@@ -45,4 +45,7 @@ h2.subtitle {
     height: 100px;
     object-fit: cover;
     object-position: center;
+    position: absolute;
+    top: -50px;
+    left: 0;
   }
