@@ -1,5 +1,16 @@
+/* Font List */
+/* Font: Montserrat */
+<style> @import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@200&display=swap'); </style>
+
 body {
     width: 100%;
     background-color: #d9d9d9;
     color: #1c1c1c;
+}
+
+h1.title {
+    font-family: 'Montserrat', sans-serif;
+    text-align: center;
+    margin: 0;
+    padding: 0;
 }
