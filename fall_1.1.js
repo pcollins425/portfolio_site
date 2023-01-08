@@ -1,13 +1,13 @@
 const fallingObject = document.querySelector(".falling-object");
 const falling = document.getElementById("falling");
 
-let top = 0;
+let position = 0;
 
 function fall() {
-  top++;
-  fallingObject.style.top = `${top}px`;
-  if (top >= falling.clientHeight) {
-    top = 0;
+  position++;
+  fallingObject.style.top = `${position}px`;
+  if (position >= falling.clientHeight) {
+    position = 0;
   }
 }
 
