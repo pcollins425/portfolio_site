@@ -33,12 +33,12 @@ h2.subtitle {
     padding: 0;
 }
 
-#falling{
+#falling {
     width: 100%;
     height: 50vh;
     display: flex;
-    flex-direction: column;
-}
+    flex-direction: row;
+  }
 
 img.falling-object {
     width: 100px;
