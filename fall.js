@@ -1,27 +1,27 @@
 const falling = document.getElementById("falling");
 
 function createFallingObject() {
-  const fallingObject = document.createElement("div");
-  fallingObject.classList.add("falling-object");
-  falling.appendChild(fallingObject);
- 
-  fallingObject.style.top = "-50px";
-  fallingObject.style.left = `${Math.random() * 100}%`;
- 
-  function animateFallingObject() {
-    const top = parseInt(fallingObject.style.top);
- 
-    if (top > falling.clientHeight) {
-      fallingObject.style.top = "-50px";
-    } else {
-      fallingObject.style.top = `${top + 1}px`;
+    const fallingObject = document.createElement("div");
+    fallingObject.classList.add("falling-object");
+    falling.appendChild(fallingObject);
+   
+    fallingObject.style.top = "-50px";
+    fallingObject.style.left = `${Math.random() * 100}%`;
+   
+    function animateFallingObject() {
+      const top = parseInt(fallingObject.style.top);
+   
+      if (top > falling.clientHeight) {
+        fallingObject.style.top = "-50px";
+      } else {
+        fallingObject.style.top = `${top + 1}px`;
+      }
+   
+      requestAnimationFrame(animateFallingObject);
     }
- 
-    requestAnimationFrame(animateFallingObject);
+   
+    animateFallingObject();
   }
- 
-  animateFallingObject();
-}
  
 for (let i = 0; i < 5; i++) {
   createFallingObject();
