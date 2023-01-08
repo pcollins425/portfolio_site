@@ -1,3 +1,5 @@
+console.log(fallingObject, falling);
+
 const fallingObject = document.querySelector(".falling-object");
 const falling = document.getElementById("falling");
 
