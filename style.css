@@ -8,6 +8,15 @@ body {
     color: #1c1c1c;
 }
 
+div.landing{
+    width: 100%;
+    height: 50vh;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+}
+
 h1.title {
     font-family: 'Montserrat', sans-serif;
     font-weight: 500;
