@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Portfolio — local API test</title>
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 40rem; margin: 2rem auto; padding: 0 1rem; background: #0f1419; color: #e6edf3; }
+    code, pre { background: #161b22; padding: .25rem .5rem; border-radius: 4px; }
+    pre { white-space: pre-wrap; padding: 1rem; margin-top: 1rem; }
+    .bad { color: #f85149; }
+    .good { color: #3fb950; }
+    a { color: #58a6ff; }
+  </style>
+</head>
+<body>
+  <h1>Local API ping</h1>
+  <p>
+    Frontend file only — not deployed to Pages unless you rename/commit it deliberately.
+    API base:<br />
+    <code id="base"></code>
+  </p>
+  <p><strong>/health:</strong></p>
+  <pre id="out-root">loading…</pre>
+  <p><strong>/v1/health:</strong></p>
+  <pre id="out-v1">loading…</pre>
+  <p><a href="index.html">← coming-soon page</a></p>
+  <script>
+    /* Change here if backend_local listens elsewhere */
+    const API_BASE = 'http://127.0.0.1:9002';
+    document.getElementById('base').textContent = API_BASE;
+
+    async function hit(path, elId) {
+      const el = document.getElementById(elId);
+      try {
+        const r = await fetch(API_BASE + path);
+        const text = await r.text();
+        el.className = r.ok ? 'good' : 'bad';
+        el.textContent = r.status + ' ' + r.statusText + '\n\n' + text;
+      } catch (e) {
+        el.className = 'bad';
+        el.textContent = String(e.message || e)
+          + '\n\nIs backend_local running? (python run.py)';
+      }
+    }
+    hit('/health', 'out-root');
+    hit('/v1/health', 'out-v1');
+  </script>
+</body>
+</html>
