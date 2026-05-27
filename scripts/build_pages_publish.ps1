@@ -9,6 +9,8 @@ Set-Location $Root
 $pub = Join-Path $Root "pages_publish"
 if (Test-Path $pub) { Remove-Item -Recurse -Force $pub }
 New-Item -ItemType Directory -Path (Join-Path $pub "dashboardtestv1") | Out-Null
+New-Item -ItemType Directory -Path (Join-Path $pub "scannertestv1") | Out-Null
 Copy-Item (Join-Path $Root "index.html") (Join-Path $pub "index.html")
 Copy-Item -Path (Join-Path $Root "frontend\dist\*") -Destination (Join-Path $pub "dashboardtestv1") -Recurse -Force
-Write-Host "OK: $pub  (root coming soon + /dashboardtestv1 SPA; SPA fallback worker/spa.js)"
+Copy-Item (Join-Path $Root "scannertestv1\index.html") (Join-Path $pub "scannertestv1\index.html")
+Write-Host "OK: $pub  (coming soon + /dashboardtestv1 SPA + /scannertestv1 scanner demo)"

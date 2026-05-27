@@ -1,10 +1,11 @@
 # `portfolio_site` — everything in one repo
 
-Static **coming-soon** site (**`/`**), **Master Revenue** dashboards at **`/dashboardtestv1/`** (Vite + React), **two FastAPI backends** (local dev vs tunnel), **SQL** to provision the read-only façade, and **scripts** to run it all.
+Static **coming-soon** site (**`/`**), **Master Revenue** dashboards at **`/dashboardtestv1/`** (Vite + React), **barcode scanner demo** at **`/scannertestv1/`** (standalone HTML, no API), **two FastAPI backends** (local dev vs tunnel), **SQL** to provision the read-only façade, and **scripts** to run it all.
 
 | Path | Purpose |
 |------|---------|
 | **`index.html`** | Cloudflare **`www`** — “coming soon” at site root (**`/`**). |
+| **`scannertestv1/`** | Client-only scan demo — USB wedge + phone camera; published to **`/scannertestv1/`**. |
 | **`local_test.html`** | Optional static probe (Python **`http.server`**) — not required if you use **`frontend/`**. |
 | **`frontend/`** | Master Revenue UI — **`npm run dev`** → **`http://localhost:5173/`** (base **`/`**), proxies **`/api`** → **`backend_local`** (**`:9002`**). Production build uses base **`/dashboardtestv1/`**. |
 | **`backend_local/`** | Dev API — **`GET /api/health`**, **`/api/executive`**, **`/api/analyst/*`**, **`/api/finance/*`**, **`/api/performance/*`** over **`[dashboard].[vw_performance_report]`** |
