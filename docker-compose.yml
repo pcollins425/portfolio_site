@@ -1,0 +1,23 @@
+# **`backend_live`** behind Cloudflare Tunnel (or local smoke test).
+#
+# Prerequisite: **`backend_live/.env`** from **`.env.example`** (ignored by Git).
+#
+# Typical (same machine as **`cloudflared`**):
+#   docker compose up -d --build
+#
+# Smoke test:
+#   curl http://127.0.0.1:9001/health
+
+services:
+  backend_live:
+    build:
+      context: ./backend_live
+      dockerfile: Dockerfile
+    container_name: portfolio_backend_live
+    restart: unless-stopped
+    # Bind to loopback only: tunnel / local callers on host use 127.0.0.1:9001
+    ports:
+      - "127.0.0.1:9001:9001"
+    env_file:
+      - path: ./backend_live/.env
+        required: false

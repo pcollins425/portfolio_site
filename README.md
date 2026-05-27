@@ -10,6 +10,7 @@ Static **coming-soon** site, **Master Revenue** dashboards (Vite + React), **two
 | **`backend_local/`** | Dev API — **`GET /api/health`**, **`/api/executive`**, **`/api/analyst/*`**, **`/api/finance/*`**, **`/api/performance/*`** over **`[dashboard].[vw_performance_report]`** |
 | **`backend_live/`** | Same API surface on **`:9001`** for tunnel / production-style tests |
 | **`scripts/`** | **`run_sql_file.py`** (DDL runner), **`run-backend-*.sh/.cmd`**, **`scripts/sql/dashboard_perf_ro/`** (view + grants) |
+| **`docker-compose.yml`** | **`backend_live`** image + host **`127.0.0.1:9001`** (for **`cloudflared`** on same machine) |
 
 ## Local dev (dashboards)
 
@@ -50,7 +51,7 @@ python3 scripts/run_sql_file.py scripts/sql/dashboard_perf_ro/create_vw_dashboar
 
 - **Cloudflare Pages** — today: root **`index.html`**. Later: build **`frontend`** (**`npm run build`**, output **`dist`**) as its own Pages project.
 - **API** — runs on your server; **`backend_live`** + tunnel (e.g. **`api.`** subdomain). It is **not** deployed with the static site.
-
+- **Docker (optional)** — from repo root with **`backend_live/.env`** in place: **`docker compose up -d --build`**. Publishes **`127.0.0.1:9001`** so **`cloudflared`** on the host can keep **`http://127.0.0.1:9001`**. See **`backend_live/README.md`**.
 ## Layout philosophy
 
 - **`backend_local`** / **`backend_live`** — same code shape, different default port and **`.env.example`** (reload on/off).

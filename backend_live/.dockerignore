@@ -1,0 +1,15 @@
+# Never bake secrets into the image.
+.env
+.env.*
+!.env.example
+
+.venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.git/
+.gitignore
+README.md
+Dockerfile
+.dockerignore
