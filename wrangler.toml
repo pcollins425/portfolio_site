@@ -1,6 +1,6 @@
 # Workers static assets — only **`pages_publish/`** is uploaded (never the whole repo).
-# Set **`name`** to match your existing Worker in Cloudflare (Workers & Pages → that worker’s name).
-name = "REPLACE_WITH_WORKER_NAME"
+# **`name`** must equal your Worker name in Workers & Pages, and Wrangler allows only lowercase letters, digits, and dashes.
+name = "collinsmediallc-www"
 
 compatibility_date = "2026-05-27"
 
