@@ -94,7 +94,7 @@ python3 scripts/run_sql_file.py scripts/sql/dashboard_perf_ro/create_vw_dashboar
 
 ## Deploy vs local
 
-- **Cloudflare Workers** — **`pages_publish`** + **`wrangler.toml`** + **`bash scripts/build_pages_publish.sh`** before **`wrangler deploy`** (see Workers section above).
+- **Cloudflare Workers** — **`wrangler.toml`** **`[assets]`** → **`pages_publish`**; **`[build]`** runs **`build_pages_publish.sh`** before **`wrangler deploy`** unless you duplicate that script in the dashboard (see Workers section above).
 - **Cloudflare Pages** — same **`pages_publish`** output if you prefer Pages instead of Workers + **`wrangler deploy`**.
 - **API** — runs on your server; **`backend_live`** + tunnel (e.g. **`api.`** subdomain). It is **not** deployed with the static site.
 - **Docker (optional)** — from repo root with **`backend_live/.env`** in place: **`docker compose up -d --build`**. Publishes **`127.0.0.1:9001`** so **`cloudflared`** on the host can keep **`http://127.0.0.1:9001`**. See **`backend_live/README.md`**.
