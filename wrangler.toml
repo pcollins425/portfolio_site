@@ -2,6 +2,9 @@
 # **`name`** = Worker service name (**`root`** → **`root.paul-collins.workers.dev`**). Must match lowercase/dash slug in dashboard.
 name = "root"
 
+# **`main`** — SPA fallback under **`/dashboardtestv1/*`** (`_redirects` wildcards reject with code 100324).
+main = "worker/spa.js"
+
 compatibility_date = "2026-05-27"
 
 [build]
@@ -9,3 +12,4 @@ command = "bash scripts/build_pages_publish.sh"
 
 [assets]
 directory = "./pages_publish"
+binding = "ASSETS"

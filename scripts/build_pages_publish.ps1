@@ -11,5 +11,4 @@ if (Test-Path $pub) { Remove-Item -Recurse -Force $pub }
 New-Item -ItemType Directory -Path (Join-Path $pub "dashboardtestv1") | Out-Null
 Copy-Item (Join-Path $Root "index.html") (Join-Path $pub "index.html")
 Copy-Item -Path (Join-Path $Root "frontend\dist\*") -Destination (Join-Path $pub "dashboardtestv1") -Recurse -Force
-Set-Content -Path (Join-Path $pub "_redirects") -Value "/dashboardtestv1/* /dashboardtestv1/index.html 200" -NoNewline
-Write-Host "OK: $pub  (root index + /dashboardtestv1 + _redirects)"
+Write-Host "OK: $pub  (root coming soon + /dashboardtestv1 SPA; SPA fallback worker/spa.js)"

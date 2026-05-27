@@ -11,5 +11,4 @@ rm -rf pages_publish
 mkdir -p pages_publish/dashboardtestv1
 cp index.html pages_publish/
 cp -r frontend/dist/. pages_publish/dashboardtestv1/
-printf '%s\n' '/dashboardtestv1/* /dashboardtestv1/index.html 200' > pages_publish/_redirects
-echo "OK: $ROOT/pages_publish  (root index + /dashboardtestv1 + _redirects)"
+echo "OK: $ROOT/pages_publish  (root coming soon + /dashboardtestv1 SPA; SPA fallback worker/spa.js)"
