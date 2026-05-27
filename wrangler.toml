@@ -1,0 +1,8 @@
+# Workers static assets — only **`pages_publish/`** is uploaded (never the whole repo).
+# Set **`name`** to match your existing Worker in Cloudflare (Workers & Pages → that worker’s name).
+name = "REPLACE_WITH_WORKER_NAME"
+
+compatibility_date = "2026-05-27"
+
+[assets]
+directory = "./pages_publish"
