@@ -13,7 +13,7 @@ python run.py
 
 Or **`scripts/run-backend-live.cmd`** / **`scripts/run-backend-live.sh`** from repo root.
 
-Point your tunnel at this host/port. **`MSSQL_*`** should use the same read-only façade user as production policy allows.
+Point your tunnel at this host/port. **`MSSQL_*`** = **`dashboard_perf_ro`** for revenue routes; **`MSSQL_FIELD_*`** = **`dgs_field_api`** for **`/api/asset/lookup`** and **`/api/field/health`**.
 
 ## Docker (same machine as **`cloudflared`**)
 

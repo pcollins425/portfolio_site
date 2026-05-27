@@ -76,24 +76,39 @@
       background: #0d1117;
       min-height: 12rem;
     }
-    #reader video {
-      border-radius: 8px;
+    #reader video { border-radius: 8px; }
+    .serial {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 1.1rem;
+      word-break: break-all;
+      margin-bottom: 0.75rem;
     }
-    .last {
-      margin-top: 0.25rem;
-      padding: 1rem;
+    .card {
+      padding: 0.85rem;
       border-radius: 8px;
       background: #0d1117;
-      border: 1px dashed #30363d;
-      word-break: break-all;
-      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-      font-size: 1.35rem;
-      min-height: 3.25rem;
+      border: 1px solid #30363d;
     }
-    .last.empty {
-      color: #6e7681;
+    .card.empty, .card.loading, .card.error {
+      color: #8b949e;
       font-size: 0.95rem;
-      font-family: inherit;
+    }
+    .card.error { color: #f85149; border-color: #f8514966; }
+    .card dl {
+      margin: 0;
+      display: grid;
+      gap: 0.55rem;
+    }
+    .card dt {
+      font-size: 0.72rem;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      color: #8b949e;
+    }
+    .card dd {
+      margin: 0.1rem 0 0;
+      font-size: 0.98rem;
+      word-break: break-word;
     }
     ul {
       list-style: none;
@@ -103,14 +118,11 @@
     li {
       padding: 0.55rem 0;
       border-bottom: 1px solid #21262d;
-      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-      font-size: 0.95rem;
-      word-break: break-all;
+      font-size: 0.9rem;
     }
     li:last-child { border-bottom: 0; }
     .meta {
       display: block;
-      font-family: inherit;
       font-size: 0.75rem;
       color: #8b949e;
       margin-bottom: 0.15rem;
@@ -136,13 +148,13 @@
 <body>
   <div class="wrap">
     <h1>Scanner test</h1>
-    <p class="sub">Scan a barcode — phone camera or USB scanner. Shows the raw value only (no server).</p>
+    <p class="sub">Scan a serial — phone camera or USB scanner. Looks up <code>inventory.compinfo_landing</code> via the API.</p>
 
     <section>
       <h2>USB / keyboard scanner</h2>
       <label for="wedge">Click here, then scan</label>
       <input id="wedge" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" inputmode="text" placeholder="Waiting for scan…" />
-      <p class="hint">Most USB scanners type the code and press Enter. This field stays focused for rapid scans.</p>
+      <p class="hint">Most USB scanners type the code and press Enter.</p>
     </section>
 
     <section>
@@ -155,7 +167,8 @@
 
     <section>
       <h2>Last scan</h2>
-      <div id="last" class="last empty">Nothing scanned yet.</div>
+      <div id="serial" class="serial">Nothing scanned yet.</div>
+      <div id="asset-card" class="card empty">Asset details will appear here after lookup.</div>
     </section>
 
     <section>
@@ -167,7 +180,9 @@
   <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
   <script>
     (function () {
-      var lastEl = document.getElementById("last");
+      var API_BASE = "https://api.collinsmediallc.com";
+      var serialEl = document.getElementById("serial");
+      var cardEl = document.getElementById("asset-card");
       var historyEl = document.getElementById("history");
       var wedge = document.getElementById("wedge");
       var camStatus = document.getElementById("cam-status");
@@ -175,37 +190,113 @@
       var camRestart = document.getElementById("cam-restart");
       var scanner = null;
       var history = [];
+      var lookupToken = 0;
 
-      function showValue(value, source) {
-        var text = String(value || "").trim();
-        if (!text) return;
+      function esc(s) {
+        return String(s == null ? "" : s)
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;")
+          .replace(/"/g, "&quot;");
+      }
 
-        lastEl.textContent = text;
-        lastEl.classList.remove("empty");
+      function setCardLoading() {
+        cardEl.className = "card loading";
+        cardEl.textContent = "Looking up asset…";
+      }
 
-        var when = new Date().toLocaleTimeString();
-        history.unshift({ text: text, source: source, when: when });
-        if (history.length > 20) history.pop();
+      function setCardError(message) {
+        cardEl.className = "card error";
+        cardEl.textContent = message;
+      }
 
-        historyEl.innerHTML = history
-          .map(function (row) {
-            return (
-              '<li><span class="meta">' +
-              row.when +
-              " · " +
-              row.source +
-              '</span>' +
-              row.text +
-              "</li>"
-            );
+      function renderAsset(asset) {
+        var rows = [
+          ["Serial", asset.serial_no],
+          ["Comp ID", asset.compid],
+          ["Property", asset.property],
+          ["Game / description", asset.comp_desc],
+          ["Manufacturer", asset.manufac],
+          ["Model", asset.model_no],
+          ["State / tribe", [asset.state, asset.tribe].filter(Boolean).join(" · ")],
+          ["ZBL", [asset.zone, asset.bank, asset.location].filter(Boolean).join("-")],
+          ["Asset ID", asset.asset_id],
+          ["Synced", asset._synced_at]
+        ];
+        var html = "<dl>";
+        rows.forEach(function (pair) {
+          if (!pair[1]) return;
+          html += "<dt>" + esc(pair[0]) + "</dt><dd>" + esc(pair[1]) + "</dd>";
+        });
+        html += "</dl>";
+        cardEl.className = "card";
+        cardEl.innerHTML = html;
+      }
+
+      function lookupSerial(text, source) {
+        var token = String(text || "").trim();
+        if (!token) return;
+
+        serialEl.textContent = token;
+        setCardLoading();
+
+        var reqId = ++lookupToken;
+        var url = API_BASE + "/api/asset/lookup?serial=" + encodeURIComponent(token);
+
+        fetch(url)
+          .then(function (res) {
+            return res.text().then(function (body) {
+              return { status: res.status, body: body };
+            });
           })
-          .join("");
+          .then(function (result) {
+            if (reqId !== lookupToken) return;
+
+            if (result.status === 200) {
+              var data = JSON.parse(result.body);
+              renderAsset(data.asset || {});
+              var when = new Date().toLocaleTimeString();
+              history.unshift({
+                when: when,
+                source: source,
+                serial: token,
+                property: (data.asset && data.asset.property) || "—"
+              });
+              if (history.length > 15) history.pop();
+              historyEl.innerHTML = history
+                .map(function (row) {
+                  return (
+                    '<li><span class="meta">' +
+                    esc(row.when) +
+                    " · " +
+                    esc(row.source) +
+                    "</span>" +
+                    esc(row.serial) +
+                    " — " +
+                    esc(row.property) +
+                    "</li>"
+                  );
+                })
+                .join("");
+              return;
+            }
+
+            var detail = result.body;
+            try {
+              detail = JSON.parse(result.body).detail || result.body;
+            } catch (e) {}
+            setCardError("Lookup failed (" + result.status + "): " + detail);
+          })
+          .catch(function (err) {
+            if (reqId !== lookupToken) return;
+            setCardError("Network error: " + (err && err.message ? err.message : err));
+          });
       }
 
       wedge.addEventListener("keydown", function (event) {
         if (event.key !== "Enter") return;
         event.preventDefault();
-        showValue(wedge.value, "USB / keyboard");
+        lookupSerial(wedge.value, "USB / keyboard");
         wedge.value = "";
         wedge.focus();
       });
@@ -234,7 +325,7 @@
             { facingMode: "environment" },
             { fps: 10, qrbox: { width: 250, height: 150 }, aspectRatio: 1.0 },
             function (decoded) {
-              showValue(decoded, "camera");
+              lookupSerial(decoded, "camera");
               camStatus.textContent = "Scanned. Point at another code to continue.";
             },
             function () {}
