@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { NavLink, Navigate, Route, Routes } from "react-router-dom";
+import { apiUrl } from "./api/client";
 import AnalystPage from "./pages/AnalystPage";
 import ExecutivePage from "./pages/ExecutivePage";
 import FinancePage from "./pages/FinancePage";
@@ -23,7 +24,7 @@ export default function App() {
   const [health, setHealth] = useState<Health | null>(null);
 
   useEffect(() => {
-    fetch("/api/health")
+    fetch(apiUrl("/api/health"))
       .then((r) => r.json())
       .then(setHealth)
       .catch(() => setHealth({ ok: false }));
@@ -33,12 +34,11 @@ export default function App() {
     <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950">
       {health?.ok === false && (
         <div className="border-b border-amber-900/70 bg-amber-950/50 px-4 py-3 text-center text-sm text-amber-100">
-          Database unreachable or façade missing. Set <code className="text-amber-200">MSSQL_*</code> in{' '}
-          <code className="text-amber-200">backend_local/.env</code> (or point{' '}
-          <code className="text-amber-200">MASTER_CREDENTIALS_ENV</code> at a credential bundle first), ensure{' '}
-          <code className="text-amber-200">dashboard.vw_performance_report</code> exists, then{' '}
-          <code className="text-amber-200">python run.py</code> from <code className="text-amber-200">backend_local</code>
-          alongside <code className="text-amber-200">npm run dev</code> here, and reload.
+          Database unreachable, façade missing, or API URL misconfigured. **Dev:** set <code className="text-amber-200">MSSQL_*</code>{' '}
+          in <code className="text-amber-200">backend_local/.env</code>, run <code className="text-amber-200">python run.py</code>{' '}
+          and <code className="text-amber-200">npm run dev</code> together. **Hosted:** build with{' '}
+          <code className="text-amber-200">VITE_API_BASE_URL</code> pointing at your tunnel API (no trailing slash),
+          e.g. <code className="text-amber-200">https://api.collinsmediallc.com</code>.
         </div>
       )}
       {health?.ok === true && (
@@ -60,9 +60,10 @@ export default function App() {
               <span className="text-slate-300">
                 [<code className="font-mono text-xs">dashboard</code>].[<code className="font-mono text-xs">vw_performance_report</code>]
               </span>{' '}
-              through FastAPI (<code className="font-mono text-slate-500">backend_local</code>). This dev server proxies{' '}
-              <code className="font-mono text-slate-500">/api</code> →{' '}
-              <code className="font-mono text-slate-500">localhost:9002</code>.
+              through FastAPI. **Dev:** this Vite server proxies <code className="font-mono text-slate-500">/api</code> →{' '}
+              <code className="font-mono text-slate-500">localhost:9002</code>. **Prod:**{' '}
+              <code className="font-mono text-slate-500">VITE_API_BASE_URL</code> (+ <code className="font-mono text-slate-500">/api/...</code>
+              ).
             </p>
           </div>
           <nav className="flex flex-wrap gap-2">

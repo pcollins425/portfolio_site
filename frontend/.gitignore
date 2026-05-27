@@ -1,2 +1,5 @@
 dist/
 node_modules/
+
+# Production build overrides (often same as Pages env; keeps working tree clean)
+.env.production

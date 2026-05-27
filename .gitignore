@@ -4,6 +4,7 @@
 # Frontend
 frontend/node_modules/
 frontend/dist/
+pages_publish/
 
 # Python
 **/.venv/
