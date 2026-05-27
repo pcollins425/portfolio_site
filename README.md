@@ -45,24 +45,17 @@ Static **coming-soon** site (**`/`**), **Master Revenue** dashboards at **`/dash
 
 If your build log shows **`Read … files from the assets directory /opt/buildhome/repo`**, Wrangler treated the **repo root** as the static folder, so **`.git/`** and everything else under the clone get scanned (and sometimes "uploaded") as assets. That is not what you want.
 
-**Automatic deployments:** whoever administers Cloudflare should run a **build** that creates **`pages_publish/`** before **`wrangler deploy`**. Deploy-only (**`npx wrangler deploy`** alone) skips the Vite step and uploads an empty/missing **`pages_publish`** tree.
+**Automatic deploy:** The **`[build]`** section in **`wrangler.toml`** runs **`bash scripts/build_pages_publish.sh`** before every **`wrangler deploy`**, so **`pages_publish/`** exists without a separate Cloudflare **build command**. Set **`VITE_API_BASE_URL`** in the Workers / Git environment for the Wrangler run so **`npm run build`** bakes **`https://api...`** into JS (the shell script defaults to **`https://api.collinsmediallc.com`** if unset).
 
-1. This repo includes **`wrangler.toml`** with **`[assets] directory = "./pages_publish"`** so only that folder is uploaded.
-2. **`pages_publish/`** must exist **before** deploy — use this as Cloudflare **build command** on Linux (**not** `.ps1`):
+1. **`[assets]`** **`directory = "./pages_publish"`** — only uploads that folder.
 
-   ```bash
-   bash scripts/build_pages_publish.sh
-   ```
+2. **Optional dashboard build command:** **`bash scripts/build_pages_publish.sh`** is redundant when **`[build]`** is present, but harmless.
 
-3. **Deploy command:** **`npx wrangler deploy`**. Combined one-liner if the UI supports a single phase:
+3. **`wrangler.toml` → `name`:** only lowercase letters, digits, and dashes. Example: **`root.paul-collins.workers.dev`** → **`root`**. **`www`** is a **custom domain/route**, not the **`name`** field.
 
-   **`bash scripts/build_pages_publish.sh && npx wrangler deploy`**
+4. **`VITE_API_BASE_URL`** for the Wrangler-triggered **`[build]`** run (no trailing slash).
 
-4. **`wrangler.toml` → `name`:** only **lowercase letters, digits, and dashes** (no underscores). It must equal the Worker **service name** (the first label of **`*.workers.dev`**, e.g. **`root.paul-collins.workers.dev`** → **`root`**), not **`www`** or **`api`** custom hostnames—those attach as **routes/domains** to the same Worker. If your Workers list shows a different name, change **`wrangler.toml`** to match.
-
-5. Set **`VITE_API_BASE_URL`** for the **build** step (**`https://api.collinsmediallc.com`**, no trailing slash).
-
-6. SPA refresh under **`/dashboardtestv1/*`** uses **`pages_publish/_redirects`**; Workers **[parse **`_redirects`**](https://developers.cloudflare.com/workers/static-assets/redirects/)**.
+5. **`pages_publish/_redirects`** drives SPA refresh under **`/dashboardtestv1/*`**; Workers **[honor **`_redirects`**](https://developers.cloudflare.com/workers/static-assets/redirects/)**.
 
 ---
 

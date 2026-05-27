@@ -3,6 +3,8 @@
 name = "root"
 
 compatibility_date = "2026-05-27"
+[build]
+command = "bash scripts/build_pages_publish.sh"
 
 [assets]
 directory = "./pages_publish"
