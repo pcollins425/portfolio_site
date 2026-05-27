@@ -58,9 +58,9 @@ If your build log shows **`Read … files from the assets directory /opt/buildho
 
    **`bash scripts/build_pages_publish.sh && npx wrangler deploy`**
 
-4. **`wrangler.toml` → `name`:** only **lowercase letters, digits, and dashes** (no underscores). Default in repo is **`collinsmediallc-www`** and must equal the Worker **name** in **Workers & Pages**; rename in **`wrangler.toml`** if the linked Worker is different.
+4. **`wrangler.toml` → `name`:** only **lowercase letters, digits, and dashes** (no underscores). It must equal the Worker **service name** (the first label of **`*.workers.dev`**, e.g. **`root.paul-collins.workers.dev`** → **`root`**), not **`www`** or **`api`** custom hostnames—those attach as **routes/domains** to the same Worker. If your Workers list shows a different name, change **`wrangler.toml`** to match.
 
-5. In CI / Workers project **Variables**, set **`VITE_API_BASE_URL`** for the **build** step (**`https://api.collinsmediallc.com`**, no trailing slash).
+5. Set **`VITE_API_BASE_URL`** for the **build** step (**`https://api.collinsmediallc.com`**, no trailing slash).
 
 6. SPA refresh under **`/dashboardtestv1/*`** uses **`pages_publish/_redirects`**; Workers **[parse **`_redirects`**](https://developers.cloudflare.com/workers/static-assets/redirects/)**.
 
@@ -102,7 +102,7 @@ python3 scripts/run_sql_file.py scripts/sql/dashboard_perf_ro/create_vw_dashboar
 ## Deploy vs local
 
 - **Cloudflare Workers** — **`pages_publish`** + **`wrangler.toml`** + **`bash scripts/build_pages_publish.sh`** before **`wrangler deploy`** (see Workers section above).
-- **Cloudflare Pages** — same **`pages_publish`** output if you prefer Pages instead of **`wrangler upload`**.
+- **Cloudflare Pages** — same **`pages_publish`** output if you prefer Pages instead of Workers + **`wrangler deploy`**.
 - **API** — runs on your server; **`backend_live`** + tunnel (e.g. **`api.`** subdomain). It is **not** deployed with the static site.
 - **Docker (optional)** — from repo root with **`backend_live/.env`** in place: **`docker compose up -d --build`**. Publishes **`127.0.0.1:9001`** so **`cloudflared`** on the host can keep **`http://127.0.0.1:9001`**. See **`backend_live/README.md`**.
 

@@ -1,6 +1,6 @@
 # Workers static assets — only **`pages_publish/`** is uploaded (never the whole repo).
-# **`name`** must equal your Worker name in Workers & Pages, and Wrangler allows only lowercase letters, digits, and dashes.
-name = "collinsmediallc-www"
+# **`name`** = Worker service name (**`root`** → **`root.paul-collins.workers.dev`**). Must match lowercase/dash slug in dashboard.
+name = "root"
 
 compatibility_date = "2026-05-27"
 
