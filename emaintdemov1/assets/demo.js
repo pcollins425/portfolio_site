@@ -30,9 +30,16 @@
   }
 
   function rowKey(row) {
-    const v = row[state.table.key_column];
-    if (v === null || v === undefined || v === "") return null;
-    return String(v);
+    const cols = [state.table.key_column];
+    const alt =
+      state.table.alternate_key_column ||
+      (state.table.id === "work_orders" ? "wo" : null);
+    if (alt) cols.push(alt);
+    for (const col of cols) {
+      const v = row[col];
+      if (v !== null && v !== undefined && v !== "") return String(v);
+    }
+    return null;
   }
 
   async function api(path) {

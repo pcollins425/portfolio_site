@@ -47,6 +47,7 @@
     "sql_schema": "projects",
     "sql_table": "work_orders",
     "key_column": "uuid",
+    "alternate_key_column": "wo",
     "browse_columns": [
       "wo",
       "reference_key",

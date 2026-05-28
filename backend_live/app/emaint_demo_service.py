@@ -13,6 +13,9 @@ from uuid import UUID
 from app import mssql
 
 _COL_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
+_UUID_RE = re.compile(
+    r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+)
 
 _CONFIG_PATH = Path(__file__).resolve().parents[1] / "data" / "emaint_demo_tables.json"
 
@@ -63,8 +66,7 @@ def list_tables() -> list[dict]:
     cfg = load_table_config()
     out = []
     for table_id, spec in cfg.items():
-        out.append(
-            {
+        entry = {
                 "id": table_id,
                 "title": spec["title"],
                 "emaint_table": spec["emaint_table"],
@@ -73,7 +75,9 @@ def list_tables() -> list[dict]:
                 "browse_columns": spec["browse_columns"],
                 "form_fields": spec["form_fields"],
             }
-        )
+        if spec.get("alternate_key_column"):
+            entry["alternate_key_column"] = spec["alternate_key_column"]
+        out.append(entry)
     return out
 
 
@@ -86,6 +90,14 @@ def _table_spec(table_id: str) -> dict:
 
 def _qualified_table(spec: dict) -> str:
     return f"[{spec['sql_schema']}].[{spec['sql_table']}]"
+
+
+def _lookup_column(spec: dict, key: str) -> tuple[str, str]:
+    key_col = spec["key_column"]
+    alt = spec.get("alternate_key_column")
+    if alt and not _UUID_RE.match(key):
+        return alt, key
+    return key_col, key
 
 
 def browse_rows(table_id: str, *, limit: int = 50, offset: int = 0, q: str | None = None):
@@ -116,12 +128,13 @@ def browse_rows(table_id: str, *, limit: int = 50, offset: int = 0, q: str | Non
 def get_row(table_id: str, key: str):
     spec = _table_spec(table_id)
     key_col = spec["key_column"]
+    lookup_col, lookup_key = _lookup_column(spec, key)
     form_cols = list(dict.fromkeys(spec["form_fields"].values()))
     if key_col not in form_cols:
         form_cols.insert(0, key_col)
     select_list = ", ".join(_bracket(c) for c in form_cols)
-    sql = f"SELECT {select_list} FROM {_qualified_table(spec)} WHERE {_bracket(key_col)} = %s"
-    rows = _query(sql, (key,))
+    sql = f"SELECT {select_list} FROM {_qualified_table(spec)} WHERE {_bracket(lookup_col)} = %s"
+    rows = _query(sql, (lookup_key,))
     if not rows:
         return None
     row = _row_json(rows[0])
