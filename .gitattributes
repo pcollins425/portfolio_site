@@ -1,0 +1,2 @@
+# Cloudflare / Linux CI runs bash — keep shell scripts LF (avoid `pipefail\r` on deploy).
+*.sh text eol=lf
