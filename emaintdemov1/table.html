@@ -27,6 +27,7 @@
       <div class="toolbar">
         <input id="search" type="search" placeholder="Search…" autocomplete="off" />
         <button id="btn-search" type="button">Search</button>
+        <button id="btn-scan" type="button" class="btn-accent" hidden>Scan</button>
         <button id="btn-prev" type="button">Prev</button>
         <button id="btn-next" type="button">Next</button>
       </div>
@@ -41,6 +42,36 @@
   </div>
 
   <div class="detail-backdrop" id="detail-backdrop" hidden></div>
+
+  <div class="scan-modal" id="scan-modal" hidden aria-hidden="true">
+    <div class="scan-dialog" role="dialog" aria-labelledby="scan-title">
+      <div class="scan-header">
+        <div>
+          <p class="detail-label">Asset lookup</p>
+          <h2 id="scan-title">Scan serial</h2>
+        </div>
+        <button id="btn-close-scan" type="button" class="icon-btn" aria-label="Close scanner">×</button>
+      </div>
+      <div class="scan-body">
+        <label class="scan-label" for="scan-wedge">USB / keyboard scanner</label>
+        <input
+          id="scan-wedge"
+          type="text"
+          autocomplete="off"
+          autocapitalize="off"
+          spellcheck="false"
+          placeholder="Click here, then scan…"
+        />
+        <p class="scan-hint">Most USB scanners type the code and press Enter.</p>
+
+        <label class="scan-label">Phone camera</label>
+        <div id="scan-reader" class="scan-reader"></div>
+        <p id="scan-status" class="scan-status">Open scan to start camera.</p>
+        <button id="btn-scan-restart" type="button" hidden>Restart camera</button>
+      </div>
+    </div>
+  </div>
+
   <aside class="detail-drawer" id="detail-drawer" aria-hidden="true">
     <div class="detail-header">
       <div>

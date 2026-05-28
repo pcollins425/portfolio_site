@@ -13,9 +13,13 @@
     rows: [],
     selectedKey: null,
     detailOpen: false,
+    scanOpen: false,
   };
 
   let loadSeq = 0;
+  let scanSeq = 0;
+  let qrScanner = null;
+  let qrLibPromise = null;
 
   function el(id) {
     return document.getElementById(id);
@@ -50,7 +54,12 @@
     const res = await fetch(`${API_BASE}${path}`);
     if (!res.ok) {
       const body = await res.text();
-      throw new Error(body || res.statusText);
+      let detail = body || res.statusText;
+      try {
+        const parsed = JSON.parse(body);
+        if (parsed.detail) detail = parsed.detail;
+      } catch (_err) {}
+      throw new Error(detail);
     }
     return res.json();
   }
@@ -205,6 +214,153 @@
     }
   }
 
+  function setScanStatus(msg, isError) {
+    const node = el("scan-status");
+    if (!node) return;
+    node.textContent = msg;
+    node.className = isError ? "scan-status error" : "scan-status";
+  }
+
+  function loadQrLibrary() {
+    if (window.Html5Qrcode) return Promise.resolve();
+    if (qrLibPromise) return qrLibPromise;
+    qrLibPromise = new Promise((resolve, reject) => {
+      const script = document.createElement("script");
+      script.src = "https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js";
+      script.onload = () => resolve();
+      script.onerror = () => reject(new Error("Camera library failed to load."));
+      document.head.appendChild(script);
+    });
+    return qrLibPromise;
+  }
+
+  async function stopScanCamera() {
+    if (!qrScanner) return;
+    try {
+      await qrScanner.stop();
+    } catch (_err) {}
+    try {
+      qrScanner.clear();
+    } catch (_err) {}
+    qrScanner = null;
+  }
+
+  async function startScanCamera() {
+    const restartBtn = el("btn-scan-restart");
+    if (restartBtn) restartBtn.hidden = true;
+    setScanStatus("Requesting camera permission…");
+
+    try {
+      await loadQrLibrary();
+    } catch (err) {
+      setScanStatus(String(err.message || err), true);
+      if (restartBtn) restartBtn.hidden = false;
+      return;
+    }
+
+    await stopScanCamera();
+    qrScanner = new Html5Qrcode("scan-reader");
+    try {
+      await qrScanner.start(
+        { facingMode: "environment" },
+        { fps: 10, qrbox: { width: 250, height: 150 }, aspectRatio: 1.0 },
+        (decoded) => {
+          handleScanResult(decoded, "camera");
+        },
+        () => {}
+      );
+      setScanStatus("Camera live — point at a barcode or QR code.");
+    } catch (err) {
+      setScanStatus(String(err.message || err), true);
+      if (restartBtn) restartBtn.hidden = false;
+    }
+  }
+
+  async function openScanModal() {
+    const modal = el("scan-modal");
+    if (!modal) return;
+    state.scanOpen = true;
+    modal.hidden = false;
+    modal.setAttribute("aria-hidden", "false");
+    setScanStatus("Starting camera…");
+    const wedge = el("scan-wedge");
+    if (wedge) {
+      wedge.value = "";
+      wedge.focus();
+    }
+    await startScanCamera();
+  }
+
+  async function closeScanModal() {
+    state.scanOpen = false;
+    scanSeq += 1;
+    await stopScanCamera();
+    const modal = el("scan-modal");
+    if (modal) {
+      modal.hidden = true;
+      modal.setAttribute("aria-hidden", "true");
+    }
+    const wedge = el("scan-wedge");
+    if (wedge) wedge.value = "";
+    setScanStatus("Open scan to start camera.");
+    const restartBtn = el("btn-scan-restart");
+    if (restartBtn) restartBtn.hidden = true;
+  }
+
+  async function handleScanResult(serial, source) {
+    const token = String(serial || "").trim();
+    if (!token) return;
+
+    const seq = ++scanSeq;
+    setScanStatus(`Looking up ${token}…`);
+    try {
+      const data = await api(`/api/asset/lookup?serial=${encodeURIComponent(token)}`);
+      if (seq !== scanSeq) return;
+      const compid = data.asset && data.asset.compid;
+      if (compid === null || compid === undefined || compid === "") {
+        throw new Error("Lookup succeeded but asset has no compid.");
+      }
+
+      await closeScanModal();
+      el("search").value = token;
+      state.q = token;
+      await loadRows(true);
+      await selectRow(String(compid));
+      setStatus(`Found asset for serial ${token}${source ? ` (${source})` : ""}`);
+    } catch (err) {
+      if (seq !== scanSeq) return;
+      setScanStatus(String(err.message || err), true);
+    }
+  }
+
+  function initScan() {
+    const scanBtn = el("btn-scan");
+    if (!scanBtn) return;
+    scanBtn.hidden = false;
+
+    scanBtn.addEventListener("click", () => {
+      openScanModal();
+    });
+    el("btn-close-scan").addEventListener("click", () => {
+      closeScanModal();
+    });
+    el("scan-modal").addEventListener("click", (e) => {
+      if (e.target.id === "scan-modal") closeScanModal();
+    });
+    el("btn-scan-restart").addEventListener("click", () => {
+      startScanCamera();
+    });
+
+    const wedge = el("scan-wedge");
+    wedge.addEventListener("keydown", (e) => {
+      if (e.key !== "Enter") return;
+      e.preventDefault();
+      handleScanResult(wedge.value, "USB / keyboard");
+      wedge.value = "";
+      wedge.focus();
+    });
+  }
+
   async function loadRows(resetOffset) {
     if (resetOffset) state.offset = 0;
     setStatus("Loading rows…");
@@ -267,8 +423,15 @@
     el("btn-close-detail").addEventListener("click", closeDetail);
     el("detail-backdrop").addEventListener("click", closeDetail);
     document.addEventListener("keydown", (e) => {
-      if (e.key === "Escape" && state.detailOpen) closeDetail();
+      if (e.key !== "Escape") return;
+      if (state.scanOpen) {
+        closeScanModal();
+        return;
+      }
+      if (state.detailOpen) closeDetail();
     });
+
+    if (TABLE_ID === "compinfo") initScan();
 
     await loadRows(true);
   }
