@@ -3,21 +3,29 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>eMaint demo table</title>
+  <title>DGS Operations</title>
   <link rel="stylesheet" href="assets/demo.css" />
 </head>
-<body>
-  <header class="topbar">
-    <h1 id="page-title">DGS Operations (demo)</h1>
-    <nav id="nav"></nav>
-    <a href="index.html" style="color:#fff;margin-left:auto;">Home</a>
-  </header>
+<body class="app">
+  <aside class="sidebar">
+    <div class="sidebar-brand">
+      <span class="brand-title">DGS Operations</span>
+      <span class="brand-sub">Demo</span>
+    </div>
+    <nav class="sidebar-nav" id="nav" aria-label="Tables"></nav>
+  </aside>
 
-  <div class="layout">
-    <section class="panel">
-      <div class="panel-head">Browse — <span id="table-subtitle"></span></div>
+  <div class="main">
+    <header class="page-header">
+      <div>
+        <h1 id="table-title">Projects</h1>
+        <p id="table-subtitle" class="subtitle"></p>
+      </div>
+    </header>
+
+    <section class="browse-panel">
       <div class="toolbar">
-        <input id="search" type="search" placeholder="Search visible columns…" />
+        <input id="search" type="search" placeholder="Search…" autocomplete="off" />
         <button id="btn-search" type="button">Search</button>
         <button id="btn-prev" type="button">Prev</button>
         <button id="btn-next" type="button">Next</button>
@@ -30,14 +38,19 @@
       </div>
       <div id="status" class="status"></div>
     </section>
-
-    <section class="panel">
-      <div class="panel-head" id="form-head">Record</div>
-      <div class="form-wrap" id="form-fields">
-        <p class="status">Select a row from the browse grid.</p>
-      </div>
-    </section>
   </div>
+
+  <div class="detail-backdrop" id="detail-backdrop" hidden></div>
+  <aside class="detail-drawer" id="detail-drawer" aria-hidden="true">
+    <div class="detail-header">
+      <div>
+        <p class="detail-label">Record details</p>
+        <h2 id="form-head">Record</h2>
+      </div>
+      <button id="btn-close-detail" type="button" class="icon-btn" aria-label="Close details">×</button>
+    </div>
+    <div class="detail-body" id="form-fields"></div>
+  </aside>
 
   <script src="assets/demo.js"></script>
   <script>EmaintDemo.initTablePage();</script>

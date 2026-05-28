@@ -3,28 +3,16 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>eMaint replacement demo</title>
-  <link rel="stylesheet" href="assets/demo.css" />
+  <title>DGS Operations</title>
+  <script>
+    (function () {
+      var params = new URLSearchParams(window.location.search);
+      if (!params.has("t")) params.set("t", "projects");
+      window.location.replace("table.html?" + params.toString());
+    })();
+  </script>
 </head>
 <body>
-  <header class="topbar">
-    <h1>DGS Operations (demo)</h1>
-  </header>
-  <main class="hub">
-    <section class="panel">
-      <div class="panel-head">eMaint replacement — table browser</div>
-      <div class="form-wrap">
-        <p>Three read-only pages backed by SQL landing tables (<code>dgs_field_api</code> login).</p>
-        <ul></ul>
-        <p class="note">
-          Optional query: <code>?api=https://api.collinsmediallc.com</code> when the static site
-          is not served from the same host as the API.
-        </p>
-        <p id="health-status" class="status">Checking API…</p>
-      </div>
-    </section>
-  </main>
-  <script src="assets/demo.js"></script>
-  <script>EmaintDemo.initHubPage();</script>
+  <p>Redirecting to <a href="table.html?t=projects">Projects</a>…</p>
 </body>
 </html>
