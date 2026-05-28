@@ -47,7 +47,6 @@
     "sql_schema": "projects",
     "sql_table": "work_orders",
     "key_column": "uuid",
-    "alternate_key_column": "wo",
     "browse_columns": [
       "wo",
       "reference_key",
@@ -105,6 +104,77 @@
       "Work Order Type": "wo_type",
       "Work Description": "work_desc",
       "Working Man Hours": "workmhours"
+    }
+  },
+  "inventory": {
+    "title": "Inventory",
+    "emaint_table": "ARINVT01 (curated)",
+    "sql_schema": "inventory",
+    "sql_table": "inventory",
+    "key_column": "item",
+    "alternate_key_column": "reference_key",
+    "browse_columns": [
+      "reference_key",
+      "item",
+      "item_family",
+      "item_subcategory",
+      "descrip",
+      "mfr",
+      "onhand",
+      "location",
+      "emaint_category"
+    ],
+    "form_fields": {
+      "Reference Key": "reference_key",
+      "Item No": "item",
+      "Family": "item_family",
+      "Sub-category": "item_subcategory",
+      "eMaint Category": "emaint_category",
+      "Description": "descrip",
+      "Manufacturer": "mfr",
+      "MFR Part No.": "mfrpartno",
+      "Supplier Part No.": "vpartno",
+      "On Hand": "onhand",
+      "Bin Location": "location",
+      "Inventory location": "state",
+      "Unit Cost": "cost",
+      "Default Supplier": "supplier",
+      "Stock Item": "stock",
+      "Add Date": "adddate",
+      "Edit Date": "editdate",
+      "Edit User": "edituser"
+    },
+    "json_columns": ["attributes"],
+    "editable_columns": ["attributes"]
+  },
+  "inventory_emaint": {
+    "title": "Inventory (eMaint mirror)",
+    "emaint_table": "ARINVT01",
+    "sql_schema": "inventory",
+    "sql_table": "arinvt01_landing",
+    "key_column": "item",
+    "browse_columns": [
+      "item",
+      "descrip",
+      "mfr",
+      "onhand",
+      "location",
+      "category"
+    ],
+    "form_fields": {
+      "Item No": "item",
+      "Description": "descrip",
+      "Manufacturer": "mfr",
+      "MFR Part No.": "mfrpartno",
+      "Category": "category",
+      "Bin Location": "location",
+      "Inventory location": "state",
+      "On Hand": "onhand",
+      "Unit Cost": "cost",
+      "Default Supplier": "supplier",
+      "Supplier Part No.": "vpartno",
+      "Edit Date": "editdate",
+      "Edit User": "edituser"
     }
   },
   "projects": {

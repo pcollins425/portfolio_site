@@ -55,3 +55,21 @@ def query(
         return cursor.fetchall()
     finally:
         conn.close()
+
+
+def execute(
+    sql: str,
+    params=None,
+    *,
+    database: str | None = None,
+    profile: DbProfile = "dashboard",
+    load_env: bool = True,
+) -> int:
+    conn = get_connection(database=database, profile=profile, load_env=load_env)
+    try:
+        cursor = conn.cursor()
+        cursor.execute(sql, params)
+        conn.commit()
+        return cursor.rowcount
+    finally:
+        conn.close()

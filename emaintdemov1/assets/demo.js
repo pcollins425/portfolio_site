@@ -2,7 +2,7 @@
   const params = new URLSearchParams(window.location.search);
   const API_BASE = (params.get("api") || "https://api.collinsmediallc.com").replace(/\/$/, "");
   const TABLE_ID = params.get("t") || "projects";
-  const NAV_ORDER = ["projects", "work_orders", "compinfo"];
+  const NAV_ORDER = ["projects", "work_orders", "compinfo", "inventory"];
 
   const state = {
     config: null,
@@ -12,6 +12,7 @@
     q: "",
     rows: [],
     selectedKey: null,
+    currentRecord: null,
     detailOpen: false,
     scanOpen: false,
   };
@@ -50,8 +51,8 @@
     return null;
   }
 
-  async function api(path) {
-    const res = await fetch(`${API_BASE}${path}`);
+  async function api(path, options) {
+    const res = await fetch(`${API_BASE}${path}`, options);
     if (!res.ok) {
       const body = await res.text();
       let detail = body || res.statusText;
@@ -62,6 +63,14 @@
       throw new Error(detail);
     }
     return res.json();
+  }
+
+  async function apiPatch(path, body) {
+    return api(path, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
   }
 
   function setStatus(msg, isError) {
@@ -152,10 +161,21 @@
     }
   }
 
+  function prettyJson(raw) {
+    if (raw === null || raw === undefined || raw === "") return "{\n  \"notes\": \"\"\n}";
+    try {
+      return JSON.stringify(JSON.parse(raw), null, 2);
+    } catch (_err) {
+      return String(raw);
+    }
+  }
+
   function renderForm(record) {
     const wrap = el("form-fields");
     const head = el("form-head");
     if (!wrap) return;
+
+    state.currentRecord = record || null;
 
     if (!record) {
       if (head) head.textContent = "Record unavailable";
@@ -166,18 +186,98 @@
     if (head) {
       head.textContent = record.fields["Project #"] ||
         record.fields["WO No"] ||
+        record.fields["Reference Key"] ||
         record.fields["Asset ID"] ||
+        record.fields["Item No"] ||
         String(record.key);
     }
 
+    const editable = new Set(record.editable_columns || []);
+    const skipLabels = new Set(["— attributes (summary) —", "— attributes (JSON) —"]);
     const parts = [];
     for (const [label, value] of Object.entries(record.fields)) {
+      if (skipLabels.has(label) || label.startsWith("  ")) continue;
       const f = fmtField(value);
       parts.push(
         `<label>${escapeHtml(label)}</label><div class="value${f.empty ? " empty" : ""}">${escapeHtml(f.text)}</div>`
       );
     }
-    wrap.innerHTML = `<div class="form-grid">${parts.join("")}</div>`;
+
+    const attrLines = [];
+    for (const [label, value] of Object.entries(record.fields)) {
+      if (!label.startsWith("  ")) continue;
+      const f = fmtField(value);
+      attrLines.push(
+        `<div class="attr-line"><span class="attr-key">${escapeHtml(label.trim())}</span><span class="attr-val${f.empty ? " empty" : ""}">${escapeHtml(f.text)}</span></div>`
+      );
+    }
+
+    let editor = "";
+    if (editable.has("attributes")) {
+      const rawAttr = record.raw && record.raw.attributes;
+      editor = `
+        <section class="attributes-editor">
+          <h3 class="editor-title">Custom attributes (JSON)</h3>
+          <p class="editor-hint">Spine fields sync from eMaint; <strong>attributes</strong> are curated here — family-specific options (software stack, cable ends, cabinet fit, …).</p>
+          <textarea id="attributes-json" class="attributes-json" spellcheck="false">${escapeHtml(prettyJson(rawAttr))}</textarea>
+          <div class="editor-actions">
+            <button type="button" id="btn-save-attributes" class="btn-accent">Save attributes</button>
+            <span id="attributes-save-status" class="editor-status"></span>
+          </div>
+        </section>`;
+    }
+
+    wrap.innerHTML = `
+      <div class="form-grid">${parts.join("")}</div>
+      ${attrLines.length ? `<section class="attributes-summary"><h3 class="editor-title">Attributes (read-only summary)</h3>${attrLines.join("")}</section>` : ""}
+      ${editor}`;
+
+    const saveBtn = el("btn-save-attributes");
+    if (saveBtn) {
+      saveBtn.addEventListener("click", saveAttributes);
+    }
+  }
+
+  async function saveAttributes() {
+    const record = state.currentRecord;
+    const ta = el("attributes-json");
+    const statusNode = el("attributes-save-status");
+    if (!record || !ta) return;
+
+    let parsed;
+    try {
+      parsed = JSON.parse(ta.value);
+    } catch (err) {
+      if (statusNode) {
+        statusNode.textContent = `Invalid JSON: ${err.message}`;
+        statusNode.className = "editor-status error";
+      }
+      return;
+    }
+
+    const key = record.key;
+    if (statusNode) {
+      statusNode.textContent = "Saving…";
+      statusNode.className = "editor-status";
+    }
+    try {
+      const updated = await apiPatch(
+        `/api/emaint-demo/${TABLE_ID}/rows/${encodeURIComponent(key)}`,
+        { updates: { attributes: JSON.stringify(parsed) } }
+      );
+      state.currentRecord = updated;
+      renderForm(updated);
+      if (statusNode) {
+        statusNode.textContent = "Saved.";
+        statusNode.className = "editor-status ok";
+      }
+      setStatus("Attributes updated (not sent to eMaint).");
+    } catch (err) {
+      if (statusNode) {
+        statusNode.textContent = String(err.message || err);
+        statusNode.className = "editor-status error";
+      }
+    }
   }
 
   function escapeHtml(s) {

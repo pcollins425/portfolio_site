@@ -1,12 +1,19 @@
-"""eMaint replacement demo — browse grid + record form over three landing tables."""
+"""eMaint replacement demo — browse grid + record form; inventory attributes PATCH."""
 
 from __future__ import annotations
 
+from typing import Any
+
 from fastapi import APIRouter, HTTPException, Query
+from pydantic import BaseModel, Field
 
 from app import emaint_demo_service
 
 router = APIRouter(prefix="/api/emaint-demo", tags=["emaint-demo"])
+
+
+class RowPatchBody(BaseModel):
+    updates: dict[str, Any] = Field(..., min_length=1)
 
 
 @router.get("/health")
@@ -45,3 +52,15 @@ def get_row(table_id: str, key: str):
     if row is None:
         raise HTTPException(status_code=404, detail="Row not found")
     return row
+
+
+@router.patch("/{table_id}/rows/{key}")
+def patch_row(table_id: str, key: str, body: RowPatchBody):
+    try:
+        return emaint_demo_service.patch_row(table_id, key, body.updates)
+    except KeyError:
+        raise HTTPException(status_code=404, detail=f"Unknown table: {table_id}") from None
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc

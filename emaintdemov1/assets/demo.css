@@ -352,6 +352,77 @@ body.detail-open .detail-drawer {
   align-items: start;
 }
 
+.attributes-summary,
+.attributes-editor {
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+}
+
+.editor-title {
+  margin: 0 0 8px;
+  font-size: 13px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+}
+
+.editor-hint {
+  margin: 0 0 10px;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.attributes-json {
+  width: 100%;
+  min-height: 220px;
+  font: 12px/1.45 ui-monospace, "Cascadia Code", Consolas, monospace;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  resize: vertical;
+}
+
+.editor-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 10px;
+}
+
+.editor-status {
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.editor-status.ok {
+  color: #15803d;
+}
+
+.editor-status.error {
+  color: var(--error);
+}
+
+.attr-line {
+  display: grid;
+  grid-template-columns: minmax(100px, 40%) 1fr;
+  gap: 8px;
+  padding: 4px 0;
+  font-size: 13px;
+}
+
+.attr-key {
+  color: var(--muted);
+  font-family: ui-monospace, Consolas, monospace;
+  font-size: 12px;
+}
+
+.attr-val.empty {
+  color: var(--muted);
+  font-style: italic;
+}
+
 .form-grid label {
   padding-top: 2px;
   color: var(--muted);
@@ -470,12 +541,6 @@ body.detail-open .detail-drawer {
 
 #btn-scan-restart {
   margin-top: 10px;
-  padding: 8px 12px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: #fff;
-  font: inherit;
-  cursor: pointer;
 }
 
 @media (max-width: 900px) {
