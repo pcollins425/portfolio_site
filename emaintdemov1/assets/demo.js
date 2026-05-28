@@ -29,6 +29,12 @@
     return { text: String(v), empty: false };
   }
 
+  function rowKey(row) {
+    const v = row[state.table.key_column];
+    if (v === null || v === undefined || v === "") return null;
+    return String(v);
+  }
+
   async function api(path) {
     const res = await fetch(`${API_BASE}${path}`);
     if (!res.ok) {
@@ -69,8 +75,8 @@
     tbody.innerHTML = "";
     for (const row of state.rows) {
       const tr = document.createElement("tr");
-      const key = row[state.table.key_column];
-      if (key === state.selectedKey) tr.classList.add("selected");
+      const key = rowKey(row);
+      if (key !== null && key === state.selectedKey) tr.classList.add("selected");
       tr.addEventListener("click", () => selectRow(key));
       tr.innerHTML = cols.map((c) => `<td title="${fmtCell(row[c])}">${fmtCell(row[c])}</td>`).join("");
       tbody.appendChild(tr);
@@ -111,6 +117,10 @@
   }
 
   async function selectRow(key) {
+    if (key === null) {
+      setStatus("This row has no key value; cannot open the record.", true);
+      return;
+    }
     state.selectedKey = key;
     renderGrid();
     setStatus("Loading record…");

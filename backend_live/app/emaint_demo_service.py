@@ -90,8 +90,8 @@ def _qualified_table(spec: dict) -> str:
 
 def browse_rows(table_id: str, *, limit: int = 50, offset: int = 0, q: str | None = None):
     spec = _table_spec(table_id)
-    cols = spec["browse_columns"]
     key_col = spec["key_column"]
+    cols = list(dict.fromkeys([*spec["browse_columns"], key_col]))
     select_list = ", ".join(_bracket(c) for c in cols)
     sql = f"SELECT {select_list} FROM {_qualified_table(spec)}"
     params: list = []
