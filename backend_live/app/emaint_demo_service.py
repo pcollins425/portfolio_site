@@ -100,7 +100,9 @@ def _table_spec(table_id: str) -> dict:
     cfg = load_table_config()
     if table_id not in cfg:
         raise KeyError(table_id)
-    return cfg[table_id]
+    spec = dict(cfg[table_id])
+    spec["_table_id"] = table_id
+    return spec
 
 
 def _qualified_table(spec: dict) -> str:
@@ -108,11 +110,28 @@ def _qualified_table(spec: dict) -> str:
 
 
 def _lookup_column(spec: dict, key: str) -> tuple[str, str]:
+    """Single-column lookup (work orders: WO number vs uuid)."""
     key_col = spec["key_column"]
     alt = spec.get("alternate_key_column")
     if alt and not _UUID_RE.match(key):
         return alt, key
     return key_col, key
+
+
+def _where_for_key(spec: dict, key: str) -> tuple[str, tuple]:
+    """WHERE clause + params for row fetch/update by primary or alternate key."""
+    key_col = spec["key_column"]
+    alt = spec.get("alternate_key_column")
+    table_id = spec.get("_table_id")
+    if alt and table_id == "work_orders":
+        lookup_col, lookup_key = _lookup_column(spec, key)
+        return f"{_bracket(lookup_col)} = %s", (lookup_key,)
+    if alt:
+        return (
+            f"({_bracket(key_col)} = %s OR {_bracket(alt)} = %s)",
+            (key, key),
+        )
+    return f"{_bracket(key_col)} = %s", (key,)
 
 
 def browse_rows(table_id: str, *, limit: int = 50, offset: int = 0, q: str | None = None):
@@ -175,14 +194,17 @@ def _flatten_attributes(obj, prefix: str = "") -> list[tuple[str, str]]:
 def get_row(table_id: str, key: str):
     spec = _table_spec(table_id)
     key_col = spec["key_column"]
-    lookup_col, lookup_key = _lookup_column(spec, key)
+    where_sql, where_params = _where_for_key(spec, key)
     json_cols = list(spec.get("json_columns") or [])
     form_cols = list(dict.fromkeys([*spec["form_fields"].values(), *json_cols]))
     if key_col not in form_cols:
         form_cols.insert(0, key_col)
+    alt = spec.get("alternate_key_column")
+    if alt and alt not in form_cols:
+        form_cols.append(alt)
     select_list = ", ".join(_bracket(c) for c in form_cols)
-    sql = f"SELECT {select_list} FROM {_qualified_table(spec)} WHERE {_bracket(lookup_col)} = %s"
-    rows = _query(sql, (lookup_key,))
+    sql = f"SELECT {select_list} FROM {_qualified_table(spec)} WHERE {where_sql}"
+    rows = _query(sql, where_params)
     if not rows:
         return None
     row = _row_json(rows[0])
@@ -218,7 +240,7 @@ def patch_row(table_id: str, key: str, updates: dict) -> dict:
     if unknown:
         raise ValueError(f"Columns not editable: {', '.join(sorted(unknown))}")
 
-    lookup_col, lookup_key = _lookup_column(spec, key)
+    where_sql, where_params = _where_for_key(spec, key)
     sets = []
     params: list = []
     for col, val in updates.items():
