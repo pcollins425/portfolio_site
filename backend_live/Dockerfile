@@ -9,6 +9,7 @@ RUN pip install --no-cache-dir --upgrade pip \
     && pip install --no-cache-dir -r requirements.txt
 
 COPY app ./app
+COPY data ./data
 COPY run.py .
 
 # Listen on all interfaces inside the container so host port publishes work.

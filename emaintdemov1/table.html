@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>eMaint demo table</title>
+  <link rel="stylesheet" href="assets/demo.css" />
+</head>
+<body>
+  <header class="topbar">
+    <h1 id="page-title">DGS Operations (demo)</h1>
+    <nav id="nav"></nav>
+    <a href="index.html" style="color:#fff;margin-left:auto;">Home</a>
+  </header>
+
+  <div class="layout">
+    <section class="panel">
+      <div class="panel-head">Browse — <span id="table-subtitle"></span></div>
+      <div class="toolbar">
+        <input id="search" type="search" placeholder="Search visible columns…" />
+        <button id="btn-search" type="button">Search</button>
+        <button id="btn-prev" type="button">Prev</button>
+        <button id="btn-next" type="button">Next</button>
+      </div>
+      <div class="grid-wrap">
+        <table class="data-grid">
+          <thead id="grid-head"></thead>
+          <tbody id="grid-body"></tbody>
+        </table>
+      </div>
+      <div id="status" class="status"></div>
+    </section>
+
+    <section class="panel">
+      <div class="panel-head" id="form-head">Record</div>
+      <div class="form-wrap" id="form-fields">
+        <p class="status">Select a row from the browse grid.</p>
+      </div>
+    </section>
+  </div>
+
+  <script src="assets/demo.js"></script>
+  <script>EmaintDemo.initTablePage();</script>
+</body>
+</html>

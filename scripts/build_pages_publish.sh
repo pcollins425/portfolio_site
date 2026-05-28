@@ -10,7 +10,9 @@ cd "$ROOT"
 rm -rf pages_publish
 mkdir -p pages_publish/dashboardtestv1
 mkdir -p pages_publish/scannertestv1
+mkdir -p pages_publish/emaintdemov1
 cp index.html pages_publish/
 cp -r frontend/dist/. pages_publish/dashboardtestv1/
 cp scannertestv1/index.html pages_publish/scannertestv1/
-echo "OK: $ROOT/pages_publish  (coming soon + /dashboardtestv1 SPA + /scannertestv1 scanner demo)"
+cp -r emaintdemov1/. pages_publish/emaintdemov1/
+echo "OK: $ROOT/pages_publish  (coming soon + /dashboardtestv1 SPA + /scannertestv1 + /emaintdemov1)"

@@ -13,7 +13,7 @@ python run.py
 
 Or **`scripts/run-backend-live.cmd`** / **`scripts/run-backend-live.sh`** from repo root.
 
-Point your tunnel at this host/port. **`MSSQL_*`** = **`dashboard_perf_ro`** for revenue routes; **`MSSQL_FIELD_*`** = **`dgs_field_api`** for **`/api/asset/lookup`** and **`/api/field/health`**.
+Point your tunnel at this host/port. **`MSSQL_*`** = **`dashboard_perf_ro`** for revenue routes; **`MSSQL_FIELD_*`** = **`dgs_field_api`** for **`/api/asset/lookup`**, **`/api/field/health`**, and **`/api/emaint-demo/*`** (read-only on **`compinfo_landing`**, **`work_orders`**, **`emaint_landing`**).
 
 ## Docker (same machine as **`cloudflared`**)
 

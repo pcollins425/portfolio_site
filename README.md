@@ -5,11 +5,12 @@ Static **coming-soon** site (**`/`**), **Master Revenue** dashboards at **`/dash
 | Path | Purpose |
 |------|---------|
 | **`index.html`** | Cloudflare **`www`** — “coming soon” at site root (**`/`**). |
-| **`scannertestv1/`** | Client-only scan demo — USB wedge + phone camera; published to **`/scannertestv1/`**. |
+| **`scannertestv1/`** | Barcode scan demo — USB wedge + phone camera; **`GET /api/asset/lookup`**. Published to **`/scannertestv1/`**. |
+| **`emaintdemov1/`** | eMaint replacement demo — browse grid + record form over three SQL landing tables; **`GET /api/emaint-demo/*`**. Published to **`/emaintdemov1/`**. |
 | **`local_test.html`** | Optional static probe (Python **`http.server`**) — not required if you use **`frontend/`**. |
 | **`frontend/`** | Master Revenue UI — **`npm run dev`** → **`http://localhost:5173/`** (base **`/`**), proxies **`/api`** → **`backend_local`** (**`:9002`**). Production build uses base **`/dashboardtestv1/`**. |
 | **`backend_local/`** | Dev API — **`GET /api/health`**, **`/api/executive`**, **`/api/analyst/*`**, **`/api/finance/*`**, **`/api/performance/*`** over **`[dashboard].[vw_performance_report]`** |
-| **`backend_live/`** | Same API surface on **`:9001`** for tunnel / production-style tests |
+| **`backend_live/`** | Same API surface on **`:9001`** for tunnel / production-style tests; includes **`/api/emaint-demo/*`** |
 | **`scripts/`** | **`run_sql_file.py`**, **`run-backend-*.sh/.cmd`**, **`build_pages_publish.*`**, **`scripts/sql/dashboard_perf_ro/`** |
 | **`worker/spa.js`** | SPA fallback: **`/dashboardtestv1/...`** client routes → **`dashboardtestv1/index.html`** (Workers reject wildcard **`_redirects`** SPA rules — code **100324**). |
 | **`wrangler.toml`** | **`main`** (`worker/spa.js`) + **`[assets] binding`**; upload **only** **`./pages_publish`**. |
