@@ -92,6 +92,8 @@ def list_tables() -> list[dict]:
         }
         if spec.get("alternate_key_column"):
             entry["alternate_key_column"] = spec["alternate_key_column"]
+        if spec.get("detail_children"):
+            entry["detail_children"] = spec["detail_children"]
         out.append(entry)
     return out
 
@@ -146,7 +148,7 @@ def browse_rows(table_id: str, *, limit: int = 50, offset: int = 0, q: str | Non
         where_parts = [f"CAST({_bracket(c)} AS nvarchar(max)) LIKE %s" for c in cols]
         sql += " WHERE (" + " OR ".join(where_parts) + ")"
         params.extend([term] * len(cols))
-    order_col = _bracket(key_col)
+    order_col = _bracket(spec.get("order_column") or key_col)
     sql += f" ORDER BY {order_col} DESC OFFSET %s ROWS FETCH NEXT %s ROWS ONLY"
     params.extend([offset, limit])
     rows = [_row_json(r) for r in _query(sql, tuple(params))]
@@ -261,12 +263,58 @@ def patch_row(table_id: str, key: str, updates: dict) -> dict:
         params.append(text)
 
     sql = f"UPDATE {_qualified_table(spec)} SET {', '.join(sets)} WHERE {where_sql}"
-    params.extend(where_params)
+    params.extend(list(where_params))
     _execute(sql, tuple(params))
     row = get_row(table_id, key)
     if row is None:
         raise ValueError("Row not found after update")
     return row
+
+
+def browse_child_rows(table_id: str, key: str, child_id: str) -> dict | None:
+    spec = _table_spec(table_id)
+    children = spec.get("detail_children") or {}
+    if child_id not in children:
+        raise KeyError(child_id)
+    child = children[child_id]
+
+    where_sql, where_params = _where_for_key(spec, key)
+    parent_sql = (
+        f"SELECT {_bracket(spec['key_column'])} AS parent_key "
+        f"FROM {_qualified_table(spec)} WHERE {where_sql}"
+    )
+    parent_rows = _query(parent_sql, where_params)
+    if not parent_rows:
+        return None
+
+    parent_key = parent_rows[0]["parent_key"]
+    if parent_key is None or str(parent_key).strip() == "":
+        return {
+            "table_id": table_id,
+            "child_id": child_id,
+            "parent_key": key,
+            "rows": [],
+            "browse_columns": child["browse_columns"],
+        }
+
+    fk = child["parent_fk_column"]
+    cols = list(dict.fromkeys([*child["browse_columns"], fk]))
+    select_list = ", ".join(_bracket(c) for c in cols)
+    child_table = f"[{child['sql_schema']}].[{child['sql_table']}]"
+    order_col = _bracket(child.get("order_column") or child["browse_columns"][0])
+    sql = (
+        f"SELECT {select_list} FROM {child_table} "
+        f"WHERE {_bracket(fk)} = %s ORDER BY {order_col} ASC"
+    )
+    rows = [_row_json(r) for r in _query(sql, (parent_key,))]
+    return {
+        "table_id": table_id,
+        "child_id": child_id,
+        "title": child.get("title") or child_id,
+        "parent_key": str(parent_key),
+        "rows": rows,
+        "browse_columns": child["browse_columns"],
+    }
 
 
 def health_check() -> dict:

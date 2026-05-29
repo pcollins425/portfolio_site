@@ -1,6 +1,7 @@
 :root {
   --sidebar-w: 220px;
   --drawer-w: min(440px, 92vw);
+  --drawer-w-split: min(720px, 96vw);
   --bg: #f1f5f9;
   --surface: #ffffff;
   --sidebar-bg: #0f172a;
@@ -109,6 +110,14 @@ body.app {
 
 body.detail-open .main {
   margin-right: var(--drawer-w);
+}
+
+body.detail-open.detail-split .main {
+  margin-right: var(--drawer-w-split);
+}
+
+body.detail-open.detail-split .detail-drawer {
+  width: var(--drawer-w-split);
 }
 
 .page-header {
@@ -338,6 +347,68 @@ body.detail-open .detail-drawer {
   overflow: auto;
   flex: 1;
   padding: 16px 18px 24px;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+body.detail-split .detail-body {
+  overflow: hidden;
+  padding-bottom: 12px;
+}
+
+body.detail-split #form-fields {
+  flex: 0 1 auto;
+  max-height: 46%;
+  overflow: auto;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+.detail-lines-section {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  padding-top: 12px;
+}
+
+.detail-lines-title {
+  margin: 0 0 10px;
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+  flex-shrink: 0;
+}
+
+.detail-lines-grid-wrap {
+  flex: 1 1 auto;
+  min-height: 120px;
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: #fff;
+}
+
+table.detail-lines-grid tbody tr {
+  cursor: default;
+}
+
+table.detail-lines-grid tbody tr:hover {
+  background: var(--row-hover);
+}
+
+.lines-status {
+  margin: 8px 0 0;
+  font-size: 12px;
+  color: var(--muted);
+  flex-shrink: 0;
+}
+
+.lines-status.error {
+  color: var(--error);
 }
 
 .detail-loading {

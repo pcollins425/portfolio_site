@@ -80,7 +80,19 @@
       </div>
       <button id="btn-close-detail" type="button" class="icon-btn" aria-label="Close details">×</button>
     </div>
-    <div class="detail-body" id="form-fields"></div>
+    <div class="detail-body" id="detail-body">
+      <div id="form-fields"></div>
+      <section id="detail-lines-section" class="detail-lines-section" hidden aria-label="Line items">
+        <h3 class="detail-lines-title">Line items</h3>
+        <div class="detail-lines-grid-wrap">
+          <table class="data-grid detail-lines-grid">
+            <thead id="lines-grid-head"></thead>
+            <tbody id="lines-grid-body"></tbody>
+          </table>
+        </div>
+        <p id="lines-status" class="lines-status"></p>
+      </section>
+    </div>
   </aside>
 
   <script src="assets/demo.js"></script>

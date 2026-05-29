@@ -177,6 +177,65 @@
       "Edit User": "edituser"
     }
   },
+  "purchase_orders": {
+    "title": "Purchase Orders",
+    "emaint_table": "POMAST + POTRAN",
+    "sql_schema": "inventory",
+    "sql_table": "purchase_order",
+    "key_column": "reference_key",
+    "alternate_key_column": "purno",
+    "order_column": "purdate",
+    "browse_columns": [
+      "reference_key",
+      "purno",
+      "supplier",
+      "purdate",
+      "postat",
+      "buyer",
+      "invloc",
+      "scheduled_labor"
+    ],
+    "form_fields": {
+      "Reference Key": "reference_key",
+      "PO No.": "purno",
+      "PO Date": "purdate",
+      "PO Status": "postat",
+      "Location": "invloc",
+      "Supplier": "supplier",
+      "Supplier ID": "supplierid",
+      "Buyer": "buyer",
+      "Closed Date": "closedate",
+      "E-Mail": "e_mail_add",
+      "Ship To": "shipto",
+      "Scheduled labor": "scheduled_labor",
+      "WO No.": "wo",
+      "Project No.": "project_no",
+      "Comments": "comments",
+      "Add Date": "adddate",
+      "Add Time": "addtime",
+      "Add User": "adduser"
+    },
+    "detail_children": {
+      "lines": {
+        "title": "Line items",
+        "sql_schema": "inventory",
+        "sql_table": "purchase_order_line",
+        "parent_fk_column": "purchase_order_id",
+        "order_column": "lineno",
+        "browse_columns": [
+          "reference_key",
+          "lineno",
+          "item",
+          "descrip",
+          "qtyord",
+          "cost",
+          "extcost",
+          "recqty",
+          "postat"
+        ]
+      }
+    }
+  },
   "projects": {
     "title": "Projects",
     "emaint_table": "PROJECT",

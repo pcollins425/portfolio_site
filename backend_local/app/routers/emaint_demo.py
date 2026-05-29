@@ -41,6 +41,19 @@ def list_rows(
         raise HTTPException(status_code=500, detail=str(exc)) from exc
 
 
+@router.get("/{table_id}/rows/{key}/children/{child_id}")
+def get_child_rows(table_id: str, key: str, child_id: str):
+    try:
+        data = emaint_demo_service.browse_child_rows(table_id, key, child_id)
+    except KeyError:
+        raise HTTPException(status_code=404, detail="Not found") from None
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+    if data is None:
+        raise HTTPException(status_code=404, detail="Row not found")
+    return data
+
+
 @router.get("/{table_id}/rows/{key}")
 def get_row(table_id: str, key: str):
     try:

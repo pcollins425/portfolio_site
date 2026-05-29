@@ -2,7 +2,13 @@
   const params = new URLSearchParams(window.location.search);
   const API_BASE = (params.get("api") || "https://api.collinsmediallc.com").replace(/\/$/, "");
   const TABLE_ID = params.get("t") || "projects";
-  const NAV_ORDER = ["projects", "work_orders", "compinfo", "inventory"];
+  const NAV_ORDER = [
+    "projects",
+    "work_orders",
+    "compinfo",
+    "inventory",
+    "purchase_orders",
+  ];
 
   const state = {
     config: null,
@@ -38,11 +44,28 @@
     return { text: String(v), empty: false };
   }
 
+  function hasSplitDetail() {
+    const ch = state.table && state.table.detail_children;
+    return ch && Object.keys(ch).length > 0;
+  }
+
+  function primaryChildId() {
+    const ch = state.table && state.table.detail_children;
+    if (!ch) return null;
+    const keys = Object.keys(ch);
+    return keys.length ? keys[0] : null;
+  }
+
+  function applyDetailLayout() {
+    const split = hasSplitDetail();
+    document.body.classList.toggle("detail-split", split);
+    const section = el("detail-lines-section");
+    if (section) section.hidden = !split;
+  }
+
   function rowKey(row) {
     const cols = [state.table.key_column];
-    const alt =
-      state.table.alternate_key_column ||
-      (state.table.id === "work_orders" ? "wo" : null);
+    const alt = state.table.alternate_key_column;
     if (alt) cols.push(alt);
     for (const col of cols) {
       const v = row[col];
@@ -124,8 +147,64 @@
     renderGrid();
     const wrap = el("form-fields");
     if (wrap) wrap.innerHTML = "";
+    clearLinesGrid();
     const head = el("form-head");
     if (head) head.textContent = "Record";
+  }
+
+  function clearLinesGrid() {
+    const thead = el("lines-grid-head");
+    const tbody = el("lines-grid-body");
+    const status = el("lines-status");
+    if (thead) thead.innerHTML = "";
+    if (tbody) tbody.innerHTML = "";
+    if (status) status.textContent = "";
+  }
+
+  function renderLinesGrid(data) {
+    const thead = el("lines-grid-head");
+    const tbody = el("lines-grid-body");
+    const status = el("lines-status");
+    if (!thead || !tbody || !data) return;
+
+    const cols = data.browse_columns || [];
+    thead.innerHTML = `<tr>${cols.map((c) => `<th>${escapeHtml(c)}</th>`).join("")}</tr>`;
+    tbody.innerHTML = "";
+    const rows = data.rows || [];
+    for (const row of rows) {
+      const tr = document.createElement("tr");
+      tr.innerHTML = cols
+        .map((c) => {
+          const text = fmtCell(row[c]);
+          return `<td title="${escapeHtml(text)}">${escapeHtml(text)}</td>`;
+        })
+        .join("");
+      tbody.appendChild(tr);
+    }
+    if (status) {
+      status.textContent = rows.length
+        ? `${rows.length} line(s)`
+        : "No lines on this purchase order.";
+    }
+  }
+
+  async function loadDetailLines(key, seq) {
+    const childId = primaryChildId();
+    if (!childId) return;
+    const status = el("lines-status");
+    if (status) status.textContent = "Loading lines…";
+    try {
+      const data = await api(
+        `/api/emaint-demo/${TABLE_ID}/rows/${encodeURIComponent(key)}/children/${encodeURIComponent(childId)}`
+      );
+      if (seq !== loadSeq) return;
+      renderLinesGrid(data);
+    } catch (err) {
+      if (seq !== loadSeq) return;
+      clearLinesGrid();
+      if (status) status.textContent = String(err.message || err);
+      if (status) status.className = "lines-status error";
+    }
   }
 
   function setDetailLoading() {
@@ -184,7 +263,9 @@
     }
 
     if (head) {
-      head.textContent = record.fields["Project #"] ||
+      head.textContent =
+        record.fields["PO No."] ||
+        record.fields["Project #"] ||
         record.fields["WO No"] ||
         record.fields["Reference Key"] ||
         record.fields["Asset ID"] ||
@@ -298,6 +379,14 @@
     openDetail();
     renderGrid();
     setDetailLoading();
+    if (hasSplitDetail()) {
+      clearLinesGrid();
+      const status = el("lines-status");
+      if (status) {
+        status.textContent = "Loading lines…";
+        status.className = "lines-status";
+      }
+    }
 
     const seq = ++loadSeq;
     try {
@@ -306,10 +395,15 @@
       );
       if (seq !== loadSeq) return;
       renderForm(record);
+      if (hasSplitDetail()) {
+        await loadDetailLines(key, seq);
+      }
+      if (seq !== loadSeq) return;
       setStatus("");
     } catch (err) {
       if (seq !== loadSeq) return;
       renderForm(null);
+      clearLinesGrid();
       setStatus(String(err.message || err), true);
     }
   }
@@ -492,6 +586,7 @@
     document.title = `${state.table.title} — DGS Operations`;
 
     renderNav();
+    applyDetailLayout();
 
     const title = el("table-title");
     if (title) title.textContent = state.table.title;
