@@ -45,22 +45,23 @@
   }
 
   function hasSplitDetail() {
+    if (TABLE_ID !== "purchase_orders") return false;
     const ch = state.table && state.table.detail_children;
-    return ch && Object.keys(ch).length > 0;
+    return !!(ch && ch.lines);
   }
 
   function primaryChildId() {
-    const ch = state.table && state.table.detail_children;
-    if (!ch) return null;
-    const keys = Object.keys(ch);
-    return keys.length ? keys[0] : null;
+    return hasSplitDetail() ? "lines" : null;
   }
 
   function applyDetailLayout() {
     const split = hasSplitDetail();
     document.body.classList.toggle("detail-split", split);
     const section = el("detail-lines-section");
-    if (section) section.hidden = !split;
+    if (section) {
+      section.hidden = !split;
+      section.classList.toggle("is-visible", split);
+    }
   }
 
   function rowKey(row) {
@@ -139,11 +140,16 @@
     state.detailOpen = false;
     state.selectedKey = null;
     loadSeq += 1;
-    document.body.classList.remove("detail-open");
+    document.body.classList.remove("detail-open", "detail-split");
     const drawer = el("detail-drawer");
     const backdrop = el("detail-backdrop");
     if (drawer) drawer.setAttribute("aria-hidden", "true");
     if (backdrop) backdrop.hidden = true;
+    const section = el("detail-lines-section");
+    if (section) {
+      section.hidden = true;
+      section.classList.remove("is-visible");
+    }
     renderGrid();
     const wrap = el("form-fields");
     if (wrap) wrap.innerHTML = "";

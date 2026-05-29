@@ -11,3 +11,11 @@ python3 scripts/run_sql_file.py scripts/sql/field_api/setup_field_api_login.sql 
 **Backend `.env`:** set **`MSSQL_USER=dgs_field_api`** and **`MSSQL_PASSWORD=`** (from vault) on the API host that serves field routes — not necessarily the same `.env` as the revenue dashboard if you split services later.
 
 **Grow access:** append **`GRANT … TO [dgs_field_api]`** batches to **`setup_field_api_login.sql`** (or a new `grant_*.sql`) and re-run.
+
+**Purchase orders (2026-05-29):** after creating **`inventory.purchase_order`** / **`purchase_order_line`**, run:
+
+```bash
+python3 scripts/run_sql_file.py scripts/sql/field_api/grant_purchase_order_field_api.sql --database dgs_application_db
+```
+
+(No password/login change — same **`dgs_field_api`** principal; only object permissions were missing.)

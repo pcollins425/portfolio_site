@@ -8,6 +8,9 @@
 
   Grants (dgs_application_db):
     SELECT  inventory.compinfo_landing
+    SELECT, UPDATE  inventory.inventory
+    SELECT  inventory.purchase_order
+    SELECT  inventory.purchase_order_line
     SELECT  projects.emaint_landing
     SELECT  projects.work_orders
     INSERT, UPDATE  projects.work_orders
@@ -42,6 +45,15 @@ GRANT CONNECT TO [dgs_field_api];
 GO
 
 GRANT SELECT ON OBJECT::[inventory].[compinfo_landing] TO [dgs_field_api];
+GO
+
+GRANT SELECT, UPDATE ON OBJECT::[inventory].[inventory] TO [dgs_field_api];
+GO
+
+GRANT SELECT ON OBJECT::[inventory].[purchase_order] TO [dgs_field_api];
+GO
+
+GRANT SELECT ON OBJECT::[inventory].[purchase_order_line] TO [dgs_field_api];
 GO
 
 GRANT SELECT ON OBJECT::[projects].[emaint_landing] TO [dgs_field_api];
