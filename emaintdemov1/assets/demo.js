@@ -130,6 +130,7 @@
   function openDetail() {
     state.detailOpen = true;
     document.body.classList.add("detail-open");
+    applyDetailLayout();
     const drawer = el("detail-drawer");
     const backdrop = el("detail-backdrop");
     if (drawer) drawer.setAttribute("aria-hidden", "false");
@@ -191,6 +192,7 @@
       status.textContent = rows.length
         ? `${rows.length} line(s)`
         : "No lines on this purchase order.";
+      status.className = "lines-status";
     }
   }
 
@@ -381,6 +383,7 @@
       return;
     }
 
+    const seq = ++loadSeq;
     state.selectedKey = key;
     openDetail();
     renderGrid();
@@ -393,8 +396,6 @@
         status.className = "lines-status";
       }
     }
-
-    const seq = ++loadSeq;
     try {
       const record = await api(
         `/api/emaint-demo/${TABLE_ID}/rows/${encodeURIComponent(key)}`
