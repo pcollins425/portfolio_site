@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Annotated, Any
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
+from app import emaint_demo_permissions as perms
 from app import emaint_demo_service
+from app.auth_deps import require_demo_user
 
 router = APIRouter(prefix="/api/emaint-demo", tags=["emaint-demo"])
 
@@ -16,14 +18,36 @@ class RowPatchBody(BaseModel):
     updates: dict[str, Any] = Field(..., min_length=1)
 
 
+def _assert_read(user: dict[str, Any] | None, table_id: str) -> None:
+    if user is None:
+        return
+    if not perms.can_read_table(user.get("permissions") or {}, table_id):
+        raise HTTPException(status_code=403, detail=f"No read access to {table_id}")
+
+
+def _assert_write(user: dict[str, Any] | None, table_id: str) -> None:
+    if user is None:
+        return
+    if not perms.can_write_table(user.get("permissions") or {}, table_id):
+        raise HTTPException(status_code=403, detail=f"No write access to {table_id}")
+
+
+def _filter_tables(user: dict[str, Any] | None, tables: list[dict]) -> list[dict]:
+    if user is None:
+        return tables
+    allowed = set(user.get("tables") or [])
+    return [t for t in tables if t.get("id") in allowed]
+
+
 @router.get("/health")
 def health():
     return emaint_demo_service.health_check()
 
 
 @router.get("/config")
-def config():
-    return {"tables": emaint_demo_service.list_tables()}
+def config(user: Annotated[dict[str, Any] | None, Depends(require_demo_user)]):
+    tables = _filter_tables(user, emaint_demo_service.list_tables())
+    return {"tables": tables}
 
 
 @router.get("/{table_id}/rows")
@@ -32,7 +56,9 @@ def list_rows(
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
     q: str | None = Query(None, max_length=200),
+    user: Annotated[dict[str, Any] | None, Depends(require_demo_user)] = None,
 ):
+    _assert_read(user, table_id)
     try:
         return emaint_demo_service.browse_rows(table_id, limit=limit, offset=offset, q=q)
     except KeyError:
@@ -42,7 +68,13 @@ def list_rows(
 
 
 @router.get("/{table_id}/rows/{key}/children/{child_id}")
-def get_child_rows(table_id: str, key: str, child_id: str):
+def get_child_rows(
+    table_id: str,
+    key: str,
+    child_id: str,
+    user: Annotated[dict[str, Any] | None, Depends(require_demo_user)] = None,
+):
+    _assert_read(user, table_id)
     try:
         data = emaint_demo_service.browse_child_rows(table_id, key, child_id)
     except KeyError:
@@ -55,7 +87,12 @@ def get_child_rows(table_id: str, key: str, child_id: str):
 
 
 @router.get("/{table_id}/rows/{key}")
-def get_row(table_id: str, key: str):
+def get_row(
+    table_id: str,
+    key: str,
+    user: Annotated[dict[str, Any] | None, Depends(require_demo_user)] = None,
+):
+    _assert_read(user, table_id)
     try:
         row = emaint_demo_service.get_row(table_id, key)
     except KeyError:
@@ -68,7 +105,13 @@ def get_row(table_id: str, key: str):
 
 
 @router.patch("/{table_id}/rows/{key}")
-def patch_row(table_id: str, key: str, body: RowPatchBody):
+def patch_row(
+    table_id: str,
+    key: str,
+    body: RowPatchBody,
+    user: Annotated[dict[str, Any] | None, Depends(require_demo_user)] = None,
+):
+    _assert_write(user, table_id)
     try:
         return emaint_demo_service.patch_row(table_id, key, body.updates)
     except KeyError:
