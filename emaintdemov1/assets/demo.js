@@ -56,7 +56,11 @@
   }
 
   function loginPageUrl() {
-    const returnTo = `${window.location.origin}${window.location.pathname}?${params.toString()}`;
+    let path = window.location.pathname;
+    if (path.endsWith("/table") && !path.endsWith(".html")) {
+      path = path.replace(/\/table$/, "/table.html");
+    }
+    const returnTo = `${window.location.origin}${path}?${params.toString()}`;
     return `login.html?api=${encodeURIComponent(API_BASE)}&return_to=${encodeURIComponent(returnTo)}`;
   }
 
