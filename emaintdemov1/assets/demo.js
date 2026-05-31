@@ -429,14 +429,30 @@
         </section>`;
     }
 
+    let prepSection = "";
+    if (TABLE_ID === "compinfo") {
+      prepSection = `
+        <section class="prep-status-section">
+          <h3 class="editor-title">Prep status</h3>
+          <p class="editor-hint">Warehouse prep stage — updates eMaint <strong>status</strong>; <strong>property</strong> stays at the warehouse.</p>
+          <div id="detail-prep-actions" class="scan-prep-actions"></div>
+          <span id="detail-prep-status" class="editor-status"></span>
+        </section>`;
+    }
+
     wrap.innerHTML = `
       <div class="form-grid">${parts.join("")}</div>
       ${attrLines.length ? `<section class="attributes-summary"><h3 class="editor-title">Attributes (read-only summary)</h3>${attrLines.join("")}</section>` : ""}
+      ${prepSection}
       ${editor}`;
 
     const saveBtn = el("btn-save-attributes");
     if (saveBtn) {
       saveBtn.addEventListener("click", saveAttributes);
+    }
+
+    if (TABLE_ID === "compinfo") {
+      renderDetailPrepActions(record);
     }
   }
 
@@ -608,6 +624,91 @@
       .replace(/"/g, "&quot;");
   }
 
+  function assetFromRecord(record) {
+    if (!record || !record.raw) return null;
+    const raw = record.raw;
+    return {
+      compid: raw.compid,
+      serial_no: raw.serial_no,
+      asset_id: raw.asset_id,
+      property: raw.property,
+      status: raw.status,
+      comp_desc: raw.comp_desc,
+    };
+  }
+
+  function loadPrepStatusConfig() {
+    if (prepStatusConfig) return Promise.resolve(prepStatusConfig);
+    return api("/api/emaint-demo/compinfo/prep-statuses")
+      .then((cfg) => {
+        prepStatusConfig = cfg;
+        return cfg;
+      })
+      .catch(() => null);
+  }
+
+  function setDetailPrepStatus(msg, isError) {
+    const node = el("detail-prep-status");
+    if (!node) return;
+    node.textContent = msg || "";
+    node.className = isError ? "editor-status error" : "editor-status ok";
+    if (!msg) node.className = "editor-status";
+  }
+
+  function fillPrepActionButtons(container, asset, onChoose) {
+    if (!container) return;
+    container.innerHTML = "";
+    if (!prepStatusConfig) {
+      const note = document.createElement("p");
+      note.className = "editor-hint";
+      note.textContent = "Loading prep status options…";
+      container.appendChild(note);
+      loadPrepStatusConfig().then(() => fillPrepActionButtons(container, asset, onChoose));
+      return;
+    }
+
+    const canWrite = canWriteTable("compinfo");
+    const current = (asset && asset.status ? String(asset.status) : "").trim();
+
+    if (!canWrite) {
+      const note = document.createElement("p");
+      note.className = "editor-hint";
+      note.textContent = "You have read-only access to Assets — prep moves are not available.";
+      container.appendChild(note);
+      return;
+    }
+
+    for (const item of prepStatusConfig.values || []) {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.textContent = item.button_label || item.status;
+      btn.className = "btn-accent";
+      const isCurrent = current && current.toLowerCase() === String(item.status).toLowerCase();
+      if (isCurrent) {
+        btn.classList.add("is-current");
+        btn.disabled = true;
+        btn.textContent = `${btn.textContent} (current)`;
+      } else {
+        btn.addEventListener("click", () => {
+          onChoose(item.status, item.button_label || item.status);
+        });
+      }
+      container.appendChild(btn);
+    }
+  }
+
+  function renderDetailPrepActions(record) {
+    const container = el("detail-prep-actions");
+    const asset = assetFromRecord(record);
+    if (!container || !asset || !asset.compid) return;
+    setDetailPrepStatus("");
+    fillPrepActionButtons(container, asset, (status, label) => {
+      applyPrepStatus(String(asset.compid), status, label, {
+        setFeedback: setDetailPrepStatus,
+      });
+    });
+  }
+
   function renderScanAssetCard(asset) {
     const card = el("scan-asset-card");
     const result = el("scan-result");
@@ -628,59 +729,50 @@
 
   function renderScanPrepActions(asset) {
     const actions = el("scan-prep-actions");
-    if (!actions || !prepStatusConfig) return;
-    actions.innerHTML = "";
-    const canWrite = canWriteTable("compinfo");
-    const current = (asset && asset.status ? String(asset.status) : "").trim();
-
-    if (!canWrite) {
-      const note = document.createElement("p");
-      note.className = "scan-hint";
-      note.textContent = "You have read-only access to Assets — prep moves are not available.";
-      actions.appendChild(note);
-      return;
-    }
-
-    for (const item of prepStatusConfig.values || []) {
-      const btn = document.createElement("button");
-      btn.type = "button";
-      btn.textContent = item.button_label || item.status;
-      btn.className = "btn-accent";
-      const isCurrent = current && current.toLowerCase() === String(item.status).toLowerCase();
-      if (isCurrent) {
-        btn.classList.add("is-current");
-        btn.disabled = true;
-        btn.textContent = `${btn.textContent} (current)`;
-      } else {
-        btn.addEventListener("click", () => {
-          applyPrepStatus(item.status, item.button_label || item.status);
-        });
-      }
-      actions.appendChild(btn);
-    }
+    if (!actions || !asset) return;
+    fillPrepActionButtons(actions, asset, (status, label) => {
+      applyPrepStatus(String(asset.compid), status, label, {
+        scanContext: true,
+        setFeedback: setScanStatus,
+      });
+    });
   }
 
-  async function applyPrepStatus(status, label) {
-    if (!scanAsset || !scanAsset.compid) return;
-    setScanStatus(`Setting status to ${label}…`);
-    const seq = scanSeq;
+  async function applyPrepStatus(compid, status, label, options) {
+    options = options || {};
+    const setFeedback = options.setFeedback || setDetailPrepStatus;
+    const scanContext = options.scanContext === true;
+    if (!compid) return;
+
+    setFeedback(`Setting status to ${label}…`, false);
+    const seq = scanContext ? scanSeq : null;
     try {
       const out = await apiPost("/api/emaint-demo/compinfo/prep-status", {
-        compid: String(scanAsset.compid),
+        compid: String(compid),
         status,
       });
-      if (seq !== scanSeq) return;
-      scanAsset = out.asset || scanAsset;
-      renderScanAssetCard(scanAsset);
-      renderScanPrepActions(scanAsset);
-      setScanStatus(`Status set to ${status} (eMaint + landing updated).`);
-      el("search").value = scanAsset.serial_no || scanAsset.compid || "";
-      state.q = el("search").value.trim();
+      if (scanContext && seq !== scanSeq) return;
+
+      const asset = out.asset || { compid, status };
+      if (scanAsset && String(scanAsset.compid) === String(compid)) {
+        scanAsset = asset;
+        renderScanAssetCard(scanAsset);
+        renderScanPrepActions(scanAsset);
+      }
+
+      const msg = `Status set to ${status} (eMaint + landing updated).`;
+      setFeedback(msg, false);
+      setStatus(msg);
+
+      if (asset.serial_no || asset.compid) {
+        el("search").value = asset.serial_no || asset.compid || "";
+        state.q = el("search").value.trim();
+      }
       await loadRows(true);
-      await selectRow(String(scanAsset.compid));
+      await selectRow(String(compid));
     } catch (err) {
-      if (seq !== scanSeq) return;
-      setScanStatus(String(err.message || err), true);
+      if (scanContext && seq !== scanSeq) return;
+      setFeedback(String(err.message || err), true);
     }
   }
 
@@ -753,11 +845,7 @@
     if (!scanBtn) return;
     scanBtn.hidden = false;
 
-    api("/api/emaint-demo/compinfo/prep-statuses")
-      .then((cfg) => {
-        prepStatusConfig = cfg;
-      })
-      .catch(() => {});
+    loadPrepStatusConfig();
 
     scanBtn.addEventListener("click", () => {
       openScanModal();
@@ -860,7 +948,10 @@
       if (state.detailOpen) closeDetail();
     });
 
-    if (TABLE_ID === "compinfo") initScan();
+    if (TABLE_ID === "compinfo") {
+      initScan();
+      loadPrepStatusConfig();
+    }
 
     const signOutBtn = el("btn-sign-out");
     if (signOutBtn) signOutBtn.addEventListener("click", signOut);

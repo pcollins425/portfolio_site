@@ -670,6 +670,17 @@ table.detail-lines-grid tbody tr:hover {
   opacity: 0.6;
 }
 
+.prep-status-section {
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+}
+
+.prep-status-section .editor-status {
+  margin-top: 8px;
+  display: block;
+}
+
 @media (max-width: 900px) {
   .sidebar {
     width: 100%;
