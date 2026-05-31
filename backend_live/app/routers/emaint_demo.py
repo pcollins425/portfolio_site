@@ -39,6 +39,12 @@ def _filter_tables(user: dict[str, Any] | None, tables: list[dict]) -> list[dict
     return [t for t in tables if t.get("id") in allowed]
 
 
+class CompinfoPrepStatusBody(BaseModel):
+    status: str = Field(..., min_length=1)
+    compid: str | None = None
+    token: str | None = None
+
+
 @router.get("/health")
 def health():
     return emaint_demo_service.health_check()
@@ -48,6 +54,60 @@ def health():
 def config(user: Annotated[dict[str, Any] | None, Depends(require_demo_user)]):
     tables = _filter_tables(user, emaint_demo_service.list_tables())
     return {"tables": tables}
+
+
+@router.get("/compinfo/prep-statuses")
+def compinfo_prep_statuses(user: Annotated[dict[str, Any] | None, Depends(require_demo_user)]):
+    _assert_read(user, "compinfo")
+    return emaint_demo_service.list_compinfo_prep_statuses()
+
+
+@router.get("/compinfo/resolve")
+def compinfo_resolve(
+    token: str = Query(..., min_length=1, max_length=200),
+    user: Annotated[dict[str, Any] | None, Depends(require_demo_user)] = None,
+):
+    _assert_read(user, "compinfo")
+    try:
+        row = emaint_demo_service.resolve_compinfo(token)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+    if row is None:
+        raise HTTPException(status_code=404, detail="Asset not found")
+    return {"asset": row, "prep_statuses": emaint_demo_service.list_compinfo_prep_statuses()}
+
+
+@router.post("/compinfo/prep-status")
+def compinfo_set_prep_status(
+    body: CompinfoPrepStatusBody,
+    user: Annotated[dict[str, Any] | None, Depends(require_demo_user)] = None,
+):
+    _assert_write(user, "compinfo")
+    compid = (body.compid or "").strip()
+    if not compid:
+        token = (body.token or "").strip()
+        if not token:
+            raise HTTPException(status_code=400, detail="compid or token is required")
+        try:
+            row = emaint_demo_service.resolve_compinfo(token)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        except Exception as exc:
+            raise HTTPException(status_code=500, detail=str(exc)) from exc
+        if row is None:
+            raise HTTPException(status_code=404, detail="Asset not found")
+        compid = str(row.get("compid") or "").strip()
+        if not compid:
+            raise HTTPException(status_code=404, detail="Asset has no compid")
+
+    try:
+        return emaint_demo_service.set_compinfo_prep_status(compid=compid, status=body.status)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
 
 
 @router.get("/{table_id}/rows")

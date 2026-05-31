@@ -21,6 +21,7 @@ _UUID_RE = re.compile(
 )
 
 _CONFIG_PATH = Path(__file__).resolve().parents[1] / "data" / "emaint_demo_tables.json"
+_PREP_STATUS_PATH = Path(__file__).resolve().parents[1] / "data" / "emaint_asset_prep_statuses.json"
 
 
 def _catalog() -> str:
@@ -314,6 +315,71 @@ def browse_child_rows(table_id: str, key: str, child_id: str) -> dict | None:
         "parent_key": str(parent_key),
         "rows": rows,
         "browse_columns": child["browse_columns"],
+    }
+
+
+def _load_prep_status_config() -> dict:
+    return json.loads(_PREP_STATUS_PATH.read_text(encoding="utf-8"))
+
+
+def list_compinfo_prep_statuses() -> dict:
+    cfg = _load_prep_status_config()
+    return {
+        "field": cfg.get("field", "status"),
+        "values": cfg.get("values") or [],
+    }
+
+
+def _allowed_prep_statuses() -> set[str]:
+    return {v["status"] for v in _load_prep_status_config().get("values") or []}
+
+
+def resolve_compinfo(token: str) -> dict | None:
+    q = (token or "").strip()
+    if not q:
+        raise ValueError("token is required")
+    spec = _table_spec("compinfo")
+    table = _qualified_table(spec)
+    sql = (
+        f"SELECT TOP 1 compid, serial_no, asset_id, property, status, comp_desc, manufac, model_no "
+        f"FROM {table} "
+        f"WHERE compid = %s OR serial_no = %s OR asset_id = %s"
+    )
+    rows = _query(sql, (q, q, q))
+    if not rows:
+        return None
+    return _row_json(rows[0])
+
+
+def set_compinfo_prep_status(*, compid: str, status: str) -> dict:
+    cid = (compid or "").strip()
+    st = (status or "").strip()
+    if not cid:
+        raise ValueError("compid is required")
+    if not st:
+        raise ValueError("status is required")
+    allowed = _allowed_prep_statuses()
+    if st not in allowed:
+        raise ValueError(f"status must be one of: {', '.join(sorted(allowed))}")
+
+    from app import emaint_client
+
+    emaint_client.record_update(table="COMPINFO", row_id=cid, payload={"status": st})
+
+    spec = _table_spec("compinfo")
+    sql = f"UPDATE {_qualified_table(spec)} SET {_bracket('status')} = %s WHERE {_bracket('compid')} = %s"
+    n = _execute(sql, (st, cid))
+    if n != 1:
+        raise ValueError(f"Landing update affected {n} row(s); expected 1")
+
+    row = resolve_compinfo(cid)
+    if row is None:
+        raise ValueError("Asset not found after update")
+    return {
+        "ok": True,
+        "compid": cid,
+        "status": st,
+        "asset": row,
     }
 
 

@@ -13,7 +13,9 @@ python run.py
 
 Or **`scripts/run-backend-live.cmd`** / **`scripts/run-backend-live.sh`** from repo root.
 
-Point your tunnel at this host/port. **`MSSQL_*`** = **`dashboard_perf_ro`** for revenue routes; **`MSSQL_FIELD_*`** = **`dgs_field_api`** for **`/api/asset/lookup`**, **`/api/field/health`**, and **`/api/emaint-demo/*`** (read-only on **`compinfo_landing`**, **`work_orders`**, **`emaint_landing`**).
+Point your tunnel at this host/port. **`MSSQL_*`** = **`dashboard_perf_ro`** for revenue routes; **`MSSQL_FIELD_*`** = **`dgs_field_api`** for **`/api/asset/lookup`**, **`/api/field/health`**, and **`/api/emaint-demo/*`**. **`compinfo_landing.status`** updates after scan prep moves require **`GRANT UPDATE`** on landing (see **`scripts/sql/grant_compinfo_landing_status_field_api.sql`** in cursor-assistant repo).
+
+**Asset prep status (scan → move):** **`POST /api/emaint-demo/compinfo/prep-status`** calls eMaint **Record** — set **`EMAINT_SERVER_URL`**, **`EMAINT_USER`**, **`EMAINT_PASSWORD`** in **`.env`** (same as other eMaint scripts; typically from **`MASTER_CREDENTIALS_ENV`** on the Docker host).
 
 ## eMaint demo auth (Google Workspace)
 

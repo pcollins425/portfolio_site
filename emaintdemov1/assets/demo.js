@@ -31,6 +31,8 @@
   let scanSeq = 0;
   let qrScanner = null;
   let qrLibPromise = null;
+  let prepStatusConfig = null;
+  let scanAsset = null;
 
   function el(id) {
     return document.getElementById(id);
@@ -186,6 +188,14 @@
       throw new Error(detail);
     }
     return res.json();
+  }
+
+  async function apiPost(path, body) {
+    return api(path, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
   }
 
   async function apiPatch(path, body) {
@@ -580,12 +590,132 @@
     }
   }
 
+  function clearScanResult() {
+    scanAsset = null;
+    const result = el("scan-result");
+    const card = el("scan-asset-card");
+    const actions = el("scan-prep-actions");
+    if (result) result.hidden = true;
+    if (card) card.innerHTML = "";
+    if (actions) actions.innerHTML = "";
+  }
+
+  function escapeHtml(s) {
+    return String(s)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;");
+  }
+
+  function renderScanAssetCard(asset) {
+    const card = el("scan-asset-card");
+    const result = el("scan-result");
+    if (!card || !result || !asset) return;
+
+    const title = asset.comp_desc || asset.compid || "Asset";
+    const statusText = asset.status ? String(asset.status) : "(no status)";
+    card.innerHTML = `
+      <h3>${escapeHtml(title)}</h3>
+      <p>Asset ID: ${escapeHtml(fmtCell(asset.compid))}</p>
+      <p>Serial: ${escapeHtml(fmtCell(asset.serial_no))}</p>
+      <p>Reference key: ${escapeHtml(fmtCell(asset.asset_id))}</p>
+      <p>Property: ${escapeHtml(fmtCell(asset.property))}</p>
+      <p class="scan-current-status"><strong>Status:</strong> ${escapeHtml(statusText)}</p>
+    `;
+    result.hidden = false;
+  }
+
+  function renderScanPrepActions(asset) {
+    const actions = el("scan-prep-actions");
+    if (!actions || !prepStatusConfig) return;
+    actions.innerHTML = "";
+    const canWrite = canWriteTable("compinfo");
+    const current = (asset && asset.status ? String(asset.status) : "").trim();
+
+    if (!canWrite) {
+      const note = document.createElement("p");
+      note.className = "scan-hint";
+      note.textContent = "You have read-only access to Assets — prep moves are not available.";
+      actions.appendChild(note);
+      return;
+    }
+
+    for (const item of prepStatusConfig.values || []) {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.textContent = item.button_label || item.status;
+      btn.className = "btn-accent";
+      const isCurrent = current && current.toLowerCase() === String(item.status).toLowerCase();
+      if (isCurrent) {
+        btn.classList.add("is-current");
+        btn.disabled = true;
+        btn.textContent = `${btn.textContent} (current)`;
+      } else {
+        btn.addEventListener("click", () => {
+          applyPrepStatus(item.status, item.button_label || item.status);
+        });
+      }
+      actions.appendChild(btn);
+    }
+  }
+
+  async function applyPrepStatus(status, label) {
+    if (!scanAsset || !scanAsset.compid) return;
+    setScanStatus(`Setting status to ${label}…`);
+    const seq = scanSeq;
+    try {
+      const out = await apiPost("/api/emaint-demo/compinfo/prep-status", {
+        compid: String(scanAsset.compid),
+        status,
+      });
+      if (seq !== scanSeq) return;
+      scanAsset = out.asset || scanAsset;
+      renderScanAssetCard(scanAsset);
+      renderScanPrepActions(scanAsset);
+      setScanStatus(`Status set to ${status} (eMaint + landing updated).`);
+      el("search").value = scanAsset.serial_no || scanAsset.compid || "";
+      state.q = el("search").value.trim();
+      await loadRows(true);
+      await selectRow(String(scanAsset.compid));
+    } catch (err) {
+      if (seq !== scanSeq) return;
+      setScanStatus(String(err.message || err), true);
+    }
+  }
+
+  async function resolveScannedAsset(token, source) {
+    const seq = ++scanSeq;
+    setScanStatus(`Looking up ${token}…`);
+    clearScanResult();
+    try {
+      const data = await api(`/api/emaint-demo/compinfo/resolve?token=${encodeURIComponent(token)}`);
+      if (seq !== scanSeq) return;
+      scanAsset = data.asset;
+      if (!scanAsset || !scanAsset.compid) {
+        throw new Error("Asset found but missing compid.");
+      }
+      if (!prepStatusConfig && data.prep_statuses) {
+        prepStatusConfig = data.prep_statuses;
+      }
+      renderScanAssetCard(scanAsset);
+      renderScanPrepActions(scanAsset);
+      setScanStatus(
+        `Found ${scanAsset.comp_desc || scanAsset.compid}${source ? ` (${source})` : ""} — choose a prep status.`
+      );
+    } catch (err) {
+      if (seq !== scanSeq) return;
+      setScanStatus(String(err.message || err), true);
+    }
+  }
+
   async function openScanModal() {
     const modal = el("scan-modal");
     if (!modal) return;
     state.scanOpen = true;
     modal.hidden = false;
     modal.setAttribute("aria-hidden", "false");
+    clearScanResult();
     setScanStatus("Starting camera…");
     const wedge = el("scan-wedge");
     if (wedge) {
@@ -599,6 +729,7 @@
     state.scanOpen = false;
     scanSeq += 1;
     await stopScanCamera();
+    clearScanResult();
     const modal = el("scan-modal");
     if (modal) {
       modal.hidden = true;
@@ -614,33 +745,19 @@
   async function handleScanResult(serial, source) {
     const token = String(serial || "").trim();
     if (!token) return;
-
-    const seq = ++scanSeq;
-    setScanStatus(`Looking up ${token}…`);
-    try {
-      const data = await api(`/api/asset/lookup?serial=${encodeURIComponent(token)}`);
-      if (seq !== scanSeq) return;
-      const compid = data.asset && data.asset.compid;
-      if (compid === null || compid === undefined || compid === "") {
-        throw new Error("Lookup succeeded but asset has no compid.");
-      }
-
-      await closeScanModal();
-      el("search").value = token;
-      state.q = token;
-      await loadRows(true);
-      await selectRow(String(compid));
-      setStatus(`Found asset for serial ${token}${source ? ` (${source})` : ""}`);
-    } catch (err) {
-      if (seq !== scanSeq) return;
-      setScanStatus(String(err.message || err), true);
-    }
+    await resolveScannedAsset(token, source);
   }
 
   function initScan() {
     const scanBtn = el("btn-scan");
     if (!scanBtn) return;
     scanBtn.hidden = false;
+
+    api("/api/emaint-demo/compinfo/prep-statuses")
+      .then((cfg) => {
+        prepStatusConfig = cfg;
+      })
+      .catch(() => {});
 
     scanBtn.addEventListener("click", () => {
       openScanModal();

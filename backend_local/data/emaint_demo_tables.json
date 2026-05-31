@@ -8,7 +8,9 @@
     "browse_columns": [
       "compid",
       "serial_no",
+      "asset_id",
       "property",
+      "status",
       "comp_desc",
       "zone",
       "bank",
@@ -16,7 +18,9 @@
     ],
     "form_fields": {
       "Asset ID": "compid",
+      "Asset Reference Key": "asset_id",
       "Serial No.": "serial_no",
+      "Status": "status",
       "Game Title": "comp_desc",
       "Manufacturer": "manufac",
       "Model No.": "model_no",

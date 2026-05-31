@@ -1,0 +1,26 @@
+{
+  "field": "status",
+  "emaint_table": "COMPINFO",
+  "datadict": {
+    "dd_dbf": "COMPINFO",
+    "dd_name": "STATUS",
+    "dd_rectype": "F"
+  },
+  "values": [
+    {
+      "status": "Bench prep",
+      "button_label": "Move to Bench",
+      "short_label": "Bench"
+    },
+    {
+      "status": "Staged",
+      "button_label": "Move to Staged",
+      "short_label": "Staged"
+    },
+    {
+      "status": "Shipping",
+      "button_label": "Move to Shipping",
+      "short_label": "Shipping"
+    }
+  ]
+}

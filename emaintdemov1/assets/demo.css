@@ -618,6 +618,58 @@ table.detail-lines-grid tbody tr:hover {
   margin-top: 10px;
 }
 
+.scan-result {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+}
+
+.scan-asset-card {
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel, var(--surface));
+  margin-bottom: 12px;
+}
+
+.scan-asset-card h3 {
+  margin: 0 0 6px;
+  font-size: 16px;
+}
+
+.scan-asset-card p {
+  margin: 4px 0;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.scan-asset-card .scan-current-status {
+  margin-top: 8px;
+  font-size: 14px;
+  color: var(--text);
+}
+
+.scan-prep-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.scan-prep-actions button {
+  width: 100%;
+  padding: 12px 14px;
+  font-size: 15px;
+}
+
+.scan-prep-actions button.is-current {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.scan-prep-actions button:disabled {
+  opacity: 0.6;
+}
+
 @media (max-width: 900px) {
   .sidebar {
     width: 100%;
