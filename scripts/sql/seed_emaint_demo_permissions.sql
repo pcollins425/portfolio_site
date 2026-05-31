@@ -27,7 +27,7 @@ BEGIN
         N'eMaint demo seed',
         N'Added for portfolio eMaint demo auth (read-only browse + inventory edit).',
         N'eMaint Demo (beta)',
-        N'emaint_demo_projects: READ_ONLY , emaint_demo_work_orders: READ_ONLY , emaint_demo_compinfo: READ_ONLY , emaint_demo_inventory: ADDS_AND_UPDATES , emaint_demo_purchase_orders: READ_ONLY'
+        N'emaint_demo_projects: READ_ONLY , emaint_demo_work_orders: READ_ONLY , emaint_demo_compinfo: UPDATES_ONLY , emaint_demo_inventory: ADDS_AND_UPDATES , emaint_demo_purchase_orders: READ_ONLY'
     );
 END
 GO
@@ -36,9 +36,9 @@ UPDATE [employees].[employee_roles]
 SET
     [override_permissions] = CASE
         WHEN [override_permissions] IS NULL OR LTRIM(RTRIM([override_permissions])) = N''
-            THEN N'emaint_demo_projects: READ_ONLY , emaint_demo_work_orders: READ_ONLY , emaint_demo_compinfo: READ_ONLY , emaint_demo_inventory: ADDS_AND_UPDATES , emaint_demo_purchase_orders: READ_ONLY'
+            THEN N'emaint_demo_projects: READ_ONLY , emaint_demo_work_orders: READ_ONLY , emaint_demo_compinfo: UPDATES_ONLY , emaint_demo_inventory: ADDS_AND_UPDATES , emaint_demo_purchase_orders: READ_ONLY'
         WHEN [override_permissions] NOT LIKE N'%emaint_demo_projects:%'
-            THEN LTRIM(RTRIM([override_permissions])) + N' , emaint_demo_projects: READ_ONLY , emaint_demo_work_orders: READ_ONLY , emaint_demo_compinfo: READ_ONLY , emaint_demo_inventory: ADDS_AND_UPDATES , emaint_demo_purchase_orders: READ_ONLY'
+            THEN LTRIM(RTRIM([override_permissions])) + N' , emaint_demo_projects: READ_ONLY , emaint_demo_work_orders: READ_ONLY , emaint_demo_compinfo: UPDATES_ONLY , emaint_demo_inventory: ADDS_AND_UPDATES , emaint_demo_purchase_orders: READ_ONLY'
         ELSE [override_permissions]
     END,
     [update_date] = GETDATE(),
@@ -50,9 +50,9 @@ UPDATE [employees].[employee_roles]
 SET
     [override_permissions] = CASE
         WHEN [override_permissions] IS NULL OR LTRIM(RTRIM([override_permissions])) = N''
-            THEN N'emaint_demo_projects: READ_ONLY , emaint_demo_work_orders: READ_ONLY , emaint_demo_compinfo: READ_ONLY , emaint_demo_inventory: ADDS_AND_UPDATES , emaint_demo_purchase_orders: READ_ONLY'
+            THEN N'emaint_demo_projects: READ_ONLY , emaint_demo_work_orders: READ_ONLY , emaint_demo_compinfo: UPDATES_ONLY , emaint_demo_inventory: ADDS_AND_UPDATES , emaint_demo_purchase_orders: READ_ONLY'
         WHEN [override_permissions] NOT LIKE N'%emaint_demo_projects:%'
-            THEN LTRIM(RTRIM([override_permissions])) + N' , emaint_demo_projects: READ_ONLY , emaint_demo_work_orders: READ_ONLY , emaint_demo_compinfo: READ_ONLY , emaint_demo_inventory: ADDS_AND_UPDATES , emaint_demo_purchase_orders: READ_ONLY'
+            THEN LTRIM(RTRIM([override_permissions])) + N' , emaint_demo_projects: READ_ONLY , emaint_demo_work_orders: READ_ONLY , emaint_demo_compinfo: UPDATES_ONLY , emaint_demo_inventory: ADDS_AND_UPDATES , emaint_demo_purchase_orders: READ_ONLY'
         ELSE [override_permissions]
     END,
     [update_date] = GETDATE(),

@@ -62,8 +62,8 @@ def _query(sql: str, params=None) -> list[dict]:
     )
 
 
-def _execute(sql: str, params=None) -> None:
-    mssql.execute(
+def _execute(sql: str, params=None) -> int:
+    return mssql.execute(
         sql,
         params=params,
         database=_catalog(),
@@ -368,13 +368,17 @@ def set_compinfo_prep_status(*, compid: str, status: str) -> dict:
 
     spec = _table_spec("compinfo")
     sql = f"UPDATE {_qualified_table(spec)} SET {_bracket('status')} = %s WHERE {_bracket('compid')} = %s"
-    n = _execute(sql, (st, cid))
-    if n != 1:
-        raise ValueError(f"Landing update affected {n} row(s); expected 1")
+    _execute(sql, (st, cid))
 
     row = resolve_compinfo(cid)
     if row is None:
-        raise ValueError("Asset not found after update")
+        raise ValueError("Asset not found in landing after update")
+    actual = (row.get("status") or "").strip()
+    if actual.casefold() != st.casefold():
+        raise ValueError(
+            f"Landing status is {actual!r} after update; expected {st!r} "
+            "(eMaint may have saved — check compinfo_landing sync/grants)"
+        )
     return {
         "ok": True,
         "compid": cid,
