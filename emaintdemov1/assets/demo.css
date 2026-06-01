@@ -411,6 +411,34 @@ table.detail-lines-grid tbody tr:hover {
   flex-shrink: 0;
 }
 
+.wo-materials-actions {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.wo-materials-actions-title {
+  margin: 0 0 8px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.wo-material-add-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.wo-material-add-row input[type="text"],
+.wo-material-add-row input[type="number"] {
+  min-width: 120px;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
 .lines-status.error {
   color: var(--error);
 }

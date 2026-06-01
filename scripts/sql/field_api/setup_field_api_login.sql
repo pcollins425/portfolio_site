@@ -11,9 +11,15 @@
     SELECT, UPDATE  inventory.inventory
     SELECT  inventory.purchase_order
     SELECT  inventory.purchase_order_line
+    SELECT, INSERT, UPDATE  inventory.stock_balance
+    SELECT, INSERT       inventory.stock_movement
+    SELECT, INSERT, UPDATE  projects.work_order_material
     SELECT  projects.emaint_landing
     SELECT  projects.work_orders
     INSERT, UPDATE  projects.work_orders
+    SELECT, INSERT, UPDATE  inventory.stock_balance
+    SELECT, INSERT       inventory.stock_movement
+    SELECT, INSERT, UPDATE  projects.work_order_material
 
   Add more GRANT statements here as API endpoints grow.
 */
@@ -63,4 +69,13 @@ GRANT SELECT ON OBJECT::[projects].[work_orders] TO [dgs_field_api];
 GO
 
 GRANT INSERT, UPDATE ON OBJECT::[projects].[work_orders] TO [dgs_field_api];
+GO
+
+GRANT SELECT, INSERT, UPDATE ON OBJECT::[inventory].[stock_balance] TO [dgs_field_api];
+GO
+
+GRANT SELECT, INSERT ON OBJECT::[inventory].[stock_movement] TO [dgs_field_api];
+GO
+
+GRANT SELECT, INSERT, UPDATE ON OBJECT::[projects].[work_order_material] TO [dgs_field_api];
 GO

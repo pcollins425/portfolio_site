@@ -9,6 +9,7 @@ from pydantic import BaseModel, Field
 
 from app import emaint_demo_permissions as perms
 from app import emaint_demo_service
+from app import wo_inventory_service
 from app.auth_deps import require_demo_user
 
 router = APIRouter(prefix="/api/emaint-demo", tags=["emaint-demo"])
@@ -43,6 +44,16 @@ class CompinfoPrepStatusBody(BaseModel):
     status: str = Field(..., min_length=1)
     compid: str | None = None
     token: str | None = None
+
+
+class WoMaterialLineBody(BaseModel):
+    item: str = Field(..., min_length=1, max_length=15)
+    qty_requested: float = Field(..., gt=0)
+
+
+class WoMaterialAllocateBody(BaseModel):
+    item: str = Field(..., min_length=1, max_length=15)
+    qty: float | None = Field(None, gt=0)
 
 
 @router.get("/health")

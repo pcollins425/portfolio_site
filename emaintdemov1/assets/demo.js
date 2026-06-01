@@ -139,13 +139,26 @@
   }
 
   function hasSplitDetail() {
-    if (TABLE_ID !== "purchase_orders") return false;
     const ch = state.table && state.table.detail_children;
-    return !!(ch && ch.lines);
+    if (!ch) return false;
+    if (TABLE_ID === "purchase_orders" && ch.lines) return true;
+    if (TABLE_ID === "work_orders" && ch.materials) return true;
+    return false;
   }
 
   function primaryChildId() {
-    return hasSplitDetail() ? "lines" : null;
+    if (TABLE_ID === "purchase_orders") return "lines";
+    if (TABLE_ID === "work_orders") return "materials";
+    return null;
+  }
+
+  function detailLinesTitle() {
+    if (TABLE_ID === "work_orders") return "Parts / materials";
+    return "Line items";
+  }
+
+  function canWriteInventory() {
+    return canWriteTable("inventory");
   }
 
   function applyDetailLayout() {
@@ -155,6 +168,12 @@
     if (section) {
       section.hidden = !split;
       section.classList.toggle("is-visible", split);
+    }
+    const title = el("detail-lines-title");
+    if (title) title.textContent = detailLinesTitle();
+    const woActions = el("wo-materials-actions");
+    if (woActions) {
+      woActions.hidden = !(split && TABLE_ID === "work_orders");
     }
   }
 
@@ -262,6 +281,7 @@
       section.hidden = true;
       section.classList.remove("is-visible");
     }
+    clearWoMaterialsForm();
     renderGrid();
     const wrap = el("form-fields");
     if (wrap) wrap.innerHTML = "";
@@ -279,6 +299,81 @@
     if (status) status.textContent = "";
   }
 
+  function clearWoMaterialsForm() {
+    const item = el("wo-mat-item");
+    const qty = el("wo-mat-qty");
+    const hint = el("wo-mat-assignable");
+    const st = el("wo-mat-actions-status");
+    if (item) item.value = "";
+    if (qty) qty.value = "";
+    if (hint) hint.textContent = "";
+    if (st) st.textContent = "";
+  }
+
+  function setWoMaterialsStatus(msg, isError) {
+    const node = el("wo-mat-actions-status");
+    if (!node) return;
+    node.textContent = msg || "";
+    node.className = isError ? "editor-status error" : "editor-status ok";
+    if (!msg) node.className = "editor-status";
+  }
+
+  async function refreshWoAssignableHint() {
+    const hint = el("wo-mat-assignable");
+    const itemInput = el("wo-mat-item");
+    if (!hint || !itemInput) return;
+    const item = itemInput.value.trim();
+    if (!item) {
+      hint.textContent = "";
+      return;
+    }
+    hint.textContent = "Checking assignable qty…";
+    try {
+      const data = await api(`/api/emaint-demo/inventory/items/${encodeURIComponent(item)}/assignable`);
+      hint.textContent = `Assignable: ${data.qty_assignable} (warehouse available; refurb: ${data.qty_refurb}; eMaint on hand: ${data.onhand})`;
+    } catch (err) {
+      hint.textContent = String(err.message || err);
+    }
+  }
+
+  async function addWoMaterialLine() {
+    if (!state.selectedKey) return;
+    const item = (el("wo-mat-item") && el("wo-mat-item").value.trim()) || "";
+    const qtyRaw = el("wo-mat-qty") && el("wo-mat-qty").value;
+    const qty = parseFloat(qtyRaw);
+    if (!item || !qty || qty <= 0) {
+      setWoMaterialsStatus("Enter item number and a positive quantity.", true);
+      return;
+    }
+    setWoMaterialsStatus("Adding line…", false);
+    try {
+      await apiPost(`/api/emaint-demo/work-orders/${encodeURIComponent(state.selectedKey)}/materials`, {
+        item,
+        qty_requested: qty,
+      });
+      setWoMaterialsStatus("Line saved.", false);
+      clearWoMaterialsForm();
+      await loadDetailLines(state.selectedKey, loadSeq);
+    } catch (err) {
+      setWoMaterialsStatus(String(err.message || err), true);
+    }
+  }
+
+  async function allocateWoMaterial(item) {
+    if (!state.selectedKey || !item) return;
+    setWoMaterialsStatus(`Allocating ${item}…`, false);
+    try {
+      await apiPost(
+        `/api/emaint-demo/work-orders/${encodeURIComponent(state.selectedKey)}/materials/allocate`,
+        { item }
+      );
+      setWoMaterialsStatus(`Allocated ${item}.`, false);
+      await loadDetailLines(state.selectedKey, loadSeq);
+    } catch (err) {
+      setWoMaterialsStatus(String(err.message || err), true);
+    }
+  }
+
   function renderLinesGrid(data) {
     const thead = el("lines-grid-head");
     const tbody = el("lines-grid-body");
@@ -286,23 +381,49 @@
     if (!thead || !tbody || !data) return;
 
     const cols = data.browse_columns || [];
-    thead.innerHTML = `<tr>${cols.map((c) => `<th>${escapeHtml(c)}</th>`).join("")}</tr>`;
+    const showAllocate = TABLE_ID === "work_orders" && canWriteInventory();
+    thead.innerHTML = `<tr>${cols.map((c) => `<th>${escapeHtml(c)}</th>`).join("")}${
+      showAllocate ? "<th></th>" : ""
+    }</tr>`;
     tbody.innerHTML = "";
     const rows = data.rows || [];
     for (const row of rows) {
       const tr = document.createElement("tr");
-      tr.innerHTML = cols
+      let cells = cols
         .map((c) => {
           const text = fmtCell(row[c]);
           return `<td title="${escapeHtml(text)}">${escapeHtml(text)}</td>`;
         })
         .join("");
+      if (showAllocate) {
+        const requested = parseFloat(row.qty_requested) || 0;
+        const allocated = parseFloat(row.qty_allocated) || 0;
+        const remaining = requested - allocated;
+        if (remaining > 0 && row.item) {
+          const btn = document.createElement("button");
+          btn.type = "button";
+          btn.className = "btn-accent";
+          btn.textContent = `Allocate ${remaining}`;
+          btn.addEventListener("click", () => allocateWoMaterial(String(row.item)));
+          const td = document.createElement("td");
+          td.appendChild(btn);
+          tr.innerHTML = cells;
+          tr.appendChild(td);
+        } else {
+          cells += "<td></td>";
+          tr.innerHTML = cells;
+        }
+      } else {
+        tr.innerHTML = cells;
+      }
       tbody.appendChild(tr);
     }
     if (status) {
-      status.textContent = rows.length
-        ? `${rows.length} line(s)`
-        : "No lines on this purchase order.";
+      const emptyMsg =
+        TABLE_ID === "work_orders"
+          ? "No parts on this work order yet."
+          : "No lines on this purchase order.";
+      status.textContent = rows.length ? `${rows.length} line(s)` : emptyMsg;
       status.className = "lines-status";
     }
   }
@@ -952,6 +1073,16 @@
       initScan();
       loadPrepStatusConfig();
     }
+
+    const woMatItem = el("wo-mat-item");
+    if (woMatItem) {
+      woMatItem.addEventListener("blur", refreshWoAssignableHint);
+      woMatItem.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") refreshWoAssignableHint();
+      });
+    }
+    const btnWoMatAdd = el("btn-wo-mat-add");
+    if (btnWoMatAdd) btnWoMatAdd.addEventListener("click", addWoMaterialLine);
 
     const signOutBtn = el("btn-sign-out");
     if (signOutBtn) signOutBtn.addEventListener("click", signOut);

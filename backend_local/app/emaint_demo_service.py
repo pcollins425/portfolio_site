@@ -280,19 +280,28 @@ def browse_child_rows(table_id: str, key: str, child_id: str) -> dict | None:
     child = children[child_id]
 
     where_sql, where_params = _where_for_key(spec, key)
+    fk_src = child.get("parent_fk_source_column")
+    select_parts = [f"{_bracket(spec['key_column'])} AS parent_key"]
+    if fk_src:
+        select_parts.append(_bracket(fk_src))
     parent_sql = (
-        f"SELECT {_bracket(spec['key_column'])} AS parent_key "
-        f"FROM {_qualified_table(spec)} WHERE {where_sql}"
+        f"SELECT {', '.join(select_parts)} FROM {_qualified_table(spec)} WHERE {where_sql}"
     )
     parent_rows = _query(parent_sql, where_params)
     if not parent_rows:
         return None
 
-    parent_key = parent_rows[0]["parent_key"]
+    parent_row = parent_rows[0]
+    fk_source = child.get("parent_fk_source_column")
+    if fk_source:
+        parent_key = parent_row.get(fk_source)
+    else:
+        parent_key = parent_row.get("parent_key")
     if parent_key is None or str(parent_key).strip() == "":
         return {
             "table_id": table_id,
             "child_id": child_id,
+            "title": child.get("title") or child_id,
             "parent_key": key,
             "rows": [],
             "browse_columns": child["browse_columns"],

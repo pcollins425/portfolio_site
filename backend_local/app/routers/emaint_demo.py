@@ -9,6 +9,7 @@ from pydantic import BaseModel, Field
 
 from app import emaint_demo_permissions as perms
 from app import emaint_demo_service
+from app import wo_inventory_service
 from app.auth_deps import require_demo_user
 
 router = APIRouter(prefix="/api/emaint-demo", tags=["emaint-demo"])
@@ -43,6 +44,16 @@ class CompinfoPrepStatusBody(BaseModel):
     status: str = Field(..., min_length=1)
     compid: str | None = None
     token: str | None = None
+
+
+class WoMaterialLineBody(BaseModel):
+    item: str = Field(..., min_length=1, max_length=15)
+    qty_requested: float = Field(..., gt=0)
+
+
+class WoMaterialAllocateBody(BaseModel):
+    item: str = Field(..., min_length=1, max_length=15)
+    qty: float | None = Field(None, gt=0)
 
 
 @router.get("/health")
@@ -104,6 +115,88 @@ def compinfo_set_prep_status(
 
     try:
         return emaint_demo_service.set_compinfo_prep_status(compid=compid, status=body.status)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+
+@router.get("/inventory/items/{item}/assignable")
+def inventory_assignable_qty(
+    item: str,
+    user: Annotated[dict[str, Any] | None, Depends(require_demo_user)] = None,
+):
+    _assert_read(user, "inventory")
+    try:
+        return wo_inventory_service.get_assignable_qty(item)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+
+@router.get("/work-orders/{wo_key}/materials")
+def wo_list_materials(
+    wo_key: str,
+    user: Annotated[dict[str, Any] | None, Depends(require_demo_user)] = None,
+):
+    _assert_read(user, "work_orders")
+    try:
+        return wo_inventory_service.list_materials(wo_key)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+
+@router.post("/work-orders/{wo_key}/materials")
+def wo_add_material_line(
+    wo_key: str,
+    body: WoMaterialLineBody,
+    user: Annotated[dict[str, Any] | None, Depends(require_demo_user)] = None,
+):
+    _assert_write(user, "inventory")
+    try:
+        return wo_inventory_service.upsert_material_line(
+            wo_key=wo_key,
+            item=body.item.strip(),
+            qty_requested=body.qty_requested,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+
+@router.post("/work-orders/{wo_key}/materials/allocate")
+def wo_allocate_material(
+    wo_key: str,
+    body: WoMaterialAllocateBody,
+    user: Annotated[dict[str, Any] | None, Depends(require_demo_user)] = None,
+):
+    _assert_write(user, "inventory")
+    email = (user or {}).get("email") if user else None
+    try:
+        return wo_inventory_service.allocate_material(
+            wo_key=wo_key,
+            item=body.item.strip(),
+            qty=body.qty,
+            created_by=email,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+
+@router.get("/tech-truck/{assignid}")
+def tech_truck_stock(
+    assignid: str,
+    user: Annotated[dict[str, Any] | None, Depends(require_demo_user)] = None,
+):
+    _assert_read(user, "inventory")
+    try:
+        return wo_inventory_service.list_truck_stock(assignid)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except Exception as exc:

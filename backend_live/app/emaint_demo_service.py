@@ -280,19 +280,34 @@ def browse_child_rows(table_id: str, key: str, child_id: str) -> dict | None:
     child = children[child_id]
 
     where_sql, where_params = _where_for_key(spec, key)
-    parent_sql = (
-        f"SELECT {_bracket(spec['key_column'])} AS parent_key "
-        f"FROM {_qualified_table(spec)} WHERE {where_sql}"
+    parent_cols = [spec["key_column"]]
+    fk_src = (children.get(child_id) or {}).get("parent_fk_source_column")
+    if fk_src and fk_src not in parent_cols:
+        parent_cols.append(fk_src)
+    parent_select = ", ".join(
+        f"{_bracket(c)} AS [{c}]" if c != spec["key_column"] else f"{_bracket(c)} AS parent_key"
+        for c in parent_cols
     )
+    if spec["key_column"] not in parent_cols:
+        parent_select = f"{_bracket(spec['key_column'])} AS parent_key"
+    elif len(parent_cols) > 1:
+        parent_select = ", ".join(_bracket(c) for c in parent_cols)
+    parent_sql = f"SELECT {parent_select} FROM {_qualified_table(spec)} WHERE {where_sql}"
     parent_rows = _query(parent_sql, where_params)
     if not parent_rows:
         return None
 
-    parent_key = parent_rows[0]["parent_key"]
+    parent_row = parent_rows[0]
+    fk_source = child.get("parent_fk_source_column")
+    if fk_source:
+        parent_key = parent_row.get(fk_source)
+    else:
+        parent_key = parent_row.get("parent_key")
     if parent_key is None or str(parent_key).strip() == "":
         return {
             "table_id": table_id,
             "child_id": child_id,
+            "title": child.get("title") or child_id,
             "parent_key": key,
             "rows": [],
             "browse_columns": child["browse_columns"],
