@@ -6,6 +6,7 @@
   const NAV_ORDER = [
     "projects",
     "work_orders",
+    "field_techs",
     "compinfo",
     "inventory",
     "purchase_orders",
@@ -140,6 +141,7 @@
 
   function hasSplitDetail() {
     const ch = state.table && state.table.detail_children;
+    if (TABLE_ID === "work_orders") return true;
     if (!ch) return false;
     if (TABLE_ID === "purchase_orders" && ch.lines) return true;
     if (TABLE_ID === "work_orders" && ch.materials) return true;
@@ -161,6 +163,69 @@
     return canWriteTable("inventory");
   }
 
+  function isCustomTable() {
+    return !!(state.table && state.table.custom_source);
+  }
+
+  let inventorySearchTimer = null;
+
+  async function fetchInventorySearch(q) {
+    const qs = q ? `?q=${encodeURIComponent(q)}&limit=30` : "?limit=30";
+    const data = await api(`/api/emaint-demo/inventory/search${qs}`);
+    return data.items || [];
+  }
+
+  function wireInventoryPicker(inputEl, hintEl, onPick) {
+    if (!inputEl) return;
+    const listId = "inventory-search-list";
+    let existing = el(listId);
+    if (!existing) {
+      existing = document.createElement("datalist");
+      existing.id = listId;
+      document.body.appendChild(existing);
+    }
+    inputEl.setAttribute("list", listId);
+
+    async function refreshList() {
+      const q = inputEl.value.trim();
+      try {
+        const items = await fetchInventorySearch(q);
+        existing.innerHTML = items
+          .map((it) => {
+            const label = `${it.item} — ${it.descrip || ""}`.trim();
+            return `<option value="${escapeHtml(it.item)}" label="${escapeHtml(label)}"></option>`;
+          })
+          .join("");
+        if (hintEl && items.length && q) {
+          const hit = items.find((it) => String(it.item) === q);
+          if (hit && hit.stock) {
+            hintEl.textContent = `Assignable: ${hit.stock.qty_assignable} · refurb: ${hit.stock.qty_refurb}`;
+          }
+        }
+      } catch (err) {
+        if (hintEl) hintEl.textContent = String(err.message || err);
+      }
+    }
+
+    inputEl.addEventListener("input", () => {
+      clearTimeout(inventorySearchTimer);
+      inventorySearchTimer = setTimeout(refreshList, 250);
+    });
+    inputEl.addEventListener("change", () => {
+      const v = inputEl.value.trim();
+      if (v && onPick) onPick(v);
+      refreshList();
+    });
+    refreshList();
+  }
+
+  function formatStockBalances(balances) {
+    if (!balances || !balances.length) return "No bucket rows yet.";
+    return balances
+      .map((b) => `${b.bucket} / ${b.condition}: ${b.qty}`)
+      .join(" · ");
+  }
+
   function applyDetailLayout() {
     const split = hasSplitDetail();
     document.body.classList.toggle("detail-split", split);
@@ -173,7 +238,15 @@
     if (title) title.textContent = detailLinesTitle();
     const woActions = el("wo-materials-actions");
     if (woActions) {
-      woActions.hidden = !(split && TABLE_ID === "work_orders");
+      woActions.hidden = !(state.detailOpen && TABLE_ID === "work_orders");
+    }
+    const techOps = el("tech-truck-ops");
+    if (techOps) {
+      techOps.hidden = !(state.detailOpen && TABLE_ID === "field_techs");
+    }
+    const invOps = el("inventory-ops");
+    if (invOps) {
+      invOps.hidden = !(state.detailOpen && TABLE_ID === "inventory");
     }
   }
 
@@ -430,7 +503,13 @@
 
   async function loadDetailLines(key, seq) {
     const childId = primaryChildId();
-    if (!childId) return;
+    if (!childId) {
+      if (TABLE_ID === "work_orders") {
+        const status = el("lines-status");
+        if (status) status.textContent = "Materials API unavailable — redeploy backend.";
+      }
+      return;
+    }
     const status = el("lines-status");
     if (status) status.textContent = "Loading lines…";
     try {
@@ -507,6 +586,8 @@
         record.fields["PO No."] ||
         record.fields["Project #"] ||
         record.fields["WO No"] ||
+        record.fields["Assigned To"] ||
+        record.fields["Assign ID"] ||
         record.fields["Reference Key"] ||
         record.fields["Asset ID"] ||
         record.fields["Item No"] ||
@@ -561,10 +642,49 @@
         </section>`;
     }
 
+    let opsSection = "";
+    if (TABLE_ID === "work_orders") {
+      opsSection = `
+        <section class="ops-section">
+          <h3 class="editor-title">Parts for this work order</h3>
+          <p class="editor-hint">Scroll to <strong>Parts / materials</strong> below: search catalog, add line, then <strong>Allocate</strong> from warehouse stock (assignable qty only).</p>
+        </section>`;
+    }
+    if (TABLE_ID === "inventory" && record.raw && record.raw.item) {
+      opsSection = `
+        <section class="ops-section" id="inventory-ops">
+          <h3 class="editor-title">Warehouse stock</h3>
+          <p id="inv-stock-summary" class="editor-hint">Loading stock buckets…</p>
+          <div class="wo-material-add-row">
+            <input id="inv-refurb-qty" type="number" min="0" step="any" placeholder="Qty" />
+            <button type="button" id="btn-inv-refurb-from-stock" class="btn-accent">Move to refurb (from available)</button>
+            <button type="button" id="btn-inv-refurb-field-return">Field return → refurb</button>
+          </div>
+          <p class="editor-hint">Field return adds to refurb without reducing available (unknown catalog item must exist in Inventory first).</p>
+          <p id="inv-ops-status" class="editor-status"></p>
+        </section>`;
+    }
+    if (TABLE_ID === "field_techs" && record.raw && record.raw.assignid) {
+      opsSection = `
+        <section class="ops-section" id="tech-truck-ops">
+          <h3 class="editor-title">Truck stock</h3>
+          <p id="truck-stock-summary" class="editor-hint">Loading truck…</p>
+          <div class="wo-material-add-row">
+            <input id="truck-mat-item" type="text" placeholder="Search item no." autocomplete="off" />
+            <input id="truck-mat-qty" type="number" min="0" step="any" placeholder="Qty" />
+            <button type="button" id="btn-truck-load" class="btn-accent">Load on truck</button>
+          </div>
+          <p id="truck-mat-hint" class="editor-hint"></p>
+          <div id="truck-lines-wrap" class="detail-lines-grid-wrap"></div>
+          <p id="truck-ops-status" class="editor-status"></p>
+        </section>`;
+    }
+
     wrap.innerHTML = `
       <div class="form-grid">${parts.join("")}</div>
       ${attrLines.length ? `<section class="attributes-summary"><h3 class="editor-title">Attributes (read-only summary)</h3>${attrLines.join("")}</section>` : ""}
       ${prepSection}
+      ${opsSection}
       ${editor}`;
 
     const saveBtn = el("btn-save-attributes");
@@ -575,6 +695,146 @@
     if (TABLE_ID === "compinfo") {
       renderDetailPrepActions(record);
     }
+    if (TABLE_ID === "inventory" && record.raw && record.raw.item) {
+      bindInventoryOps(String(record.raw.item));
+    }
+    if (TABLE_ID === "field_techs" && record.raw && record.raw.assignid) {
+      bindFieldTechOps(record.raw);
+    }
+    if (TABLE_ID === "work_orders") {
+      applyDetailLayout();
+      const itemInput = el("wo-mat-item");
+      const hint = el("wo-mat-assignable");
+      wireInventoryPicker(itemInput, hint, (item) => refreshWoAssignableHint());
+    }
+  }
+
+  function setInvOpsStatus(msg, isError) {
+    const node = el("inv-ops-status");
+    if (!node) return;
+    node.textContent = msg || "";
+    node.className = isError ? "editor-status error" : "editor-status ok";
+    if (!msg) node.className = "editor-status";
+  }
+
+  async function bindInventoryOps(item) {
+    const summary = el("inv-stock-summary");
+    try {
+      const data = await api(`/api/emaint-demo/inventory/items/${encodeURIComponent(item)}/stock`);
+      if (summary) {
+        summary.textContent = `Available: ${data.qty_assignable} · Refurb: ${data.qty_refurb} · eMaint on hand: ${data.onhand} — ${formatStockBalances(data.balances)}`;
+      }
+    } catch (err) {
+      if (summary) summary.textContent = String(err.message || err);
+    }
+
+    const btnFrom = el("btn-inv-refurb-from-stock");
+    const btnField = el("btn-inv-refurb-field-return");
+    const qtyInput = el("inv-refurb-qty");
+    if (!canWriteInventory()) {
+      setInvOpsStatus("Read-only — cannot change refurb stock.", true);
+      if (btnFrom) btnFrom.disabled = true;
+      if (btnField) btnField.disabled = true;
+      return;
+    }
+    async function doRefurb(fromAvailable) {
+      const qty = parseFloat(qtyInput && qtyInput.value);
+      if (!qty || qty <= 0) {
+        setInvOpsStatus("Enter a positive quantity.", true);
+        return;
+      }
+      setInvOpsStatus("Updating…", false);
+      try {
+        await apiPost("/api/emaint-demo/inventory/refurb", {
+          item,
+          qty,
+          from_available: fromAvailable,
+        });
+        setInvOpsStatus(fromAvailable ? "Moved to refurb from available." : "Added field return to refurb.", false);
+        bindInventoryOps(item);
+        if (state.selectedKey) await selectRow(state.selectedKey);
+      } catch (err) {
+        setInvOpsStatus(String(err.message || err), true);
+      }
+    }
+    if (btnFrom) btnFrom.onclick = () => doRefurb(true);
+    if (btnField) btnField.onclick = () => doRefurb(false);
+  }
+
+  function setTruckOpsStatus(msg, isError) {
+    const node = el("truck-ops-status");
+    if (!node) return;
+    node.textContent = msg || "";
+    node.className = isError ? "editor-status error" : "editor-status ok";
+    if (!msg) node.className = "editor-status";
+  }
+
+  function renderTruckLines(truck) {
+    const wrap = el("truck-lines-wrap");
+    if (!wrap) return;
+    const lines = (truck && truck.lines) || [];
+    if (!lines.length) {
+      wrap.innerHTML = "<p class=\"editor-hint\">Nothing on this truck yet.</p>";
+      return;
+    }
+    wrap.innerHTML = `
+      <table class="data-grid detail-lines-grid">
+        <thead><tr><th>Item</th><th>Description</th><th>Condition</th><th>Qty</th></tr></thead>
+        <tbody>
+          ${lines
+            .map(
+              (ln) =>
+                `<tr><td>${escapeHtml(fmtCell(ln.item))}</td><td>${escapeHtml(fmtCell(ln.descrip))}</td><td>${escapeHtml(fmtCell(ln.condition))}</td><td>${escapeHtml(fmtCell(ln.qty))}</td></tr>`
+            )
+            .join("")}
+        </tbody>
+      </table>`;
+  }
+
+  async function bindFieldTechOps(raw) {
+    const assignid = String(raw.assignid || "").trim();
+    const summary = el("truck-stock-summary");
+    if (summary) summary.textContent = `Tech ${raw.assignto || assignid} · assign id ${assignid}`;
+    try {
+      const truck = await api(`/api/emaint-demo/tech-truck/${encodeURIComponent(assignid)}`);
+      renderTruckLines(truck);
+    } catch (err) {
+      if (summary) summary.textContent = String(err.message || err);
+    }
+
+    const itemInput = el("truck-mat-item");
+    const hint = el("truck-mat-hint");
+    wireInventoryPicker(itemInput, hint);
+
+    const btn = el("btn-truck-load");
+    if (!btn) return;
+    if (!canWriteInventory()) {
+      btn.disabled = true;
+      setTruckOpsStatus("Read-only — cannot load truck stock.", true);
+      return;
+    }
+    btn.onclick = async () => {
+      const item = (itemInput && itemInput.value.trim()) || "";
+      const qty = parseFloat(el("truck-mat-qty") && el("truck-mat-qty").value);
+      if (!item || !qty || qty <= 0) {
+        setTruckOpsStatus("Pick an item and positive qty.", true);
+        return;
+      }
+      setTruckOpsStatus("Loading truck…", false);
+      try {
+        const truck = await apiPost("/api/emaint-demo/inventory/truck-load", {
+          assignid,
+          item,
+          qty,
+        });
+        renderTruckLines(truck);
+        setTruckOpsStatus(`Loaded ${qty} × ${item} on truck.`, false);
+        if (itemInput) itemInput.value = "";
+        if (el("truck-mat-qty")) el("truck-mat-qty").value = "";
+      } catch (err) {
+        setTruckOpsStatus(String(err.message || err), true);
+      }
+    };
   }
 
   async function saveAttributes() {
@@ -636,23 +896,39 @@
     const seq = ++loadSeq;
     state.selectedKey = key;
     openDetail();
+    applyDetailLayout();
     renderGrid();
     setDetailLoading();
-    if (hasSplitDetail()) {
+    if (hasSplitDetail() || TABLE_ID === "work_orders") {
       clearLinesGrid();
       const status = el("lines-status");
       if (status) {
-        status.textContent = "Loading lines…";
+        status.textContent = TABLE_ID === "work_orders" ? "Loading parts…" : "Loading lines…";
         status.className = "lines-status";
       }
     }
     try {
-      const record = await api(
-        `/api/emaint-demo/${TABLE_ID}/rows/${encodeURIComponent(key)}`
-      );
+      let record;
+      if (TABLE_ID === "field_techs") {
+        const row = state.rows.find((r) => String(r.assignid) === String(key));
+        if (!row) throw new Error("Tech not found in current page");
+        record = {
+          key: String(row.assignid),
+          fields: {
+            "Assign ID": row.assignid,
+            "Assigned To": row.assignto,
+            "Open WOs": row.open_wo_count,
+          },
+          raw: row,
+          editable_columns: [],
+        };
+      } else {
+        record = await api(`/api/emaint-demo/${TABLE_ID}/rows/${encodeURIComponent(key)}`);
+      }
       if (seq !== loadSeq) return;
       renderForm(record);
-      if (hasSplitDetail()) {
+      applyDetailLayout();
+      if (hasSplitDetail() || TABLE_ID === "work_orders") {
         await loadDetailLines(key, seq);
       }
       if (seq !== loadSeq) return;
@@ -996,12 +1272,20 @@
     setStatus("Loading rows…");
     try {
       const qParam = state.q ? `&q=${encodeURIComponent(state.q)}` : "";
-      const data = await api(
-        `/api/emaint-demo/${TABLE_ID}/rows?limit=${state.limit}&offset=${state.offset}${qParam}`
-      );
+      let data;
+      if (state.table && state.table.custom_source === "field_techs") {
+        data = await api(
+          `/api/emaint-demo/field-techs?limit=${state.limit}&offset=${state.offset}${qParam}`
+        );
+      } else {
+        data = await api(
+          `/api/emaint-demo/${TABLE_ID}/rows?limit=${state.limit}&offset=${state.offset}${qParam}`
+        );
+      }
       state.rows = data.rows || [];
       renderGrid();
-      setStatus(`${state.rows.length} row(s) shown · offset ${state.offset}`);
+      const totalNote = data.total != null ? ` · ${data.total} total` : "";
+      setStatus(`${state.rows.length} row(s) shown · offset ${state.offset}${totalNote}`);
       el("btn-prev").disabled = state.offset <= 0;
       el("btn-next").disabled = state.rows.length < state.limit;
     } catch (err) {
@@ -1036,7 +1320,15 @@
 
     const sub = el("table-subtitle");
     if (sub) {
-      sub.textContent = `${state.table.emaint_table} → ${state.table.sql_object}`;
+      let hint = "";
+      if (TABLE_ID === "work_orders") {
+        hint = " · Open a row → add parts from inventory";
+      } else if (TABLE_ID === "inventory") {
+        hint = " · Open a row → refurb / stock buckets";
+      } else if (TABLE_ID === "field_techs") {
+        hint = " · Open a tech → load parts on truck";
+      }
+      sub.textContent = `${state.table.emaint_table} → ${state.table.sql_object || state.table.custom_source || ""}${hint}`;
     }
 
     el("search").addEventListener("keydown", (e) => {

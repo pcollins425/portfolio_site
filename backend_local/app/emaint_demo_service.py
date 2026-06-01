@@ -95,6 +95,8 @@ def list_tables() -> list[dict]:
             entry["alternate_key_column"] = spec["alternate_key_column"]
         if spec.get("detail_children"):
             entry["detail_children"] = spec["detail_children"]
+        if spec.get("custom_source"):
+            entry["custom_source"] = spec["custom_source"]
         out.append(entry)
     return out
 

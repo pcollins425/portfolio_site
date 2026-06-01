@@ -9,6 +9,7 @@ from app import emaint_demo_service as demo
 
 BUCKET_WAREHOUSE = "WAREHOUSE"
 COND_AVAILABLE = "AVAILABLE"
+COND_REFURB = "REFURB"
 COND_ALLOCATED = "ALLOCATED"
 
 
@@ -109,7 +110,7 @@ def _apply_balance_delta(item: str, bucket: str, condition: str, delta: Decimal)
             f"(have {current}, need {-delta})"
         )
     if current == 0 and delta > 0:
-        temp_ref = f"TEMP-STB-{uuid.uuid4().hex[:12]}"
+        temp_ref = f"T{uuid.uuid4().hex[:12]}"
         demo._execute(
             "INSERT INTO [inventory].[stock_balance] "
             "(reference_key, item, bucket, condition, qty) VALUES (%s, %s, %s, %s, %s)",
@@ -136,7 +137,7 @@ def _record_movement(
     note: str | None,
     created_by: str | None,
 ) -> None:
-    temp_ref = f"TEMP-STM-{uuid.uuid4().hex[:12]}"
+    temp_ref = f"M{uuid.uuid4().hex[:12]}"
     demo._execute(
         "INSERT INTO [inventory].[stock_movement] "
         "(reference_key, item, from_bucket, from_condition, to_bucket, to_condition, "
@@ -205,7 +206,7 @@ def upsert_material_line(*, wo_key: str, item: str, qty_requested: float) -> dic
             (float(qty), ref),
         )
     else:
-        temp_ref = f"TEMP-WOM-{uuid.uuid4().hex[:12]}"
+        temp_ref = f"W{uuid.uuid4().hex[:12]}"
         demo._execute(
             "INSERT INTO [projects].[work_order_material] "
             "(reference_key, wo, item, qty_requested, status) VALUES (%s, %s, %s, %s, N'draft')",
@@ -289,6 +290,189 @@ def allocate_material(
         "qty_allocated": float(to_allocate),
         "materials": list_materials(wo_key),
     }
+
+
+def search_inventory(*, q: str | None = None, limit: int = 25) -> dict:
+    term = (q or "").strip()
+    lim = max(1, min(int(limit), 100))
+    if term:
+        like = f"%{term}%"
+        rows = demo._query(
+            "SELECT TOP (%s) item, reference_key, descrip, onhand "
+            "FROM [inventory].[inventory] "
+            "WHERE [item] LIKE %s OR [descrip] LIKE %s OR [reference_key] LIKE %s "
+            "ORDER BY [item] ASC",
+            (lim, like, like, like),
+        )
+    else:
+        rows = demo._query(
+            "SELECT TOP (%s) item, reference_key, descrip, onhand "
+            "FROM [inventory].[inventory] "
+            "WHERE [item] IS NOT NULL "
+            "ORDER BY [item] ASC",
+            (lim,),
+        )
+    items = []
+    for r in rows:
+        row = demo._row_json(r)
+        item = (row.get("item") or "").strip()
+        if not item:
+            continue
+        try:
+            row["stock"] = get_assignable_qty(item)
+        except ValueError:
+            row["stock"] = None
+        items.append(row)
+    return {"items": items}
+
+
+def get_item_stock_summary(item: str) -> dict:
+    base = get_assignable_qty(item)
+    rows = demo._query(
+        "SELECT bucket, condition, qty FROM [inventory].[stock_balance] "
+        "WHERE [item] = %s AND [qty] > 0 ORDER BY [bucket], [condition]",
+        (item.strip(),),
+    )
+    base["balances"] = [demo._row_json(r) for r in rows]
+    return base
+
+
+def _transfer_stock(
+    *,
+    item: str,
+    qty: Decimal,
+    from_bucket: str | None,
+    from_condition: str | None,
+    to_bucket: str,
+    to_condition: str,
+    wo: str | None = None,
+    note: str | None = None,
+    created_by: str | None = None,
+) -> None:
+    if qty <= 0:
+        raise ValueError("qty must be positive")
+    if from_bucket and from_condition:
+        available = _balance_qty(item, from_bucket, from_condition)
+        if qty > available:
+            raise ValueError(f"Only {available} available in {from_bucket}/{from_condition}")
+        _apply_balance_delta(item, from_bucket, from_condition, -qty)
+    _apply_balance_delta(item, to_bucket, to_condition, qty)
+    _record_movement(
+        item=item,
+        qty=qty,
+        from_bucket=from_bucket,
+        from_condition=from_condition,
+        to_bucket=to_bucket,
+        to_condition=to_condition,
+        wo=wo,
+        work_order_material_id=None,
+        note=note,
+        created_by=created_by,
+    )
+
+
+def move_to_refurb(
+    *,
+    item: str,
+    qty: float,
+    from_available: bool = True,
+    created_by: str | None = None,
+) -> dict:
+    item = (item or "").strip()
+    if _inventory_row(item) is None:
+        raise ValueError(f"Unknown item: {item}")
+    q = _dec(qty)
+    if from_available:
+        _transfer_stock(
+            item=item,
+            qty=q,
+            from_bucket=BUCKET_WAREHOUSE,
+            from_condition=COND_AVAILABLE,
+            to_bucket=BUCKET_WAREHOUSE,
+            to_condition=COND_REFURB,
+            note="move to refurb from available",
+            created_by=created_by,
+        )
+    else:
+        _apply_balance_delta(item, BUCKET_WAREHOUSE, COND_REFURB, q)
+        _record_movement(
+            item=item,
+            qty=q,
+            from_bucket=None,
+            from_condition=None,
+            to_bucket=BUCKET_WAREHOUSE,
+            to_condition=COND_REFURB,
+            note="field return to refurb",
+            created_by=created_by,
+        )
+    return get_item_stock_summary(item)
+
+
+def load_truck(
+    *,
+    assignid: str,
+    item: str,
+    qty: float,
+    created_by: str | None = None,
+) -> dict:
+    assignid = (assignid or "").strip()
+    item = (item or "").strip()
+    if not assignid:
+        raise ValueError("assignid is required")
+    if _inventory_row(item) is None:
+        raise ValueError(f"Unknown item: {item}")
+    q = _dec(qty)
+    truck_bucket = f"TRUCK:{assignid}"
+    _transfer_stock(
+        item=item,
+        qty=q,
+        from_bucket=BUCKET_WAREHOUSE,
+        from_condition=COND_AVAILABLE,
+        to_bucket=truck_bucket,
+        to_condition=COND_AVAILABLE,
+        note=f"load truck {assignid}",
+        created_by=created_by,
+    )
+    return list_truck_stock(assignid)
+
+
+def list_field_techs(*, q: str | None = None, limit: int = 50, offset: int = 0) -> dict:
+    term = (q or "").strip()
+    lim = max(1, min(int(limit), 200))
+    off = max(0, int(offset))
+    where = "WHERE [assignid] IS NOT NULL AND LTRIM([assignid]) <> N''"
+    params: list = []
+    if term:
+        where += " AND ([assignto] LIKE %s OR [assignid] LIKE %s)"
+        like = f"%{term}%"
+        params.extend([like, like])
+    count_sql = (
+        "SELECT COUNT(*) AS n FROM ("
+        "SELECT DISTINCT [assignid], [assignto] FROM [projects].[work_orders] "
+        f"{where}"
+        ") AS d"
+    )
+    total = int(demo._query(count_sql, tuple(params) if params else None)[0]["n"])
+    rows = demo._query(
+        "SELECT [assignid], [assignto], COUNT(*) AS open_wo_count "
+        "FROM [projects].[work_orders] "
+        f"{where} "
+        "GROUP BY [assignid], [assignto] "
+        "ORDER BY [assignto] ASC "
+        "OFFSET %s ROWS FETCH NEXT %s ROWS ONLY",
+        tuple([*params, off, lim]),
+    )
+    out = []
+    for r in rows:
+        row = demo._row_json(r)
+        aid = (row.get("assignid") or "").strip()
+        if aid:
+            try:
+                row["truck"] = list_truck_stock(aid)
+            except ValueError:
+                row["truck"] = {"lines": []}
+        out.append(row)
+    return {"rows": out, "total": total, "limit": lim, "offset": off}
 
 
 def list_truck_stock(assignid: str) -> dict:

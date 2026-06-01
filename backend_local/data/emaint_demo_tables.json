@@ -45,6 +45,20 @@
       "Edit User": "edituser"
     }
   },
+  "field_techs": {
+    "title": "Field techs",
+    "emaint_table": "WORK assignees",
+    "custom_source": "field_techs",
+    "sql_schema": "projects",
+    "sql_table": "work_orders",
+    "key_column": "assignid",
+    "browse_columns": ["assignid", "assignto", "open_wo_count"],
+    "form_fields": {
+      "Assign ID": "assignid",
+      "Assigned To": "assignto",
+      "Open WOs": "open_wo_count"
+    }
+  },
   "work_orders": {
     "title": "Work Orders",
     "emaint_table": "WORK",

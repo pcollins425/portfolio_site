@@ -411,6 +411,16 @@ table.detail-lines-grid tbody tr:hover {
   flex-shrink: 0;
 }
 
+.ops-section {
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border);
+}
+
+.ops-section .editor-title {
+  margin: 0 0 8px;
+}
+
 .wo-materials-actions {
   margin-top: 12px;
   padding-top: 12px;

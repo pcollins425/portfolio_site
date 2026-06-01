@@ -9,6 +9,7 @@ WRITE_LEVELS = frozenset({"UPDATES_ONLY", "ADDS_AND_UPDATES", "ALL_CHANGES"})
 DEMO_TABLE_IDS = (
     "projects",
     "work_orders",
+    "field_techs",
     "compinfo",
     "inventory",
     "purchase_orders",
@@ -46,6 +47,8 @@ def level_for_table(permissions: dict[str, str], table_id: str) -> str | None:
 
 
 def can_read_table(permissions: dict[str, str], table_id: str) -> bool:
+    if table_id == "field_techs" and level_for_table(permissions, "field_techs") is None:
+        return level_for_table(permissions, "work_orders") in READ_LEVELS
     level = level_for_table(permissions, table_id)
     return level in READ_LEVELS if level else False
 

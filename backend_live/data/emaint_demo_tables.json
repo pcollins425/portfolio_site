@@ -45,6 +45,20 @@
       "Edit User": "edituser"
     }
   },
+  "field_techs": {
+    "title": "Field techs",
+    "emaint_table": "WORK assignees",
+    "custom_source": "field_techs",
+    "sql_schema": "projects",
+    "sql_table": "work_orders",
+    "key_column": "assignid",
+    "browse_columns": ["assignid", "assignto", "open_wo_count"],
+    "form_fields": {
+      "Assign ID": "assignid",
+      "Assigned To": "assignto",
+      "Open WOs": "open_wo_count"
+    }
+  },
   "work_orders": {
     "title": "Work Orders",
     "emaint_table": "WORK",
@@ -108,6 +122,24 @@
       "Work Order Type": "wo_type",
       "Work Description": "work_desc",
       "Working Man Hours": "workmhours"
+    },
+    "detail_children": {
+      "materials": {
+        "title": "Parts / materials",
+        "sql_schema": "projects",
+        "sql_table": "work_order_material",
+        "parent_fk_column": "wo",
+        "parent_fk_source_column": "wo",
+        "order_column": "item",
+        "browse_columns": [
+          "reference_key",
+          "item",
+          "qty_requested",
+          "qty_allocated",
+          "qty_issued",
+          "status"
+        ]
+      }
     }
   },
   "inventory": {

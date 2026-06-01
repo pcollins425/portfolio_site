@@ -9,6 +9,7 @@ WRITE_LEVELS = frozenset({"UPDATES_ONLY", "ADDS_AND_UPDATES", "ALL_CHANGES"})
 DEMO_TABLE_IDS = (
     "projects",
     "work_orders",
+    "field_techs",
     "compinfo",
     "inventory",
     "purchase_orders",
