@@ -4,7 +4,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app import settings as app_settings
-from app.routers import auth, emaint_demo, field, master_revenue
+from app.routers import auth, emaint_demo, field, master_revenue, warehouse_inventory
 from app.routers.v1 import health as v1_health
 
 app_settings.load_local_env()
@@ -22,6 +22,7 @@ app.include_router(master_revenue.router)
 app.include_router(field.router)
 app.include_router(auth.router)
 app.include_router(emaint_demo.router)
+app.include_router(warehouse_inventory.router)
 app.include_router(v1_health.router, prefix="/api/v1", tags=["v1"])
 app.include_router(v1_health.router, prefix="/v1", tags=["v1"])
 
