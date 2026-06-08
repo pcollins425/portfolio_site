@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { NavLink, Navigate, Route, Routes } from "react-router-dom";
 import { apiUrl } from "./api/client";
+import { DashboardThemeProvider } from "./dgs/ThemeContext";
 import AnalystPage from "./pages/AnalystPage";
 import ExecutivePage from "./pages/ExecutivePage";
 import FinancePage from "./pages/FinancePage";
@@ -31,6 +32,7 @@ export default function App() {
   }, []);
 
   return (
+    <DashboardThemeProvider mode="legacy">
     <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950">
       {health?.ok === false && (
         <div className="border-b border-amber-900/70 bg-amber-950/50 px-4 py-3 text-center text-sm text-amber-100">
@@ -97,5 +99,6 @@ export default function App() {
         </Routes>
       </main>
     </div>
+    </DashboardThemeProvider>
   );
 }

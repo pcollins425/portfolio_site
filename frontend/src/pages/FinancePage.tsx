@@ -13,6 +13,7 @@ import {
   ZAxis,
 } from "recharts";
 import { fetchJson } from "../api/client";
+import { useDashboardTheme } from "../dgs/ThemeContext";
 
 type CasinoRow = {
   casino: string;
@@ -26,6 +27,7 @@ type RatioRow = { month: string; ratio: number | null };
 type RatioPayload = { ratios: RatioRow[] };
 
 export default function FinancePage() {
+  const t = useDashboardTheme();
   const [scatter, setScatter] = useState<CasinoRow[]>([]);
   const [ratios, setRatios] = useState<RatioRow[]>([]);
   const [asOf, setAsOf] = useState<string>("");
@@ -51,29 +53,27 @@ export default function FinancePage() {
   return (
     <div className="space-y-8">
       <section>
-        <h2 className="text-lg font-semibold text-white">Economics & viability</h2>
-        <p className="mt-1 text-sm text-slate-400">
+        <h2 className={t.pageTitle}>Economics & viability</h2>
+        <p className={t.pageSub}>
           {err
-            ? `Live slice unavailable (${err}). Run backend_local (python run.py) beside npm run dev.`
+            ? `Live slice unavailable (${err}). Check API connectivity.`
             : `Average daily actual vs house benchmark. Commission÷actual (${asOf.replace(/T.+/, "") || "latest month"} slice).`}
         </p>
       </section>
 
       <div className="grid gap-6 lg:grid-cols-2">
-        <div className="rounded-xl border border-slate-800 bg-slate-900/40 p-4">
-          <p className="text-xs font-medium uppercase tracking-wide text-slate-500">
-            ADW vs house benchmark ({asOf.slice(0, 10) || "—"})
-          </p>
+        <div className={t.panel}>
+          <p className={t.panelLabel}>ADW vs house benchmark ({asOf.slice(0, 10) || "—"})</p>
           <div className="mt-4 h-80">
             <ResponsiveContainer width="100%" height="100%">
               <ScatterChart margin={{ top: 16 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
-                <XAxis type="number" dataKey="houseWpu" name="House benchmark" stroke="#94a3b8" domain={["dataMin - 10", "dataMax + 10"]} />
-                <YAxis type="number" dataKey="avgAdw" name="Avg ADW" stroke="#94a3b8" />
+                <CartesianGrid strokeDasharray="3 3" stroke={t.chart.grid} />
+                <XAxis type="number" dataKey="houseWpu" name="House benchmark" stroke={t.chart.axis} domain={["dataMin - 10", "dataMax + 10"]} />
+                <YAxis type="number" dataKey="avgAdw" name="Avg ADW" stroke={t.chart.axis} />
                 <ZAxis range={[80, 80]} />
                 <Tooltip
                   cursor={{ strokeDasharray: "3 3" }}
-                  contentStyle={{ backgroundColor: "#0f172a", borderColor: "#334155" }}
+                  contentStyle={{ backgroundColor: t.chart.tooltipBg, borderColor: t.chart.tooltipBorder }}
                   formatter={(value: unknown, name: string) =>
                     [typeof value === "number" ? Math.round(value) : String(value), name]
                   }
@@ -81,40 +81,38 @@ export default function FinancePage() {
                     payload?.length ? String((payload[0] as { payload?: { casino?: string } }).payload?.casino ?? "") : ""
                   }
                 />
-                <Scatter name="Casinos" data={scatter} fill="#38bdf8" shape="circle" />
+                <Scatter name="Casinos" data={scatter} fill={t.chart.scatter} shape="circle" />
               </ScatterChart>
             </ResponsiveContainer>
           </div>
-          <p className="mt-2 text-xs text-slate-500">
+          <p className={`mt-2 text-xs ${t.code}`}>
             Interpret with commission profile mix — aggregates are AVG(ADW)/AVG(HouseWPU) by casino row grain.
           </p>
         </div>
 
-        <div className="rounded-xl border border-slate-800 bg-slate-900/40 p-4">
-          <p className="text-xs font-medium uppercase tracking-wide text-slate-500">
-            Commission ÷ actual win (national)
-          </p>
+        <div className={t.panel}>
+          <p className={t.panelLabel}>Commission ÷ actual win (national)</p>
           <div className="mt-4 h-80">
             <ResponsiveContainer width="100%" height="100%">
               <LineChart data={ratios}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
-                <XAxis dataKey="month" stroke="#94a3b8" tick={{ fontSize: 10 }} angle={-30} textAnchor="end" height={52} />
-                <YAxis stroke="#94a3b8" domain={[0, "auto"]} tickFormatter={(v) => `${(v * 100).toFixed(0)}¢/$`} />
+                <CartesianGrid strokeDasharray="3 3" stroke={t.chart.grid} />
+                <XAxis dataKey="month" stroke={t.chart.axis} tick={{ fontSize: 10 }} angle={-30} textAnchor="end" height={52} />
+                <YAxis stroke={t.chart.axis} domain={[0, "auto"]} tickFormatter={(v) => `${(v * 100).toFixed(0)}¢/$`} />
                 <Tooltip
-                  contentStyle={{ backgroundColor: "#0f172a", borderColor: "#334155" }}
+                  contentStyle={{ backgroundColor: t.chart.tooltipBg, borderColor: t.chart.tooltipBorder }}
                   formatter={(value: number) => [`${(value * 100).toFixed(1)}¢ per $ actual`, "Ratio"]}
                 />
                 <Legend />
-                <Line type="stepAfter" dataKey="ratio" name="Commission intensity" stroke="#a78bfa" strokeWidth={2} dot />
+                <Line type="stepAfter" dataKey="ratio" name="Commission intensity" stroke={t.chart.ratio} strokeWidth={2} dot />
               </LineChart>
             </ResponsiveContainer>
           </div>
         </div>
       </div>
 
-      <div className="overflow-hidden rounded-xl border border-slate-800 bg-slate-900/40">
+      <div className={t.tableWrap}>
         <table className="w-full text-left text-sm">
-          <thead className="border-b border-slate-800 bg-slate-950/60 text-xs uppercase tracking-wide text-slate-500">
+          <thead className={t.tableHead}>
             <tr>
               <th className="px-4 py-3 font-medium">Casino</th>
               <th className="px-4 py-3 font-medium">Avg ADW</th>
@@ -122,13 +120,13 @@ export default function FinancePage() {
               <th className="px-4 py-3 font-medium">Gap</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-slate-800">
+          <tbody className={t.tableRow}>
             {scatter.map((r) => (
-              <tr key={r.casino + r.avgAdw} className={r.delta < 0 ? "bg-rose-500/5" : ""}>
-                <td className="px-4 py-3 font-medium text-white">{r.casino}</td>
-                <td className="px-4 py-3 font-mono text-slate-300">${r.avgAdw}</td>
-                <td className="px-4 py-3 font-mono text-slate-400">${r.houseWpu}</td>
-                <td className={`px-4 py-3 font-mono ${r.delta >= 0 ? "text-emerald-400" : "text-rose-400"}`}>
+              <tr key={r.casino + r.avgAdw} className={r.delta < 0 ? "bg-[#fef2f2]" : ""}>
+                <td className={t.tableCellName}>{r.casino}</td>
+                <td className={t.tableCell}>${r.avgAdw}</td>
+                <td className={t.tableCellMuted}>${r.houseWpu}</td>
+                <td className={`px-4 py-3 font-mono ${r.delta >= 0 ? t.tableCellGood : t.tableCellBad}`}>
                   {r.delta >= 0 ? "+" : ""}
                   {r.delta}
                 </td>

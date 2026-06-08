@@ -28,20 +28,22 @@
 
     <nav class="dgs-subnav" id="dgs-dashboard-nav" aria-label="Dashboard views"></nav>
 
-    <iframe
-      id="dashboard-frame"
-      class="dgs-dashboard-frame"
-      title="Master Revenue dashboards"
-      loading="lazy"
-    ></iframe>
-    <p class="status" id="dashboard-hint">
-      Local dev: run <code>npm run dev</code> in <code>frontend/</code> so the frame can load
-      <code>http://localhost:5173</code>. Production: build with <code>npm run build:dgsapp</code>.
+    <section class="dgs-panel dgs-dashboard-mount" id="dashboard-root" aria-live="polite">
+      <p class="status" style="border: none; padding: 1rem;">Loading dashboards…</p>
+    </section>
+    <p class="status" id="dashboard-hint" hidden>
+      Local dev: run <code>npm run dev:dgsapp</code> in <code>frontend/</code> (port 5174) plus
+      <code>scripts/run-backend-local.sh</code>. Production: <code>npm run build:dgsapp</code>.
     </p>
   </div>
 
   <script src="assets/auth.js"></script>
   <script src="assets/shell.js"></script>
-  <script>DGS.boot("dashboard", () => DGS.initDashboardPage());</script>
+  <script>
+    if (/localhost|127\.0\.0\.1/.test(location.hostname)) {
+      document.getElementById("dashboard-hint").hidden = false;
+    }
+    DGS.boot("dashboard", () => DGS.initDashboardPage());
+  </script>
 </body>
 </html>

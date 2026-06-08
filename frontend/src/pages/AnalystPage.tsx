@@ -12,6 +12,7 @@ import {
   YAxis,
 } from "recharts";
 import { fetchJson } from "../api/client";
+import { useDashboardTheme } from "../dgs/ThemeContext";
 import { fmtUsd } from "../data/mockData";
 
 type TrendsPayload = {
@@ -22,6 +23,7 @@ type TrendsPayload = {
 type TrendRow = NonNullable<TrendsPayload["trends"]>[number];
 
 export default function AnalystPage() {
+  const t = useDashboardTheme();
   const [trend, setTrend] = useState<TrendRow[]>([]);
   const [err, setErr] = useState<string | null>(null);
 
@@ -36,10 +38,10 @@ export default function AnalystPage() {
   return (
     <div className="space-y-8">
       <section>
-        <h2 className="text-lg font-semibold text-white">Validity & jumps</h2>
-        <p className="mt-1 text-sm text-slate-400">
+        <h2 className={t.pageTitle}>Validity & jumps</h2>
+        <p className={t.pageSub}>
           {err
-            ? `Trends unavailable (${err}). Is backend_local running (python run.py)?`
+            ? `Trends unavailable (${err}). Is the API reachable?`
             : empty
               ? "No trend rows returned — check dated rows in Master_Revenue façade."
               : "Portfolio-level actual vs theoretical win."}
@@ -47,57 +49,50 @@ export default function AnalystPage() {
       </section>
 
       <div className="grid gap-6 lg:grid-cols-3">
-        <div className="rounded-xl border border-slate-800 bg-slate-900/40 p-4 lg:col-span-2">
-          <p className="text-xs font-medium uppercase tracking-wide text-slate-500">
-            Actual vs theoretical (national rollup)
-          </p>
+        <div className={`${t.panel} lg:col-span-2`}>
+          <p className={t.panelLabel}>Actual vs theoretical (national rollup)</p>
           <div className="mt-4 h-72">
             <ResponsiveContainer width="100%" height="100%">
               <LineChart data={trend}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
-                <XAxis dataKey="month" stroke="#94a3b8" tick={{ fontSize: 11 }} />
-                <YAxis stroke="#94a3b8" tickFormatter={(v) => `${Math.round(v / 1e6)}M`} />
+                <CartesianGrid strokeDasharray="3 3" stroke={t.chart.grid} />
+                <XAxis dataKey="month" stroke={t.chart.axis} tick={{ fontSize: 11 }} />
+                <YAxis stroke={t.chart.axis} tickFormatter={(v) => `${Math.round(v / 1e6)}M`} />
                 <Tooltip
-                  contentStyle={{ backgroundColor: "#0f172a", borderColor: "#334155" }}
+                  contentStyle={{ backgroundColor: t.chart.tooltipBg, borderColor: t.chart.tooltipBorder }}
                   formatter={(value: number, name: string) => [fmtUsd(value), name]}
                 />
                 <Legend />
-                <Line type="monotone" dataKey="actualWin" name="Actual win" stroke="#34d399" strokeWidth={2} dot={false} />
-                <Line type="monotone" dataKey="theoWin" name="Theo win" stroke="#818cf8" strokeWidth={2} dot={false} />
+                <Line type="monotone" dataKey="actualWin" name="Actual win" stroke={t.chart.actualWin} strokeWidth={2} dot={false} />
+                <Line type="monotone" dataKey="theoWin" name="Theo win" stroke={t.chart.theoWin} strokeWidth={2} dot={false} />
               </LineChart>
             </ResponsiveContainer>
           </div>
         </div>
 
-        <div className="rounded-xl border border-slate-800 bg-slate-900/40 p-4">
-          <p className="text-xs font-medium uppercase tracking-wide text-slate-500">
-            Theo variance %
-          </p>
+        <div className={t.panel}>
+          <p className={t.panelLabel}>Theo variance %</p>
           <div className="mt-4 h-72">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={trend}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
-                <XAxis dataKey="month" stroke="#94a3b8" tick={{ fontSize: 10 }} angle={-35} textAnchor="end" height={56} />
-                <YAxis stroke="#94a3b8" tickFormatter={(v) => `${(v * 100).toFixed(0)}%`} />
+                <CartesianGrid strokeDasharray="3 3" stroke={t.chart.grid} />
+                <XAxis dataKey="month" stroke={t.chart.axis} tick={{ fontSize: 10 }} angle={-35} textAnchor="end" height={56} />
+                <YAxis stroke={t.chart.axis} tickFormatter={(v) => `${(v * 100).toFixed(0)}%`} />
                 <Tooltip
-                  contentStyle={{ backgroundColor: "#0f172a", borderColor: "#334155" }}
+                  contentStyle={{ backgroundColor: t.chart.tooltipBg, borderColor: t.chart.tooltipBorder }}
                   formatter={(value: number) => [`${(value * 100).toFixed(1)}%`, "Variance"]}
                 />
-                <Bar dataKey="variance" fill="#fbbf24" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="variance" fill={t.chart.variance} radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </div>
         </div>
       </div>
 
-      <section className="rounded-xl border border-slate-800 bg-slate-900/40 p-4">
-        <p className="text-xs font-medium uppercase tracking-wide text-slate-500">
-          Analyst queue (rules placeholder)
+      <section className={t.panel}>
+        <p className={t.panelLabel}>Analyst queue (rules placeholder)</p>
+        <p className={`mt-3 text-sm ${t.code}`}>
+          Automated anomaly flags can post here via <code className={t.code}>/api/analyst/sanity</code>; not wired yet.
         </p>
-        <p className="mt-3 text-sm text-slate-500">
-          Automated anomaly flags can post here via <code className="text-slate-400">/api/analyst/sanity</code>; not wired yet.
-        </p>
-        <ul className="mt-4 divide-y divide-slate-800" />
       </section>
     </div>
   );

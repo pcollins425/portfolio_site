@@ -18,16 +18,6 @@
     return h === "localhost" || h === "127.0.0.1";
   }
 
-  function dashboardOrigin() {
-    if (isLocalDev()) return "http://localhost:5173";
-    return new URL("dashboard/", window.location.href).href.replace(/\/$/, "");
-  }
-
-  function dashboardFramePath(route) {
-    const path = route.startsWith("/") ? route : `/${route}`;
-    return `${dashboardOrigin()}${path}`;
-  }
-
   const APP_NAV = [
     { id: "dashboard", label: "Dashboard", href: "dashboard.html" },
     { id: "contracts", label: "Contracts", href: "contracts.html" },
@@ -41,6 +31,56 @@
     { route: "/finance", label: "Finance" },
     { route: "/performance", label: "Performance" },
   ];
+
+  let dashboardBundlePromise = null;
+
+  function dashboardAssetUrl(file) {
+    return new URL(`dashboard/assets/${file}`, window.location.href).href;
+  }
+
+  function loadDashboardBundle() {
+    if (dashboardBundlePromise) return dashboardBundlePromise;
+
+    if (isLocalDev()) {
+      dashboardBundlePromise = import(/* @vite-ignore */ "http://localhost:5174/src/main.dgs.tsx")
+        .then(() => {})
+        .catch((err) => {
+          dashboardBundlePromise = null;
+          throw err;
+        });
+      return dashboardBundlePromise;
+    }
+
+    dashboardBundlePromise = new Promise((resolve, reject) => {
+      if (!document.querySelector('link[data-dgs-dashboard-css]')) {
+        const link = document.createElement("link");
+        link.rel = "stylesheet";
+        link.href = dashboardAssetUrl("dashboard.css");
+        link.dataset.dgsDashboardCss = "1";
+        link.onload = () => {};
+        link.onerror = () => reject(new Error("Failed to load dashboard.css — run npm run build:dgsapp"));
+        document.head.appendChild(link);
+      }
+
+      if (document.querySelector('script[data-dgs-dashboard-js]')) {
+        resolve();
+        return;
+      }
+
+      const script = document.createElement("script");
+      script.type = "module";
+      script.src = dashboardAssetUrl("dashboard.js");
+      script.dataset.dgsDashboardJs = "1";
+      script.onload = () => resolve();
+      script.onerror = () => {
+        dashboardBundlePromise = null;
+        reject(new Error("Failed to load dashboard.js — run npm run build:dgsapp"));
+      };
+      document.head.appendChild(script);
+    });
+
+    return dashboardBundlePromise;
+  }
 
   function renderAppSidebar(activeId) {
     const nav = document.getElementById("dgs-app-nav");
@@ -74,12 +114,22 @@
   }
 
   function setDashboardRoute(route) {
-    const frame = document.getElementById("dashboard-frame");
-    if (frame) frame.src = dashboardFramePath(route);
-    renderDashboardSubnav(route);
+    const normalized = route.startsWith("/") ? route : `/${route}`;
+    renderDashboardSubnav(normalized);
+    loadDashboardBundle()
+      .then(() => {
+        window.dispatchEvent(new CustomEvent("dgs-dashboard-route", { detail: normalized }));
+      })
+      .catch((err) => {
+        const root = document.getElementById("dashboard-root");
+        if (root) {
+          root.innerHTML = `<p class="error-box">${String(err.message || err)}</p>`;
+        }
+      });
+
     if (window.history.replaceState) {
       const u = new URL(window.location.href);
-      u.searchParams.set("view", route.replace(/^\//, ""));
+      u.searchParams.set("view", normalized.replace(/^\//, ""));
       window.history.replaceState({}, "", u.pathname + u.search);
     }
   }
@@ -108,6 +158,7 @@
     renderAppSidebar,
     boot,
     initDashboardPage,
-    dashboardFramePath,
+    setDashboardRoute,
+    loadDashboardBundle,
   };
 })();

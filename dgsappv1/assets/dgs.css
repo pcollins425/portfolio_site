@@ -437,13 +437,22 @@ table.data-grid tbody tr.selected {
   padding-bottom: 0.5rem;
 }
 
-.dgs-dashboard-frame {
-  width: 100%;
-  min-height: calc(100vh - 160px);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  background: #0f172a;
-  box-shadow: var(--shadow);
+.dgs-dashboard-mount {
+  padding: 1.25rem 1.5rem 1.5rem;
+  min-height: calc(100vh - 180px);
+  overflow: auto;
+}
+
+.dgs-dashboard-mount .dgs-dashboard-app {
+  min-height: 420px;
+}
+
+.dgs-dashboard-mount .dgs-dashboard-panel {
+  /* React pages supply their own cards; keep mount area flush */
+}
+
+.dgs-dashboard-mount .error-box {
+  margin: 0;
 }
 
 .detail-backdrop {

@@ -8,7 +8,7 @@ Published to **`/dgsappv1/`** on Cloudflare Pages.
 
 | Page | Source | API |
 |------|--------|-----|
-| **Dashboard** | `frontend/` React app (iframe + subnav) | `/api/executive`, `/api/analyst/*`, … |
+| **Dashboard** | `frontend/` React app embedded in page (no iframe) | `/api/executive`, `/api/analyst/*`, … |
 | **Contracts** | Google sheet sync browse + detail drawer | `/api/contracts/*` |
 | **Warehouse** | `warehouseinventoryv1` logic | `/api/warehouse-inventory/*` |
 | **Operations** | `emaintdemov1` grid + drawer | `/api/emaint-demo/*`, optional Google auth |
@@ -21,8 +21,8 @@ Legacy standalone apps remain at `/dashboardtestv1/`, `/warehouseinventoryv1/`, 
 # Terminal 1 — API
 scripts/run-backend-local.sh
 
-# Terminal 2 — React dashboards (for iframe in dashboard.html)
-cd frontend && npm run dev
+# Terminal 2 — React dashboards (embedded in dashboard.html, port 5174)
+cd frontend && npm run dev:dgsapp
 
 # Terminal 3 — static shell
 cd dgsappv1 && python -m http.server 8080
@@ -35,7 +35,7 @@ Open:
 - `http://localhost:8080/warehouse.html?api=http://127.0.0.1:9002`
 - `http://localhost:8080/operations.html?t=projects&api=http://127.0.0.1:9002`
 
-Dashboard iframe loads `http://localhost:5173` automatically on localhost.
+Dashboard bundle loads from Vite on **port 5174** automatically on localhost (`npm run dev:dgsapp`). Subnav switches views without reload.
 
 ## Production build
 
