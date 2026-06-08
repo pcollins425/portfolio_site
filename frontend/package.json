@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
+    "build:dgsapp": "tsc --noEmit && vite build --config vite.dgsapp.config.ts",
     "preview": "vite preview"
   },
   "dependencies": {

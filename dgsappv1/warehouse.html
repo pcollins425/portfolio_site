@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Warehouse — DGS Application</title>
+  <link rel="stylesheet" href="assets/dgs.css" />
+</head>
+<body class="dgs-app">
+  <aside class="dgs-sidebar">
+    <div class="dgs-sidebar-brand">
+      <span class="dgs-brand-title">DGS Application</span>
+      <span class="dgs-brand-sub">Inventory</span>
+    </div>
+    <nav class="dgs-sidebar-nav" id="dgs-app-nav" aria-label="Application"></nav>
+  </aside>
+
+  <div class="dgs-main">
+    <header class="page-header">
+      <p class="page-eyebrow">Warehouse inventory</p>
+      <h1>Warehouse</h1>
+      <p class="subtitle">Live from eMaint COMPINFO · <span id="grand-total">—</span> assets across warehouses</p>
+    </header>
+
+    <div id="error-box" class="error-box" hidden></div>
+
+    <section class="dgs-panel" style="min-height: auto; padding: 1rem 1rem 0.5rem; margin-bottom: 1rem;">
+      <h2 class="page-eyebrow" style="margin-bottom: 0.75rem;">Totals by warehouse</h2>
+      <div id="summary-grid" class="summary-grid"></div>
+    </section>
+
+    <section>
+      <div id="warehouse-tabs" class="tabs" role="tablist" aria-label="Warehouses"></div>
+
+      <div id="warehouse-panel" class="dgs-panel" hidden>
+        <div style="padding: 1rem 1rem 0;">
+          <h2 id="panel-title" style="margin: 0; font-size: 1.15rem;"></h2>
+          <p class="subtitle">Cabinet counts for selected warehouse</p>
+        </div>
+
+        <div id="cabinet-summary" class="cabinet-summary" style="padding: 0 1rem;"></div>
+
+        <div class="toolbar">
+          <label style="flex: 1; min-width: 14rem;" for="search-input">
+            <span class="page-eyebrow" style="display: block; margin-bottom: 0.25rem;">Search</span>
+            <input id="search-input" type="search" placeholder="Serial, manufacturer, cabinet, previous location…" autocomplete="off" />
+          </label>
+          <button id="search-btn" type="button" class="btn btn-primary">Search</button>
+          <button id="clear-search" type="button" class="btn">Clear</button>
+        </div>
+
+        <p id="status-line" class="status-line" style="padding: 0 1rem; border: none;"></p>
+
+        <div class="table-wrap">
+          <table class="table">
+            <thead>
+              <tr>
+                <th>Serial</th>
+                <th>Manufacturer</th>
+                <th>Cabinet</th>
+                <th>Date Received</th>
+                <th>Previous Location</th>
+              </tr>
+            </thead>
+            <tbody id="asset-tbody"></tbody>
+          </table>
+        </div>
+
+        <div id="pager" class="pager" hidden>
+          <button id="prev-page" type="button" class="btn">Previous</button>
+          <span class="pager__label">Page 1 of 1</span>
+          <button id="next-page" type="button" class="btn">Next</button>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <script src="assets/shell.js"></script>
+  <script>DGS.renderAppSidebar("warehouse");</script>
+  <script src="assets/warehouse.js"></script>
+</body>
+</html>

@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Operations — DGS Application</title>
+  <link rel="stylesheet" href="assets/dgs.css" />
+</head>
+<body class="dgs-app">
+  <aside class="dgs-sidebar">
+    <div class="dgs-sidebar-brand">
+      <span class="dgs-brand-title">DGS Application</span>
+      <span class="dgs-brand-sub">Operations</span>
+    </div>
+    <nav class="dgs-sidebar-nav" id="dgs-app-nav" aria-label="Application"></nav>
+    <div class="dgs-sidebar-account" id="sidebar-account" hidden>
+      <span class="dgs-sidebar-user" id="user-label"></span>
+      <button type="button" id="btn-sign-out" class="dgs-sidebar-signout">Sign out</button>
+    </div>
+  </aside>
+
+  <div class="dgs-main">
+    <header class="page-header">
+      <p class="page-eyebrow">eMaint landing tables</p>
+      <h1 id="table-title">Projects</h1>
+      <p id="table-subtitle" class="subtitle"></p>
+    </header>
+
+    <nav class="dgs-subnav" id="nav" aria-label="Tables"></nav>
+
+    <section class="browse-panel">
+      <div class="toolbar">
+        <input id="search" type="search" placeholder="Search…" autocomplete="off" />
+        <button id="btn-search" type="button" class="btn btn-primary">Search</button>
+        <button id="btn-scan" type="button" class="btn-accent" hidden>Scan</button>
+        <button id="btn-prev" type="button" class="btn">Prev</button>
+        <button id="btn-next" type="button" class="btn">Next</button>
+      </div>
+      <div class="grid-wrap">
+        <table class="data-grid">
+          <thead id="grid-head"></thead>
+          <tbody id="grid-body"></tbody>
+        </table>
+      </div>
+      <div id="status" class="status"></div>
+    </section>
+  </div>
+
+  <div class="detail-backdrop" id="detail-backdrop" hidden></div>
+
+  <div class="scan-modal" id="scan-modal" hidden aria-hidden="true">
+    <div class="scan-dialog" role="dialog" aria-labelledby="scan-title">
+      <div class="detail-header">
+        <div>
+          <p class="detail-label">Asset lookup</p>
+          <h2 id="scan-title">Scan serial</h2>
+        </div>
+        <button id="btn-close-scan" type="button" class="icon-btn" aria-label="Close scanner">×</button>
+      </div>
+      <div style="padding: 16px 18px 20px;">
+        <label class="detail-label" for="scan-wedge">USB / keyboard scanner</label>
+        <input id="scan-wedge" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Click here, then scan…" style="width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 8px; font: inherit;" />
+        <p class="subtitle" style="margin-top: 8px;">Most USB scanners type the code and press Enter.</p>
+        <label class="detail-label" style="margin-top: 18px; display: block;">Phone camera</label>
+        <div id="scan-reader" style="width: 100%; min-height: 220px; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; background: #0f172a;"></div>
+        <p id="scan-status" class="subtitle" style="margin-top: 8px;">Open scan to start camera.</p>
+        <button id="btn-scan-restart" type="button" hidden class="btn" style="margin-top: 10px;">Restart camera</button>
+        <div id="scan-result" hidden style="margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--border);">
+          <div id="scan-asset-card" style="padding: 12px 14px; border: 1px solid var(--border); border-radius: 8px; margin-bottom: 12px;"></div>
+          <div id="scan-prep-actions" style="display: flex; flex-direction: column; gap: 8px;"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <aside class="detail-drawer" id="detail-drawer" aria-hidden="true">
+    <div class="detail-header">
+      <div>
+        <p class="detail-label">Record details</p>
+        <h2 id="form-head">Record</h2>
+      </div>
+      <button id="btn-close-detail" type="button" class="icon-btn" aria-label="Close details">×</button>
+    </div>
+    <div class="detail-body" id="detail-body">
+      <div id="form-fields"></div>
+      <section id="detail-lines-section" class="detail-lines-section" hidden aria-label="Line items">
+        <h3 id="detail-lines-title" class="detail-lines-title">Line items</h3>
+        <div class="detail-lines-grid-wrap">
+          <table class="data-grid detail-lines-grid">
+            <thead id="lines-grid-head"></thead>
+            <tbody id="lines-grid-body"></tbody>
+          </table>
+        </div>
+        <p id="lines-status" class="status" style="border: none; padding-left: 0;"></p>
+        <div id="wo-materials-actions" hidden style="margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border);">
+          <h4 class="editor-title">Add part to work order</h4>
+          <div style="display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 8px;">
+            <input id="wo-mat-item" type="text" placeholder="Search item no." autocomplete="off" style="min-width: 120px; padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px;" />
+            <input id="wo-mat-qty" type="number" min="0" step="any" placeholder="Qty needed" style="min-width: 120px; padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px;" />
+            <button type="button" id="btn-wo-mat-add" class="btn-accent">Add line</button>
+          </div>
+          <p id="wo-mat-assignable" class="subtitle"></p>
+          <p id="wo-mat-actions-status" class="subtitle"></p>
+        </div>
+      </section>
+    </div>
+  </aside>
+
+  <script src="assets/shell.js"></script>
+  <script>DGS.renderAppSidebar("operations");</script>
+  <script src="assets/demo.js"></script>
+  <script>EmaintDemo.initTablePage();</script>
+</body>
+</html>

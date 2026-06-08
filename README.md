@@ -7,6 +7,8 @@ Static **coming-soon** site (**`/`**), **Master Revenue** dashboards at **`/dash
 | **`index.html`** | Cloudflare **`www`** — “coming soon” at site root (**`/`**). |
 | **`scannertestv1/`** | Barcode scan demo — USB wedge + phone camera; **`GET /api/asset/lookup`**. Published to **`/scannertestv1/`**. |
 | **`emaintdemov1/`** | eMaint replacement demo — browse grid + record form over three SQL landing tables; **`GET /api/emaint-demo/*`**. Published to **`/emaintdemov1/`**. |
+| **`dgsappv1/`** | **Unified app shell** — Dashboard + Warehouse + Operations with shared sidebar/CSS. Published to **`/dgsappv1/`**. See **`dgsappv1/README.md`**. |
+| **`warehouseinventoryv1/`** | Warehouse COMPINFO browser. Published to **`/warehouseinventoryv1/`**. |
 | **`local_test.html`** | Optional static probe (Python **`http.server`**) — not required if you use **`frontend/`**. |
 | **`frontend/`** | Master Revenue UI — **`npm run dev`** → **`http://localhost:5173/`** (base **`/`**), proxies **`/api`** → **`backend_local`** (**`:9002`**). Production build uses base **`/dashboardtestv1/`**. |
 | **`backend_local/`** | Dev API — **`GET /api/health`**, **`/api/executive`**, **`/api/analyst/*`**, **`/api/finance/*`**, **`/api/performance/*`** over **`[dashboard].[vw_performance_report]`** |

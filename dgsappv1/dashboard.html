@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Dashboard — DGS Application</title>
+  <link rel="stylesheet" href="assets/dgs.css" />
+</head>
+<body class="dgs-app">
+  <aside class="dgs-sidebar">
+    <div class="dgs-sidebar-brand">
+      <span class="dgs-brand-title">DGS Application</span>
+      <span class="dgs-brand-sub">Master Revenue</span>
+    </div>
+    <nav class="dgs-sidebar-nav" id="dgs-app-nav" aria-label="Application"></nav>
+  </aside>
+
+  <div class="dgs-main">
+    <header class="page-header">
+      <p class="page-eyebrow">Master Revenue</p>
+      <h1>Dashboards</h1>
+      <p class="subtitle">Performance and finance views · <code>dashboard.vw_performance_report</code></p>
+    </header>
+
+    <nav class="dgs-subnav" id="dgs-dashboard-nav" aria-label="Dashboard views"></nav>
+
+    <iframe
+      id="dashboard-frame"
+      class="dgs-dashboard-frame"
+      title="Master Revenue dashboards"
+      loading="lazy"
+    ></iframe>
+    <p class="status" id="dashboard-hint">
+      Local dev: run <code>npm run dev</code> in <code>frontend/</code> so the frame can load
+      <code>http://localhost:5173</code>. Production: build with <code>npm run build:dgsapp</code>.
+    </p>
+  </div>
+
+  <script src="assets/shell.js"></script>
+  <script>DGS.initDashboardPage();</script>
+</body>
+</html>

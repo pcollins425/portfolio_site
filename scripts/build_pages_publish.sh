@@ -6,15 +6,18 @@ cd "$ROOT/frontend"
 npm install
 export VITE_API_BASE_URL="${VITE_API_BASE_URL:-https://api.collinsmediallc.com}"
 npm run build
+npm run build:dgsapp
 cd "$ROOT"
 rm -rf pages_publish
 mkdir -p pages_publish/dashboardtestv1
 mkdir -p pages_publish/scannertestv1
 mkdir -p pages_publish/emaintdemov1
 mkdir -p pages_publish/warehouseinventoryv1
+mkdir -p pages_publish/dgsappv1
 cp index.html pages_publish/
 cp -r frontend/dist/. pages_publish/dashboardtestv1/
 cp scannertestv1/index.html pages_publish/scannertestv1/
 cp -r emaintdemov1/. pages_publish/emaintdemov1/
 cp -r warehouseinventoryv1/. pages_publish/warehouseinventoryv1/
-echo "OK: $ROOT/pages_publish  (coming soon + /dashboardtestv1 SPA + /scannertestv1 + /emaintdemov1 + /warehouseinventoryv1)"
+cp -r dgsappv1/. pages_publish/dgsappv1/
+echo "OK: $ROOT/pages_publish  (coming soon + /dashboardtestv1 SPA + /dgsappv1 unified app + /scannertestv1 + /emaintdemov1 + /warehouseinventoryv1)"

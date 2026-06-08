@@ -4,6 +4,8 @@
 # Frontend
 frontend/node_modules/
 frontend/dist/
+dgsappv1/dashboard/assets/
+dgsappv1/dashboard/index.html
 pages_publish/
 
 # Python
