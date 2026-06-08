@@ -16,6 +16,7 @@ python3 scripts/run_sql_file.py scripts/sql/field_api/setup_field_api_login.sql 
 
 ```bash
 python3 scripts/run_sql_file.py scripts/sql/field_api/grant_purchase_order_field_api.sql --database dgs_application_db
+python3 scripts/run_sql_file.py scripts/sql/field_api/grant_contract_field_api.sql --database dgs_application_db
 ```
 
 (No password/login change — same **`dgs_field_api`** principal; only object permissions were missing.)

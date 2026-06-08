@@ -11,6 +11,11 @@
     SELECT, UPDATE  inventory.inventory
     SELECT  inventory.purchase_order
     SELECT  inventory.purchase_order_line
+    SELECT  inventory.contract
+    SELECT  inventory.contract_line
+    SELECT  inventory.contract_line_serial
+    SELECT  vendors.vendors
+    SELECT  vendors.cabinets
     SELECT, INSERT, UPDATE  inventory.stock_balance
     SELECT, INSERT       inventory.stock_movement
     SELECT, INSERT, UPDATE  projects.work_order_material
@@ -78,4 +83,19 @@ GRANT SELECT, INSERT ON OBJECT::[inventory].[stock_movement] TO [dgs_field_api];
 GO
 
 GRANT SELECT, INSERT, UPDATE ON OBJECT::[projects].[work_order_material] TO [dgs_field_api];
+GO
+
+GRANT SELECT ON OBJECT::[inventory].[contract] TO [dgs_field_api];
+GO
+
+GRANT SELECT ON OBJECT::[inventory].[contract_line] TO [dgs_field_api];
+GO
+
+GRANT SELECT ON OBJECT::[inventory].[contract_line_serial] TO [dgs_field_api];
+GO
+
+GRANT SELECT ON OBJECT::[vendors].[vendors] TO [dgs_field_api];
+GO
+
+GRANT SELECT ON OBJECT::[vendors].[cabinets] TO [dgs_field_api];
 GO

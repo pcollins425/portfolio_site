@@ -30,6 +30,7 @@
 
   const APP_NAV = [
     { id: "dashboard", label: "Dashboard", href: "dashboard.html" },
+    { id: "contracts", label: "Contracts", href: "contracts.html" },
     { id: "warehouse", label: "Warehouse", href: "warehouse.html" },
     { id: "operations", label: "Operations", href: "operations.html?t=projects" },
   ];

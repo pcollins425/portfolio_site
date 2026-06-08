@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Contracts — DGS Application</title>
+  <link rel="stylesheet" href="assets/dgs.css" />
+</head>
+<body class="dgs-app">
+  <aside class="dgs-sidebar">
+    <div class="dgs-sidebar-brand">
+      <span class="dgs-brand-title">DGS Application</span>
+      <span class="dgs-brand-sub">Inventory</span>
+    </div>
+    <nav class="dgs-sidebar-nav" id="dgs-app-nav" aria-label="Application"></nav>
+    <div class="dgs-sidebar-account" id="sidebar-account" hidden>
+      <span class="dgs-sidebar-user" id="user-label"></span>
+      <button type="button" id="btn-sign-out" class="dgs-sidebar-signout">Sign out</button>
+    </div>
+  </aside>
+
+  <div class="dgs-main">
+    <header class="page-header">
+      <p class="page-eyebrow">Vendor agreements</p>
+      <h1>Contracts</h1>
+      <p class="subtitle">Google sheet sync · <code>inventory.contract</code></p>
+    </header>
+
+    <div id="error-box" class="error-box" hidden></div>
+
+    <div class="stat-row" id="stat-row" aria-label="Summary statistics">
+      <div class="stat-card">
+        <span class="stat-card__value" id="stat-agreements">—</span>
+        <span class="stat-card__label">Total agreements</span>
+      </div>
+      <div class="stat-card">
+        <span class="stat-card__value" id="stat-lines">—</span>
+        <span class="stat-card__label">Contract lines</span>
+      </div>
+      <div class="stat-card">
+        <span class="stat-card__value" id="stat-serials">—</span>
+        <span class="stat-card__label">Linked serials</span>
+      </div>
+      <div class="stat-card stat-card--accent">
+        <span class="stat-card__value" id="stat-missing">—</span>
+        <span class="stat-card__label">Missing assets</span>
+      </div>
+    </div>
+
+    <section class="browse-panel">
+      <div class="toolbar">
+        <input id="search-input" type="search" placeholder="Search agreement ID, vendor, SO#…" autocomplete="off" />
+        <button id="search-btn" type="button" class="btn btn-primary">Search</button>
+        <button id="clear-search" type="button" class="btn">Clear</button>
+      </div>
+      <div class="grid-wrap">
+        <table class="data-grid" id="contracts-table">
+          <thead>
+            <tr>
+              <th>Agreement</th>
+              <th>Vendor</th>
+              <th>SO#</th>
+              <th>Date</th>
+              <th>Total</th>
+            </tr>
+          </thead>
+          <tbody id="contracts-tbody"></tbody>
+        </table>
+      </div>
+      <div class="status" id="list-status"></div>
+    </section>
+  </div>
+
+  <div class="detail-backdrop" id="detail-backdrop" hidden></div>
+
+  <aside class="detail-drawer detail-split" id="detail-drawer" aria-hidden="true">
+    <div class="detail-header">
+      <div>
+        <p class="detail-label">Vendor agreement</p>
+        <h2 id="detail-title">Contract</h2>
+        <p class="subtitle" id="detail-subtitle"></p>
+      </div>
+      <button type="button" id="btn-close-detail" class="icon-btn" aria-label="Close details">×</button>
+    </div>
+    <div class="detail-body">
+      <div class="form-grid" id="detail-fields"></div>
+      <section class="detail-lines-section is-visible" aria-label="Line items">
+        <h3 class="detail-lines-title">Line items</h3>
+        <div class="detail-lines-grid-wrap">
+          <table class="data-grid detail-lines-grid">
+            <thead>
+              <tr>
+                <th>Description</th>
+                <th>Cabinet</th>
+                <th>Qty</th>
+                <th>Cost</th>
+                <th>Serials</th>
+              </tr>
+            </thead>
+            <tbody id="lines-tbody"></tbody>
+          </table>
+        </div>
+        <p id="lines-status" class="status" style="border: none; padding-left: 0;"></p>
+      </section>
+    </div>
+  </aside>
+
+  <script src="assets/auth.js"></script>
+  <script src="assets/shell.js"></script>
+  <script src="assets/contracts.js"></script>
+  <script>DGS.boot("contracts", () => ContractsApp.init());</script>
+</body>
+</html>
