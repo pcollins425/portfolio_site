@@ -37,7 +37,8 @@
   }
 
   async function fetchJson(path) {
-    const res = await fetch(apiUrl(path));
+    const headers = window.DGSAuth ? DGSAuth.authHeaders() : {};
+    const res = await fetch(apiUrl(path), { headers });
     const body = await res.json().catch(() => ({}));
     if (!res.ok) {
       const msg = body.detail || body.message || res.statusText;
@@ -228,5 +229,5 @@
     }
   });
 
-  init();
+  window.WarehouseApp = { init };
 })();

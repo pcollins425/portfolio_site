@@ -13,6 +13,10 @@
       <span class="dgs-brand-sub">Inventory</span>
     </div>
     <nav class="dgs-sidebar-nav" id="dgs-app-nav" aria-label="Application"></nav>
+    <div class="dgs-sidebar-account" id="sidebar-account" hidden>
+      <span class="dgs-sidebar-user" id="user-label"></span>
+      <button type="button" id="btn-sign-out" class="dgs-sidebar-signout">Sign out</button>
+    </div>
   </aside>
 
   <div class="dgs-main">
@@ -75,8 +79,9 @@
     </section>
   </div>
 
+  <script src="assets/auth.js"></script>
   <script src="assets/shell.js"></script>
-  <script>DGS.renderAppSidebar("warehouse");</script>
   <script src="assets/warehouse.js"></script>
+  <script>DGS.boot("warehouse", () => WarehouseApp.init());</script>
 </body>
 </html>

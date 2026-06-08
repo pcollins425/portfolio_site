@@ -154,7 +154,7 @@ def user_from_claims(claims: dict[str, Any]) -> dict[str, Any]:
 
 
 def _safe_return_path(return_to: str | None) -> str:
-    default = f"{frontend_origin()}/emaintdemov1/table.html?t=projects"
+    default = f"{frontend_origin()}/dgsappv1/dashboard.html"
     if not return_to:
         return default
     parsed = urlparse(return_to)

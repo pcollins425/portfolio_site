@@ -39,26 +39,27 @@
     return document.getElementById(id);
   }
 
-  function getAuthToken() {
-    return sessionStorage.getItem(AUTH_TOKEN_KEY);
+  function authHeaders(extra) {
+    if (window.DGSAuth) return DGSAuth.authHeaders(extra);
+    const headers = Object.assign({}, extra || {});
+    const token = sessionStorage.getItem(AUTH_TOKEN_KEY);
+    if (token) headers.Authorization = `Bearer ${token}`;
+    return headers;
   }
 
-  function setAuthToken(token) {
-    if (token) sessionStorage.setItem(AUTH_TOKEN_KEY, token);
-    else sessionStorage.removeItem(AUTH_TOKEN_KEY);
+  function syncAuthState() {
+    if (!window.DGSAuth) return;
+    state.authRequired = DGSAuth.isAuthRequired();
+    state.user = DGSAuth.getUser();
+    state.allowedTableIds = state.user ? new Set(state.user.tables || []) : null;
   }
 
-  function captureAuthTokenFromUrl() {
-    const token = params.get("auth_token");
-    if (!token) return;
-    setAuthToken(token);
-    params.delete("auth_token");
-    const qs = params.toString();
-    const next = `${window.location.pathname}${qs ? `?${qs}` : ""}`;
-    window.history.replaceState({}, "", next);
+  function redirectToLogin() {
+    const url = window.DGSAuth ? DGSAuth.loginPageUrl() : loginPageUrlFallback();
+    window.location.replace(url);
   }
 
-  function loginPageUrl() {
+  function loginPageUrlFallback() {
     let path = window.location.pathname;
     if (path.endsWith("/operations") && !path.endsWith(".html")) {
       path = path.replace(/\/operations$/, "/operations.html");
@@ -67,64 +68,10 @@
     return `login.html?api=${encodeURIComponent(API_BASE)}&return_to=${encodeURIComponent(returnTo)}`;
   }
 
-  function authHeaders(extra) {
-    const headers = Object.assign({}, extra || {});
-    const token = getAuthToken();
-    if (token) headers.Authorization = `Bearer ${token}`;
-    return headers;
-  }
-
   function canWriteTable(tableId) {
     if (!state.authRequired || !state.user) return true;
     const level = (state.user.permissions || {})[`emaint_demo_${tableId}`];
     return level === "UPDATES_ONLY" || level === "ADDS_AND_UPDATES" || level === "ALL_CHANGES";
-  }
-
-  function renderAccount() {
-    const box = el("sidebar-account");
-    const label = el("user-label");
-    if (!box || !label) return;
-    if (!state.authRequired || !state.user) {
-      box.hidden = true;
-      return;
-    }
-    box.hidden = false;
-    label.textContent = state.user.name || state.user.email || "Signed in";
-  }
-
-  function signOut() {
-    setAuthToken(null);
-    window.location.replace(loginPageUrl());
-  }
-
-  async function ensureAuth() {
-    captureAuthTokenFromUrl();
-    let cfg = { required: false };
-    try {
-      const res = await fetch(`${API_BASE}/api/auth/config`);
-      if (res.ok) cfg = await res.json();
-    } catch (_err) {
-      /* offline / old API — allow browse until server is updated */
-    }
-    state.authRequired = cfg.required === true;
-    if (!state.authRequired) return true;
-
-    const token = getAuthToken();
-    if (!token) {
-      window.location.replace(loginPageUrl());
-      return false;
-    }
-    try {
-      const me = await api("/api/auth/me");
-      state.user = me.user;
-      state.allowedTableIds = new Set(me.user.tables || []);
-      renderAccount();
-      return true;
-    } catch (_err) {
-      setAuthToken(null);
-      window.location.replace(loginPageUrl());
-      return false;
-    }
   }
 
   function fmtCell(v) {
@@ -266,8 +213,9 @@
     opts.headers = authHeaders(opts.headers);
     const res = await fetch(`${API_BASE}${path}`, opts);
     if (res.status === 401 && state.authRequired) {
-      setAuthToken(null);
-      window.location.replace(loginPageUrl());
+      if (window.DGSAuth) DGSAuth.setToken(null);
+      else sessionStorage.removeItem(AUTH_TOKEN_KEY);
+      redirectToLogin();
       throw new Error("Sign in required");
     }
     if (!res.ok) {
@@ -1296,7 +1244,7 @@
   }
 
   async function initTablePage() {
-    if (!(await ensureAuth())) return;
+    syncAuthState();
 
     state.config = await api("/api/emaint-demo/config");
     state.table = state.config.tables.find((t) => t.id === TABLE_ID);
@@ -1376,32 +1324,11 @@
     const btnWoMatAdd = el("btn-wo-mat-add");
     if (btnWoMatAdd) btnWoMatAdd.addEventListener("click", addWoMaterialLine);
 
-    const signOutBtn = el("btn-sign-out");
-    if (signOutBtn) signOutBtn.addEventListener("click", signOut);
-
     await loadRows(true);
-  }
-
-  async function initLoginPage() {
-    const err = params.get("error");
-    const errNode = el("login-error");
-    if (err && errNode) {
-      errNode.textContent = err;
-      errNode.hidden = false;
-    }
-    const btn = el("btn-google-signin");
-    if (!btn) return;
-    btn.addEventListener("click", () => {
-      const returnTo =
-        params.get("return_to") ||
-        `${window.location.origin}/dgsappv1/operations.html?t=projects&api=${encodeURIComponent(API_BASE)}`;
-      window.location.href = `${API_BASE}/api/auth/google/start?return_to=${encodeURIComponent(returnTo)}`;
-    });
   }
 
   window.EmaintDemo = {
     initTablePage,
-    initLoginPage,
     API_BASE,
     TABLE_ID,
   };

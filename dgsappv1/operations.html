@@ -106,9 +106,9 @@
     </div>
   </aside>
 
+  <script src="assets/auth.js"></script>
   <script src="assets/shell.js"></script>
-  <script>DGS.renderAppSidebar("operations");</script>
   <script src="assets/demo.js"></script>
-  <script>EmaintDemo.initTablePage();</script>
+  <script>DGS.boot("operations", () => EmaintDemo.initTablePage());</script>
 </body>
 </html>

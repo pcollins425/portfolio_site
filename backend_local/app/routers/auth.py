@@ -44,7 +44,7 @@ async def google_callback(
 ):
     if error:
         return RedirectResponse(
-            url=f"{auth_service.frontend_origin()}/emaintdemov1/login.html?error={quote(error)}",
+            url=f"{auth_service.frontend_origin()}/dgsappv1/login.html?error={quote(error)}",
             status_code=302,
         )
     if not code or not state:
@@ -54,7 +54,7 @@ async def google_callback(
         token = auth_service.issue_jwt(user)
     except ValueError as exc:
         return RedirectResponse(
-            url=f"{auth_service.frontend_origin()}/emaintdemov1/login.html?error={quote(str(exc))}",
+            url=f"{auth_service.frontend_origin()}/dgsappv1/login.html?error={quote(str(exc))}",
             status_code=302,
         )
     except RuntimeError as exc:

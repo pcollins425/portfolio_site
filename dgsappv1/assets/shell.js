@@ -4,7 +4,7 @@
   const params = new URLSearchParams(window.location.search);
 
   function apiBase() {
-    return (params.get("api") || "https://api.collinsmediallc.com").replace(/\/$/, "");
+    return window.DGSAuth ? DGSAuth.apiBase() : (params.get("api") || "https://api.collinsmediallc.com").replace(/\/$/, "");
   }
 
   function withApi(href) {
@@ -84,7 +84,6 @@
   }
 
   function initDashboardPage() {
-    renderAppSidebar("dashboard");
     const initial =
       "/" +
       (params.get("view") ||
@@ -94,25 +93,20 @@
     setDashboardRoute(initial);
   }
 
-  function wireAccountSlot() {
-    const slot = document.getElementById("sidebar-account");
-    const opsSlot = document.getElementById("dgs-ops-account");
-    if (!slot || !opsSlot) return;
-    const mo = new MutationObserver(() => {
-      slot.hidden = opsSlot.hidden;
-      slot.innerHTML = opsSlot.innerHTML;
-    });
-    mo.observe(opsSlot, { childList: true, subtree: true, attributes: true });
-    slot.hidden = opsSlot.hidden;
-    slot.innerHTML = opsSlot.innerHTML;
+  /** Gate the whole app behind Google auth, then run page setup. */
+  async function boot(activeId, onReady) {
+    if (window.DGSAuth && !(await DGSAuth.ensureAuth())) return;
+    renderAppSidebar(activeId);
+    if (window.DGSAuth) DGSAuth.renderAccount();
+    if (typeof onReady === "function") onReady();
   }
 
   window.DGS = {
     apiBase,
     withApi,
     renderAppSidebar,
+    boot,
     initDashboardPage,
-    wireAccountSlot,
     dashboardFramePath,
   };
 })();
