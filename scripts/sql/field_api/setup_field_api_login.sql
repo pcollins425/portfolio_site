@@ -16,6 +16,12 @@
     SELECT  inventory.contract_line_serial
     SELECT  vendors.vendors
     SELECT  vendors.cabinets
+    SELECT, UPDATE  inventory.slot_master_migration
+    SELECT  clients.states
+    SELECT  clients.tribes
+    SELECT  clients.casinos
+    SELECT  inventory.assets
+    SELECT  vendors.themes
     SELECT, INSERT, UPDATE  inventory.stock_balance
     SELECT, INSERT       inventory.stock_movement
     SELECT, INSERT, UPDATE  projects.work_order_material
@@ -98,4 +104,22 @@ GRANT SELECT ON OBJECT::[vendors].[vendors] TO [dgs_field_api];
 GO
 
 GRANT SELECT ON OBJECT::[vendors].[cabinets] TO [dgs_field_api];
+GO
+
+GRANT SELECT, UPDATE ON OBJECT::[inventory].[slot_master_migration] TO [dgs_field_api];
+GO
+
+GRANT SELECT ON OBJECT::[clients].[states] TO [dgs_field_api];
+GO
+
+GRANT SELECT ON OBJECT::[clients].[tribes] TO [dgs_field_api];
+GO
+
+GRANT SELECT ON OBJECT::[clients].[casinos] TO [dgs_field_api];
+GO
+
+GRANT SELECT ON OBJECT::[inventory].[assets] TO [dgs_field_api];
+GO
+
+GRANT SELECT ON OBJECT::[vendors].[themes] TO [dgs_field_api];
 GO

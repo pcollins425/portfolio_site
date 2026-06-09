@@ -9,6 +9,7 @@ Published to **`/dgsappv1/`** on Cloudflare Pages.
 | Page | Source | API |
 |------|--------|-----|
 | **Dashboard** | `frontend/` React app embedded in page (no iframe) | `/api/executive`, `/api/analyst/*`, … |
+| **Slot Master** | State → Tribe → Casino cascade, active list, detail drawer, direct-edit attributes | `/api/slot-master/*` |
 | **Contracts** | Google sheet sync browse + detail drawer | `/api/contracts/*` |
 | **Warehouse** | `warehouseinventoryv1` logic | `/api/warehouse-inventory/*` |
 | **Operations** | `emaintdemov1` grid + drawer | `/api/emaint-demo/*`, optional Google auth |
@@ -30,6 +31,7 @@ cd dgsappv1 && python -m http.server 8080
 
 Open:
 
+- `http://localhost:8080/slot_master.html?api=http://127.0.0.1:9002`
 - `http://localhost:8080/contracts.html?api=http://127.0.0.1:9002`
 - `http://localhost:8080/dashboard.html?api=http://127.0.0.1:9002`
 - `http://localhost:8080/warehouse.html?api=http://127.0.0.1:9002`

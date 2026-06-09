@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Slot Master — DGS Application</title>
+  <link rel="stylesheet" href="assets/dgs.css" />
+</head>
+<body class="dgs-app">
+  <aside class="dgs-sidebar">
+    <div class="dgs-sidebar-brand">
+      <span class="dgs-brand-title">DGS Application</span>
+      <span class="dgs-brand-sub">Inventory</span>
+    </div>
+    <nav class="dgs-sidebar-nav" id="dgs-app-nav" aria-label="Application"></nav>
+    <div class="dgs-sidebar-account" id="sidebar-account" hidden>
+      <span class="dgs-sidebar-user" id="user-label"></span>
+      <button type="button" id="btn-sign-out" class="dgs-sidebar-signout">Sign out</button>
+    </div>
+  </aside>
+
+  <div class="dgs-main">
+    <header class="page-header">
+      <p class="page-eyebrow">Deployed machines</p>
+      <h1>Slot Master</h1>
+      <p class="subtitle"><code>inventory.slot_master_migration</code> · resolved via asset, casino, theme FKs</p>
+    </header>
+
+    <div id="error-box" class="error-box" hidden></div>
+
+    <section class="location-cascade" aria-label="Location filters">
+      <p class="page-eyebrow" style="margin-bottom: 0.65rem;">Location</p>
+      <div class="location-cascade__row">
+        <label class="cascade-select">
+          <span class="cascade-select__label">State</span>
+          <select id="state-select"><option value="">Select state…</option></select>
+        </label>
+        <span class="cascade-sep" aria-hidden="true">›</span>
+        <label class="cascade-select">
+          <span class="cascade-select__label">Tribe</span>
+          <select id="tribe-select" disabled><option value="">Select tribe…</option></select>
+        </label>
+        <span class="cascade-sep" aria-hidden="true">›</span>
+        <label class="cascade-select cascade-select--active">
+          <span class="cascade-select__label">Casino</span>
+          <select id="casino-select" disabled><option value="">Select casino…</option></select>
+        </label>
+      </div>
+    </section>
+
+    <div class="stat-row" id="stat-row" aria-label="Summary statistics" hidden>
+      <div class="stat-card">
+        <span class="stat-card__value" id="stat-active">—</span>
+        <span class="stat-card__label">Active machines</span>
+      </div>
+      <div class="stat-card">
+        <span class="stat-card__value" id="stat-cabinets">—</span>
+        <span class="stat-card__label">Cabinet types</span>
+      </div>
+      <div class="stat-card stat-card--accent">
+        <span class="stat-card__value" id="stat-history">—</span>
+        <span class="stat-card__label">History rows at property</span>
+      </div>
+    </div>
+
+    <section class="browse-panel" id="list-panel" hidden>
+      <div class="toolbar">
+        <input id="search-input" type="search" placeholder="Search serial, asset #, theme, ZBL…" autocomplete="off" />
+        <button id="search-btn" type="button" class="btn btn-primary">Search</button>
+        <button id="clear-search" type="button" class="btn">Clear</button>
+      </div>
+      <div class="grid-wrap">
+        <table class="data-grid" id="machines-table">
+          <thead>
+            <tr>
+              <th>Serial</th>
+              <th>Cabinet</th>
+              <th>Theme</th>
+              <th>ZBL</th>
+              <th>Hold</th>
+            </tr>
+          </thead>
+          <tbody id="machines-tbody"></tbody>
+        </table>
+      </div>
+      <div class="status" id="list-status"></div>
+    </section>
+  </div>
+
+  <div class="detail-backdrop" id="detail-backdrop" hidden></div>
+
+  <aside class="detail-drawer detail-split" id="detail-drawer" aria-hidden="true">
+    <div class="detail-header">
+      <div>
+        <p class="detail-label" id="detail-eyebrow">Active deployment</p>
+        <h2 id="detail-title">Machine</h2>
+        <p class="subtitle" id="detail-subtitle"></p>
+      </div>
+      <div class="detail-header__badges">
+        <span class="smm-badge" id="detail-active-badge" hidden>Active</span>
+        <button type="button" id="btn-close-detail" class="icon-btn" aria-label="Close details">×</button>
+      </div>
+    </div>
+    <div class="detail-body smm-detail-body">
+      <div class="fk-chip-row" id="fk-chips"></div>
+
+      <button type="button" class="smm-summary-toggle" id="btn-toggle-summary" aria-expanded="false">
+        <span>Current settings</span>
+        <span class="smm-summary-toggle__hint" id="summary-hint">▾ Show all attributes</span>
+      </button>
+      <div class="smm-summary-strip" id="summary-strip"></div>
+
+      <div class="smm-edit-panel" id="edit-panel" hidden>
+        <div class="smm-edit-panel__head">
+          <div>
+            <p class="smm-edit-panel__title">All attributes · direct edit</p>
+            <p class="subtitle" id="edit-panel-subtitle"></p>
+          </div>
+          <button type="button" class="btn btn-ghost" id="btn-collapse-edit">▴ Collapse</button>
+        </div>
+        <div class="smm-edit-grid" id="edit-grid"></div>
+        <div class="smm-edit-actions" id="edit-actions" hidden>
+          <button type="button" class="btn btn-primary" id="btn-apply">Apply changes</button>
+          <button type="button" class="btn" id="btn-discard">Discard</button>
+        </div>
+      </div>
+
+      <section class="smm-history-section" aria-label="Asset history">
+        <div class="smm-history-head">
+          <h3 class="detail-lines-title" id="history-title">Asset history</h3>
+          <span class="status-line" id="history-count"></span>
+        </div>
+        <p class="subtitle smm-history-note">Click a row to load that snapshot into the edit form.</p>
+        <div class="smm-history-list" id="history-list"></div>
+      </section>
+    </div>
+  </aside>
+
+  <script src="assets/auth.js"></script>
+  <script src="assets/shell.js"></script>
+  <script src="assets/slot_master.js"></script>
+  <script>DGS.boot("slot_master", () => SlotMasterApp.init());</script>
+</body>
+</html>

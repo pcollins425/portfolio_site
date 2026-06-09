@@ -20,3 +20,12 @@ python3 scripts/run_sql_file.py scripts/sql/field_api/grant_contract_field_api.s
 ```
 
 (No password/login change — same **`dgs_field_api`** principal; only object permissions were missing.)
+
+**Slot Master (2026-06-09):** after **`inventory.slot_master_migration`** exists:
+
+```bash
+python3 scripts/run_sql_file.py scripts/sql/field_api/grant_slot_master_field_api.sql --database dgs_application_db
+python3 scripts/run_sql_file.py scripts/sql/seed_slot_master_permissions.sql --database dgs_application_db
+```
+
+Re-login after the permission seed so JWT includes **`slot_master:UPDATES_ONLY`**.
