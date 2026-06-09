@@ -7,8 +7,9 @@ Example:
   export GITHUB_WEBHOOK_SECRET='...'
   python3 scripts/github-webhook-listener.py --host 127.0.0.1 --port 9009
 
-Point GitHub → Settings → Webhooks → Payload URL at your reverse proxy, e.g.:
-  https://deploy.example.com/hooks/portfolio-backend
+Expose via existing Cloudflare Tunnel (path rule → 127.0.0.1:9009), then set GitHub
+webhook Payload URL to e.g.:
+  https://api.collinsmediallc.com/hooks/portfolio-backend
 
 Only push events on DEPLOY_BRANCH (default main) that touch backend_live/ or
 docker-compose.yml trigger a deploy.
