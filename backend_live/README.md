@@ -50,3 +50,5 @@ Point your tunnel at this host/port. **`MSSQL_*`** = **`dashboard_perf_ro`** for
 **Compose** maps **`127.0.0.1:9001:9001`** so the API is **not** exposed on all interfaces. **`env_file`** reads **`./backend_live/.env`** when present (Compose marks it optional so a missing file does not block **`docker compose config`**; without **`MSSQL_*`**, the app will fail at runtime until you add one).
 
 The image sets **`API_HOST=0.0.0.0`** inside the container; you do not need to duplicate that in **`.env`** unless you override it.
+
+**Auto-redeploy after git push:** from repo root, **`bash scripts/deploy-backend-docker.sh`** (pull + down + up **`--build`**). For unattended updates, see **`scripts/README.md`** — cron polling (**`check-backend-updates.sh`**) or a GitHub webhook (**`github-webhook-listener.py`**).
