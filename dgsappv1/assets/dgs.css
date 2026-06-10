@@ -1158,6 +1158,187 @@ body.login-page {
   font-size: 0.92em;
 }
 
+.warehouse-selector-panel {
+  margin-bottom: 1rem;
+}
+
+.warehouse-selector-panel .page-eyebrow {
+  margin-bottom: 0.75rem;
+}
+
+.warehouse-pivot-panel {
+  min-height: auto;
+}
+
+.warehouse-pivot-head {
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--border);
+  background: #fafbfc;
+}
+
+.warehouse-pivot-title {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.warehouse-pivot-wrap {
+  overflow: auto;
+}
+
+.warehouse-pivot {
+  min-width: 720px;
+}
+
+.warehouse-pivot th,
+.warehouse-pivot td {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.warehouse-pivot .pivot-row-header,
+.warehouse-pivot .pivot-row-label {
+  text-align: left;
+  min-width: 12rem;
+}
+
+.pivot-col-header {
+  cursor: pointer;
+  vertical-align: bottom;
+}
+
+.pivot-col-header:hover,
+.pivot-col-header.pivot-col-highlight {
+  background: var(--accent-soft);
+}
+
+.pivot-col-name {
+  display: block;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.pivot-col-total {
+  display: block;
+  margin-top: 2px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.pivot-col-header.pivot-col-highlight .pivot-col-name {
+  color: var(--accent);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.pivot-row-btn,
+.pivot-cell-btn {
+  appearance: none;
+  border: none;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  padding: 0;
+  cursor: pointer;
+  text-align: inherit;
+  width: 100%;
+}
+
+.pivot-row-btn:hover {
+  color: var(--sidebar-bg);
+  text-decoration: underline;
+}
+
+.pivot-row--selected .pivot-row-btn {
+  color: var(--sidebar-bg);
+  font-weight: 600;
+}
+
+.pivot-cell-btn {
+  min-width: 2.5rem;
+  padding: 4px 6px;
+  border-radius: 6px;
+}
+
+.pivot-cell-btn:hover:not(:disabled) {
+  background: var(--accent-soft);
+}
+
+.pivot-cell-btn--empty {
+  cursor: default;
+  color: var(--muted);
+}
+
+.pivot-cell--selected .pivot-cell-btn {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+  background: #fff7f2;
+}
+
+.pivot-col-highlight .pivot-cell-btn:not(:disabled) {
+  background: #fff7f2;
+}
+
+.pivot-total-header,
+.pivot-total-cell {
+  font-weight: 700;
+}
+
+.warehouse-pivot-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem 1.5rem;
+  padding: 12px 16px 14px;
+  border-top: 1px solid var(--border);
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.legend-swatch {
+  width: 14px;
+  height: 14px;
+  border-radius: 3px;
+  flex-shrink: 0;
+}
+
+.legend-swatch--cell {
+  border: 2px solid var(--accent);
+  background: #fff7f2;
+}
+
+.legend-swatch--row {
+  border-left: 3px solid var(--sidebar-bg);
+  background: transparent;
+  width: 10px;
+}
+
+.legend-swatch--col {
+  border-top: 3px solid var(--accent);
+  background: transparent;
+  height: 10px;
+}
+
+.warehouse-drawer-toolbar {
+  padding: 0;
+  border: none;
+  background: transparent;
+  margin-bottom: 12px;
+}
+
+.warehouse-serial-grid .mono {
+  font-family: var(--mono, ui-monospace, monospace);
+  font-size: 12px;
+}
+
 @media (max-width: 900px) {
   .dgs-sidebar {
     width: 100%;

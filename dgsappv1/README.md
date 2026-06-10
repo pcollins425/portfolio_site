@@ -11,7 +11,7 @@ Published to **`/dgsappv1/`** on Cloudflare Pages.
 | **Dashboard** | `frontend/` React app embedded in page (no iframe) | `/api/executive`, `/api/analyst/*`, … |
 | **Slot Master** | State → Tribe → Casino cascade, active list, detail drawer, direct-edit attributes | `/api/slot-master/*` |
 | **Contracts** | Google sheet sync browse + detail drawer | `/api/contracts/*` |
-| **Warehouse** | `warehouseinventoryv1` logic | `/api/warehouse-inventory/*` |
+| **Warehouse** | Pivot grid + cell/row/column drill-down drawer | `/api/warehouse-inventory/pivot`, `/serials`, `/summary` |
 | **Operations** | `emaintdemov1` grid + drawer | `/api/emaint-demo/*`, optional Google auth |
 
 Legacy standalone apps remain at `/dashboardtestv1/`, `/warehouseinventoryv1/`, `/emaintdemov1/` until cutover.
