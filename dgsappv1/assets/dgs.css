@@ -140,8 +140,9 @@ body.detail-open .dgs-main {
   margin-right: var(--drawer-w);
 }
 
+/* Wide split drawer overlays content (fixed + z-index) instead of shrinking the table */
 body.detail-open.detail-split .dgs-main {
-  margin-right: var(--drawer-w-split);
+  margin-right: 0;
 }
 
 body.detail-open.detail-split .detail-drawer {
@@ -1173,7 +1174,8 @@ body.login-page {
     margin-left: 0;
   }
 
-  body.detail-open .dgs-main {
+  body.detail-open .dgs-main,
+  body.detail-open.detail-split .dgs-main {
     margin-right: 0;
   }
 
