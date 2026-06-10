@@ -1202,6 +1202,23 @@ body.login-page {
   min-width: 12rem;
 }
 
+.pivot-group-row th {
+  text-align: left;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--sidebar-bg);
+  background: #f4f7fb;
+  border-top: 1px solid var(--border);
+  padding-top: 10px;
+  padding-bottom: 6px;
+}
+
+.pivot-row-label--cabinet {
+  padding-left: 1.25rem;
+}
+
 .pivot-col-header {
   cursor: pointer;
   vertical-align: bottom;

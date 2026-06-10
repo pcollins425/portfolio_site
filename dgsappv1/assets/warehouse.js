@@ -88,56 +88,41 @@
     const p = state.pivot;
     if (!p) return;
 
-    const cards = p.columns.map((col) => ({
-      key: col.property,
-      count: col.total,
-      label: col.property,
-      kind: "primary",
-    }));
-
-    if (p.others) {
-      cards.push({
-        key: "__others__",
-        count: p.others.total,
-        label: p.others.label,
-        kind: "others",
-      });
-    }
-
-    els.summaryGrid.innerHTML = cards
-      .map((card) => {
-        const active =
-          (card.kind === "primary" && card.key === state.highlightProperty) ||
-          (card.kind === "others" && state.highlightProperty === "__others__");
+    els.summaryGrid.innerHTML = p.columns
+      .map((col) => {
+        const active = col.property === state.highlightProperty;
         return `
-        <button type="button" class="summary-card${active ? " active" : ""}" data-key="${esc(card.key)}" data-kind="${esc(card.kind)}">
-          <span class="summary-card__count">${fmtNum(card.count)}</span>
-          <span class="summary-card__label">${esc(card.label)}</span>
+        <button type="button" class="summary-card${active ? " active" : ""}" data-property="${esc(col.property)}">
+          <span class="summary-card__count">${fmtNum(col.total)}</span>
+          <span class="summary-card__label">${esc(col.property)}</span>
         </button>`;
       })
       .join("");
 
-    els.summaryGrid.querySelectorAll("[data-key]").forEach((btn) => {
+    els.summaryGrid.querySelectorAll("[data-property]").forEach((btn) => {
       btn.addEventListener("click", () => {
-        const key = btn.dataset.key;
-        state.highlightProperty = state.highlightProperty === key ? null : key;
+        const property = btn.dataset.property;
+        state.highlightProperty = state.highlightProperty === property ? null : property;
         renderSummaryCards();
         renderPivot();
-        if (state.highlightProperty && state.highlightProperty !== "__others__") {
+        if (state.highlightProperty) {
           openColumnDrill(state.highlightProperty);
-        } else if (state.highlightProperty === "__others__") {
-          openOthersDrill();
         }
       });
     });
   }
 
+  function cabinetLabel(row) {
+    return (row.cabinet || "").trim() || row.label || "—";
+  }
+
+  function manufacturerKey(row) {
+    return (row.manufacturer || "").trim() || "—";
+  }
+
   function cellClass(property, row) {
     const selected = state.selection;
-    const highlightCol =
-      state.highlightProperty &&
-      state.highlightProperty !== "__others__" &&
-      state.highlightProperty === property;
+    const highlightCol = state.highlightProperty && state.highlightProperty === property;
     const classes = ["pivot-cell"];
     if (highlightCol) classes.push("pivot-col-highlight");
     if (
@@ -174,38 +159,51 @@
         <th scope="col" class="pivot-total-header">Total</th>
       </tr>`;
 
-    els.pivotTbody.innerHTML = p.rows
-      .map((row) => {
-        const rowSelected =
-          state.selection &&
-          state.selection.kind === "row" &&
-          state.selection.manufacturer === row.manufacturer &&
-          state.selection.cabinet === row.cabinet;
-        const cells = p.columns
-          .map((col) => {
-            const count = row.counts[col.property] || 0;
-            const clickable = count > 0 ? ' class="pivot-cell-btn"' : ' disabled class="pivot-cell-btn pivot-cell-btn--empty"';
-            return `
+    const colSpan = p.columns.length + 2;
+    let lastManufacturer = null;
+    const bodyHtml = [];
+
+    p.rows.forEach((row) => {
+      const mfg = manufacturerKey(row);
+      if (mfg !== lastManufacturer) {
+        bodyHtml.push(`
+        <tr class="pivot-group-row">
+          <th scope="row" colspan="${colSpan}">${esc(mfg)}</th>
+        </tr>`);
+        lastManufacturer = mfg;
+      }
+
+      const rowSelected =
+        state.selection &&
+        state.selection.kind === "row" &&
+        state.selection.manufacturer === row.manufacturer &&
+        state.selection.cabinet === row.cabinet;
+      const cells = p.columns
+        .map((col) => {
+          const count = row.counts[col.property] || 0;
+          const clickable = count > 0 ? ' class="pivot-cell-btn"' : ' disabled class="pivot-cell-btn pivot-cell-btn--empty"';
+          return `
             <td class="${cellClass(col.property, row)}" data-property="${esc(col.property)}">
               <button type="button"${clickable} data-kind="cell" data-property="${esc(col.property)}" data-manufacturer="${esc(row.manufacturer || "")}" data-cabinet="${esc(row.cabinet || "")}">
                 ${count ? fmtNum(count) : "—"}
               </button>
             </td>`;
-          })
-          .join("");
+        })
+        .join("");
 
-        return `
+      bodyHtml.push(`
         <tr class="${rowSelected ? "pivot-row--selected" : ""}">
-          <th scope="row" class="pivot-row-label">
+          <th scope="row" class="pivot-row-label pivot-row-label--cabinet">
             <button type="button" class="pivot-row-btn" data-kind="row" data-manufacturer="${esc(row.manufacturer || "")}" data-cabinet="${esc(row.cabinet || "")}">
-              ${esc(row.label)}
+              ${esc(cabinetLabel(row))}
             </button>
           </th>
           ${cells}
           <td class="pivot-total-cell">${fmtNum(row.total)}</td>
-        </tr>`;
-      })
-      .join("");
+        </tr>`);
+    });
+
+    els.pivotTbody.innerHTML = bodyHtml.join("");
 
     els.pivotThead.querySelectorAll(".pivot-col-header[data-property]").forEach((th) => {
       th.addEventListener("click", () => openColumnDrill(th.dataset.property));
@@ -239,7 +237,6 @@
     if (filter.property) q.set("property", filter.property);
     if (filter.manufacturer !== undefined) q.set("manufacturer", filter.manufacturer);
     if (filter.cabinet !== undefined) q.set("cabinet", filter.cabinet);
-    if (filter.others) q.set("others", "true");
     if (state.drawer.search) q.set("q", state.drawer.search);
     q.set("page", String(state.drawer.page));
     q.set("page_size", "100");
@@ -348,14 +345,6 @@
     });
   }
 
-  function openOthersDrill() {
-    openDrill("column", {
-      filter: { others: true },
-      title: state.pivot.others.label,
-      subtitle: "All serials in smaller warehouse locations",
-    });
-  }
-
   function _cabinetLabel(manufacturer, cabinet) {
     const m = (manufacturer || "").trim();
     const c = (cabinet || "").trim();
@@ -369,9 +358,7 @@
     try {
       state.pivot = await fetchJson("/api/warehouse-inventory/pivot");
       els.grandTotal.textContent = fmtNum(state.pivot.grand_total);
-      const warehouseCount =
-        state.pivot.columns.length + (state.pivot.others ? state.pivot.others.properties.length : 0);
-      els.warehouseCount.textContent = String(warehouseCount);
+      els.warehouseCount.textContent = String(state.pivot.columns.length);
       renderSummaryCards();
       renderPivot();
     } catch (err) {

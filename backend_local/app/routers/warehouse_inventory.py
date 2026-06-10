@@ -12,9 +12,6 @@ from app import mssql
 
 router = APIRouter(prefix="/api/warehouse-inventory", tags=["warehouse-inventory"])
 
-_PRIMARY_COLUMN_COUNT = 4
-_OTHERS_LABEL = "All others"
-
 _WHERE_WAREHOUSE = """
     LOWER(LTRIM(RTRIM(ISNULL(property, N'')))) LIKE N'%warehouse%'
 """
@@ -73,17 +70,8 @@ def _fetch_warehouse_totals() -> list[dict]:
     return [{"property": r["property"], "total": int(r["total"])} for r in rows]
 
 
-def _split_primary_warehouses(warehouses: list[dict]) -> tuple[list[dict], dict | None]:
-    primary = warehouses[:_PRIMARY_COLUMN_COUNT]
-    rest = warehouses[_PRIMARY_COLUMN_COUNT:]
-    others = None
-    if rest:
-        others = {
-            "label": _OTHERS_LABEL,
-            "total": sum(w["total"] for w in rest),
-            "properties": [w["property"] for w in rest],
-        }
-    return primary, others
+def _sort_key(value: str | None) -> str:
+    return (value or "").casefold()
 
 
 def _search_clause(search: str) -> tuple[str, tuple]:
@@ -141,11 +129,9 @@ def warehouse_summary():
 
 @router.get("/pivot")
 def warehouse_pivot():
-    """CEO pivot: rows = manufacturer & cabinet, columns = top warehouses + total."""
+    """CEO pivot: rows = manufacturer & cabinet, columns = all warehouses + total."""
     try:
         warehouses = _fetch_warehouse_totals()
-        primary, others = _split_primary_warehouses(warehouses)
-        primary_props = {w["property"] for w in primary}
 
         rows_raw = _field_query(
             f"""
@@ -181,18 +167,19 @@ def warehouse_pivot():
             pivot[key]["counts"][prop] = count
             pivot[key]["total"] += count
 
-        rows = sorted(pivot.values(), key=lambda x: (-x["total"], x["label"]))
+        rows = sorted(
+            pivot.values(),
+            key=lambda x: (_sort_key(x["manufacturer"]), _sort_key(x["cabinet"])),
+        )
         for row in rows:
-            row["counts"] = {col["property"]: row["counts"].get(col["property"], 0) for col in primary}
+            row["counts"] = {col["property"]: row["counts"].get(col["property"], 0) for col in warehouses}
 
     except Exception as exc:
         raise HTTPException(status_code=503, detail=f"database error: {exc}") from exc
 
     return {
         "grand_total": sum(w["total"] for w in warehouses),
-        "columns": primary,
-        "others": others,
-        "primary_properties": sorted(primary_props),
+        "columns": warehouses,
         "rows": rows,
     }
 
@@ -202,7 +189,6 @@ def warehouse_serials(
     property: str | None = Query(None, max_length=120, description="Warehouse property name"),
     manufacturer: str | None = Query(None, max_length=120),
     cabinet: str | None = Query(None, max_length=120),
-    others: bool = Query(False, description="Filter to warehouses outside the top pivot columns"),
     q: str = Query("", max_length=120, description="Search serial or previous location"),
     page: int = Query(1, ge=1),
     page_size: int = Query(100, ge=1, le=500),
@@ -213,22 +199,13 @@ def warehouse_serials(
     manufac = manufacturer.strip() if manufacturer else None
     model_no = cabinet.strip() if cabinet else None
 
-    if not prop and not manufac and not model_no and not others:
+    if not prop and not manufac and not model_no:
         raise HTTPException(status_code=400, detail="at least one filter is required")
 
     filter_sql = f"WHERE {_WHERE_WAREHOUSE}"
     params: list = []
 
-    if others:
-        warehouses = _fetch_warehouse_totals()
-        primary, _ = _split_primary_warehouses(warehouses)
-        primary_props = [w["property"] for w in primary]
-        if not primary_props:
-            raise HTTPException(status_code=400, detail="no primary warehouses to exclude")
-        placeholders = ", ".join(["%s"] * len(primary_props))
-        filter_sql += f" AND LTRIM(RTRIM(property)) NOT IN ({placeholders})"
-        params.extend(primary_props)
-    elif prop:
+    if prop:
         filter_sql += " AND LTRIM(RTRIM(property)) = %s"
         params.append(prop)
 
@@ -298,7 +275,6 @@ def warehouse_serials(
         "property": prop,
         "manufacturer": manufac,
         "cabinet": model_no,
-        "others": others or None,
         "search": search or None,
         "total_items": total_items,
         "items": items,
