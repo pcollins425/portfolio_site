@@ -5,8 +5,13 @@ from __future__ import annotations
 import math
 import os
 from datetime import date, datetime
+from io import BytesIO
 
 from fastapi import APIRouter, HTTPException, Query
+from fastapi.responses import StreamingResponse
+from openpyxl import Workbook
+from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
+from openpyxl.utils import get_column_letter
 
 from app import mssql
 
@@ -74,6 +79,181 @@ def _sort_key(value: str | None) -> str:
     return (value or "").casefold()
 
 
+def _build_pivot_data() -> dict:
+    warehouses = _fetch_warehouse_totals()
+
+    rows_raw = _field_query(
+        f"""
+        SELECT
+            LTRIM(RTRIM(ISNULL(manufac, N''))) AS manufac,
+            LTRIM(RTRIM(ISNULL(model_no, N''))) AS model_no,
+            LTRIM(RTRIM(property)) AS property,
+            COUNT(*) AS total
+        FROM inventory.compinfo_landing
+        WHERE {_WHERE_WAREHOUSE}
+        GROUP BY
+            LTRIM(RTRIM(ISNULL(manufac, N''))),
+            LTRIM(RTRIM(ISNULL(model_no, N''))),
+            LTRIM(RTRIM(property))
+        """
+    )
+
+    pivot: dict[tuple[str, str], dict] = {}
+    for r in rows_raw:
+        manufac = r["manufac"] or ""
+        model_no = r["model_no"] or ""
+        prop = r["property"]
+        count = int(r["total"])
+        key = (manufac, model_no)
+        if key not in pivot:
+            pivot[key] = {
+                "manufacturer": manufac or None,
+                "cabinet": model_no or None,
+                "label": _cabinet_label(manufac, model_no),
+                "counts": {},
+                "total": 0,
+            }
+        pivot[key]["counts"][prop] = count
+        pivot[key]["total"] += count
+
+    rows = sorted(
+        pivot.values(),
+        key=lambda x: (_sort_key(x["manufacturer"]), _sort_key(x["cabinet"])),
+    )
+    for row in rows:
+        row["counts"] = {col["property"]: row["counts"].get(col["property"], 0) for col in warehouses}
+
+    return {
+        "grand_total": sum(w["total"] for w in warehouses),
+        "columns": warehouses,
+        "rows": rows,
+    }
+
+
+def _pivot_workbook(data: dict) -> bytes:
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Warehouse Inventory"
+
+    columns = data["columns"]
+    rows = data["rows"]
+    grand_total = data["grand_total"]
+    generated = datetime.now().strftime("%B %d, %Y")
+
+    title_font = Font(bold=True, size=14)
+    meta_font = Font(color="666666", size=11)
+    header_font = Font(bold=True, color="FFFFFF", size=11)
+    header_fill = PatternFill("solid", fgColor="5A85D6")
+    group_font = Font(bold=True, color="5A85D6", size=11)
+    group_fill = PatternFill("solid", fgColor="F4F7FB")
+    total_font = Font(bold=True, size=11)
+    total_fill = PatternFill("solid", fgColor="FFF3EC")
+    thin = Side(style="thin", color="D8DEE8")
+    border = Border(left=thin, right=thin, top=thin, bottom=thin)
+    center = Alignment(horizontal="center", vertical="center")
+    left = Alignment(horizontal="left", vertical="center")
+    indent = Alignment(horizontal="left", vertical="center", indent=1)
+
+    last_col = 2 + len(columns) + 1
+    last_letter = get_column_letter(last_col)
+
+    ws["A1"] = "Warehouse Inventory — Cabinet by Warehouse"
+    ws["A1"].font = title_font
+    ws.merge_cells(f"A1:{last_letter}1")
+
+    ws["A2"] = (
+        f"Live from eMaint COMPINFO · {grand_total:,} assets across {len(columns)} warehouses"
+        f" · Generated {generated}"
+    )
+    ws["A2"].font = meta_font
+    ws.merge_cells(f"A2:{last_letter}2")
+
+    header_row = 4
+    headers = ["Manufacturer", "Cabinet"] + [col["property"] for col in columns] + ["Total"]
+    for col_idx, label in enumerate(headers, start=1):
+        cell = ws.cell(row=header_row, column=col_idx, value=label)
+        cell.font = header_font
+        cell.fill = header_fill
+        cell.alignment = center if col_idx > 2 else left
+        cell.border = border
+
+    data_row = header_row + 1
+    last_manufacturer = None
+    col_totals = {col["property"]: 0 for col in columns}
+
+    for row in rows:
+        manufacturer = (row["manufacturer"] or "").strip() or "—"
+        cabinet = (row["cabinet"] or "").strip() or "—"
+
+        if manufacturer != last_manufacturer:
+            group_cell = ws.cell(row=data_row, column=1, value=manufacturer)
+            group_cell.font = group_font
+            group_cell.fill = group_fill
+            group_cell.alignment = left
+            for col_idx in range(2, last_col + 1):
+                cell = ws.cell(row=data_row, column=col_idx)
+                cell.fill = group_fill
+                cell.border = border
+            ws.merge_cells(start_row=data_row, start_column=1, end_row=data_row, end_column=last_col)
+            data_row += 1
+            last_manufacturer = manufacturer
+
+        ws.cell(row=data_row, column=1, value="").border = border
+        cab_cell = ws.cell(row=data_row, column=2, value=cabinet)
+        cab_cell.alignment = indent
+        cab_cell.border = border
+
+        for col_idx, col in enumerate(columns, start=3):
+            count = row["counts"].get(col["property"], 0)
+            col_totals[col["property"]] += count
+            cell = ws.cell(row=data_row, column=col_idx, value=count or None)
+            cell.alignment = center
+            cell.border = border
+            cell.number_format = "#,##0"
+
+        total_cell = ws.cell(row=data_row, column=last_col, value=row["total"])
+        total_cell.alignment = center
+        total_cell.border = border
+        total_cell.font = Font(bold=True)
+        total_cell.number_format = "#,##0"
+        data_row += 1
+
+    for col_idx, col in enumerate(columns, start=3):
+        cell = ws.cell(row=data_row, column=col_idx, value=col_totals[col["property"]])
+        cell.font = total_font
+        cell.fill = total_fill
+        cell.alignment = center
+        cell.border = border
+        cell.number_format = "#,##0"
+
+    total_label = ws.cell(row=data_row, column=2, value="All cabinets")
+    total_label.font = total_font
+    total_label.fill = total_fill
+    total_label.alignment = left
+    total_label.border = border
+    ws.cell(row=data_row, column=1, value="").border = border
+
+    grand_cell = ws.cell(row=data_row, column=last_col, value=grand_total)
+    grand_cell.font = total_font
+    grand_cell.fill = total_fill
+    grand_cell.alignment = center
+    grand_cell.border = border
+    grand_cell.number_format = "#,##0"
+
+    widths = {"A": 22, "B": 28}
+    for col_idx, col in enumerate(columns, start=3):
+        widths[get_column_letter(col_idx)] = max(12, min(18, len(col["property"]) + 2))
+    widths[last_letter] = 10
+    for letter, width in widths.items():
+        ws.column_dimensions[letter].width = width
+
+    ws.freeze_panes = f"A{header_row + 1}"
+
+    buf = BytesIO()
+    wb.save(buf)
+    return buf.getvalue()
+
+
 def _search_clause(search: str) -> tuple[str, tuple]:
     like = f"%{search.strip()}%"
     sql = """
@@ -131,57 +311,27 @@ def warehouse_summary():
 def warehouse_pivot():
     """CEO pivot: rows = manufacturer & cabinet, columns = all warehouses + total."""
     try:
-        warehouses = _fetch_warehouse_totals()
-
-        rows_raw = _field_query(
-            f"""
-            SELECT
-                LTRIM(RTRIM(ISNULL(manufac, N''))) AS manufac,
-                LTRIM(RTRIM(ISNULL(model_no, N''))) AS model_no,
-                LTRIM(RTRIM(property)) AS property,
-                COUNT(*) AS total
-            FROM inventory.compinfo_landing
-            WHERE {_WHERE_WAREHOUSE}
-            GROUP BY
-                LTRIM(RTRIM(ISNULL(manufac, N''))),
-                LTRIM(RTRIM(ISNULL(model_no, N''))),
-                LTRIM(RTRIM(property))
-            """
-        )
-
-        pivot: dict[tuple[str, str], dict] = {}
-        for r in rows_raw:
-            manufac = r["manufac"] or ""
-            model_no = r["model_no"] or ""
-            prop = r["property"]
-            count = int(r["total"])
-            key = (manufac, model_no)
-            if key not in pivot:
-                pivot[key] = {
-                    "manufacturer": manufac or None,
-                    "cabinet": model_no or None,
-                    "label": _cabinet_label(manufac, model_no),
-                    "counts": {},
-                    "total": 0,
-                }
-            pivot[key]["counts"][prop] = count
-            pivot[key]["total"] += count
-
-        rows = sorted(
-            pivot.values(),
-            key=lambda x: (_sort_key(x["manufacturer"]), _sort_key(x["cabinet"])),
-        )
-        for row in rows:
-            row["counts"] = {col["property"]: row["counts"].get(col["property"], 0) for col in warehouses}
-
+        return _build_pivot_data()
     except Exception as exc:
         raise HTTPException(status_code=503, detail=f"database error: {exc}") from exc
 
-    return {
-        "grand_total": sum(w["total"] for w in warehouses),
-        "columns": warehouses,
-        "rows": rows,
-    }
+
+@router.get("/export/pivot")
+def warehouse_export_pivot():
+    """Download the warehouse pivot as a formatted Excel workbook."""
+    try:
+        data = _build_pivot_data()
+        content = _pivot_workbook(data)
+    except Exception as exc:
+        raise HTTPException(status_code=503, detail=f"database error: {exc}") from exc
+
+    stamp = datetime.now().strftime("%Y-%m-%d")
+    filename = f"warehouse-inventory-pivot-{stamp}.xlsx"
+    return StreamingResponse(
+        BytesIO(content),
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 @router.get("/serials")

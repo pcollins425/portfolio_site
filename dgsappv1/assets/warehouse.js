@@ -38,6 +38,7 @@
     drawerPrevPage: document.getElementById("drawer-prev-page"),
     drawerNextPage: document.getElementById("drawer-next-page"),
     btnCloseDetail: document.getElementById("btn-close-detail"),
+    btnExportPivot: document.getElementById("btn-export-pivot"),
   };
 
   function apiUrl(path) {
@@ -272,7 +273,7 @@
       els.drawerStatus.textContent =
         data.total_items === 0
           ? `No serials${searchNote}.`
-          : `Showing ${fmtNum(start)}–${fmtNum(end)} of ${fmtNum(data.total_items)}${searchNote} · export available`;
+          : `Showing ${fmtNum(start)}–${fmtNum(end)} of ${fmtNum(data.total_items)}${searchNote}`;
 
       els.drawerPager.hidden = data.total_pages <= 1;
       els.drawerPrevPage.disabled = data.page <= 1;
@@ -352,6 +353,45 @@
     return m || c || "—";
   }
 
+  function parseFilename(contentDisposition, fallback) {
+    if (!contentDisposition) return fallback;
+    const match = /filename="?([^";\n]+)"?/i.exec(contentDisposition);
+    return match ? match[1].trim() : fallback;
+  }
+
+  async function exportPivot() {
+    const btn = els.btnExportPivot;
+    const priorLabel = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = "Exporting…";
+    showError(null);
+    try {
+      const headers = window.DGSAuth ? DGSAuth.authHeaders() : {};
+      const res = await fetch(apiUrl("/api/warehouse-inventory/export/pivot"), { headers });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        const msg = body.detail || body.message || res.statusText;
+        throw new Error(typeof msg === "string" ? msg : JSON.stringify(msg));
+      }
+      const blob = await res.blob();
+      const filename = parseFilename(
+        res.headers.get("Content-Disposition"),
+        `warehouse-inventory-pivot-${new Date().toISOString().slice(0, 10)}.xlsx`
+      );
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = filename;
+      link.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      showError(err.message || String(err));
+    } finally {
+      btn.disabled = false;
+      btn.textContent = priorLabel;
+    }
+  }
+
   async function init() {
     showError(null);
     els.pivotTbody.innerHTML = `<tr><td colspan="6" class="subtitle">Loading pivot…</td></tr>`;
@@ -367,6 +407,7 @@
     }
   }
 
+  els.btnExportPivot.addEventListener("click", () => exportPivot());
   els.btnCloseDetail.addEventListener("click", () => setDrawerOpen(false));
   els.backdrop.addEventListener("click", () => setDrawerOpen(false));
 
