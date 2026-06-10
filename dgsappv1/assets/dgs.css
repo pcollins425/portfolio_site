@@ -136,12 +136,8 @@ body.dgs-app {
   transition: margin-right var(--transition);
 }
 
+/* Detail drawer overlays content (fixed + z-index) instead of shrinking the table */
 body.detail-open .dgs-main {
-  margin-right: var(--drawer-w);
-}
-
-/* Wide split drawer overlays content (fixed + z-index) instead of shrinking the table */
-body.detail-open.detail-split .dgs-main {
   margin-right: 0;
 }
 
