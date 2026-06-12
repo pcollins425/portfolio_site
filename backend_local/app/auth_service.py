@@ -1,4 +1,4 @@
-"""Google Workspace sign-in + JWT for eMaint demo (employees.employee_roles)."""
+"""Google Workspace sign-in + JWT (employees.employee_roles)."""
 
 from __future__ import annotations
 
@@ -252,7 +252,4 @@ async def exchange_code_for_user(code: str, state_token: str) -> tuple[dict[str,
         raise ValueError("No active employee record for this email")
 
     user = build_user_payload(employee)
-    if not user["tables"]:
-        raise ValueError("No eMaint demo table access configured for this user")
-
     return user, return_to

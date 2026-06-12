@@ -29,3 +29,11 @@ python3 scripts/run_sql_file.py scripts/sql/seed_slot_master_permissions.sql --d
 ```
 
 Re-login after the permission seed so JWT includes **`slot_master:UPDATES_ONLY`**.
+
+**Operations read-only — executives (2026-06-12):** Haley H, Garrett A, Travis J — run with **privileged** login (`paulc`, not `dashboard_perf_ro`):
+
+```bash
+python3 scripts/run_sql_file.py scripts/sql/seed_dgs_ops_readonly_executives.sql --database dgs_application_db
+```
+
+Or apply from `cursor_assistant` with master `.env`. Re-login after apply.
