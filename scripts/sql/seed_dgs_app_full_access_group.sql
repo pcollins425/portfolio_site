@@ -1,7 +1,7 @@
 /*
   DGS Application — full module access group (2026-06-12).
 
-  Members: Paul C, Barry D, Haley H, Garrett A, Travis J
+  Members: Paul C, Barry D, Haley H, Garrett A, Travis J, Reed B
   Policy: all app modules visible; READ_ONLY on most areas.
   Ops writes (compinfo, inventory) + Slot Master edits: Paul & Barry only.
 
@@ -25,7 +25,7 @@ SET
     END,
     [update_date] = GETDATE(),
     [update_by] = N'DGS app full access group'
-WHERE [reference_key] IN (N'EMP-000055', N'EMP-000051', N'EMP-000042')
+WHERE [reference_key] IN (N'EMP-000055', N'EMP-000051', N'EMP-000042', N'EMP-000048')
   AND [active] = 1;
 GO
 
@@ -39,7 +39,7 @@ SET
     END,
     [update_date] = GETDATE(),
     [update_by] = N'DGS app full access group'
-WHERE [reference_key] IN (N'EMP-000055', N'EMP-000051', N'EMP-000042')
+WHERE [reference_key] IN (N'EMP-000055', N'EMP-000051', N'EMP-000042', N'EMP-000048')
   AND [active] = 1;
 GO
 
@@ -72,5 +72,5 @@ WHERE [reference_key] IN (N'EMP-000040', N'EMP-000068')
   AND [active] = 1;
 GO
 
-PRINT N'DGS app full access group: EMP-000040, EMP-000068 (ops + slot edit), EMP-000055/051/042 (ops + slot read-only).';
+PRINT N'DGS app full access group: EMP-000040, EMP-000068 (ops + slot edit), EMP-000055/051/042/048 (ops + slot read-only).';
 GO
