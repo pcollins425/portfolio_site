@@ -301,6 +301,11 @@
   }
 
   function initGrid() {
+    if (typeof Tabulator === "undefined") {
+      showError("Tabulator failed to load — check network connection or try again in a minute.");
+      return;
+    }
+
     if (state.table) {
       state.table.destroy();
       state.table = null;
