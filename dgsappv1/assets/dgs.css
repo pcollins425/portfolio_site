@@ -326,8 +326,27 @@ table.data-grid td.mono {
   overflow: hidden;
 }
 
-.mass-edit-grid .handsontable {
+.mass-edit-grid .tabulator {
   font-size: 12px;
+  border: none;
+  background: var(--surface);
+}
+
+.mass-edit-grid .tabulator .tabulator-header {
+  background: #f1f5f9;
+  border-bottom: 2px solid var(--border);
+}
+
+.mass-edit-grid .tabulator .tabulator-row.tabulator-row-even {
+  background: #fafbfc;
+}
+
+.mass-edit-grid .tabulator .tabulator-cell {
+  border-color: #e2e8f0;
+}
+
+.mass-edit-grid .tabulator .tabulator-range-highlight {
+  background: rgba(59, 130, 246, 0.12);
 }
 
 .mass-edit-grid .mass-edit-gl-col {

@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Expenses Mass Edit — DGS Application</title>
   <link rel="stylesheet" href="assets/dgs.css" />
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/handsontable@14.6.2/dist/handsontable.full.min.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/tabulator-tables@6.3.5/dist/css/tabulator.min.css" />
 </head>
 <body class="dgs-app dgs-mass-edit">
   <aside class="dgs-sidebar">
@@ -25,7 +25,7 @@
       <div>
         <p class="page-eyebrow">Finance · Supervisor</p>
         <h1>Expenses Mass Edit</h1>
-        <p class="subtitle">Spreadsheet edits on <code>finance.expenses</code> · paste GL blocks from Excel · fill handle</p>
+        <p class="subtitle">Spreadsheet edits on <code>finance.expenses</code> · paste GL blocks from Excel · range fill</p>
       </div>
       <div class="mass-edit-actions">
         <button type="button" id="btn-discard" class="btn" disabled>Discard</button>
@@ -75,7 +75,7 @@
 
   <script src="assets/auth.js"></script>
   <script src="assets/shell.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/handsontable@14.6.2/dist/handsontable.full.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/tabulator-tables@6.3.5/dist/js/tabulator.min.js"></script>
   <script src="assets/expenses-mass-edit.js"></script>
   <script>DGS.boot("expenses", () => ExpensesMassEdit.init());</script>
 </body>

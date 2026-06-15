@@ -3,32 +3,6 @@
 
   const params = new URLSearchParams(window.location.search);
   const API_BASE = (params.get("api") || "https://api.collinsmediallc.com").replace(/\/$/, "");
-  const COL = {
-    REF: 0,
-    DATE: 1,
-    AMOUNT: 2,
-    EMPLOYEE: 3,
-    STATE: 4,
-    TRIBE: 5,
-    CASINO: 6,
-    GL: 7,
-    DESCRIPTION: 8,
-    RECEIPT: 9,
-    AMEX: 10,
-  };
-  const HEADERS = [
-    "Ref",
-    "Date",
-    "Amount",
-    "Employee",
-    "St",
-    "Tribe",
-    "Casino",
-    "GL Account",
-    "Description",
-    "Rcpt",
-    "Amex",
-  ];
 
   const state = {
     cardholders: [],
@@ -36,7 +10,7 @@
     glLabels: new Set(),
     glCodes: new Set(),
     baseline: new Map(),
-    hot: null,
+    table: null,
     rows: [],
     filteredIndices: [],
     dirty: new Set(),
@@ -105,7 +79,7 @@
   }
 
   function fmtMoney(n) {
-    if (n === null || n === undefined || Number.isNaN(n)) return "";
+    if (n === null || n === undefined || Number.isNaN(n)) return null;
     return Number(n);
   }
 
@@ -124,20 +98,27 @@
     return false;
   }
 
-  function itemToRow(item) {
-    return [
-      item.reference_key,
-      fmtDate(item.date),
-      fmtMoney(item.amount),
-      item.employee_name || "",
-      item.state_abbr || "",
-      item.tribe_name || "",
-      item.casino_name || "",
-      item.expense_account_display || item.expense_account || "",
-      item.description || "",
-      item.has_receipt ? "Y" : "",
-      item.amex_matched ? "Matched" : "",
-    ];
+  function itemToData(item) {
+    const ref = item.reference_key;
+    const pending = state.pending.get(ref);
+    const data = {
+      reference_key: ref,
+      date: fmtDate(item.date),
+      amount: fmtMoney(item.amount),
+      employee_name: item.employee_name || "",
+      state_abbr: item.state_abbr || "",
+      tribe_name: item.tribe_name || "",
+      casino_name: item.casino_name || "",
+      expense_account: item.expense_account_display || item.expense_account || "",
+      description: item.description || "",
+      has_receipt: item.has_receipt ? "Y" : "",
+      amex_matched: item.amex_matched ? "Matched" : "",
+    };
+    if (pending) {
+      data.expense_account = pending.expense_account;
+      data.description = pending.description;
+    }
+    return data;
   }
 
   function rowMatchesSearch(item, q) {
@@ -175,20 +156,13 @@
     }
   }
 
-  function rowIndexToRef(visualRow) {
-    const item = state.filteredIndices[visualRow];
-    return item != null ? state.rows[item].reference_key : null;
-  }
-
-  function markDirty(visualRow, prop) {
-    const ref = rowIndexToRef(visualRow);
+  function markDirtyFromData(ref, data) {
     if (!ref) return;
     const base = state.baseline.get(ref);
-    const row = state.hot.getDataAtRow(visualRow);
-    if (!base || !row) return;
+    if (!base || !data) return;
 
-    const gl = row[COL.GL] ?? "";
-    const desc = row[COL.DESCRIPTION] ?? "";
+    const gl = data.expense_account ?? "";
+    const desc = data.description ?? "";
     const changed = gl !== base.expense_account || desc !== base.description;
     if (changed) {
       state.dirty.add(ref);
@@ -198,13 +172,24 @@
       state.pending.delete(ref);
     }
 
-    if (prop === COL.GL || prop == null) {
-      if (!isValidGl(gl)) state.invalid.set(ref, "Invalid GL");
-      else state.invalid.delete(ref);
-    }
+    if (!isValidGl(gl)) state.invalid.set(ref, "Invalid GL");
+    else state.invalid.delete(ref);
 
     refreshActionState();
     refreshStatusBar();
+  }
+
+  function markDirtyFromRow(row) {
+    const data = row.getData();
+    markDirtyFromData(data.reference_key, data);
+  }
+
+  function rescanDirtyFromTable() {
+    if (!state.table) return;
+    for (const row of state.table.getRows()) {
+      markDirtyFromRow(row);
+    }
+    state.table.redraw(true);
   }
 
   function refreshActionState() {
@@ -216,7 +201,8 @@
 
   function refreshStatusBar(extra) {
     const loaded = state.filteredIndices.length;
-    els.statusSelection.textContent = extra || `${loaded.toLocaleString()} row${loaded === 1 ? "" : "s"} loaded · newest first`;
+    els.statusSelection.textContent =
+      extra || `${loaded.toLocaleString()} row${loaded === 1 ? "" : "s"} loaded · newest first`;
     els.statusSum.textContent = state.totalAmount
       ? `SUM(Amount): ${Number(state.totalAmount).toLocaleString(undefined, { style: "currency", currency: "USD" })}`
       : "";
@@ -227,6 +213,10 @@
       : "";
   }
 
+  function filteredData() {
+    return state.filteredIndices.map((idx) => itemToData(state.rows[idx]));
+  }
+
   function applyFilter() {
     const q = state.search.trim().toLowerCase();
     state.filteredIndices = state.rows
@@ -234,90 +224,138 @@
       .filter(({ item }) => rowMatchesSearch(item, q))
       .map(({ idx }) => idx);
 
-    const data = state.filteredIndices.map((idx) => itemToRow(state.rows[idx]));
-    if (state.hot) {
-      state.hot.loadData(data);
+    if (state.table) {
+      state.table.setData(filteredData());
     }
     refreshStatusBar();
   }
 
-  function initGrid() {
-    if (state.hot) {
-      state.hot.destroy();
-      state.hot = null;
+  function glEditorParams() {
+    return {
+      values: state.glSource,
+      autocomplete: true,
+      listOnEmpty: true,
+      freetext: true,
+      clearable: false,
+    };
+  }
+
+  function buildColumns() {
+    return [
+      { title: "Ref", field: "reference_key", width: 110, frozen: true, editor: false },
+      { title: "Date", field: "date", width: 95, editor: false },
+      {
+        title: "Amount",
+        field: "amount",
+        width: 100,
+        hozAlign: "right",
+        editor: false,
+        formatter: "money",
+        formatterParams: { decimal: ".", thousand: ",", symbol: "$", precision: 2 },
+      },
+      { title: "Employee", field: "employee_name", width: 140, editor: false },
+      { title: "St", field: "state_abbr", width: 48, hozAlign: "center", editor: false },
+      { title: "Tribe", field: "tribe_name", width: 120, editor: false },
+      { title: "Casino", field: "casino_name", width: 120, editor: false },
+      {
+        title: "GL Account",
+        field: "expense_account",
+        width: 220,
+        cssClass: "mass-edit-gl-col",
+        editor: "list",
+        editorParams: glEditorParams(),
+        formatter(cell) {
+          const el = cell.getElement();
+          const ref = cell.getRow().getData().reference_key;
+          el.classList.toggle("mass-edit-gl-invalid", state.invalid.has(ref));
+          return cell.getValue() ?? "";
+        },
+      },
+      { title: "Description", field: "description", width: 220, editor: "input" },
+      { title: "Rcpt", field: "has_receipt", width: 52, hozAlign: "center", editor: false },
+      { title: "Amex", field: "amex_matched", width: 72, hozAlign: "center", editor: false },
+    ];
+  }
+
+  function updateSelectionStatus() {
+    if (!state.table) return;
+    const ranges = state.table.getRanges();
+    if (!ranges.length) {
+      refreshStatusBar();
+      return;
     }
 
-    const data = state.filteredIndices.map((idx) => itemToRow(state.rows[idx]));
-    state.hot = new Handsontable(els.grid, {
-      data,
-      colHeaders: HEADERS,
-      rowHeaders: true,
-      licenseKey: "non-commercial-and-evaluation",
+    const rows = ranges[0].getRows();
+    if (rows.length <= 1) {
+      refreshStatusBar();
+      return;
+    }
+
+    let sum = 0;
+    for (const row of rows) {
+      const amt = row.getData().amount;
+      if (typeof amt === "number" && !Number.isNaN(amt)) sum += amt;
+    }
+    els.statusSelection.textContent = `${rows.length} rows selected`;
+    els.statusSum.textContent = `SUM(Amount): ${sum.toLocaleString(undefined, { style: "currency", currency: "USD" })}`;
+  }
+
+  function initGrid() {
+    if (state.table) {
+      state.table.destroy();
+      state.table = null;
+    }
+
+    state.table = new Tabulator(els.grid, {
       height: "100%",
-      width: "100%",
-      stretchH: "all",
-      manualColumnResize: true,
-      fillHandle: { direction: "vertical", autoInsertRow: false },
-      copyPaste: true,
-      undo: true,
-      selectionMode: "multiple",
-      outsideClickDeselects: false,
-      columns: [
-        { readOnly: true },
-        { readOnly: true, className: "htLeft" },
-        { readOnly: true, type: "numeric", numericFormat: { pattern: "$0,0.00" }, className: "htRight" },
-        { readOnly: true },
-        { readOnly: true },
-        { readOnly: true },
-        { readOnly: true },
-        {
-          type: "autocomplete",
-          source: state.glSource,
-          strict: false,
-          allowInvalid: true,
-          className: "htLeft mass-edit-gl-col",
-        },
-        { type: "text" },
-        { readOnly: true, className: "htCenter" },
-        { readOnly: true, className: "htCenter" },
-      ],
-      cells(row, col) {
-        const props = {};
-        if (col === COL.GL) {
-          const ref = rowIndexToRef(row);
-          if (ref && state.invalid.has(ref)) {
-            props.className = "mass-edit-gl-invalid";
-          }
-        }
-        return props;
+      data: filteredData(),
+      layout: "fitColumns",
+      renderVertical: "virtual",
+      placeholder: "Load expenses to begin editing",
+      editTriggerEvent: "dblclick",
+      selectableRange: 1,
+      selectableRangeColumns: true,
+      selectableRangeRows: true,
+      selectableRangeClearCells: false,
+      clipboard: true,
+      clipboardCopyStyled: false,
+      clipboardCopyConfig: {
+        rowHeaders: false,
+        columnHeaders: false,
       },
-      afterChange(changes, source) {
-        if (!changes || source === "loadData") return;
-        for (const [row, prop] of changes) {
-          markDirty(row, prop);
-        }
-        state.hot.render();
+      clipboardCopyRowRange: "range",
+      clipboardPasteParser: "range",
+      clipboardPasteAction: "range",
+      rowHeader: {
+        resizable: false,
+        frozen: true,
+        width: 44,
+        hozAlign: "center",
+        formatter: "rownum",
+        field: "rownum",
+        headerSort: false,
+        editor: false,
       },
-      afterSelectionEnd(row, col, row2) {
-        const start = Math.min(row, row2);
-        const end = Math.max(row, row2);
-        let sum = 0;
-        let count = 0;
-        for (let r = start; r <= end; r += 1) {
-          const amt = state.hot.getDataAtCell(r, COL.AMOUNT);
-          if (typeof amt === "number" && !Number.isNaN(amt)) {
-            sum += amt;
-            count += 1;
-          }
-        }
-        if (count > 1) {
-          els.statusSelection.textContent = `${count} rows selected`;
-          els.statusSum.textContent = `SUM(Amount): ${sum.toLocaleString(undefined, { style: "currency", currency: "USD" })}`;
-        } else {
-          refreshStatusBar();
-        }
+      columnDefaults: {
+        headerSort: false,
+        resizable: "header",
+        headerHozAlign: "center",
       },
+      columns: buildColumns(),
     });
+
+    state.table.on("cellEdited", (cell) => {
+      markDirtyFromRow(cell.getRow());
+      cell.getTable().redraw(true);
+    });
+
+    state.table.on("clipboardPasted", () => {
+      rescanDirtyFromTable();
+    });
+
+    state.table.on("rangeAdded", updateSelectionStatus);
+    state.table.on("rangeChanged", updateSelectionStatus);
+    state.table.on("rangeRemoved", updateSelectionStatus);
   }
 
   async function loadCardholders() {
