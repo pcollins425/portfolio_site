@@ -156,6 +156,23 @@
     }
   }
 
+  function refreshGlInvalidCell(ref) {
+    if (!state.table || !ref) return;
+    const row = state.table.getRows().find((r) => r.getData().reference_key === ref);
+    if (!row) return;
+    const cell = row.getCell("expense_account");
+    if (cell) {
+      cell.getElement().classList.toggle("mass-edit-gl-invalid", state.invalid.has(ref));
+    }
+  }
+
+  function refreshAllGlInvalidCells() {
+    if (!state.table) return;
+    for (const row of state.table.getRows()) {
+      refreshGlInvalidCell(row.getData().reference_key);
+    }
+  }
+
   function markDirtyFromData(ref, data) {
     if (!ref) return;
     const base = state.baseline.get(ref);
@@ -175,6 +192,7 @@
     if (!isValidGl(gl)) state.invalid.set(ref, "Invalid GL");
     else state.invalid.delete(ref);
 
+    refreshGlInvalidCell(ref);
     refreshActionState();
     refreshStatusBar();
   }
@@ -189,7 +207,30 @@
     for (const row of state.table.getRows()) {
       markDirtyFromRow(row);
     }
-    state.table.redraw(true);
+    refreshAllGlInvalidCells();
+  }
+
+  function preventPageScrollOnGridFocus() {
+    let pageScrollY = 0;
+    els.grid.addEventListener(
+      "mousedown",
+      () => {
+        pageScrollY = window.scrollY;
+      },
+      true
+    );
+    els.grid.addEventListener(
+      "focusin",
+      () => {
+        const y = pageScrollY;
+        requestAnimationFrame(() => {
+          if (window.scrollY !== y) {
+            window.scrollTo({ top: y, left: 0, behavior: "instant" });
+          }
+        });
+      },
+      true
+    );
   }
 
   function refreshActionState() {
@@ -232,11 +273,9 @@
 
   function glEditorParams() {
     return {
-      values: state.glSource,
-      autocomplete: true,
-      listOnEmpty: true,
-      freetext: true,
-      clearable: false,
+      elementAttributes: {
+        autocomplete: "off",
+      },
     };
   }
 
@@ -262,7 +301,7 @@
         field: "expense_account",
         width: 220,
         cssClass: "mass-edit-gl-col",
-        editor: "list",
+        editor: "input",
         editorParams: glEditorParams(),
         formatter(cell) {
           const el = cell.getElement();
@@ -318,6 +357,7 @@
       renderVertical: "virtual",
       placeholder: "Load expenses to begin editing",
       editTriggerEvent: "dblclick",
+      selectableRangeAutoFocus: false,
       selectableRange: 1,
       selectableRangeColumns: true,
       selectableRangeRows: true,
@@ -351,7 +391,6 @@
 
     state.table.on("cellEdited", (cell) => {
       markDirtyFromRow(cell.getRow());
-      cell.getTable().redraw(true);
     });
 
     state.table.on("clipboardPasted", () => {
@@ -481,6 +520,8 @@
   }
 
   async function init() {
+    preventPageScrollOnGridFocus();
+
     const bounds = monthBounds();
     state.dateFrom = bounds.from;
     state.dateTo = bounds.to;

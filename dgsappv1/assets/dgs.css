@@ -286,8 +286,22 @@ table.data-grid td.mono {
 .dgs-mass-edit-main {
   display: flex;
   flex-direction: column;
-  min-height: 100vh;
+  height: 100vh;
+  max-height: 100vh;
+  min-height: 0;
+  overflow: hidden;
   padding-bottom: 16px;
+  box-sizing: border-box;
+}
+
+body.dgs-mass-edit {
+  overflow: hidden;
+}
+
+.dgs-mass-edit-main .page-header,
+.dgs-mass-edit-main .dgs-subnav,
+.dgs-mass-edit-main .error-box {
+  flex-shrink: 0;
 }
 
 .mass-edit-header {
@@ -322,8 +336,12 @@ table.data-grid td.mono {
 
 .mass-edit-grid {
   flex: 1;
-  min-height: 420px;
+  min-height: 0;
   overflow: hidden;
+}
+
+.mass-edit-grid .tabulator .tabulator-tableholder {
+  overflow-anchor: none;
 }
 
 .mass-edit-grid .tabulator {
