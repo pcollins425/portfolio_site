@@ -283,6 +283,78 @@ table.data-grid td.mono {
   color: var(--muted);
 }
 
+.dgs-mass-edit-main {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  padding-bottom: 16px;
+}
+
+.mass-edit-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.mass-edit-actions {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+  padding-top: 8px;
+}
+
+.mass-edit-panel {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  overflow: hidden;
+}
+
+.mass-edit-toolbar {
+  flex-shrink: 0;
+}
+
+.mass-edit-grid {
+  flex: 1;
+  min-height: 420px;
+  overflow: hidden;
+}
+
+.mass-edit-grid .handsontable {
+  font-size: 12px;
+}
+
+.mass-edit-grid .mass-edit-gl-col {
+  background: #eff6ff;
+}
+
+.mass-edit-grid .mass-edit-gl-invalid {
+  background: #fef2f2 !important;
+  color: #b91c1c;
+}
+
+.mass-edit-statusbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  align-items: center;
+  padding: 8px 14px;
+  border-top: 2px solid var(--border);
+  background: #f8fafb;
+  font-size: 12px;
+}
+
+.mass-edit-errors {
+  color: #b91c1c;
+  font-weight: 600;
+}
+
 .browse-panel,
 .dgs-panel {
   background: var(--surface);

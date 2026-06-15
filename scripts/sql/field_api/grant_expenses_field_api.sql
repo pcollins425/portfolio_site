@@ -42,7 +42,10 @@ BEGIN
     SET @sql = N'GRANT SELECT ON OBJECT::[employees].[employee_roles] TO [' + REPLACE(@principal, N']', N']]') + N'];';
     EXEC sp_executesql @sql;
 
-    PRINT N'Granted expenses browse SELECT to ' + @principal + N'.';
+    SET @sql = N'GRANT UPDATE ON OBJECT::[finance].[expenses] TO [' + REPLACE(@principal, N']', N']]') + N'];';
+    EXEC sp_executesql @sql;
+
+    PRINT N'Granted expenses browse SELECT + mass-edit UPDATE to ' + @principal + N'.';
 
     FETCH NEXT FROM target_cursor INTO @principal;
 END;

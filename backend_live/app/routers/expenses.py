@@ -8,6 +8,7 @@ from datetime import date, datetime
 from decimal import Decimal
 
 from fastapi import APIRouter, HTTPException, Query
+from pydantic import BaseModel, Field
 
 from app import mssql
 
@@ -204,7 +205,7 @@ def list_expenses(
     date_to: str | None = Query(None, description="Inclusive end date YYYY-MM-DD"),
     q: str = Query("", max_length=120, description="Search ref, description, amount, GL"),
     page: int = Query(1, ge=1),
-    page_size: int = Query(100, ge=1, le=500),
+    page_size: int = Query(100, ge=1, le=2000),
 ):
     """Paginated expense browse — newest date first."""
     parsed_from = _parse_iso_date(date_from, "date_from")
@@ -289,6 +290,163 @@ def list_expenses(
         "total_pages": total_pages,
         "total_amount": total_amount,
     }
+
+
+class BatchExpenseUpdate(BaseModel):
+    reference_key: str = Field(min_length=1, max_length=32)
+    expense_account: str | None = Field(default=None, max_length=100)
+    description: str | None = Field(default=None, max_length=500)
+
+
+class BatchExpenseUpdateRequest(BaseModel):
+    updates: list[BatchExpenseUpdate] = Field(min_length=1, max_length=500)
+
+
+def _load_gl_lookup() -> tuple[dict[str, str], set[str]]:
+    """Map normalized labels → gl_code; set of valid gl_code prefixes."""
+    rows = _field_query(
+        "SELECT gl_code, display_name FROM finance.expense_account_gl_display ORDER BY gl_code"
+    )
+    by_label: dict[str, str] = {}
+    codes: set[str] = set()
+    for r in rows:
+        code = _json_value(r.get("gl_code"))
+        display = _json_value(r.get("display_name"))
+        if not code:
+            continue
+        codes.add(code.upper())
+        by_label[code.upper()] = code
+        if display:
+            by_label[display.strip().upper()] = code
+            if " - " not in display and display.upper().startswith(code.upper()):
+                tail = display[len(code) :].strip()
+                if tail:
+                    by_label[f"{code} - {tail}".upper()] = code
+    return by_label, codes
+
+
+def _normalize_expense_account(raw: str | None, gl_by_label: dict[str, str], gl_codes: set[str]) -> str | None:
+    if raw is None:
+        return None
+    value = raw.strip()
+    if not value:
+        return ""
+    upper = value.upper()
+    if upper in gl_by_label:
+        matched = gl_by_label[upper]
+        if value.upper().startswith(matched.upper()):
+            return value
+        return matched
+    for code in sorted(gl_codes, key=len, reverse=True):
+        if upper.startswith(code + " ") or upper.startswith(code + " -") or upper == code:
+            return value
+    return None
+
+
+@router.get("/gl-accounts")
+def list_gl_accounts():
+    """GL labels for mass-edit autocomplete and paste validation."""
+    try:
+        rows = _field_query(
+            """
+            SELECT gl_code, display_name
+            FROM finance.expense_account_gl_display
+            ORDER BY display_name
+            """
+        )
+    except Exception as exc:
+        raise HTTPException(status_code=503, detail=f"database error: {exc}") from exc
+
+    items = []
+    labels: list[str] = []
+    for r in rows:
+        code = _json_value(r.get("gl_code"))
+        display = _json_value(r.get("display_name"))
+        if not code or not display:
+            continue
+        short = display
+        if display.upper().startswith(code.upper()) and " - " not in display:
+            tail = display[len(code) :].strip()
+            if tail:
+                short = f"{code} - {tail}"
+        items.append({"gl_code": code, "display_name": display, "label": short})
+        labels.append(display)
+        if short != display:
+            labels.append(short)
+    seen: set[str] = set()
+    source: list[str] = []
+    for label in labels:
+        if label not in seen:
+            seen.add(label)
+            source.append(label)
+    return {"items": items, "source": source}
+
+
+@router.post("/batch")
+def batch_update_expenses(body: BatchExpenseUpdateRequest):
+    """Apply spreadsheet mass-edit saves to finance.expenses."""
+    gl_by_label, gl_codes = _load_gl_lookup()
+    updated = 0
+    errors: list[dict] = []
+
+    for item in body.updates:
+        key = item.reference_key.strip()
+        if not key:
+            errors.append({"reference_key": item.reference_key, "error": "reference_key required"})
+            continue
+
+        sets: list[str] = []
+        params: list = []
+
+        if item.expense_account is not None:
+            normalized = _normalize_expense_account(item.expense_account, gl_by_label, gl_codes)
+            if normalized is None:
+                errors.append(
+                    {
+                        "reference_key": key,
+                        "field": "expense_account",
+                        "error": f"Unknown GL account: {item.expense_account}",
+                    }
+                )
+                continue
+            sets.append("expense_account = %s")
+            params.append(normalized if normalized else None)
+
+        if item.description is not None:
+            sets.append("description = %s")
+            params.append(item.description.strip() or None)
+
+        if not sets:
+            continue
+
+        sets.append("update_date = GETDATE()")
+        sets.append("update_by = %s")
+        params.append("dgsapp-mass-edit")
+        params.append(key)
+
+        try:
+            n = mssql.execute(
+                f"""
+                UPDATE finance.expenses
+                SET {", ".join(sets)}
+                WHERE reference_key = %s
+                """,
+                tuple(params),
+                database=_catalog(),
+                profile="field",
+                load_env=False,
+            )
+            if n:
+                updated += 1
+            else:
+                errors.append({"reference_key": key, "error": "expense not found"})
+        except Exception as exc:
+            errors.append({"reference_key": key, "error": str(exc)})
+
+    if updated == 0 and errors:
+        raise HTTPException(status_code=400, detail={"updated": 0, "errors": errors})
+
+    return {"updated": updated, "errors": errors}
 
 
 @router.get("/{reference_key}")

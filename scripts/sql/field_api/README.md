@@ -36,7 +36,7 @@ Re-login after the permission seed so JWT includes **`slot_master:UPDATES_ONLY`*
 python3 scripts/run_sql_file.py scripts/sql/field_api/grant_expenses_field_api.sql --database dgs_application_db
 ```
 
-Use a **privileged** login (`paulc` / **`MASTER_CREDENTIALS_ENV`**) — not `dashboard_perf_ro`. Grants **`SELECT`** on **`finance.expenses`**, **`finance.card_accounts`**, **`finance.expense_account_gl_display`**, and **`employees.employee_roles`** to whichever of **`dgs_field_api`** / **`dashboard_perf_ro`** exists.
+Use a **privileged** login (`paulc` / **`MASTER_CREDENTIALS_ENV`**) — not `dashboard_perf_ro`. Grants **`SELECT`** on **`finance.expenses`**, **`finance.card_accounts`**, **`finance.expense_account_gl_display`**, and **`employees.employee_roles`**, plus **`UPDATE`** on **`finance.expenses`** for mass edit saves, to whichever of **`dgs_field_api`** / **`dashboard_perf_ro`** exists.
 
 **Operations read-only — executives (2026-06-12):** Haley H, Garrett A, Travis J — run with **privileged** login (`paulc`, not `dashboard_perf_ro`):
 

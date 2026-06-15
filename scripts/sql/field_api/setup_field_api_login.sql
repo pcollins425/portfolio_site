@@ -139,3 +139,6 @@ GO
 
 GRANT SELECT ON OBJECT::[employees].[employee_roles] TO [dgs_field_api];
 GO
+
+GRANT UPDATE ON OBJECT::[finance].[expenses] TO [dgs_field_api];
+GO

@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Expenses Mass Edit — DGS Application</title>
+  <link rel="stylesheet" href="assets/dgs.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/handsontable@14.6.2/dist/handsontable.full.min.css" />
+</head>
+<body class="dgs-app dgs-mass-edit">
+  <aside class="dgs-sidebar">
+    <div class="dgs-sidebar-brand">
+      <span class="dgs-brand-title">DGS Application</span>
+      <span class="dgs-brand-sub">Finance</span>
+    </div>
+    <nav class="dgs-sidebar-nav" id="dgs-app-nav" aria-label="Application"></nav>
+    <div class="dgs-sidebar-account" id="sidebar-account" hidden>
+      <span class="dgs-sidebar-user" id="user-label"></span>
+      <button type="button" id="btn-sign-out" class="dgs-sidebar-signout">Sign out</button>
+    </div>
+  </aside>
+
+  <div class="dgs-main dgs-mass-edit-main">
+    <header class="page-header mass-edit-header">
+      <div>
+        <p class="page-eyebrow">Finance · Supervisor</p>
+        <h1>Expenses Mass Edit</h1>
+        <p class="subtitle">Spreadsheet edits on <code>finance.expenses</code> · paste GL blocks from Excel · fill handle</p>
+      </div>
+      <div class="mass-edit-actions">
+        <button type="button" id="btn-discard" class="btn" disabled>Discard</button>
+        <button type="button" id="btn-save" class="btn btn-accent" disabled>Save changes</button>
+      </div>
+    </header>
+
+    <nav class="dgs-subnav" aria-label="Expenses views">
+      <a href="expenses.html">My Expenses</a>
+      <a href="expenses-mass-edit.html" class="active">Mass Edit</a>
+      <a href="#" class="is-disabled" aria-disabled="true" title="Coming later">Reconciliation</a>
+      <a href="#" class="is-disabled" aria-disabled="true" title="Coming later">Import Amex</a>
+    </nav>
+
+    <div id="error-box" class="error-box" hidden></div>
+
+    <section class="mass-edit-panel">
+      <div class="toolbar expenses-toolbar mass-edit-toolbar">
+        <input id="search-input" type="search" placeholder="Filter rows — ref, description, amount, GL…" autocomplete="off" />
+        <label class="toolbar-field">
+          <span class="toolbar-field__label">Cardholder</span>
+          <select id="cardholder-select">
+            <option value="">All cardholders</option>
+          </select>
+        </label>
+        <label class="toolbar-field">
+          <span class="toolbar-field__label">From</span>
+          <input id="date-from" type="date" />
+        </label>
+        <label class="toolbar-field">
+          <span class="toolbar-field__label">To</span>
+          <input id="date-to" type="date" />
+        </label>
+        <button id="btn-apply" type="button" class="btn btn-primary">Load</button>
+      </div>
+
+      <div id="mass-edit-grid" class="mass-edit-grid"></div>
+
+      <div class="mass-edit-statusbar" id="mass-edit-statusbar">
+        <span id="status-selection">Ready</span>
+        <span id="status-sum"></span>
+        <span id="status-changes" class="muted"></span>
+        <span id="status-errors" class="mass-edit-errors"></span>
+      </div>
+    </section>
+  </div>
+
+  <script src="assets/auth.js"></script>
+  <script src="assets/shell.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/handsontable@14.6.2/dist/handsontable.full.min.js"></script>
+  <script src="assets/expenses-mass-edit.js"></script>
+  <script>DGS.boot("expenses", () => ExpensesMassEdit.init());</script>
+</body>
+</html>
