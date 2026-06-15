@@ -23,6 +23,7 @@
     { id: "slot_master", label: "Slot Master", href: "slot_master.html" },
     { id: "contracts", label: "Contracts", href: "contracts.html" },
     { id: "warehouse", label: "Warehouse", href: "warehouse.html" },
+    { id: "expenses", label: "Expenses", href: "expenses.html" },
     { id: "operations", label: "Operations", href: "operations.html?t=projects" },
   ];
 

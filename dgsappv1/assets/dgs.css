@@ -197,6 +197,90 @@ body.detail-open.detail-split .detail-drawer {
   background: var(--accent-soft);
   border-color: #b8d4df;
   color: #4a7f93;
+  font-weight: 600;
+}
+
+.dgs-subnav a.is-disabled {
+  opacity: 0.45;
+  pointer-events: none;
+  cursor: default;
+}
+
+.expenses-toolbar {
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 10px;
+}
+
+.toolbar-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+}
+
+.toolbar-field__label {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.toolbar-field select,
+.toolbar-field input[type="date"] {
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  font: inherit;
+  font-size: 13px;
+  min-height: 36px;
+}
+
+table.data-grid th.num,
+table.data-grid td.num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+table.data-grid td.mono {
+  font-family: var(--mono, ui-monospace, monospace);
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.expenses-total-row td {
+  background: #f8fafb;
+  border-top: 2px solid var(--border);
+  font-size: 13px;
+}
+
+.expense-badge {
+  display: inline-block;
+  padding: 3px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.expense-badge--ok {
+  background: #dcfce7;
+  color: #15803d;
+}
+
+.expense-badge--warn {
+  background: #fdeee8;
+  color: #c2410c;
+}
+
+.expense-receipt {
+  color: var(--sidebar-bg);
+  font-weight: 600;
+}
+
+.muted {
+  color: var(--muted);
 }
 
 .browse-panel,
@@ -464,7 +548,8 @@ table.data-grid tbody tr.selected {
 
 body.detail-open .detail-backdrop {
   opacity: 1;
-  pointer-events: auto;
+  /* Dim only — table stays clickable so users can switch rows without closing the drawer */
+  pointer-events: none;
 }
 
 .detail-drawer {

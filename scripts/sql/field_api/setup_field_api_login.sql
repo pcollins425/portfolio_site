@@ -22,6 +22,10 @@
     SELECT  clients.casinos
     SELECT  inventory.assets
     SELECT  vendors.themes
+    SELECT  finance.expenses
+    SELECT  finance.card_accounts
+    SELECT  finance.expense_account_gl_display
+    SELECT  employees.employee_roles
     SELECT, INSERT, UPDATE  inventory.stock_balance
     SELECT, INSERT       inventory.stock_movement
     SELECT, INSERT, UPDATE  projects.work_order_material
@@ -122,4 +126,16 @@ GRANT SELECT ON OBJECT::[inventory].[assets] TO [dgs_field_api];
 GO
 
 GRANT SELECT ON OBJECT::[vendors].[themes] TO [dgs_field_api];
+GO
+
+GRANT SELECT ON OBJECT::[finance].[expenses] TO [dgs_field_api];
+GO
+
+GRANT SELECT ON OBJECT::[finance].[card_accounts] TO [dgs_field_api];
+GO
+
+GRANT SELECT ON OBJECT::[finance].[expense_account_gl_display] TO [dgs_field_api];
+GO
+
+GRANT SELECT ON OBJECT::[employees].[employee_roles] TO [dgs_field_api];
 GO
