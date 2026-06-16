@@ -392,6 +392,116 @@ body.dgs-mass-edit {
   font-weight: 600;
 }
 
+.import-edit-modal .import-edit-dialog {
+  width: min(920px, 100%);
+  display: flex;
+  flex-direction: column;
+  max-height: min(90vh, 820px);
+}
+
+.import-edit-body {
+  padding: 16px 18px;
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+
+.import-edit-dropzone {
+  border: 2px dashed var(--border);
+  border-radius: var(--radius);
+  padding: 32px 20px;
+  text-align: center;
+  background: var(--bg);
+  cursor: pointer;
+}
+
+.import-edit-dropzone.is-dragover {
+  border-color: var(--accent);
+  background: #fff7f4;
+}
+
+.import-edit-dropzone__title {
+  margin: 0;
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.import-edit-dropzone__hint {
+  margin: 8px 0 0;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.import-edit-link {
+  border: none;
+  background: none;
+  padding: 0;
+  font: inherit;
+  font-weight: 600;
+  color: var(--accent);
+  cursor: pointer;
+}
+
+.import-edit-file-name {
+  margin: 12px 0 0;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.import-edit-preview-wrap {
+  margin-top: 16px;
+}
+
+.import-edit-preview-summary {
+  font-size: 13px;
+  margin-bottom: 10px;
+  color: var(--muted);
+}
+
+.import-edit-preview-scroll {
+  max-height: 320px;
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+
+.import-edit-preview-table {
+  margin: 0;
+  font-size: 12px;
+}
+
+.import-edit-preview-table .status-update {
+  color: #15803d;
+  font-weight: 600;
+}
+
+.import-edit-preview-table .status-unchanged {
+  color: var(--muted);
+}
+
+.import-edit-preview-table .status-error {
+  color: #b91c1c;
+  font-weight: 600;
+}
+
+.import-edit-error {
+  margin: 12px 0 0;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: #fef2f2;
+  color: #b91c1c;
+  font-size: 13px;
+}
+
+.import-edit-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 14px 18px 18px;
+  border-top: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
 .browse-panel,
 .dgs-panel {
   background: var(--surface);

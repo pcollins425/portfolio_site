@@ -25,9 +25,10 @@
       <div>
         <p class="page-eyebrow">Finance · Supervisor</p>
         <h1>Expenses Mass Edit</h1>
-        <p class="subtitle">Spreadsheet edits on <code>finance.expenses</code> · paste GL blocks from Excel · range fill</p>
+        <p class="subtitle">Spreadsheet edits on <code>finance.expenses</code> · paste in grid or download → edit → Import Edit</p>
       </div>
       <div class="mass-edit-actions">
+        <button type="button" id="btn-import-edit" class="btn">Import Edit</button>
         <button type="button" id="btn-discard" class="btn" disabled>Discard</button>
         <button type="button" id="btn-save" class="btn btn-accent" disabled>Save changes</button>
       </div>
@@ -60,6 +61,7 @@
           <input id="date-to" type="date" />
         </label>
         <button id="btn-apply" type="button" class="btn btn-primary">Load</button>
+        <button id="btn-download" type="button" class="btn" disabled title="Export loaded rows for offline editing">Download</button>
       </div>
 
       <div id="mass-edit-grid" class="mass-edit-grid"></div>
@@ -73,9 +75,52 @@
     </section>
   </div>
 
+  <div class="scan-modal import-edit-modal" id="import-edit-modal" hidden aria-hidden="true">
+    <div class="scan-dialog import-edit-dialog" role="dialog" aria-labelledby="import-edit-title">
+      <div class="detail-header">
+        <div>
+          <p class="detail-label">Mass Edit</p>
+          <h2 id="import-edit-title">Import Edit</h2>
+          <p class="subtitle" style="margin: 6px 0 0;">Upload an edited export · matches on <code>reference_key</code> · updates GL and description</p>
+        </div>
+        <button id="btn-close-import-edit" type="button" class="icon-btn" aria-label="Close import">×</button>
+      </div>
+      <div class="import-edit-body">
+        <div class="import-edit-dropzone" id="import-edit-dropzone">
+          <input type="file" id="import-edit-file" accept=".csv,.xlsx,.xls,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" hidden />
+          <p class="import-edit-dropzone__title">Drop CSV or Excel here</p>
+          <p class="import-edit-dropzone__hint">or <button type="button" id="btn-import-browse" class="import-edit-link">Browse files</button></p>
+        </div>
+        <p id="import-edit-file-name" class="import-edit-file-name" hidden></p>
+        <div id="import-edit-preview-wrap" class="import-edit-preview-wrap" hidden>
+          <div class="import-edit-preview-summary" id="import-edit-summary"></div>
+          <div class="import-edit-preview-scroll">
+            <table class="data-grid import-edit-preview-table" id="import-edit-preview-table">
+              <thead>
+                <tr>
+                  <th>Ref</th>
+                  <th>Status</th>
+                  <th>GL (was → new)</th>
+                  <th>Description (was → new)</th>
+                </tr>
+              </thead>
+              <tbody id="import-edit-preview-tbody"></tbody>
+            </table>
+          </div>
+        </div>
+        <p id="import-edit-error" class="import-edit-error" hidden></p>
+      </div>
+      <div class="import-edit-footer">
+        <button type="button" id="btn-import-cancel" class="btn">Cancel</button>
+        <button type="button" id="btn-import-apply" class="btn btn-accent" disabled>Apply updates</button>
+      </div>
+    </div>
+  </div>
+
   <script src="assets/auth.js"></script>
   <script src="assets/shell.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/tabulator-tables@6.4.0/dist/js/tabulator.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <script src="assets/expenses-mass-edit.js"></script>
   <script>DGS.boot("expenses", () => ExpensesMassEdit.init());</script>
 </body>

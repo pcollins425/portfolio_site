@@ -22,7 +22,24 @@
     dateTo: "",
     search: "",
     loading: false,
+    importUpdates: [],
   };
+
+  const EXPORT_COLUMNS = [
+    { key: "reference_key", header: "reference_key" },
+    { key: "date", header: "date" },
+    { key: "amount", header: "amount" },
+    { key: "employee_name", header: "employee_name" },
+    { key: "state_abbr", header: "state_abbr" },
+    { key: "tribe_name", header: "tribe_name" },
+    { key: "casino_name", header: "casino_name" },
+    { key: "expense_account", header: "expense_account" },
+    { key: "description", header: "description" },
+  ];
+
+  const REF_HEADERS = ["reference_key", "ref", "expense_id", "expense ref"];
+  const GL_HEADERS = ["expense_account", "gl", "gl account", "gl_account"];
+  const DESC_HEADERS = ["description", "desc"];
 
   const els = {
     errorBox: document.getElementById("error-box"),
@@ -38,6 +55,20 @@
     statusErrors: document.getElementById("status-errors"),
     btnDiscard: document.getElementById("btn-discard"),
     btnSave: document.getElementById("btn-save"),
+    btnDownload: document.getElementById("btn-download"),
+    btnImportEdit: document.getElementById("btn-import-edit"),
+    importModal: document.getElementById("import-edit-modal"),
+    importDropzone: document.getElementById("import-edit-dropzone"),
+    importFileInput: document.getElementById("import-edit-file"),
+    btnImportBrowse: document.getElementById("btn-import-browse"),
+    btnCloseImport: document.getElementById("btn-close-import-edit"),
+    btnImportCancel: document.getElementById("btn-import-cancel"),
+    btnImportApply: document.getElementById("btn-import-apply"),
+    importFileName: document.getElementById("import-edit-file-name"),
+    importPreviewWrap: document.getElementById("import-edit-preview-wrap"),
+    importPreviewTbody: document.getElementById("import-edit-preview-tbody"),
+    importSummary: document.getElementById("import-edit-summary"),
+    importError: document.getElementById("import-edit-error"),
   };
 
   function apiUrl(path) {
@@ -81,6 +112,402 @@
   function fmtMoney(n) {
     if (n === null || n === undefined || Number.isNaN(n)) return null;
     return Number(n);
+  }
+
+  function escHtml(s) {
+    return String(s ?? "")
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;");
+  }
+
+  function normalizeHeader(value) {
+    return String(value || "")
+      .trim()
+      .toLowerCase()
+      .replace(/_/g, " ")
+      .replace(/\s+/g, " ");
+  }
+
+  function findHeaderIndex(headers, aliases) {
+    const normalized = headers.map((h) => normalizeHeader(h));
+    for (let i = 0; i < normalized.length; i += 1) {
+      if (aliases.includes(normalized[i])) return i;
+    }
+    return -1;
+  }
+
+  function csvEscape(value) {
+    const s = value === null || value === undefined ? "" : String(value);
+    if (/[",\n\r]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
+    return s;
+  }
+
+  function exportRowValues(item) {
+    const gl = item.expense_account_display || item.expense_account || "";
+    return {
+      reference_key: item.reference_key || "",
+      date: item.date || "",
+      amount: item.amount ?? "",
+      employee_name: item.employee_name || "",
+      state_abbr: item.state_abbr || "",
+      tribe_name: item.tribe_name || "",
+      casino_name: item.casino_name || "",
+      expense_account: gl,
+      description: item.description || "",
+    };
+  }
+
+  function downloadExport() {
+    if (!state.rows.length) return;
+
+    const headerLine = EXPORT_COLUMNS.map((c) => csvEscape(c.header)).join(",");
+    const lines = [headerLine];
+    for (const item of state.rows) {
+      const values = exportRowValues(item);
+      lines.push(EXPORT_COLUMNS.map((c) => csvEscape(values[c.key])).join(","));
+    }
+
+    const from = state.dateFrom || "start";
+    const to = state.dateTo || "end";
+    const filename = `expenses_mass_edit_${from}_${to}.csv`;
+    const blob = new Blob([lines.join("\r\n")], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+  }
+
+  function parseCsvRows(text) {
+    const rows = [];
+    let row = [];
+    let field = "";
+    let inQuotes = false;
+
+    for (let i = 0; i < text.length; i += 1) {
+      const ch = text[i];
+      const next = text[i + 1];
+
+      if (inQuotes) {
+        if (ch === '"' && next === '"') {
+          field += '"';
+          i += 1;
+        } else if (ch === '"') {
+          inQuotes = false;
+        } else {
+          field += ch;
+        }
+        continue;
+      }
+
+      if (ch === '"') {
+        inQuotes = true;
+      } else if (ch === ",") {
+        row.push(field);
+        field = "";
+      } else if (ch === "\n" || ch === "\r") {
+        if (ch === "\r" && next === "\n") i += 1;
+        row.push(field);
+        field = "";
+        if (row.some((cell) => String(cell).trim() !== "")) rows.push(row);
+        row = [];
+      } else {
+        field += ch;
+      }
+    }
+
+    row.push(field);
+    if (row.some((cell) => String(cell).trim() !== "")) rows.push(row);
+    return rows;
+  }
+
+  function sheetRowsFromFile(file) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      const name = (file.name || "").toLowerCase();
+
+      reader.onerror = () => reject(new Error("Could not read file"));
+
+      if (name.endsWith(".csv") || file.type === "text/csv") {
+        reader.onload = () => {
+          const text = String(reader.result || "").replace(/^\uFEFF/, "");
+          resolve(parseCsvRows(text));
+        };
+        reader.readAsText(file);
+        return;
+      }
+
+      if (typeof XLSX === "undefined") {
+        reject(new Error("Excel support did not load — try CSV or refresh the page."));
+        return;
+      }
+
+      reader.onload = () => {
+        try {
+          const data = new Uint8Array(reader.result);
+          const workbook = XLSX.read(data, { type: "array" });
+          const sheetName = workbook.SheetNames[0];
+          const sheet = workbook.Sheets[sheetName];
+          const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: "" });
+          resolve(rows);
+        } catch (err) {
+          reject(err);
+        }
+      };
+      reader.readAsArrayBuffer(file);
+    });
+  }
+
+  function cellValue(row, index) {
+    if (index < 0 || index >= row.length) return "";
+    const v = row[index];
+    if (v === null || v === undefined) return "";
+    return String(v).trim();
+  }
+
+  function changeLabel(before, after) {
+    const from = before || "—";
+    const to = after || "—";
+    if (from === to) return "—";
+    return `${from} → ${to}`;
+  }
+
+  function findBaseline(ref) {
+    const trimmed = String(ref || "").trim();
+    if (!trimmed) return null;
+    if (state.baseline.has(trimmed)) {
+      return { key: trimmed, base: state.baseline.get(trimmed) };
+    }
+    const upper = trimmed.toUpperCase();
+    for (const [key, base] of state.baseline.entries()) {
+      if (key.toUpperCase() === upper) return { key, base };
+    }
+    return null;
+  }
+
+  function editableCellValue(row, index) {
+    if (index < 0) return null;
+    const value = cellValue(row, index);
+    return value === "" ? null : value;
+  }
+
+  function buildImportPreview(rows) {
+    if (!rows.length) {
+      throw new Error("File is empty.");
+    }
+    if (!state.baseline.size) {
+      throw new Error("Load expenses first so Import Edit can match your selection.");
+    }
+
+    const headers = rows[0].map((h) => String(h ?? ""));
+    const refIdx = findHeaderIndex(headers, REF_HEADERS);
+    const glIdx = findHeaderIndex(headers, GL_HEADERS);
+    const descIdx = findHeaderIndex(headers, DESC_HEADERS);
+
+    if (refIdx < 0) {
+      throw new Error('Missing reference column — use "reference_key" or "expense_id".');
+    }
+    if (glIdx < 0 && descIdx < 0) {
+      throw new Error('No editable columns found — include "expense_account" and/or "description".');
+    }
+
+    const preview = [];
+    const updates = [];
+    let updateCount = 0;
+    let unchangedCount = 0;
+    let errorCount = 0;
+
+    for (let r = 1; r < rows.length; r += 1) {
+      const row = rows[r];
+      if (!row || !row.length) continue;
+
+      const refRaw = cellValue(row, refIdx);
+      if (!refRaw) continue;
+
+      const matched = findBaseline(refRaw);
+      const newGl = editableCellValue(row, glIdx);
+      const newDesc = editableCellValue(row, descIdx);
+
+      let status = "unchanged";
+      let statusClass = "status-unchanged";
+      let glChange = "—";
+      let descChange = "—";
+      const ref = matched ? matched.key : refRaw;
+
+      if (!matched) {
+        status = "Not in selection";
+        statusClass = "status-error";
+        errorCount += 1;
+      } else {
+        const { base } = matched;
+        const glFrom = base.expense_account;
+        const descFrom = base.description;
+        const glTo = newGl === null ? glFrom : newGl;
+        const descTo = newDesc === null ? descFrom : newDesc;
+        glChange = changeLabel(glFrom, glTo);
+        descChange = changeLabel(descFrom, descTo);
+
+        const glChanged = newGl !== null && glTo !== glFrom;
+        const descChanged = newDesc !== null && descTo !== descFrom;
+
+        if (!glChanged && !descChanged) {
+          status = "No change";
+          unchangedCount += 1;
+        } else if (newGl !== null && !isValidGl(glTo)) {
+          status = "Invalid GL";
+          statusClass = "status-error";
+          errorCount += 1;
+        } else {
+          status = "Update";
+          statusClass = "status-update";
+          updateCount += 1;
+          const payload = { reference_key: ref };
+          if (glChanged) payload.expense_account = glTo;
+          if (descChanged) payload.description = descTo;
+          updates.push(payload);
+        }
+      }
+
+      preview.push({ ref, status, statusClass, glChange, descChange });
+    }
+
+    if (!preview.length) {
+      throw new Error("No data rows found below the header row.");
+    }
+
+    return { preview, updates, updateCount, unchangedCount, errorCount, total: preview.length };
+  }
+
+  function setImportError(msg) {
+    els.importError.hidden = !msg;
+    els.importError.textContent = msg || "";
+  }
+
+  function renderImportPreview(result) {
+    state.importUpdates = result.updates;
+    els.importPreviewWrap.hidden = false;
+    els.importSummary.innerHTML =
+      `${result.total.toLocaleString()} row${result.total === 1 ? "" : "s"} in file · ` +
+      `<strong>${result.updateCount.toLocaleString()} update${result.updateCount === 1 ? "" : "s"}</strong> · ` +
+      `${result.unchangedCount.toLocaleString()} unchanged · ` +
+      `${result.errorCount.toLocaleString()} skipped`;
+
+    const show = result.preview.slice(0, 200);
+    els.importPreviewTbody.innerHTML = show
+      .map(
+        (row) => `<tr>
+          <td class="mono">${escHtml(row.ref)}</td>
+          <td class="${row.statusClass}">${escHtml(row.status)}</td>
+          <td>${escHtml(row.glChange)}</td>
+          <td>${escHtml(row.descChange)}</td>
+        </tr>`
+      )
+      .join("");
+
+    if (result.preview.length > show.length) {
+      els.importPreviewTbody.innerHTML += `<tr><td colspan="4" class="muted">…and ${(result.preview.length - show.length).toLocaleString()} more rows</td></tr>`;
+    }
+
+    const n = result.updateCount;
+    els.btnImportApply.disabled = n === 0 || state.loading;
+    els.btnImportApply.textContent = n ? `Apply ${n} update${n === 1 ? "" : "s"}` : "Apply updates";
+    setImportError(null);
+  }
+
+  function resetImportModal() {
+    state.importUpdates = [];
+    els.importFileInput.value = "";
+    els.importFileName.hidden = true;
+    els.importFileName.textContent = "";
+    els.importPreviewWrap.hidden = true;
+    els.importPreviewTbody.innerHTML = "";
+    els.importSummary.textContent = "";
+    els.btnImportApply.disabled = true;
+    els.btnImportApply.textContent = "Apply updates";
+    setImportError(null);
+    els.importDropzone.classList.remove("is-dragover");
+  }
+
+  function openImportModal() {
+    resetImportModal();
+    els.importModal.hidden = false;
+    els.importModal.setAttribute("aria-hidden", "false");
+  }
+
+  function closeImportModal() {
+    els.importModal.hidden = true;
+    els.importModal.setAttribute("aria-hidden", "true");
+    resetImportModal();
+  }
+
+  async function handleImportFile(file) {
+    if (!file) return;
+    resetImportModal();
+    els.importFileName.hidden = false;
+    els.importFileName.textContent = file.name;
+
+    try {
+      const rows = await sheetRowsFromFile(file);
+      const result = buildImportPreview(rows);
+      renderImportPreview(result);
+    } catch (err) {
+      setImportError(err.message || String(err));
+      els.importPreviewWrap.hidden = true;
+      els.btnImportApply.disabled = true;
+    }
+  }
+
+  async function applyImportUpdates() {
+    const updates = state.importUpdates || [];
+    if (!updates.length) return;
+
+    if (state.dirty.size && !window.confirm("Discard unsaved grid changes before applying import?")) {
+      return;
+    }
+    state.dirty.clear();
+    state.pending.clear();
+    state.invalid.clear();
+
+    state.loading = true;
+    els.btnImportApply.disabled = true;
+    showError(null);
+    setImportError(null);
+
+    try {
+      const result = await fetchJson("/api/expenses/batch", {
+        method: "POST",
+        body: JSON.stringify({ updates }),
+      });
+      if (result.errors && result.errors.length) {
+        setImportError(
+          `Applied ${result.updated}, but ${result.errors.length} row(s) failed: ${result.errors
+            .map((e) => `${e.reference_key}: ${e.error}`)
+            .slice(0, 3)
+            .join("; ")}`
+        );
+      } else {
+        closeImportModal();
+      }
+      await loadRows();
+    } catch (err) {
+      setImportError(err.message || String(err));
+    } finally {
+      state.loading = false;
+      const n = state.importUpdates.length;
+      els.btnImportApply.disabled = n === 0;
+      refreshActionState();
+    }
+  }
+
+  function refreshDownloadState() {
+    if (els.btnDownload) {
+      els.btnDownload.disabled = !state.rows.length || state.loading;
+    }
   }
 
   function normalizeGl(value) {
@@ -238,6 +665,7 @@
     els.btnDiscard.disabled = n === 0 || state.loading;
     els.btnSave.disabled = n === 0 || state.invalid.size > 0 || state.loading;
     els.btnSave.textContent = n ? `Save ${n} change${n === 1 ? "" : "s"}` : "Save changes";
+    refreshDownloadState();
   }
 
   function refreshStatusBar(extra) {
@@ -571,6 +999,37 @@
 
   els.btnDiscard.addEventListener("click", () => loadRows());
   els.btnSave.addEventListener("click", () => saveChanges());
+  els.btnDownload.addEventListener("click", () => downloadExport());
+  els.btnImportEdit.addEventListener("click", () => openImportModal());
+  els.btnCloseImport.addEventListener("click", () => closeImportModal());
+  els.btnImportCancel.addEventListener("click", () => closeImportModal());
+  els.btnImportApply.addEventListener("click", () => applyImportUpdates());
+  els.btnImportBrowse.addEventListener("click", (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    els.importFileInput.click();
+  });
+  els.importDropzone.addEventListener("click", () => els.importFileInput.click());
+  els.importFileInput.addEventListener("change", () => {
+    const file = els.importFileInput.files && els.importFileInput.files[0];
+    handleImportFile(file);
+  });
+  els.importDropzone.addEventListener("dragover", (e) => {
+    e.preventDefault();
+    els.importDropzone.classList.add("is-dragover");
+  });
+  els.importDropzone.addEventListener("dragleave", () => {
+    els.importDropzone.classList.remove("is-dragover");
+  });
+  els.importDropzone.addEventListener("drop", (e) => {
+    e.preventDefault();
+    els.importDropzone.classList.remove("is-dragover");
+    const file = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+    handleImportFile(file);
+  });
+  els.importModal.addEventListener("click", (e) => {
+    if (e.target === els.importModal) closeImportModal();
+  });
 
   window.ExpensesMassEdit = { init };
 })();
