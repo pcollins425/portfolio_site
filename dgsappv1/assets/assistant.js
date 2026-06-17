@@ -373,12 +373,15 @@
     wireEvents();
     try {
       await loadHealth();
-      await Promise.all([loadSessions(), loadFileTree()]);
+      await loadSessions();
       renderChatHeader();
       if (state.sessions.length) await selectSession(state.sessions[0].id);
     } catch (err) {
       showError(String(err.message || err));
     }
+    loadFileTree().catch((err) => {
+      showError(`Workspace files: ${err.message || err}`);
+    });
   }
 
   window.AssistantApp = { init };

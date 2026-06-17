@@ -14,6 +14,13 @@ _SKIP_DIRS = {
     ".cursor",
     "credentials",
     "pages_publish",
+    "data",
+    "logs",
+    "demo",
+    "deploy",
+    "expense_processor",
+    "expense_sheet_out_watcher",
+    "master_revenue_dashboard",
 }
 _MAX_DEPTH = 5
 _MAX_PREVIEW = 32_000
