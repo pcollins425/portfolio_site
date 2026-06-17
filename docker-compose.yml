@@ -23,6 +23,8 @@ services:
     env_file:
       - path: ./backend_live/.env
         required: false
-    # Assistant: host clone → /workspace (set ASSISTANT_WORKSPACE_HOST in repo-root .env)
+    # Assistant: host clone → /workspace
+    # Set ASSISTANT_WORKSPACE_HOST in portfolio_site/.env (repo root, NOT backend_live/.env).
+    # Default ../cursor-assistant works when both repos are siblings on the host.
     volumes:
-      - ${ASSISTANT_WORKSPACE_HOST}:/workspace:rw
+      - ${ASSISTANT_WORKSPACE_HOST:-../cursor-assistant}:/workspace:rw

@@ -57,7 +57,7 @@ The image sets **`API_HOST=0.0.0.0`** inside the container; you do not need to d
 
 The **`/api/assistant/*`** routes and **`dgsappv1/assistant.html`** UI are already in this repo. In Docker, the API container needs two things beyond a normal deploy:
 
-1. **Mount the workspace** — `docker-compose.yml` maps **`${ASSISTANT_WORKSPACE_HOST}`** on the host → **`/workspace`** in the container.
+1. **Mount the workspace** — `docker-compose.yml` maps the host clone → **`/workspace`** in the container. Default: **`../cursor-assistant`** (sibling folder). Override with **`ASSISTANT_WORKSPACE_HOST`** in **`portfolio_site/.env`** at the **repo root** (not **`backend_live/.env`**).
 2. **`CURSOR_API_KEY`** in **`backend_live/.env`** — user or team service-account key from [Cursor Dashboard → Integrations](https://cursor.com/dashboard/integrations).
 
 ### One-time setup (SQL server)
