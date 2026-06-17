@@ -1688,6 +1688,24 @@ body.login-page {
 }
 
 /* —— Assistant module —— */
+.assistant-page {
+  height: 100vh;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+  padding-bottom: 16px;
+}
+
+.assistant-page .assistant-header {
+  flex-shrink: 0;
+}
+
+.assistant-page #error-box {
+  flex-shrink: 0;
+}
+
 .assistant-page .assistant-header__row {
   display: flex;
   align-items: flex-start;
@@ -1715,8 +1733,9 @@ body.login-page {
 .assistant-panels {
   display: flex;
   gap: 12px;
-  padding: 0 0 24px;
-  min-height: 640px;
+  padding: 0;
+  flex: 1;
+  min-height: 0;
   align-items: stretch;
 }
 
@@ -1738,6 +1757,13 @@ body.login-page {
 .assistant-chat {
   flex: 1;
   min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.assistant-chat__head {
+  flex-shrink: 0;
+  background: #fafbfc;
 }
 
 .assistant-files {
@@ -1805,10 +1831,6 @@ body.login-page {
   color: var(--muted);
 }
 
-.assistant-chat__head {
-  background: #fafbfc;
-}
-
 .assistant-chat__meta {
   margin: 4px 0 0;
   font-size: 11px;
@@ -1817,6 +1839,7 @@ body.login-page {
 
 .assistant-messages {
   flex: 1;
+  min-height: 0;
   overflow: auto;
   padding: 18px 20px;
   display: flex;
@@ -1831,6 +1854,7 @@ body.login-page {
   border-radius: 14px;
   font-size: 13px;
   line-height: 1.5;
+  flex-shrink: 0;
 }
 
 .assistant-message--user {
@@ -1842,6 +1866,7 @@ body.login-page {
 
 .assistant-message--assistant {
   align-self: flex-start;
+  max-width: min(92%, 760px);
   background: #fff;
   border: 1px solid var(--border);
   border-bottom-left-radius: 4px;
@@ -1856,7 +1881,79 @@ body.login-page {
   margin-bottom: 6px;
 }
 
+.assistant-message__body--markdown > :first-child {
+  margin-top: 0;
+}
+
+.assistant-message__body--markdown > :last-child {
+  margin-bottom: 0;
+}
+
+.assistant-message__body--markdown p {
+  margin: 0 0 0.65em;
+}
+
+.assistant-message__body--markdown ul,
+.assistant-message__body--markdown ol {
+  margin: 0.35em 0 0.75em;
+  padding-left: 1.35em;
+}
+
+.assistant-message__body--markdown li {
+  margin: 0.25em 0;
+}
+
+.assistant-message__body--markdown li > ul,
+.assistant-message__body--markdown li > ol {
+  margin-top: 0.25em;
+}
+
+.assistant-message__body--markdown h1,
+.assistant-message__body--markdown h2,
+.assistant-message__body--markdown h3 {
+  margin: 0.75em 0 0.4em;
+  font-size: 1em;
+  font-weight: 700;
+  line-height: 1.3;
+}
+
+.assistant-message__body--markdown h1 { font-size: 1.1em; }
+
+.assistant-message__body--markdown code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.92em;
+  padding: 0.1em 0.35em;
+  border-radius: 4px;
+  background: #f1f5f9;
+}
+
+.assistant-message__body--markdown pre {
+  margin: 0.5em 0 0.75em;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: #0f172a;
+  color: #e2e8f0;
+  overflow-x: auto;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.assistant-message__body--markdown pre code {
+  padding: 0;
+  background: transparent;
+  color: inherit;
+  font-size: inherit;
+}
+
+.assistant-message__body--markdown blockquote {
+  margin: 0.5em 0;
+  padding-left: 0.75em;
+  border-left: 3px solid var(--border);
+  color: var(--muted);
+}
+
 .assistant-composer {
+  flex-shrink: 0;
   display: flex;
   gap: 10px;
   padding: 14px 16px 0;
@@ -1880,6 +1977,7 @@ body.login-page {
 }
 
 .assistant-composer-hint {
+  flex-shrink: 0;
   margin: 8px 16px 14px;
   font-size: 11px;
   color: #94a3b8;
@@ -2199,8 +2297,19 @@ body.login-page {
 }
 
 @media (max-width: 1100px) {
+  .assistant-page {
+    height: auto;
+    min-height: 100vh;
+    overflow: visible;
+  }
+
   .assistant-panels {
     flex-direction: column;
+    flex: none;
+  }
+
+  .assistant-chat {
+    min-height: 420px;
   }
 
   .assistant-sessions,

@@ -94,6 +94,58 @@
     }
   }
 
+  function escapeHtml(text) {
+    return String(text)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;");
+  }
+
+  function renderAssistantHtml(text) {
+    const raw = String(text || "");
+    if (typeof marked !== "undefined" && typeof DOMPurify !== "undefined") {
+      const html = marked.parse(raw, { breaks: true, gfm: true });
+      return DOMPurify.sanitize(html, { USE_PROFILES: { html: true } });
+    }
+    return formatPlainFallback(raw);
+  }
+
+  function formatPlainFallback(text) {
+    const lines = String(text || "").split("\n");
+    let html = "";
+    let inList = false;
+    for (const line of lines) {
+      const trimmed = line.trim();
+      const bullet = /^([-*•]|\d+\.)\s+/.exec(trimmed);
+      if (bullet) {
+        if (!inList) {
+          html += "<ul>";
+          inList = true;
+        }
+        html += "<li>" + escapeHtml(trimmed.replace(/^([-*•]|\d+\.)\s+/, "")) + "</li>";
+      } else {
+        if (inList) {
+          html += "</ul>";
+          inList = false;
+        }
+        if (trimmed) html += "<p>" + escapeHtml(line) + "</p>";
+      }
+    }
+    if (inList) html += "</ul>";
+    return html || "<p></p>";
+  }
+
+  function setMessageBody(el, role, content) {
+    if (role === "assistant") {
+      el.classList.add("assistant-message__body--markdown");
+      el.innerHTML = renderAssistantHtml(content);
+    } else {
+      el.classList.remove("assistant-message__body--markdown");
+      el.textContent = content || "";
+    }
+  }
+
   function renderMessages() {
     if (!els.chatMessages) return;
     els.chatMessages.innerHTML = "";
@@ -108,7 +160,7 @@
       }
       const body = document.createElement("div");
       body.className = "assistant-message__body";
-      body.textContent = m.content || "";
+      setMessageBody(body, m.role, m.content);
       div.appendChild(body);
       els.chatMessages.appendChild(div);
     }
@@ -417,7 +469,8 @@
               assistantNode.appendChild(body);
               els.chatMessages.appendChild(assistantNode);
             }
-            assistantNode.querySelector(".assistant-message__body").textContent = assistantText;
+            const streamBody = assistantNode.querySelector(".assistant-message__body");
+            setMessageBody(streamBody, "assistant", assistantText);
             els.chatMessages.scrollTop = els.chatMessages.scrollHeight;
           } else if (event.type === "error") {
             showError(event.message || "Agent error");
