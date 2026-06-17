@@ -129,6 +129,51 @@
     els.chatMeta.textContent = parts.length ? parts.join(" · ") : "Ready";
   }
 
+  function fileEntryIconClass(name, type, expanded) {
+    if (type === "dir") {
+      return expanded ? "assistant-file-icon--folder-open" : "assistant-file-icon--folder";
+    }
+    const base = (name || "").toLowerCase();
+    if (base === ".env" || base.endsWith(".env.example")) return "assistant-file-icon--env";
+    const ext = base.includes(".") ? base.split(".").pop() : "";
+    const map = {
+      md: "md",
+      mdc: "md",
+      py: "code",
+      js: "code",
+      ts: "code",
+      sh: "code",
+      sql: "sql",
+      json: "json",
+      html: "html",
+      htm: "html",
+      css: "css",
+      yaml: "config",
+      yml: "config",
+      toml: "config",
+      ini: "config",
+      png: "image",
+      jpg: "image",
+      jpeg: "image",
+      gif: "image",
+      webp: "image",
+      svg: "image",
+      csv: "data",
+      xlsx: "data",
+      xls: "data",
+      pdf: "doc",
+      txt: "text",
+    };
+    return "assistant-file-icon--" + (map[ext] || "file");
+  }
+
+  function createFileIcon(className) {
+    const icon = document.createElement("span");
+    icon.className = "assistant-file-icon " + className;
+    icon.setAttribute("aria-hidden", "true");
+    return icon;
+  }
+
   function renderFileTreeNodes(entries, depth) {
     const frag = document.createDocumentFragment();
     const filter = state.fileFilter.trim().toLowerCase();
@@ -164,6 +209,7 @@
         nameSpan.textContent = label;
 
         row.appendChild(chevron);
+        row.appendChild(createFileIcon(fileEntryIconClass(label, "dir", expanded)));
         row.appendChild(nameSpan);
         row.addEventListener("click", () => {
           if (state.expandedDirs.has(path)) state.expandedDirs.delete(path);
@@ -184,7 +230,13 @@
         row.type = "button";
         row.className = "assistant-file-row assistant-file-row--file";
         row.style.paddingLeft = `${8 + depth * 14 + chevronPad}px`;
-        row.textContent = label;
+
+        const nameSpan = document.createElement("span");
+        nameSpan.className = "assistant-file-name";
+        nameSpan.textContent = label;
+
+        row.appendChild(createFileIcon(fileEntryIconClass(label, "file", false)));
+        row.appendChild(nameSpan);
         row.addEventListener("click", () => loadFilePreview(path));
         frag.appendChild(row);
       }
@@ -197,7 +249,12 @@
     els.fileTree.innerHTML = "";
     const root = document.createElement("div");
     root.className = "assistant-file-row assistant-file-row--root";
-    root.textContent = state.fileTree.name || "workspace";
+    const rootIcon = createFileIcon("assistant-file-icon--folder-open");
+    const rootName = document.createElement("span");
+    rootName.className = "assistant-file-name";
+    rootName.textContent = state.fileTree.name || "workspace";
+    root.appendChild(rootIcon);
+    root.appendChild(rootName);
     els.fileTree.appendChild(root);
     const result = renderFileTreeNodes(state.fileTree.entries || [], 0);
     els.fileTree.appendChild(result.frag);
