@@ -1920,6 +1920,46 @@ body.login-page {
   color: var(--text);
 }
 
+.assistant-file-row--dir {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+  font-weight: 500;
+}
+
+.assistant-file-row--dir:hover {
+  background: var(--row-hover);
+}
+
+.assistant-file-chevron {
+  flex-shrink: 0;
+  width: 12px;
+  font-size: 10px;
+  line-height: 1;
+  color: var(--muted);
+  transition: transform var(--transition);
+}
+
+.assistant-file-chevron::before {
+  content: "▸";
+}
+
+.assistant-file-chevron.is-open {
+  transform: rotate(90deg);
+}
+
+.assistant-file-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.assistant-file-children[hidden] {
+  display: none;
+}
+
 .assistant-file-preview {
   border-top: 1px solid var(--border);
   padding: 12px 14px;

@@ -15,6 +15,7 @@
     sending: false,
     sessionFilter: "",
     fileFilter: "",
+    expandedDirs: new Set(),
   };
 
   const els = {
@@ -131,30 +132,64 @@
   function renderFileTreeNodes(entries, depth) {
     const frag = document.createDocumentFragment();
     const filter = state.fileFilter.trim().toLowerCase();
+    const filtering = Boolean(filter);
+    const chevronPad = 16;
+    let hasContent = false;
+
     for (const entry of entries || []) {
       const label = entry.name || "";
       const path = entry.path || label;
-      const matches = !filter || label.toLowerCase().includes(filter) || path.toLowerCase().includes(filter);
+      const matches =
+        !filter || label.toLowerCase().includes(filter) || path.toLowerCase().includes(filter);
+
       if (entry.type === "dir") {
-        const children = renderFileTreeNodes(entry.children || [], depth + 1);
-        if (!matches && !children.childNodes.length) continue;
-        const row = document.createElement("div");
+        const childResult = renderFileTreeNodes(entry.children || [], depth + 1);
+        if (!matches && !childResult.hasContent) continue;
+
+        const expanded = filtering || state.expandedDirs.has(path);
+        hasContent = true;
+
+        const row = document.createElement("button");
+        row.type = "button";
         row.className = "assistant-file-row assistant-file-row--dir";
         row.style.paddingLeft = `${8 + depth * 14}px`;
-        row.textContent = label;
+        row.setAttribute("aria-expanded", expanded ? "true" : "false");
+
+        const chevron = document.createElement("span");
+        chevron.className = "assistant-file-chevron" + (expanded ? " is-open" : "");
+        chevron.setAttribute("aria-hidden", "true");
+
+        const nameSpan = document.createElement("span");
+        nameSpan.className = "assistant-file-name";
+        nameSpan.textContent = label;
+
+        row.appendChild(chevron);
+        row.appendChild(nameSpan);
+        row.addEventListener("click", () => {
+          if (state.expandedDirs.has(path)) state.expandedDirs.delete(path);
+          else state.expandedDirs.add(path);
+          renderFileTree();
+        });
+
         frag.appendChild(row);
-        frag.appendChild(children);
+
+        const childrenWrap = document.createElement("div");
+        childrenWrap.className = "assistant-file-children";
+        childrenWrap.hidden = !expanded;
+        childrenWrap.appendChild(childResult.frag);
+        frag.appendChild(childrenWrap);
       } else if (matches) {
+        hasContent = true;
         const row = document.createElement("button");
         row.type = "button";
         row.className = "assistant-file-row assistant-file-row--file";
-        row.style.paddingLeft = `${8 + depth * 14}px`;
+        row.style.paddingLeft = `${8 + depth * 14 + chevronPad}px`;
         row.textContent = label;
         row.addEventListener("click", () => loadFilePreview(path));
         frag.appendChild(row);
       }
     }
-    return frag;
+    return { frag, hasContent };
   }
 
   function renderFileTree() {
@@ -164,7 +199,8 @@
     root.className = "assistant-file-row assistant-file-row--root";
     root.textContent = state.fileTree.name || "workspace";
     els.fileTree.appendChild(root);
-    els.fileTree.appendChild(renderFileTreeNodes(state.fileTree.entries || [], 0));
+    const result = renderFileTreeNodes(state.fileTree.entries || [], 0);
+    els.fileTree.appendChild(result.frag);
   }
 
   function renderSecrets() {
