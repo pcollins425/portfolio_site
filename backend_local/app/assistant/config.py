@@ -30,6 +30,11 @@ def sessions_file() -> Path:
         path = Path("/app/data/assistant_sessions/assistant_sessions.json")
     else:
         path = workspace_root() / "data" / "assistant_sessions.json"
+    return path
+
+
+def ensure_sessions_dir() -> Path:
+    path = sessions_file()
     path.parent.mkdir(parents=True, exist_ok=True)
     return path
 

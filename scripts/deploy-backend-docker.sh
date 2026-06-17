@@ -63,7 +63,8 @@ log "Stopping containers..."
 docker compose "${COMPOSE_ARGS[@]}" down
 
 log "Building and starting containers..."
-docker compose "${COMPOSE_ARGS[@]}" up -d --build
+docker compose "${COMPOSE_ARGS[@]}" build --pull backend_live
+docker compose "${COMPOSE_ARGS[@]}" up -d --force-recreate
 
 log "Waiting for /health..."
 for _ in $(seq 1 30); do

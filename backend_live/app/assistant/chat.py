@@ -8,27 +8,37 @@ from app.assistant import config, sessions
 
 
 def health() -> dict[str, Any]:
-    root = config.workspace_root()
-    key = config.cursor_api_key()
-    sdk_error = config.sdk_import_error()
-    out: dict[str, Any] = {
-        "ok": root.is_dir() and sdk_error is None,
-        "workspace": str(root),
-        "workspace_exists": root.is_dir(),
-        "sessions_file": str(config.sessions_file()),
-        "cursor_api_key_configured": bool(key),
-        "cursor_sdk_installed": sdk_error is None,
-        "model": config.model_name(),
-    }
-    if sdk_error:
-        out["cursor_sdk_error"] = sdk_error
     try:
-        out["session_count"] = len(sessions.list_sessions())
-    except OSError as err:
-        out["ok"] = False
-        out["session_error"] = f"{type(err).__name__}: {err}"
-        out["session_count"] = 0
-    return out
+        root = config.workspace_root()
+        key = config.cursor_api_key()
+        sdk_error = config.sdk_import_error()
+        out: dict[str, Any] = {
+            "ok": root.is_dir() and sdk_error is None,
+            "workspace": str(root),
+            "workspace_exists": root.is_dir(),
+            "sessions_file": str(config.sessions_file()),
+            "cursor_api_key_configured": bool(key),
+            "cursor_sdk_installed": sdk_error is None,
+            "model": config.model_name(),
+        }
+        if sdk_error:
+            out["cursor_sdk_error"] = sdk_error
+        try:
+            out["session_count"] = len(sessions.list_sessions())
+        except OSError as err:
+            out["ok"] = False
+            out["session_error"] = f"{type(err).__name__}: {err}"
+            out["session_count"] = 0
+        return out
+    except Exception as err:
+        return {
+            "ok": False,
+            "error": f"{type(err).__name__}: {err}",
+            "workspace_exists": False,
+            "cursor_api_key_configured": bool(config.cursor_api_key()),
+            "cursor_sdk_installed": False,
+            "session_count": 0,
+        }
 
 
 def _sse(event: dict[str, Any]) -> str:

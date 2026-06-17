@@ -31,7 +31,7 @@ class SaveSecretsBody(BaseModel):
 
 @router.get("/health")
 def assistant_health(
-    user: Annotated[dict[str, Any] | None, Depends(require_demo_user)] = None,
+    _user: Annotated[dict[str, Any] | None, Depends(require_demo_user)],
 ):
     return chat.health()
 

@@ -23,7 +23,6 @@ def _path() -> Path:
 
 def _read_all() -> list[dict[str, Any]]:
     path = _path()
-    path.parent.mkdir(parents=True, exist_ok=True)
     if not path.exists():
         return []
     raw = path.read_text(encoding="utf-8").strip()
@@ -39,8 +38,7 @@ def _read_all() -> list[dict[str, Any]]:
 
 
 def _write_all(rows: list[dict[str, Any]]) -> None:
-    path = _path()
-    path.parent.mkdir(parents=True, exist_ok=True)
+    path = config.ensure_sessions_dir()
     tmp = path.with_suffix(".json.tmp")
     tmp.write_text(json.dumps(rows, indent=2) + "\n", encoding="utf-8")
     os.replace(tmp, path)
