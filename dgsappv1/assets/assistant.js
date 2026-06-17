@@ -225,6 +225,9 @@
 
   async function loadFileTree() {
     state.fileTree = await fetchJson("/api/assistant/workspace/tree");
+    if (state.fileTree && state.fileTree.error) {
+      showError(state.fileTree.error);
+    }
     renderFileTree();
   }
 
