@@ -117,6 +117,19 @@ def set_agent_id(session_id: str, agent_id: str) -> None:
     raise KeyError(session_id)
 
 
+def clear_agent_id(session_id: str) -> None:
+    with _lock:
+        rows = _read_all()
+        for row in rows:
+            if row.get("id") != session_id:
+                continue
+            row["agent_id"] = None
+            row["updated_at"] = _now_iso()
+            _write_all(rows)
+            return
+    raise KeyError(session_id)
+
+
 def get_agent_id(session_id: str) -> str | None:
     with _lock:
         for row in _read_all():

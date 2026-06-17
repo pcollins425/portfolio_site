@@ -63,10 +63,15 @@ The **`/api/assistant/*`** routes and **`dgsappv1/assistant.html`** UI are alrea
 ### One-time setup (SQL server)
 
 ```powershell
-# 1) Workspace clone (agent files, scripts, knowledge)
+# 1) Workspace clone — FULL tree for the assistant (not work-orders-only sparse)
 cd "C:\Users\DGS Slot Server"
 git clone https://github.com/pcollins425/cursor-assistant.git
 # or: cd cursor-assistant && git pull origin main
+
+# If this folder was already a sparse clone (deploy/work_orders only), expand it:
+cd cursor-assistant
+git sparse-checkout set deploy/work_orders agents .cursor data scripts sessions
+# Or disable sparse entirely: git sparse-checkout disable
 
 # 2) portfolio_site — pull latest (sibling ../cursor-assistant mount is automatic)
 
@@ -103,6 +108,7 @@ Do **not** put **`CURSOR_API_KEY`** in the workspace `.env` unless you have a sp
 
 ### Notes
 
+- **Sparse-checkout trap:** Docker mounts whatever is on disk at **`ASSISTANT_WORKSPACE_HOST`** (default sibling **`../cursor-assistant`**). A work-orders-only sparse clone (`git sparse-checkout set deploy/work_orders`) exposes **only** that subtree in **`/workspace`** — no **`agents/knowledge`**, **`.cursor/rules`**, or FSR docs. Expand sparse paths or use a full clone before expecting IDE-parity assistant behavior.
 - **`cursor-sdk`** ships **`cursor-sdk-bridge`** inside the image; no Cursor IDE install on the host.
 - The mount is **read-write** so agents can edit workspace files under **`/workspace`**.
 - Chat session index is stored in a **named Docker volume** at **`/app/data/assistant_sessions/`** (not in the git clone).

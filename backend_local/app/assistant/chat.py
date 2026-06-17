@@ -8,10 +8,10 @@ from app.assistant import config, sessions
 
 
 def health() -> dict[str, Any]:
+    key = config.cursor_api_key()
+    sdk_error = config.sdk_import_error()
     try:
         root = config.workspace_root()
-        key = config.cursor_api_key()
-        sdk_error = config.sdk_import_error()
         out: dict[str, Any] = {
             "ok": root.is_dir() and sdk_error is None,
             "workspace": str(root),
@@ -31,18 +31,68 @@ def health() -> dict[str, Any]:
             out["session_count"] = 0
         return out
     except Exception as err:
-        return {
+        out = {
             "ok": False,
             "error": f"{type(err).__name__}: {err}",
             "workspace_exists": False,
-            "cursor_api_key_configured": bool(config.cursor_api_key()),
-            "cursor_sdk_installed": False,
+            "cursor_api_key_configured": bool(key),
+            "cursor_sdk_installed": sdk_error is None,
             "session_count": 0,
         }
+        if sdk_error:
+            out["cursor_sdk_error"] = sdk_error
+        return out
 
 
 def _sse(event: dict[str, Any]) -> str:
     return f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
+
+
+def _prompt_with_history(session_id: str, prompt: str) -> str:
+    """Inject prior UI messages when the SDK agent must be recreated."""
+    session = sessions.get_session(session_id)
+    if not session:
+        return prompt
+    prior: list[dict[str, Any]] = []
+    for message in session.get("messages") or []:
+        role = message.get("role")
+        content = (message.get("content") or "").strip()
+        if role in {"user", "assistant"} and content:
+            prior.append({"role": role, "content": content})
+    if prior and prior[-1]["role"] == "user" and prior[-1]["content"] == prompt.strip():
+        prior = prior[:-1]
+    if not prior:
+        return prompt
+    lines = ["Continue this conversation. Prior messages:", ""]
+    for message in prior:
+        label = "User" if message["role"] == "user" else "Assistant"
+        lines.append(f"{label}: {message['content']}")
+        lines.append("")
+    lines.append(f"User: {prompt}")
+    return "\n".join(lines)
+
+
+def _open_agent(api_key: str, session_id: str, agent_id: str | None):
+    from cursor_sdk import Agent, AgentOptions
+    from cursor_sdk.errors import AgentNotFoundError
+
+    local = config.local_agent_options()
+    options = AgentOptions(
+        api_key=api_key,
+        local=local,
+        model=config.model_name(),
+    )
+    if agent_id:
+        try:
+            return Agent.resume(agent_id, options), agent_id, False
+        except AgentNotFoundError:
+            sessions.clear_agent_id(session_id)
+    agent_ctx = Agent.create(
+        model=config.model_name(),
+        api_key=api_key,
+        local=local,
+    )
+    return agent_ctx, None, True
 
 
 def stream_message(session_id: str, content: str) -> Iterator[str]:
@@ -80,27 +130,24 @@ def stream_message(session_id: str, content: str) -> Iterator[str]:
 
     yield _sse({"type": "status", "status": "running"})
 
-    from cursor_sdk import Agent, AgentOptions, CursorAgentError, LocalAgentOptions
+    from cursor_sdk import CursorAgentError
 
     assistant_chunks: list[str] = []
-    agent_id = sessions.get_agent_id(session_id)
-    cwd = str(config.workspace_root())
+    stored_agent_id = sessions.get_agent_id(session_id)
+    effective_prompt = prompt
 
     try:
-        if agent_id:
-            agent_ctx = Agent.resume(agent_id, AgentOptions(api_key=api_key))
-        else:
-            agent_ctx = Agent.create(
-                model=config.model_name(),
-                api_key=api_key,
-                local=LocalAgentOptions(cwd=cwd, setting_sources=[]),
-            )
+        agent_ctx, resume_agent_id, recreated = _open_agent(
+            api_key, session_id, stored_agent_id
+        )
+        if recreated and stored_agent_id:
+            effective_prompt = _prompt_with_history(session_id, prompt)
 
         with agent_ctx as agent:
-            if not agent_id:
+            if resume_agent_id is None:
                 sessions.set_agent_id(session_id, agent.agent_id)
 
-            run = agent.send(prompt)
+            run = agent.send(effective_prompt)
             for message in run.messages():
                 if message.type != "assistant":
                     continue

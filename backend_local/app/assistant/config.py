@@ -4,18 +4,25 @@ import os
 from pathlib import Path
 
 
+def _workspace_candidates(here: Path) -> list[Path]:
+    candidates = [
+        Path("/workspace"),  # Docker Compose mount (see repo-root docker-compose.yml)
+        Path("E:/cursor-assistant"),
+        Path("E:/cursor_assistant"),
+    ]
+    # Repo-root sibling only when the path is deep enough (not true in /app/... Docker layout).
+    if len(here.parents) > 4:
+        candidates.append(here.parents[4] / "cursor-assistant")
+    return candidates
+
+
 def workspace_root() -> Path:
     raw = (os.environ.get("ASSISTANT_WORKSPACE") or "").strip()
     if raw:
         return Path(raw).resolve()
     # Dev fallback: sibling cursor-assistant on E: (adjust on SQL server via env).
     here = Path(__file__).resolve()
-    for candidate in (
-        Path("/workspace"),  # Docker Compose mount (see repo-root docker-compose.yml)
-        Path("E:/cursor-assistant"),
-        Path("E:/cursor_assistant"),
-        here.parents[4] / "cursor-assistant",
-    ):
+    for candidate in _workspace_candidates(here):
         if candidate.is_dir():
             return candidate.resolve()
     return Path.cwd().resolve()
@@ -55,6 +62,37 @@ def sdk_import_error() -> str | None:
         return None
     except Exception as err:
         return f"{type(err).__name__}: {err}"
+
+
+def agent_store_dir() -> Path:
+    override = (os.environ.get("ASSISTANT_AGENT_STORE_DIR") or "").strip()
+    if override:
+        path = Path(override).resolve()
+    else:
+        path = sessions_file().parent / "cursor_agents"
+    path.mkdir(parents=True, exist_ok=True)
+    return path
+
+
+def setting_sources() -> list[str]:
+    raw = (os.environ.get("ASSISTANT_SETTING_SOURCES") or "project").strip()
+    if not raw or raw.lower() in {"none", "off", "false", "0"}:
+        return []
+    return [part.strip() for part in raw.split(",") if part.strip()]
+
+
+def local_agent_options():
+    """Shared LocalAgentOptions for create and resume (store + cwd must match)."""
+    from cursor_sdk import LocalAgentOptions, LocalAgentStoreConfig
+
+    return LocalAgentOptions(
+        cwd=str(workspace_root()),
+        setting_sources=setting_sources(),
+        store=LocalAgentStoreConfig(
+            type="sqlite",
+            root_dir=str(agent_store_dir()),
+        ),
+    )
 
 
 def sdk_installed() -> bool:
