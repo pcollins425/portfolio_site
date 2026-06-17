@@ -29,9 +29,12 @@ def _read_all() -> list[dict[str, Any]]:
     raw = path.read_text(encoding="utf-8").strip()
     if not raw:
         return []
-    data = json.loads(raw)
+    try:
+        data = json.loads(raw)
+    except json.JSONDecodeError:
+        return []
     if not isinstance(data, list):
-        raise RuntimeError(f"Invalid sessions store: {path}")
+        return []
     return data
 
 

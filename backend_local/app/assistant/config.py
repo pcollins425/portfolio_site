@@ -24,10 +24,14 @@ def workspace_root() -> Path:
 def sessions_file() -> Path:
     override = (os.environ.get("ASSISTANT_SESSIONS_FILE") or "").strip()
     if override:
-        return Path(override).resolve()
-    data_dir = workspace_root() / "data"
-    data_dir.mkdir(parents=True, exist_ok=True)
-    return data_dir / "assistant_sessions.json"
+        path = Path(override).resolve()
+    elif Path("/workspace").is_dir():
+        # Docker: keep session index off the git workspace mount (Windows bind mounts can be finicky).
+        path = Path("/app/data/assistant_sessions/assistant_sessions.json")
+    else:
+        path = workspace_root() / "data" / "assistant_sessions.json"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    return path
 
 
 def cursor_api_key() -> str | None:
@@ -39,10 +43,14 @@ def model_name() -> str:
     return (os.environ.get("ASSISTANT_MODEL") or "composer-2.5").strip()
 
 
-def sdk_installed() -> bool:
+def sdk_import_error() -> str | None:
     try:
         import cursor_sdk  # noqa: F401
 
-        return True
-    except ImportError:
-        return False
+        return None
+    except Exception as err:
+        return f"{type(err).__name__}: {err}"
+
+
+def sdk_installed() -> bool:
+    return sdk_import_error() is None

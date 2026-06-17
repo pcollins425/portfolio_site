@@ -27,5 +27,11 @@ services:
     # Assistant: host clone → /workspace (default: sibling ../cursor-assistant)
     # Optional ASSISTANT_WORKSPACE_HOST in backend_live/.env — use:
     #   docker compose --env-file backend_live/.env up -d --build
+    environment:
+      ASSISTANT_SESSIONS_FILE: /app/data/assistant_sessions/assistant_sessions.json
     volumes:
       - ${ASSISTANT_WORKSPACE_HOST:-../cursor-assistant}:/workspace:rw
+      - assistant_sessions:/app/data/assistant_sessions
+
+volumes:
+  assistant_sessions:

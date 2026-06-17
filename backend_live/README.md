@@ -104,5 +104,6 @@ Do **not** put **`CURSOR_API_KEY`** in the workspace `.env` unless you have a sp
 ### Notes
 
 - **`cursor-sdk`** ships **`cursor-sdk-bridge`** inside the image; no Cursor IDE install on the host.
-- The mount is **read-write** so agents can edit files and persist session index under **`/workspace/data/assistant_sessions.json`**.
+- The mount is **read-write** so agents can edit workspace files under **`/workspace`**.
+- Chat session index is stored in a **named Docker volume** at **`/app/data/assistant_sessions/`** (not in the git clone).
 - Static UI: run **`scripts/build_pages_publish.sh`** and deploy **`pages_publish/`** if **`assistant.html`** is not yet on Cloudflare Pages.
