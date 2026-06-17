@@ -13,6 +13,7 @@ Published to **`/dgsappv1/`** on Cloudflare Pages.
 | **Contracts** | Google sheet sync browse + detail drawer | `/api/contracts/*` |
 | **Warehouse** | Pivot grid + cell/row/column drill-down drawer | `/api/warehouse-inventory/pivot`, `/serials`, `/summary` |
 | **Operations** | `emaintdemov1` grid + drawer | `/api/emaint-demo/*`, optional Google auth |
+| **Assistant** | Chat + sessions + workspace files + `.env` secrets | `/api/assistant/*` (Cursor SDK local runtime) |
 
 Legacy standalone apps remain at `/dashboardtestv1/`, `/warehouseinventoryv1/`, `/emaintdemov1/` until cutover.
 
@@ -36,6 +37,7 @@ Open:
 - `http://localhost:8080/dashboard.html?api=http://127.0.0.1:9002`
 - `http://localhost:8080/warehouse.html?api=http://127.0.0.1:9002`
 - `http://localhost:8080/operations.html?t=projects&api=http://127.0.0.1:9002`
+- `http://localhost:8080/assistant.html?api=http://127.0.0.1:9002`
 
 Dashboard bundle loads from Vite on **port 5174** automatically on localhost (`npm run dev:dgsapp`). Subnav switches views without reload.
 
