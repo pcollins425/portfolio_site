@@ -52,3 +52,62 @@ Point your tunnel at this host/port. **`MSSQL_*`** = **`dashboard_perf_ro`** for
 The image sets **`API_HOST=0.0.0.0`** inside the container; you do not need to duplicate that in **`.env`** unless you override it.
 
 **Auto-redeploy after git push:** from repo root, **`bash scripts/deploy-backend-docker.sh`** (pull + down + up **`--build`**). For unattended updates, see **`scripts/README.md`** — cron polling (**`check-backend-updates.sh`**) or a GitHub webhook (**`github-webhook-listener.py`**).
+
+## Assistant (Cursor SDK) in Docker
+
+The **`/api/assistant/*`** routes and **`dgsappv1/assistant.html`** UI are already in this repo. In Docker, the API container needs two things beyond a normal deploy:
+
+1. **Mount the workspace** — `docker-compose.yml` maps **`${ASSISTANT_WORKSPACE_HOST}`** on the host → **`/workspace`** in the container.
+2. **`CURSOR_API_KEY`** in **`backend_live/.env`** — user or team service-account key from [Cursor Dashboard → Integrations](https://cursor.com/dashboard/integrations).
+
+### One-time setup (SQL server)
+
+```powershell
+# 1) Workspace clone (agent files, scripts, knowledge)
+cd "C:\Users\DGS Slot Server"
+git clone https://github.com/pcollins425/cursor-assistant.git
+# or: cd cursor-assistant && git pull origin main
+
+# 2) portfolio_site — compose host path (use WSL path if compose runs from bash/WSL)
+cd portfolio_site
+copy .env.example .env
+# WSL: ASSISTANT_WORKSPACE_HOST=/mnt/c/Users/DGS Slot Server/cursor-assistant
+# Win: ASSISTANT_WORKSPACE_HOST=C:/Users/DGS Slot Server/cursor-assistant
+
+# 3) API secrets
+copy backend_live\.env.example backend_live\.env
+# Add CURSOR_API_KEY=cursor_... to backend_live\.env
+# (Do not put ASSISTANT_WORKSPACE_HOST or CURSOR_API_KEY in repo-root .env)
+
+docker compose up -d --build
+```
+
+### Verify
+
+```bash
+curl -s http://127.0.0.1:9001/api/assistant/health
+```
+
+Expect **`workspace_exists: true`**, **`cursor_api_key_configured: true`**, **`cursor_sdk_installed: true`**.
+
+Inside the container (optional):
+
+```bash
+docker compose exec backend_live cursor-sdk-bridge --help
+docker compose exec backend_live ls /workspace/agents
+```
+
+### Secret locations (two files)
+
+| Secret | File | Purpose |
+|--------|------|---------|
+| **`CURSOR_API_KEY`** | **`backend_live/.env`** | SDK auth — stays on the API server, not in git |
+| MSSQL, Gmail, etc. | **`cursor-assistant/.env`** on host (visible in container as **`/workspace/.env`**) | Agent runtime; editable via Assistant UI **Secrets** drawer |
+
+Do **not** put **`CURSOR_API_KEY`** in the workspace `.env` unless you have a specific reason — keep it in **`backend_live/.env`** only.
+
+### Notes
+
+- **`cursor-sdk`** ships **`cursor-sdk-bridge`** inside the image; no Cursor IDE install on the host.
+- The mount is **read-write** so agents can edit files and persist session index under **`/workspace/data/assistant_sessions.json`**.
+- Static UI: run **`scripts/build_pages_publish.sh`** and deploy **`pages_publish/`** if **`assistant.html`** is not yet on Cloudflare Pages.

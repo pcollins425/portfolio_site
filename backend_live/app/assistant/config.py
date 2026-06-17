@@ -11,6 +11,7 @@ def workspace_root() -> Path:
     # Dev fallback: sibling cursor-assistant on E: (adjust on SQL server via env).
     here = Path(__file__).resolve()
     for candidate in (
+        Path("/workspace"),  # Docker Compose mount (see repo-root docker-compose.yml)
         Path("E:/cursor-assistant"),
         Path("E:/cursor_assistant"),
         here.parents[4] / "cursor-assistant",

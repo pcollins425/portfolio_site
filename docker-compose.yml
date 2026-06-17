@@ -1,6 +1,8 @@
 # **`backend_live`** behind Cloudflare Tunnel (or local smoke test).
 #
 # Prerequisite: **`backend_live/.env`** from **`.env.example`** (ignored by Git).
+# Assistant: copy **`.env.example`** → **`.env`** at repo root and set **`ASSISTANT_WORKSPACE_HOST`**
+# to the host path of your **cursor-assistant** clone.
 #
 # Typical (same machine as **`cloudflared`**):
 #   docker compose up -d --build
@@ -21,3 +23,6 @@ services:
     env_file:
       - path: ./backend_live/.env
         required: false
+    # Assistant: host clone → /workspace (set ASSISTANT_WORKSPACE_HOST in repo-root .env)
+    volumes:
+      - ${ASSISTANT_WORKSPACE_HOST}:/workspace:rw
