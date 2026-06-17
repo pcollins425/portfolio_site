@@ -10,6 +10,7 @@
 # Env:
 #   DEPLOY_BRANCH=main
 #   DEPLOY_LOCK_FILE=/tmp/portfolio-backend-deploy.lock
+#   COMPOSE_ENV_FILE=backend_live/.env
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -17,6 +18,7 @@ cd "$ROOT"
 
 BRANCH="${DEPLOY_BRANCH:-main}"
 LOCK_FILE="${DEPLOY_LOCK_FILE:-/tmp/portfolio-backend-deploy.lock}"
+COMPOSE_ENV_FILE="${COMPOSE_ENV_FILE:-backend_live/.env}"
 DO_PULL=true
 
 while [[ $# -gt 0 ]]; do
@@ -52,11 +54,16 @@ if [[ "$DO_PULL" == true ]]; then
   git pull --ff-only origin "$BRANCH"
 fi
 
+COMPOSE_ARGS=()
+if [[ -f "$COMPOSE_ENV_FILE" ]]; then
+  COMPOSE_ARGS=(--env-file "$COMPOSE_ENV_FILE")
+fi
+
 log "Stopping containers..."
-docker compose down
+docker compose "${COMPOSE_ARGS[@]}" down
 
 log "Building and starting containers..."
-docker compose up -d --build
+docker compose "${COMPOSE_ARGS[@]}" up -d --build
 
 log "Waiting for /health..."
 for _ in $(seq 1 30); do

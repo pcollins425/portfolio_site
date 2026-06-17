@@ -57,7 +57,7 @@ The image sets **`API_HOST=0.0.0.0`** inside the container; you do not need to d
 
 The **`/api/assistant/*`** routes and **`dgsappv1/assistant.html`** UI are already in this repo. In Docker, the API container needs two things beyond a normal deploy:
 
-1. **Mount the workspace** — `docker-compose.yml` maps the host clone → **`/workspace`** in the container. Default: **`../cursor-assistant`** (sibling folder). Override with **`ASSISTANT_WORKSPACE_HOST`** in **`portfolio_site/.env`** at the **repo root** (not **`backend_live/.env`**).
+1. **Mount the workspace** — default **`../cursor-assistant`** (sibling folder). Override with **`ASSISTANT_WORKSPACE_HOST`** in **`backend_live/.env`** and run compose with **`--env-file backend_live/.env`** (or use **`scripts/deploy-backend-docker.sh`**, which does this automatically).
 2. **`CURSOR_API_KEY`** in **`backend_live/.env`** — user or team service-account key from [Cursor Dashboard → Integrations](https://cursor.com/dashboard/integrations).
 
 ### One-time setup (SQL server)
@@ -68,18 +68,13 @@ cd "C:\Users\DGS Slot Server"
 git clone https://github.com/pcollins425/cursor-assistant.git
 # or: cd cursor-assistant && git pull origin main
 
-# 2) portfolio_site — compose host path (use WSL path if compose runs from bash/WSL)
-cd portfolio_site
-copy .env.example .env
-# WSL: ASSISTANT_WORKSPACE_HOST=/mnt/c/Users/DGS Slot Server/cursor-assistant
-# Win: ASSISTANT_WORKSPACE_HOST=C:/Users/DGS Slot Server/cursor-assistant
+# 2) portfolio_site — pull latest (sibling ../cursor-assistant mount is automatic)
 
-# 3) API secrets
-copy backend_live\.env.example backend_live\.env
-# Add CURSOR_API_KEY=cursor_... to backend_live\.env
-# (Do not put ASSISTANT_WORKSPACE_HOST or CURSOR_API_KEY in repo-root .env)
+# 3) API secrets in backend_live\.env only
+#    CURSOR_API_KEY=cursor_...
+#    Remove ASSISTANT_WORKSPACE_HOST unless the clone is not a sibling folder
 
-docker compose up -d --build
+docker compose --env-file backend_live\.env up -d --build
 ```
 
 ### Verify
