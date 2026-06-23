@@ -469,42 +469,60 @@ body.dgs-contracts-v2 .dgs-v2-main {
   padding: 4px 0 8px;
 }
 
-.dgs-v2-serial-table {
-  width: 100%;
-  border-collapse: collapse;
+.dgs-v2-serial-scroll {
+  display: flex;
+  flex-direction: column;
+  max-height: 220px;
+  overflow: hidden;
+  border: 1px solid var(--dgs-v2-border-soft);
+  border-radius: 8px;
+  background: var(--dgs-v2-card);
+}
+
+.dgs-v2-serial-head {
+  flex-shrink: 0;
+  background: var(--dgs-v2-card-head);
+  box-shadow: 0 1px 0 var(--dgs-v2-border-soft);
+}
+
+.dgs-v2-serial-head-row,
+.dgs-v2-serial-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) minmax(0, 0.75fr);
   font-size: 11px;
 }
 
-.dgs-v2-serial-table thead th {
+.dgs-v2-serial-head-row > * {
   padding: 6px 10px;
-  background-color: var(--dgs-v2-card-head);
   color: var(--dgs-v2-text-muted);
   font-size: 10px;
   text-transform: uppercase;
   text-align: left;
-  border-top: 1px solid var(--dgs-v2-border-soft);
-  position: sticky;
-  top: 0;
-  z-index: 2;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35);
 }
 
-.dgs-v2-serial-table tbody td {
+.dgs-v2-serial-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.dgs-v2-serial-row > * {
   padding: 6px 10px;
   border-top: 1px solid var(--dgs-v2-border-soft);
   color: var(--dgs-v2-text);
+  background: var(--dgs-v2-card);
 }
 
-.dgs-v2-serial-table tbody td.mono {
+.dgs-v2-serial-row .mono {
   font-family: ui-monospace, monospace;
   font-size: 10px;
 }
 
-.dgs-v2-serial-table tbody tr.is-missing td {
+.dgs-v2-serial-row.is-missing > * {
   color: #fca5a5;
 }
 
-.dgs-v2-serial-table tbody tr.is-linked td:last-child {
+.dgs-v2-serial-row.is-linked > *:last-child {
   color: #86efac;
 }
 

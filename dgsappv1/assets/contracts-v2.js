@@ -297,27 +297,27 @@
         <p class="dgs-v2-lines-status" style="margin:0 0 8px;">
           ${data.linked.toLocaleString()} linked · ${data.missing.toLocaleString()} missing asset
         </p>
-        <table class="dgs-v2-serial-table">
-          <thead>
-            <tr>
-              <th>Serial</th>
-              <th>Asset</th>
-              <th>Status</th>
-            </tr>
-          </thead>
-          <tbody>
+        <div class="dgs-v2-serial-scroll">
+          <div class="dgs-v2-serial-head">
+            <div class="dgs-v2-serial-head-row">
+              <div>Serial</div>
+              <div>Asset</div>
+              <div>Status</div>
+            </div>
+          </div>
+          <div class="dgs-v2-serial-body">
             ${data.serials
               .map(
                 (s) => `
-              <tr class="${s.linked ? "is-linked" : "is-missing"}">
-                <td class="mono">${esc(s.serial_number)}</td>
-                <td class="mono">${esc(s.asset_id || "—")}</td>
-                <td>${s.linked ? "Linked" : "Missing"}</td>
-              </tr>`
+              <div class="dgs-v2-serial-row ${s.linked ? "is-linked" : "is-missing"}">
+                <div class="mono">${esc(s.serial_number)}</div>
+                <div class="mono">${esc(s.asset_id || "—")}</div>
+                <div>${s.linked ? "Linked" : "Missing"}</div>
+              </div>`
               )
               .join("")}
-          </tbody>
-        </table>`;
+          </div>
+        </div>`;
     } catch (err) {
       panel.innerHTML = `<span class="dgs-v2-lines-status" style="color:#fca5a5;">${esc(err.message || String(err))}</span>`;
     }
