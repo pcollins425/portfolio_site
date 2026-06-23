@@ -478,11 +478,42 @@ body.dgs-contracts-v2 .dgs-v2-main {
   border-bottom: 1px solid var(--dgs-v2-border-soft);
 }
 
+.dgs-v2-serial-table-shell {
+  position: relative;
+}
+
+.dgs-v2-serial-sticky-mask {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  height: 29px;
+  margin: 0 0 -29px;
+  background: var(--dgs-v2-card);
+  pointer-events: none;
+  isolation: isolate;
+}
+
+.dgs-v2-serial-sticky-mask::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 100%;
+  height: 100vh;
+  background: var(--dgs-v2-card);
+  pointer-events: none;
+}
+
 .dgs-v2-serial-table {
   width: 100%;
   border-collapse: separate;
   border-spacing: 0;
   font-size: 11px;
+}
+
+.dgs-v2-serial-table tbody {
+  position: relative;
+  z-index: 0;
 }
 
 .dgs-v2-serial-table thead th {

@@ -299,14 +299,16 @@
       }
       els.serialExpansionMeta.textContent = `${line?.asset_description || "Line"} · ${data.linked.toLocaleString()} linked · ${data.missing.toLocaleString()} missing asset`;
       els.serialExpansionBody.innerHTML = `
-        <table class="dgs-v2-serial-table">
-          <thead>
-            <tr>
-              <th>Serial</th>
-              <th>Asset</th>
-              <th>Status</th>
-            </tr>
-          </thead>
+        <div class="dgs-v2-serial-table-shell">
+          <div class="dgs-v2-serial-sticky-mask" aria-hidden="true"></div>
+          <table class="dgs-v2-serial-table">
+            <thead>
+              <tr>
+                <th>Serial</th>
+                <th>Asset</th>
+                <th>Status</th>
+              </tr>
+            </thead>
           <tbody>
             ${data.serials
               .map(
@@ -319,7 +321,8 @@
               )
               .join("")}
           </tbody>
-        </table>`;
+        </table>
+        </div>`;
     } catch (err) {
       els.serialExpansionMeta.textContent = line?.asset_description || "Line";
       els.serialExpansionBody.innerHTML = `<span class="dgs-v2-lines-status" style="color:#fca5a5;">${esc(err.message || String(err))}</span>`;
