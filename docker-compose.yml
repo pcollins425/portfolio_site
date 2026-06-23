@@ -35,7 +35,7 @@ services:
       - assistant_sessions:/app/data/assistant_sessions
       # Vendor logos / cabinet images — host NAS path → fixed path inside container.
       # Set MEDIA_ROOT_HOST in backend_live/.env (see .env.example). MEDIA_ROOT=/media/tableau-images
-      - ${MEDIA_ROOT_HOST}:/media/tableau-images:ro
+      - "${MEDIA_ROOT_HOST:-M:/Paul Collins/tableau images}:/media/tableau-images:ro"
 
 volumes:
   assistant_sessions:
