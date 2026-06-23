@@ -270,6 +270,52 @@
     if (els.serialExpansionBody) els.serialExpansionBody.innerHTML = "";
   }
 
+  let serialMaskScrollBound = false;
+
+  function ensureSerialMaskScrollListener() {
+    if (serialMaskScrollBound) return;
+    serialMaskScrollBound = true;
+    els.detailBody.addEventListener("scroll", updateSerialStickyMask, { passive: true });
+    window.addEventListener("resize", updateSerialStickyMask, { passive: true });
+  }
+
+  function updateSerialStickyMask() {
+    if (!els.serialExpansion || els.serialExpansion.hidden) return;
+    const shell = els.serialExpansionBody?.querySelector(".dgs-v2-serial-table-shell");
+    if (!shell) return;
+
+    const mask = shell.querySelector(".dgs-v2-serial-sticky-mask");
+    const thead = shell.querySelector(".dgs-v2-serial-table thead");
+    const scrollEl = els.detailBody;
+    if (!mask || !thead || !scrollEl) return;
+
+    const headerH = thead.getBoundingClientRect().height;
+    if (!headerH) return;
+
+    const scrollRect = scrollEl.getBoundingClientRect();
+    const theadTop = thead.getBoundingClientRect().top;
+    const padTop = parseFloat(getComputedStyle(scrollEl).paddingTop) || 0;
+    const stickTop = scrollRect.top + padTop;
+    const stuck = theadTop <= stickTop + 1;
+
+    let extension = 0;
+    if (stuck) {
+      extension = Math.max(0, theadTop - scrollRect.top);
+    }
+
+    mask.style.setProperty("--serial-head-h", `${headerH}px`);
+    mask.style.setProperty("--serial-mask-h", `${headerH + extension}px`);
+    mask.style.top = extension > 0 ? `${-extension}px` : "0px";
+  }
+
+  function scheduleSerialStickyMaskUpdate() {
+    ensureSerialMaskScrollListener();
+    requestAnimationFrame(() => {
+      updateSerialStickyMask();
+      requestAnimationFrame(updateSerialStickyMask);
+    });
+  }
+
   function lineByKey(lineKey) {
     return (state.detail?.lines || []).find((line) => line.reference_key === lineKey);
   }
@@ -323,6 +369,7 @@
           </tbody>
         </table>
         </div>`;
+      scheduleSerialStickyMaskUpdate();
     } catch (err) {
       els.serialExpansionMeta.textContent = line?.asset_description || "Line";
       els.serialExpansionBody.innerHTML = `<span class="dgs-v2-lines-status" style="color:#fca5a5;">${esc(err.message || String(err))}</span>`;

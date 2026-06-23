@@ -487,10 +487,8 @@ body.dgs-contracts-v2 .dgs-v2-main {
   top: 0;
   z-index: 1;
   box-sizing: border-box;
-  padding: 6px 10px;
-  font-size: 10px;
-  line-height: 1.2;
-  margin: 0 0 calc(-12px - 1.2em);
+  height: var(--serial-mask-h, 0px);
+  margin: 0 0 calc(-1 * var(--serial-head-h, 0px));
   background: var(--dgs-v2-card);
   pointer-events: none;
 }
