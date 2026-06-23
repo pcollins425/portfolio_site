@@ -19,6 +19,7 @@
         { id: "warehouse", label: "Warehouse", href: "warehouse.html" },
         { id: "slot_master", label: "Slot Master", href: "slot_master.html" },
         { id: "contracts", label: "Contracts", href: "contracts-v2.html" },
+        { id: "assets", label: "Assets", href: "assets-v2.html" },
       ],
     },
     {

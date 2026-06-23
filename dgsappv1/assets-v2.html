@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Assets — DGS Application</title>
+  <link rel="stylesheet" href="assets/dgs.css" />
+  <link rel="stylesheet" href="assets/dgs-v2.css" />
+</head>
+<body class="dgs-app dgs-assets-v2">
+  <aside class="dgs-sidebar" id="dgs-sidebar">
+    <div class="dgs-sidebar-brand">
+      <div class="dgs-brand-text">
+        <span class="dgs-brand-eyebrow">Dynamic Gaming Solutions</span>
+        <span class="dgs-brand-title">DGS Application</span>
+      </div>
+      <button type="button" id="dgs-rail-toggle" class="dgs-rail-toggle" aria-expanded="true" title="Collapse navigation">◧</button>
+    </div>
+    <nav class="dgs-sidebar-nav" id="dgs-app-nav" aria-label="Application"></nav>
+    <div class="dgs-sidebar-account" id="sidebar-account" hidden>
+      <span class="dgs-sidebar-user" id="user-label"></span>
+      <button type="button" id="btn-sign-out" class="dgs-sidebar-signout">Sign out</button>
+    </div>
+  </aside>
+
+  <div id="dgs-nav-flyout" class="dgs-nav-flyout" hidden></div>
+
+  <div class="dgs-main dgs-v2-main">
+    <header class="dgs-v2-page-header">
+      <div>
+        <p class="dgs-v2-eyebrow">eMaint COMPINFO</p>
+        <h1>Assets</h1>
+        <p class="dgs-v2-subtitle">assets-v2.html · <code>inventory.compinfo_landing</code> · vendor &amp; cabinet images</p>
+      </div>
+      <div class="dgs-v2-pilot-note">Split layout · prep status updates</div>
+    </header>
+
+    <div id="error-box" class="dgs-v2-error" hidden></div>
+
+    <div class="dgs-v2-metrics" id="stat-row" aria-label="Summary statistics">
+      <div class="dgs-v2-metric">
+        <div class="dgs-v2-metric-label">Total assets</div>
+        <div class="dgs-v2-metric-value" id="stat-total">—</div>
+      </div>
+      <div class="dgs-v2-metric">
+        <div class="dgs-v2-metric-label">Properties</div>
+        <div class="dgs-v2-metric-value" id="stat-properties">—</div>
+      </div>
+      <div class="dgs-v2-metric">
+        <div class="dgs-v2-metric-label">With status</div>
+        <div class="dgs-v2-metric-value" id="stat-with-status">—</div>
+      </div>
+      <div class="dgs-v2-metric dgs-v2-metric--warn">
+        <div class="dgs-v2-metric-label">Missing asset link</div>
+        <div class="dgs-v2-metric-value" id="stat-missing-link">—</div>
+      </div>
+    </div>
+
+    <div class="dgs-v2-split">
+      <section class="dgs-v2-list-panel">
+        <div class="dgs-v2-toolbar">
+          <input id="search-input" type="search" placeholder="Search asset ID, serial, title, property…" autocomplete="off" />
+          <button id="search-btn" type="button" class="dgs-v2-btn dgs-v2-btn--primary">Search</button>
+          <button id="clear-search" type="button" class="dgs-v2-btn">Clear</button>
+        </div>
+        <div class="dgs-v2-grid-wrap">
+          <table class="dgs-v2-grid" id="assets-table">
+            <thead>
+              <tr>
+                <th>Asset ID</th>
+                <th>Serial</th>
+                <th>Title</th>
+                <th>Property</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody id="assets-tbody"></tbody>
+          </table>
+        </div>
+        <div class="dgs-v2-list-status" id="list-status"></div>
+      </section>
+
+      <aside class="dgs-v2-detail" id="detail-panel">
+        <div class="dgs-v2-image-card" id="image-card">
+          <div class="dgs-v2-image-hero">
+            <div class="dgs-v2-vendor-logo" id="vendor-logo">
+              <span class="placeholder">Select an asset</span>
+            </div>
+            <div class="dgs-v2-cabinet-row dgs-v2-cabinet-row--single" id="cabinet-row"></div>
+          </div>
+          <div class="dgs-v2-image-caption">
+            <div class="label">Selected asset</div>
+            <div class="title" id="card-title">—</div>
+            <div class="meta" id="card-meta">Choose a row from the list</div>
+          </div>
+        </div>
+
+        <div class="dgs-v2-detail-body empty" id="detail-body">
+          <p id="detail-empty-msg">Select an asset to view fields and prep status.</p>
+          <div id="detail-content" hidden>
+            <div class="dgs-v2-section-label">Asset</div>
+            <dl class="dgs-v2-fields" id="detail-fields"></dl>
+            <div class="dgs-v2-section-label">Prep status</div>
+            <div class="dgs-v2-prep-panel" id="prep-panel">
+              <p class="dgs-v2-lines-status" id="prep-hint">Warehouse prep stage — updates eMaint status.</p>
+              <div class="dgs-v2-prep-actions" id="prep-actions"></div>
+              <p class="dgs-v2-lines-status" id="prep-status"></p>
+            </div>
+          </div>
+        </div>
+      </aside>
+    </div>
+  </div>
+
+  <script src="assets/auth.js"></script>
+  <script src="assets/shell.js"></script>
+  <script src="assets/assets-v2.js"></script>
+  <script>DGS.boot("assets", () => AssetsV2.init());</script>
+</body>
+</html>

@@ -7,7 +7,6 @@
     "projects",
     "work_orders",
     "field_techs",
-    "compinfo",
     "inventory",
     "purchase_orders",
   ];
@@ -1245,6 +1244,13 @@
 
   async function initTablePage() {
     syncAuthState();
+
+    if (TABLE_ID === "compinfo") {
+      const url = new URL("assets-v2.html", window.location.href);
+      if (params.get("api")) url.searchParams.set("api", params.get("api"));
+      window.location.replace(url.pathname + url.search);
+      return;
+    }
 
     state.config = await api("/api/emaint-demo/config");
     state.table = state.config.tables.find((t) => t.id === TABLE_ID);
