@@ -8,6 +8,9 @@
 # Typical (same machine as **`cloudflared`**):
 #   docker compose --env-file backend_live/.env up -d --build
 #
+# **`backend_live/.env`:** set `MEDIA_ROOT=/media/tableau-images` (container path).
+# NAS bind mount is configured below (edit source path if your M: layout differs).
+#
 # Smoke test:
 #   curl http://127.0.0.1:9001/health
 
@@ -33,9 +36,8 @@ services:
     volumes:
       - ${ASSISTANT_WORKSPACE_HOST:-../cursor-assistant}:/workspace:rw
       - assistant_sessions:/app/data/assistant_sessions
-      # Vendor logos / cabinet images — host NAS path → fixed path inside container.
-      # Set MEDIA_ROOT_HOST in backend_live/.env (see .env.example). MEDIA_ROOT=/media/tableau-images
-      - "${MEDIA_ROOT_HOST:-M:/Paul Collins/tableau images}:/media/tableau-images:ro"
+      # NAS tableau images (Contracts media). Host M: → /media/tableau-images in container.
+      - "M:/Paul Collins/tableau images:/media/tableau-images:ro"
 
 volumes:
   assistant_sessions:
