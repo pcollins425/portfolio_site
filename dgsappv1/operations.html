@@ -7,10 +7,13 @@
   <link rel="stylesheet" href="assets/dgs.css" />
 </head>
 <body class="dgs-app">
-  <aside class="dgs-sidebar">
+  <aside class="dgs-sidebar" id="dgs-sidebar">
     <div class="dgs-sidebar-brand">
-      <span class="dgs-brand-title">DGS Application</span>
-      <span class="dgs-brand-sub">Operations</span>
+      <div class="dgs-brand-text">
+        <span class="dgs-brand-eyebrow">Dynamic Gaming Solutions</span>
+        <span class="dgs-brand-title">DGS Application</span>
+      </div>
+      <button type="button" id="dgs-rail-toggle" class="dgs-rail-toggle" aria-expanded="true" title="Collapse navigation">◧</button>
     </div>
     <nav class="dgs-sidebar-nav" id="dgs-app-nav" aria-label="Application"></nav>
     <div class="dgs-sidebar-account" id="sidebar-account" hidden>
@@ -18,6 +21,8 @@
       <button type="button" id="btn-sign-out" class="dgs-sidebar-signout">Sign out</button>
     </div>
   </aside>
+
+  <div id="dgs-nav-flyout" class="dgs-nav-flyout" hidden></div>
 
   <div class="dgs-main">
     <header class="page-header">

@@ -4,34 +4,35 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Contracts — DGS Application</title>
+  <link rel="stylesheet" href="assets/dgs.css" />
   <link rel="stylesheet" href="assets/dgs-v2.css" />
 </head>
-<body class="dgs-v2-app">
-  <aside class="dgs-v2-sidebar" id="dgs-v2-sidebar">
-    <div class="dgs-v2-sidebar-brand">
-      <div class="dgs-v2-brand-text">
-        <span class="dgs-v2-brand-eyebrow">Dynamic Gaming Solutions</span>
-        <span class="dgs-v2-brand-title">DGS Application</span>
+<body class="dgs-app dgs-contracts-v2">
+  <aside class="dgs-sidebar" id="dgs-sidebar">
+    <div class="dgs-sidebar-brand">
+      <div class="dgs-brand-text">
+        <span class="dgs-brand-eyebrow">Dynamic Gaming Solutions</span>
+        <span class="dgs-brand-title">DGS Application</span>
       </div>
-      <button type="button" id="dgs-v2-rail-toggle" class="dgs-v2-rail-toggle" aria-expanded="true" title="Collapse navigation">◧</button>
+      <button type="button" id="dgs-rail-toggle" class="dgs-rail-toggle" aria-expanded="true" title="Collapse navigation">◧</button>
     </div>
-    <nav class="dgs-v2-nav" id="dgs-v2-nav" aria-label="Application"></nav>
-    <div class="dgs-v2-sidebar-account" id="sidebar-account" hidden>
-      <span class="dgs-v2-sidebar-user" id="user-label"></span>
-      <button type="button" id="btn-sign-out" class="dgs-v2-sidebar-signout">Sign out</button>
+    <nav class="dgs-sidebar-nav" id="dgs-app-nav" aria-label="Application"></nav>
+    <div class="dgs-sidebar-account" id="sidebar-account" hidden>
+      <span class="dgs-sidebar-user" id="user-label"></span>
+      <button type="button" id="btn-sign-out" class="dgs-sidebar-signout">Sign out</button>
     </div>
   </aside>
 
-  <div id="dgs-v2-flyout" class="dgs-v2-flyout" hidden></div>
+  <div id="dgs-nav-flyout" class="dgs-nav-flyout" hidden></div>
 
-  <main class="dgs-v2-main">
+  <div class="dgs-main dgs-v2-main">
     <header class="dgs-v2-page-header">
       <div>
         <p class="dgs-v2-eyebrow">Vendor agreements</p>
         <h1>Contracts</h1>
         <p class="dgs-v2-subtitle">contracts-v2.html · <code>inventory.contract</code> · read-only browse</p>
       </div>
-      <div class="dgs-v2-pilot-note">Pilot: split layout · dark theme · NAS vendor images</div>
+      <div class="dgs-v2-pilot-note">Split layout · vendor images from NAS</div>
     </header>
 
     <div id="error-box" class="dgs-v2-error" hidden></div>
@@ -119,11 +120,11 @@
         </div>
       </aside>
     </div>
-  </main>
+  </div>
 
   <script src="assets/auth.js"></script>
-  <script src="assets/shell-v2.js"></script>
+  <script src="assets/shell.js"></script>
   <script src="assets/contracts-v2.js"></script>
-  <script>DGSv2.boot("contracts", () => ContractsV2.init());</script>
+  <script>DGS.boot("contracts", () => ContractsV2.init());</script>
 </body>
 </html>

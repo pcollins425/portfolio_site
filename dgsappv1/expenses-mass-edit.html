@@ -8,10 +8,13 @@
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/tabulator-tables@6.4.0/dist/css/tabulator.min.css" />
 </head>
 <body class="dgs-app dgs-mass-edit">
-  <aside class="dgs-sidebar">
+  <aside class="dgs-sidebar" id="dgs-sidebar">
     <div class="dgs-sidebar-brand">
-      <span class="dgs-brand-title">DGS Application</span>
-      <span class="dgs-brand-sub">Finance</span>
+      <div class="dgs-brand-text">
+        <span class="dgs-brand-eyebrow">Dynamic Gaming Solutions</span>
+        <span class="dgs-brand-title">DGS Application</span>
+      </div>
+      <button type="button" id="dgs-rail-toggle" class="dgs-rail-toggle" aria-expanded="true" title="Collapse navigation">◧</button>
     </div>
     <nav class="dgs-sidebar-nav" id="dgs-app-nav" aria-label="Application"></nav>
     <div class="dgs-sidebar-account" id="sidebar-account" hidden>
@@ -19,6 +22,8 @@
       <button type="button" id="btn-sign-out" class="dgs-sidebar-signout">Sign out</button>
     </div>
   </aside>
+
+  <div id="dgs-nav-flyout" class="dgs-nav-flyout" hidden></div>
 
   <div class="dgs-main dgs-mass-edit-main">
     <header class="page-header mass-edit-header">
@@ -122,6 +127,6 @@
   <script src="https://cdn.jsdelivr.net/npm/tabulator-tables@6.4.0/dist/js/tabulator.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <script src="assets/expenses-mass-edit.js"></script>
-  <script>DGS.boot("expenses", () => ExpensesMassEdit.init());</script>
+  <script>DGS.boot("expenses_mass", () => ExpensesMassEdit.init());</script>
 </body>
 </html>

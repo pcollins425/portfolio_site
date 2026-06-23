@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  const API_BASE = (window.DGSv2 ? DGSv2.apiBase() : "").replace(/\/$/, "") ||
+  const API_BASE = (window.DGS ? DGS.apiBase() : "").replace(/\/$/, "") ||
     new URLSearchParams(window.location.search).get("api")?.replace(/\/$/, "") ||
     "https://api.collinsmediallc.com";
 
