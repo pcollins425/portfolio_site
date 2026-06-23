@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Contracts — DGS Application</title>
+  <link rel="stylesheet" href="assets/dgs-v2.css" />
+</head>
+<body class="dgs-v2-app">
+  <aside class="dgs-v2-sidebar" id="dgs-v2-sidebar">
+    <div class="dgs-v2-sidebar-brand">
+      <div class="dgs-v2-brand-text">
+        <span class="dgs-v2-brand-eyebrow">Dynamic Gaming Solutions</span>
+        <span class="dgs-v2-brand-title">DGS Application</span>
+      </div>
+      <button type="button" id="dgs-v2-rail-toggle" class="dgs-v2-rail-toggle" aria-expanded="true" title="Collapse navigation">◧</button>
+    </div>
+    <nav class="dgs-v2-nav" id="dgs-v2-nav" aria-label="Application"></nav>
+    <div class="dgs-v2-sidebar-account" id="sidebar-account" hidden>
+      <span class="dgs-v2-sidebar-user" id="user-label"></span>
+      <button type="button" id="btn-sign-out" class="dgs-v2-sidebar-signout">Sign out</button>
+    </div>
+  </aside>
+
+  <div id="dgs-v2-flyout" class="dgs-v2-flyout" hidden></div>
+
+  <main class="dgs-v2-main">
+    <header class="dgs-v2-page-header">
+      <div>
+        <p class="dgs-v2-eyebrow">Vendor agreements</p>
+        <h1>Contracts</h1>
+        <p class="dgs-v2-subtitle">contracts-v2.html · <code>inventory.contract</code> · read-only browse</p>
+      </div>
+      <div class="dgs-v2-pilot-note">Pilot: split layout · dark theme · NAS vendor images</div>
+    </header>
+
+    <div id="error-box" class="dgs-v2-error" hidden></div>
+
+    <div class="dgs-v2-metrics" id="stat-row" aria-label="Summary statistics">
+      <div class="dgs-v2-metric">
+        <div class="dgs-v2-metric-label">Total agreements</div>
+        <div class="dgs-v2-metric-value" id="stat-agreements">—</div>
+      </div>
+      <div class="dgs-v2-metric">
+        <div class="dgs-v2-metric-label">Contract lines</div>
+        <div class="dgs-v2-metric-value" id="stat-lines">—</div>
+      </div>
+      <div class="dgs-v2-metric">
+        <div class="dgs-v2-metric-label">Linked serials</div>
+        <div class="dgs-v2-metric-value" id="stat-serials">—</div>
+      </div>
+      <div class="dgs-v2-metric dgs-v2-metric--warn">
+        <div class="dgs-v2-metric-label">Missing assets</div>
+        <div class="dgs-v2-metric-value" id="stat-missing">—</div>
+      </div>
+    </div>
+
+    <div class="dgs-v2-split">
+      <section class="dgs-v2-list-panel">
+        <div class="dgs-v2-toolbar">
+          <input id="search-input" type="search" placeholder="Search agreement ID, vendor, SO#…" autocomplete="off" />
+          <button id="search-btn" type="button" class="dgs-v2-btn dgs-v2-btn--primary">Search</button>
+          <button id="clear-search" type="button" class="dgs-v2-btn">Clear</button>
+        </div>
+        <div class="dgs-v2-grid-wrap">
+          <table class="dgs-v2-grid" id="contracts-table">
+            <thead>
+              <tr>
+                <th>Agreement</th>
+                <th>Vendor</th>
+                <th>SO#</th>
+                <th>Date</th>
+                <th>Total</th>
+              </tr>
+            </thead>
+            <tbody id="contracts-tbody"></tbody>
+          </table>
+        </div>
+        <div class="dgs-v2-list-status" id="list-status"></div>
+      </section>
+
+      <aside class="dgs-v2-detail" id="detail-panel">
+        <div class="dgs-v2-image-card" id="image-card">
+          <div class="dgs-v2-image-hero">
+            <div class="dgs-v2-vendor-logo" id="vendor-logo">
+              <span class="placeholder">Select an agreement</span>
+            </div>
+            <div class="dgs-v2-cabinet-row" id="cabinet-row"></div>
+          </div>
+          <div class="dgs-v2-image-caption">
+            <div class="label">Selected agreement</div>
+            <div class="title" id="card-title">—</div>
+            <div class="meta" id="card-meta">Choose a row from the list</div>
+          </div>
+        </div>
+
+        <div class="dgs-v2-detail-body empty" id="detail-body">
+          <p id="detail-empty-msg">Select an agreement to view header fields and line items.</p>
+          <div id="detail-content" hidden>
+            <div class="dgs-v2-section-label">Header</div>
+            <dl class="dgs-v2-fields" id="detail-fields"></dl>
+            <div class="dgs-v2-section-label">Line items</div>
+            <div class="dgs-v2-lines-wrap">
+              <table class="dgs-v2-lines-table">
+                <thead>
+                  <tr>
+                    <th>Description</th>
+                    <th>Cabinet</th>
+                    <th>Qty</th>
+                    <th>Cost</th>
+                    <th>Serials</th>
+                  </tr>
+                </thead>
+                <tbody id="lines-tbody"></tbody>
+              </table>
+            </div>
+            <p class="dgs-v2-lines-status" id="lines-status"></p>
+          </div>
+        </div>
+      </aside>
+    </div>
+  </main>
+
+  <script src="assets/auth.js"></script>
+  <script src="assets/shell-v2.js"></script>
+  <script src="assets/contracts-v2.js"></script>
+  <script>DGSv2.boot("contracts", () => ContractsV2.init());</script>
+</body>
+</html>

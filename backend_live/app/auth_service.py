@@ -56,14 +56,73 @@ def google_client_secret() -> str:
 
 
 def oauth_redirect_uri() -> str:
+    local = (os.environ.get("EMAINT_DEMO_OAUTH_REDIRECT_URI_LOCAL") or "").strip()
+    if local:
+        return local
     value = (os.environ.get("EMAINT_DEMO_OAUTH_REDIRECT_URI") or "").strip()
     if not value:
         raise RuntimeError("EMAINT_DEMO_OAUTH_REDIRECT_URI is not configured")
     return value
 
 
+def _local_oauth_enabled() -> bool:
+    return bool((os.environ.get("EMAINT_DEMO_OAUTH_REDIRECT_URI_LOCAL") or "").strip())
+
+
+def frontend_app_path() -> str:
+    explicit = (os.environ.get("EMAINT_DEMO_FRONTEND_APP_PATH") or "").strip()
+    if explicit:
+        return explicit if explicit.startswith("/") else f"/{explicit}"
+    if _local_oauth_enabled():
+        return "/"
+    return "/dgsappv1"
+
+
+def frontend_origins() -> list[str]:
+    origins: list[str] = []
+    local = (os.environ.get("EMAINT_DEMO_FRONTEND_ORIGIN_LOCAL") or "").strip()
+    if local:
+        origins.append(local.rstrip("/"))
+    raw = (os.environ.get("EMAINT_DEMO_FRONTEND_ORIGIN") or "").strip()
+    if raw:
+        origins.extend(part.strip().rstrip("/") for part in raw.split(",") if part.strip())
+    if not origins:
+        if _local_oauth_enabled():
+            origins.append("http://localhost:8080")
+        else:
+            origins.append("https://www.collinsmediallc.com")
+    seen: set[str] = set()
+    out: list[str] = []
+    for origin in origins:
+        if origin not in seen:
+            seen.add(origin)
+            out.append(origin)
+    return out
+
+
 def frontend_origin() -> str:
-    return (os.environ.get("EMAINT_DEMO_FRONTEND_ORIGIN") or "https://www.collinsmediallc.com").rstrip("/")
+    return frontend_origins()[0]
+
+
+def frontend_page(path: str) -> str:
+    path = path.lstrip("/")
+    base = frontend_app_path().rstrip("/")
+    origin = frontend_origin()
+    if base:
+        return f"{origin}/{base}/{path}"
+    return f"{origin}/{path}"
+
+
+def _return_to_allowed(parsed) -> bool:
+    if parsed.scheme not in ("http", "https"):
+        return False
+    for allowed in frontend_origins():
+        origin = urlparse(allowed)
+        if parsed.scheme == origin.scheme and parsed.netloc == origin.netloc:
+            return True
+    if _local_oauth_enabled() and parsed.hostname in ("localhost", "127.0.0.1"):
+        return True
+    return False
 
 
 def _catalog() -> str:
@@ -154,14 +213,11 @@ def user_from_claims(claims: dict[str, Any]) -> dict[str, Any]:
 
 
 def _safe_return_path(return_to: str | None) -> str:
-    default = f"{frontend_origin()}/dgsappv1/dashboard.html"
+    default = frontend_page("dashboard.html")
     if not return_to:
         return default
     parsed = urlparse(return_to)
-    if parsed.scheme not in ("http", "https"):
-        return default
-    origin = urlparse(frontend_origin())
-    if parsed.netloc != origin.netloc:
+    if not _return_to_allowed(parsed):
         return default
     return return_to
 

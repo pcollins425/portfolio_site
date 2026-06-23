@@ -21,7 +21,7 @@
   const APP_NAV = [
     { id: "dashboard", label: "Dashboard", href: "dashboard.html" },
     { id: "slot_master", label: "Slot Master", href: "slot_master.html" },
-    { id: "contracts", label: "Contracts", href: "contracts.html" },
+    { id: "contracts", label: "Contracts", href: "contracts-v2.html" },
     { id: "warehouse", label: "Warehouse", href: "warehouse.html" },
     { id: "expenses", label: "Expenses", href: "expenses.html" },
     { id: "assistant", label: "Assistant", href: "assistant.html" },

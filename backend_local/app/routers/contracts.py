@@ -245,6 +245,7 @@ def contract_detail(reference_key: str):
                 c.agreement_id,
                 c.vendor_id,
                 v.vendor_name,
+                v.logo_media_path AS vendor_logo_media_path,
                 c.agreement_date,
                 c.sales_order,
                 c.total_price,
@@ -271,6 +272,7 @@ def contract_detail(reference_key: str):
                 cl.asset_description,
                 cl.cabinet_id,
                 cab.cabinet_name,
+                cab.image_media_path AS cabinet_image_media_path,
                 cl.machine_cost,
                 cl.quantity,
                 cl.date_received,
@@ -306,6 +308,7 @@ def contract_detail(reference_key: str):
             "asset_description": _json_value(r.get("asset_description")),
             "cabinet_id": _json_value(r.get("cabinet_id")),
             "cabinet_name": _json_value(r.get("cabinet_name")),
+            "cabinet_image_media_path": _json_value(r.get("cabinet_image_media_path")),
             "machine_cost": _money(r.get("machine_cost")),
             "quantity": int(r["quantity"]) if r.get("quantity") is not None else None,
             "date_received": _json_value(r.get("date_received")),
@@ -316,11 +319,28 @@ def contract_detail(reference_key: str):
         for r in line_rows
     ]
 
+    cabinet_images: list[dict] = []
+    seen_cab: set[str] = set()
+    for ln in lines:
+        cid = ln.get("cabinet_id")
+        img = ln.get("cabinet_image_media_path")
+        if not cid or not img or cid in seen_cab:
+            continue
+        seen_cab.add(cid)
+        cabinet_images.append(
+            {
+                "cabinet_id": cid,
+                "cabinet_name": ln.get("cabinet_name"),
+                "image_media_path": img,
+            }
+        )
+
     return {
         "reference_key": _json_value(h.get("reference_key")),
         "agreement_id": _json_value(h.get("agreement_id")),
         "vendor_id": _json_value(h.get("vendor_id")),
         "vendor_name": _json_value(h.get("vendor_name")),
+        "vendor_logo_media_path": _json_value(h.get("vendor_logo_media_path")),
         "agreement_date": _json_value(h.get("agreement_date")),
         "sales_order": _json_value(h.get("sales_order")),
         "total_price": _money(h.get("total_price")),
@@ -331,6 +351,7 @@ def contract_detail(reference_key: str):
         "contract_file": _json_value(h.get("contract_file")),
         "notes": _json_value(h.get("notes")),
         "lines": lines,
+        "cabinet_images": cabinet_images,
         "line_count": len(lines),
         "serial_count": sum(ln["serial_count"] for ln in lines),
         "linked_serial_count": sum(ln["linked_serial_count"] for ln in lines),
