@@ -487,8 +487,19 @@ body.dgs-contracts-v2 .dgs-v2-main {
   top: 0;
   z-index: 1;
   box-sizing: border-box;
-  height: var(--serial-mask-h, 0px);
-  margin: 0 0 calc(-1 * var(--serial-head-h, 0px));
+  height: var(--serial-head-h, 28px);
+  margin: 0 0 calc(-1 * var(--serial-head-h, 28px));
+  background: var(--dgs-v2-card);
+  pointer-events: none;
+}
+
+.dgs-v2-serial-sticky-mask.is-stuck::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 100%;
+  height: var(--serial-mask-ext, 0px);
   background: var(--dgs-v2-card);
   pointer-events: none;
 }

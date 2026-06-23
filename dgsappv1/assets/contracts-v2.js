@@ -289,23 +289,30 @@
     const scrollEl = els.detailBody;
     if (!mask || !thead || !scrollEl) return;
 
-    const headerH = thead.getBoundingClientRect().height;
+    const scrollRect = scrollEl.getBoundingClientRect();
+    const theadRect = thead.getBoundingClientRect();
+    const headerH = Math.round(theadRect.height);
     if (!headerH) return;
 
-    const scrollRect = scrollEl.getBoundingClientRect();
-    const theadTop = thead.getBoundingClientRect().top;
     const padTop = parseFloat(getComputedStyle(scrollEl).paddingTop) || 0;
-    const stickTop = scrollRect.top + padTop;
-    const stuck = theadTop <= stickTop + 1;
-
-    let extension = 0;
-    if (stuck) {
-      extension = Math.max(0, theadTop - scrollRect.top);
-    }
+    const containerTop = scrollRect.top;
+    const stickLine = containerTop + padTop;
+    const stuck = theadRect.top <= stickLine + 0.5;
 
     mask.style.setProperty("--serial-head-h", `${headerH}px`);
-    mask.style.setProperty("--serial-mask-h", `${headerH + extension}px`);
-    mask.style.top = extension > 0 ? `${-extension}px` : "0px";
+
+    if (!stuck) {
+      mask.classList.remove("is-stuck");
+      mask.style.setProperty("--serial-mask-ext", "0px");
+      mask.style.top = "0px";
+      return;
+    }
+
+    const expansionTop = els.serialExpansion.getBoundingClientRect().top;
+    const extension = Math.max(0, Math.ceil(theadRect.top - containerTop), Math.ceil(theadRect.top - expansionTop));
+    mask.classList.add("is-stuck");
+    mask.style.setProperty("--serial-mask-ext", `${extension}px`);
+    mask.style.top = "0px";
   }
 
   function scheduleSerialStickyMaskUpdate() {
