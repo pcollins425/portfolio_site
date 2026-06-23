@@ -40,6 +40,9 @@
     detailFields: document.getElementById("detail-fields"),
     linesTbody: document.getElementById("lines-tbody"),
     linesStatus: document.getElementById("lines-status"),
+    serialExpansion: document.getElementById("serial-expansion"),
+    serialExpansionMeta: document.getElementById("serial-expansion-meta"),
+    serialExpansionBody: document.getElementById("serial-expansion-body"),
   };
 
   function apiUrl(path) {
@@ -215,6 +218,7 @@
     if (!d) {
       els.linesTbody.innerHTML = "";
       els.linesStatus.textContent = "";
+      hideSerialExpansion();
       return;
     }
 
@@ -234,11 +238,6 @@
           <td>${esc(fmtNum(line.quantity))}</td>
           <td>${esc(fmtMoney(line.machine_cost))}</td>
           <td>${esc(serialLabel)}</td>
-        </tr>
-        <tr class="dgs-v2-serial-row" data-serial-for="${esc(line.reference_key)}" ${expanded ? "" : "hidden"}>
-          <td colspan="5">
-            <div class="dgs-v2-serial-panel" id="serial-panel-${esc(line.reference_key)}"></div>
-          </td>
         </tr>`);
     }
     els.linesTbody.innerHTML = rows.join("");
@@ -255,33 +254,35 @@
   async function toggleLineSerials(lineKey) {
     if (state.expandedLine === lineKey) {
       state.expandedLine = null;
-      hideSerialRow(lineKey);
+      hideSerialExpansion();
       renderLines();
       return;
     }
-    if (state.expandedLine) hideSerialRow(state.expandedLine);
     state.expandedLine = lineKey;
-    showSerialRow(lineKey);
     renderLines();
     await loadSerials(lineKey);
   }
 
-  function showSerialRow(lineKey) {
-    const row = els.linesTbody.querySelector(`tr[data-serial-for="${lineKey}"]`);
-    if (row) row.hidden = false;
+  function hideSerialExpansion() {
+    if (!els.serialExpansion) return;
+    els.serialExpansion.hidden = true;
+    if (els.serialExpansionMeta) els.serialExpansionMeta.textContent = "";
+    if (els.serialExpansionBody) els.serialExpansionBody.innerHTML = "";
   }
 
-  function hideSerialRow(lineKey) {
-    const row = els.linesTbody.querySelector(`tr[data-serial-for="${lineKey}"]`);
-    if (row) row.hidden = true;
-    const panel = document.getElementById(`serial-panel-${lineKey}`);
-    if (panel) panel.innerHTML = "";
+  function lineByKey(lineKey) {
+    return (state.detail?.lines || []).find((line) => line.reference_key === lineKey);
   }
 
   async function loadSerials(lineKey) {
-    const panel = document.getElementById(`serial-panel-${lineKey}`);
-    if (!panel) return;
-    panel.innerHTML = `<span class="dgs-v2-lines-status">Loading serials…</span>`;
+    const line = lineByKey(lineKey);
+    if (!els.serialExpansion || !els.serialExpansionBody) return;
+
+    els.serialExpansion.hidden = false;
+    els.serialExpansionMeta.textContent = line
+      ? `${line.asset_description || "Line"} · loading serials…`
+      : "Loading serials…";
+    els.serialExpansionBody.innerHTML = `<span class="dgs-v2-lines-status">Loading serials…</span>`;
 
     try {
       let data = state.serialCache[lineKey];
@@ -290,36 +291,38 @@
         state.serialCache[lineKey] = data;
       }
       if (!data.serials.length) {
-        panel.innerHTML = `<span class="dgs-v2-lines-status">No serials on this line.</span>`;
+        els.serialExpansionMeta.textContent = line
+          ? `${line.asset_description || "Line"} · no serials`
+          : "No serials on this line.";
+        els.serialExpansionBody.innerHTML = `<span class="dgs-v2-lines-status">No serials on this line.</span>`;
         return;
       }
-      panel.innerHTML = `
-        <p class="dgs-v2-lines-status" style="margin:0 0 8px;">
-          ${data.linked.toLocaleString()} linked · ${data.missing.toLocaleString()} missing asset
-        </p>
-        <div class="dgs-v2-serial-scroll">
-          <div class="dgs-v2-serial-head">
-            <div class="dgs-v2-serial-head-row">
-              <div>Serial</div>
-              <div>Asset</div>
-              <div>Status</div>
-            </div>
-          </div>
-          <div class="dgs-v2-serial-body">
+      els.serialExpansionMeta.textContent = `${line?.asset_description || "Line"} · ${data.linked.toLocaleString()} linked · ${data.missing.toLocaleString()} missing asset`;
+      els.serialExpansionBody.innerHTML = `
+        <table class="dgs-v2-serial-table">
+          <thead>
+            <tr>
+              <th>Serial</th>
+              <th>Asset</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody>
             ${data.serials
               .map(
                 (s) => `
-              <div class="dgs-v2-serial-row ${s.linked ? "is-linked" : "is-missing"}">
-                <div class="mono">${esc(s.serial_number)}</div>
-                <div class="mono">${esc(s.asset_id || "—")}</div>
-                <div>${s.linked ? "Linked" : "Missing"}</div>
-              </div>`
+              <tr class="${s.linked ? "is-linked" : "is-missing"}">
+                <td class="mono">${esc(s.serial_number)}</td>
+                <td class="mono">${esc(s.asset_id || "—")}</td>
+                <td>${s.linked ? "Linked" : "Missing"}</td>
+              </tr>`
               )
               .join("")}
-          </div>
-        </div>`;
+          </tbody>
+        </table>`;
     } catch (err) {
-      panel.innerHTML = `<span class="dgs-v2-lines-status" style="color:#fca5a5;">${esc(err.message || String(err))}</span>`;
+      els.serialExpansionMeta.textContent = line?.asset_description || "Line";
+      els.serialExpansionBody.innerHTML = `<span class="dgs-v2-lines-status" style="color:#fca5a5;">${esc(err.message || String(err))}</span>`;
     }
   }
 
@@ -333,6 +336,7 @@
     state.selectedKey = referenceKey;
     state.expandedLine = null;
     state.serialCache = {};
+    hideSerialExpansion();
     revokeMediaUrls();
     renderList();
 
@@ -354,6 +358,7 @@
       await renderImageCard(null);
       els.linesTbody.innerHTML = "";
       els.linesStatus.textContent = "";
+      hideSerialExpansion();
     }
   }
 
