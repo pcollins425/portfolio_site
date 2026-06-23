@@ -18,6 +18,11 @@
   --dgs-v2-warn-text: #fde68a;
 }
 
+body.dgs-contracts-v2.dgs-app {
+  height: 100vh;
+  overflow: hidden;
+}
+
 body.dgs-contracts-v2 .dgs-v2-main {
   display: flex;
   flex-direction: column;
@@ -25,6 +30,9 @@ body.dgs-contracts-v2 .dgs-v2-main {
   gap: 18px;
   background: var(--dgs-v2-bg);
   color: var(--dgs-v2-text);
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
 }
 
 .dgs-v2-page-header {
@@ -120,7 +128,8 @@ body.dgs-contracts-v2 .dgs-v2-main {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(320px, 380px);
   gap: 14px;
-  min-height: 420px;
+  min-height: 0;
+  overflow: hidden;
 }
 
 .dgs-v2-list-panel {
@@ -246,9 +255,11 @@ body.dgs-contracts-v2 .dgs-v2-main {
   flex-direction: column;
   gap: 12px;
   min-height: 0;
+  overflow: hidden;
 }
 
 .dgs-v2-image-card {
+  flex-shrink: 0;
   background: var(--dgs-v2-card);
   border: 1px solid var(--dgs-v2-border);
   border-radius: 16px;
@@ -369,8 +380,18 @@ body.dgs-contracts-v2 .dgs-v2-main {
   display: flex;
   flex-direction: column;
   gap: 10px;
-  overflow: hidden;
+  overflow-y: auto;
   min-height: 0;
+}
+
+.dgs-v2-detail-body #detail-content {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.dgs-v2-detail-body.empty #detail-content {
+  display: none;
 }
 
 .dgs-v2-detail-body.empty {
@@ -406,11 +427,9 @@ body.dgs-contracts-v2 .dgs-v2-main {
 }
 
 .dgs-v2-lines-wrap {
-  flex: 1;
   border: 1px solid var(--dgs-v2-border-soft);
   border-radius: 10px;
-  overflow: auto;
-  min-height: 120px;
+  overflow: visible;
 }
 
 .dgs-v2-lines-table {
