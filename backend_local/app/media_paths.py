@@ -23,9 +23,11 @@ def media_root() -> Path | None:
             if p.is_dir():
                 return p.resolve()
     for candidate in (
+        "/media/tableau-images",
         r"Z:\Paul Collins\tableau images",
         r"M:\Paul Collins\tableau images",
         r"G:\Paul Collins\tableau images",
+        "/mnt/m/Paul Collins/tableau images",
         "/mnt/z/Paul Collins/tableau images",
         "/mnt/g/Paul Collins/tableau images",
     ):
