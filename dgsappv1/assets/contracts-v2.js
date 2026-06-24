@@ -80,6 +80,16 @@
     return n.toLocaleString(undefined, { style: "currency", currency: "USD", maximumFractionDigits: 0 });
   }
 
+  function assetHubHref(assetId) {
+    if (!assetId) return "";
+    if (window.DGS) {
+      return DGS.withApi(`asset-hub.html?id=${encodeURIComponent(assetId)}`);
+    }
+    const url = new URL("asset-hub.html", window.location.href);
+    url.searchParams.set("id", assetId);
+    return url.pathname + url.search;
+  }
+
   function fmtNum(n) {
     if (n === null || n === undefined) return "—";
     return Number(n).toLocaleString();
@@ -368,7 +378,11 @@
                 (s) => `
               <tr class="${s.linked ? "is-linked" : "is-missing"}">
                 <td class="mono">${esc(s.serial_number)}</td>
-                <td class="mono">${esc(s.asset_id || "—")}</td>
+                <td class="mono">${
+                  s.linked && s.asset_id
+                    ? `<a class="dgs-v2-hub-serial-link" href="${esc(assetHubHref(s.asset_id))}">${esc(s.asset_id)}</a>`
+                    : esc(s.asset_id || "—")
+                }</td>
                 <td>${s.linked ? "Linked" : "Missing"}</td>
               </tr>`
               )

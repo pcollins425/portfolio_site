@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Asset hub — DGS Application</title>
+  <link rel="stylesheet" href="assets/dgs.css" />
+  <link rel="stylesheet" href="assets/dgs-v2.css" />
+</head>
+<body class="dgs-app dgs-asset-hub">
+  <aside class="dgs-sidebar" id="dgs-sidebar">
+    <div class="dgs-sidebar-brand">
+      <div class="dgs-brand-text">
+        <span class="dgs-brand-eyebrow">Dynamic Gaming Solutions</span>
+        <span class="dgs-brand-title">DGS Application</span>
+      </div>
+      <button type="button" id="dgs-rail-toggle" class="dgs-rail-toggle" aria-expanded="true" title="Collapse navigation">◧</button>
+    </div>
+    <nav class="dgs-sidebar-nav" id="dgs-app-nav" aria-label="Application"></nav>
+    <div class="dgs-sidebar-account" id="sidebar-account" hidden>
+      <span class="dgs-sidebar-user" id="user-label"></span>
+      <button type="button" id="btn-sign-out" class="dgs-sidebar-signout">Sign out</button>
+    </div>
+  </aside>
+
+  <div id="dgs-nav-flyout" class="dgs-nav-flyout" hidden></div>
+
+  <div class="dgs-main dgs-v2-main dgs-v2-hub-main">
+    <div id="error-box" class="dgs-v2-error" hidden></div>
+
+    <div class="dgs-v2-hub-body" id="hub-body" hidden>
+      <aside class="dgs-v2-hub-media" aria-label="Asset media">
+        <div class="dgs-v2-hub-media-inner">
+          <div class="dgs-v2-hub-hero">
+            <div class="dgs-v2-vendor-logo" id="vendor-logo">
+              <span class="placeholder">Loading…</span>
+            </div>
+            <div class="dgs-v2-hub-cabinet" id="cabinet-wrap"></div>
+          </div>
+          <div class="dgs-v2-image-caption">
+            <div class="label">Asset identity</div>
+            <div class="title mono" id="caption-id">—</div>
+            <div class="meta" id="caption-meta">—</div>
+          </div>
+        </div>
+      </aside>
+
+      <main class="dgs-v2-hub-cells">
+        <header class="dgs-v2-hub-header">
+          <div>
+            <p class="dgs-v2-eyebrow">Reference view</p>
+            <h1>Asset hub</h1>
+            <p class="dgs-v2-subtitle" id="hub-subtitle">asset-hub.html</p>
+          </div>
+          <button type="button" class="dgs-v2-btn" id="btn-back" hidden>← Back</button>
+        </header>
+
+        <div class="dgs-v2-hub-grid" id="hub-grid"></div>
+      </main>
+    </div>
+
+    <div class="dgs-v2-hub-loading" id="hub-loading">Loading asset hub…</div>
+  </div>
+
+  <script src="assets/auth.js"></script>
+  <script src="assets/shell.js"></script>
+  <script src="assets/asset-hub.js"></script>
+  <script>DGS.boot(null, () => AssetHub.init());</script>
+</body>
+</html>
