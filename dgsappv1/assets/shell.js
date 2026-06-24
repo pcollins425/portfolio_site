@@ -23,6 +23,14 @@
       ],
     },
     {
+      id: "commerce",
+      label: "Commerce",
+      items: [
+        { id: "vendors", label: "Vendors", href: "vendors-v2.html" },
+        { id: "casinos", label: "Casinos", href: "casinos-v2.html" },
+      ],
+    },
+    {
       id: "operations",
       label: "Operations",
       items: [{ id: "operations", label: "Operations", href: "operations.html?t=projects" }],

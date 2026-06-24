@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Casinos — DGS Application</title>
+  <link rel="stylesheet" href="assets/dgs.css" />
+  <link rel="stylesheet" href="assets/dgs-v2.css" />
+</head>
+<body class="dgs-app dgs-casinos-v2">
+  <aside class="dgs-sidebar" id="dgs-sidebar">
+    <div class="dgs-sidebar-brand">
+      <div class="dgs-brand-text">
+        <span class="dgs-brand-eyebrow">Dynamic Gaming Solutions</span>
+        <span class="dgs-brand-title">DGS Application</span>
+      </div>
+      <button type="button" id="dgs-rail-toggle" class="dgs-rail-toggle" aria-expanded="true" title="Collapse navigation">◧</button>
+    </div>
+    <nav class="dgs-sidebar-nav" id="dgs-app-nav" aria-label="Application"></nav>
+    <div class="dgs-sidebar-account" id="sidebar-account" hidden>
+      <span class="dgs-sidebar-user" id="user-label"></span>
+      <button type="button" id="btn-sign-out" class="dgs-sidebar-signout">Sign out</button>
+    </div>
+  </aside>
+
+  <div id="dgs-nav-flyout" class="dgs-nav-flyout" hidden></div>
+
+  <div class="dgs-main dgs-v2-main">
+    <header class="dgs-v2-page-header">
+      <div>
+        <p class="dgs-v2-eyebrow">Commerce</p>
+        <h1>Casinos</h1>
+        <p class="dgs-v2-subtitle">casinos-v2.html · <code>clients.casinos</code> · read-only browse</p>
+      </div>
+      <div class="dgs-v2-pilot-note">Split layout · tribe &amp; state context</div>
+    </header>
+
+    <div id="error-box" class="dgs-v2-error" hidden></div>
+
+    <div class="dgs-v2-metrics" id="stat-row" aria-label="Summary statistics">
+      <div class="dgs-v2-metric">
+        <div class="dgs-v2-metric-label">Casinos</div>
+        <div class="dgs-v2-metric-value" id="stat-total">—</div>
+      </div>
+      <div class="dgs-v2-metric">
+        <div class="dgs-v2-metric-label">Licensed</div>
+        <div class="dgs-v2-metric-value" id="stat-licensed">—</div>
+      </div>
+      <div class="dgs-v2-metric">
+        <div class="dgs-v2-metric-label">States</div>
+        <div class="dgs-v2-metric-value" id="stat-states">—</div>
+      </div>
+      <div class="dgs-v2-metric">
+        <div class="dgs-v2-metric-label">Active deployments</div>
+        <div class="dgs-v2-metric-value" id="stat-active">—</div>
+      </div>
+    </div>
+
+    <div class="dgs-v2-split">
+      <section class="dgs-v2-list-panel">
+        <div class="dgs-v2-toolbar">
+          <input id="search-input" type="search" placeholder="Search casino, tribe, or ID…" autocomplete="off" />
+          <button id="search-btn" type="button" class="dgs-v2-btn dgs-v2-btn--primary">Search</button>
+          <button id="clear-search" type="button" class="dgs-v2-btn">Clear</button>
+        </div>
+        <div class="dgs-v2-grid-wrap">
+          <table class="dgs-v2-grid" id="casinos-table">
+            <thead>
+              <tr>
+                <th>State</th>
+                <th>Casino</th>
+                <th>Tribe</th>
+                <th>Licensed</th>
+                <th>Active</th>
+              </tr>
+            </thead>
+            <tbody id="casinos-tbody"></tbody>
+          </table>
+        </div>
+        <div class="dgs-v2-list-status" id="list-status"></div>
+      </section>
+
+      <aside class="dgs-v2-detail" id="detail-panel">
+        <div class="dgs-v2-image-card dgs-v2-text-hero" id="hero-card">
+          <div class="dgs-v2-text-hero-body">
+            <div class="dgs-v2-text-hero-state" id="hero-state">—</div>
+            <div class="dgs-v2-text-hero-title" id="hero-title">Select a casino</div>
+            <div class="dgs-v2-text-hero-meta" id="hero-meta">Choose a row from the list</div>
+          </div>
+        </div>
+
+        <div class="dgs-v2-detail-body empty" id="detail-body">
+          <p id="detail-empty-msg">Select a casino to view profile and contacts.</p>
+          <div id="detail-content" hidden>
+            <div class="dgs-v2-section-label">Profile</div>
+            <dl class="dgs-v2-fields" id="detail-fields"></dl>
+            <div class="dgs-v2-section-label">Agreement</div>
+            <dl class="dgs-v2-fields" id="agreement-fields"></dl>
+            <div class="dgs-v2-section-label">Contacts</div>
+            <dl class="dgs-v2-fields" id="contact-fields"></dl>
+          </div>
+        </div>
+      </aside>
+    </div>
+  </div>
+
+  <script src="assets/auth.js"></script>
+  <script src="assets/shell.js"></script>
+  <script src="assets/casinos-v2.js"></script>
+  <script>DGS.boot("casinos", () => CasinosV2.init());</script>
+</body>
+</html>

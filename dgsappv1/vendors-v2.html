@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Vendors — DGS Application</title>
+  <link rel="stylesheet" href="assets/dgs.css" />
+  <link rel="stylesheet" href="assets/dgs-v2.css" />
+</head>
+<body class="dgs-app dgs-vendors-v2">
+  <aside class="dgs-sidebar" id="dgs-sidebar">
+    <div class="dgs-sidebar-brand">
+      <div class="dgs-brand-text">
+        <span class="dgs-brand-eyebrow">Dynamic Gaming Solutions</span>
+        <span class="dgs-brand-title">DGS Application</span>
+      </div>
+      <button type="button" id="dgs-rail-toggle" class="dgs-rail-toggle" aria-expanded="true" title="Collapse navigation">◧</button>
+    </div>
+    <nav class="dgs-sidebar-nav" id="dgs-app-nav" aria-label="Application"></nav>
+    <div class="dgs-sidebar-account" id="sidebar-account" hidden>
+      <span class="dgs-sidebar-user" id="user-label"></span>
+      <button type="button" id="btn-sign-out" class="dgs-sidebar-signout">Sign out</button>
+    </div>
+  </aside>
+
+  <div id="dgs-nav-flyout" class="dgs-nav-flyout" hidden></div>
+
+  <div class="dgs-main dgs-v2-main">
+    <header class="dgs-v2-page-header">
+      <div>
+        <p class="dgs-v2-eyebrow">Commerce</p>
+        <h1>Vendors</h1>
+        <p class="dgs-v2-subtitle">vendors-v2.html · <code>vendors.vendors</code> · read-only browse</p>
+      </div>
+      <div class="dgs-v2-pilot-note">Split layout · vendor logos from NAS</div>
+    </header>
+
+    <div id="error-box" class="dgs-v2-error" hidden></div>
+
+    <div class="dgs-v2-metrics" id="stat-row" aria-label="Summary statistics">
+      <div class="dgs-v2-metric">
+        <div class="dgs-v2-metric-label">Vendors</div>
+        <div class="dgs-v2-metric-value" id="stat-total">—</div>
+      </div>
+      <div class="dgs-v2-metric">
+        <div class="dgs-v2-metric-label">Manufacturers</div>
+        <div class="dgs-v2-metric-value" id="stat-manufacturers">—</div>
+      </div>
+      <div class="dgs-v2-metric">
+        <div class="dgs-v2-metric-label">With logo</div>
+        <div class="dgs-v2-metric-value" id="stat-with-logo">—</div>
+      </div>
+      <div class="dgs-v2-metric">
+        <div class="dgs-v2-metric-label">Cabinets</div>
+        <div class="dgs-v2-metric-value" id="stat-cabinets">—</div>
+      </div>
+    </div>
+
+    <div class="dgs-v2-split">
+      <section class="dgs-v2-list-panel">
+        <div class="dgs-v2-toolbar">
+          <input id="search-input" type="search" placeholder="Search vendor name or ID…" autocomplete="off" />
+          <button id="search-btn" type="button" class="dgs-v2-btn dgs-v2-btn--primary">Search</button>
+          <button id="clear-search" type="button" class="dgs-v2-btn">Clear</button>
+        </div>
+        <div class="dgs-v2-grid-wrap">
+          <table class="dgs-v2-grid" id="vendors-table">
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>Vendor</th>
+                <th>Mfr</th>
+                <th>Cabinets</th>
+                <th>Themes</th>
+              </tr>
+            </thead>
+            <tbody id="vendors-tbody"></tbody>
+          </table>
+        </div>
+        <div class="dgs-v2-list-status" id="list-status"></div>
+      </section>
+
+      <aside class="dgs-v2-detail" id="detail-panel">
+        <div class="dgs-v2-image-card" id="image-card">
+          <div class="dgs-v2-image-hero">
+            <div class="dgs-v2-vendor-logo" id="vendor-logo">
+              <span class="placeholder">Select a vendor</span>
+            </div>
+            <div class="dgs-v2-cabinet-row" id="cabinet-row"></div>
+          </div>
+          <div class="dgs-v2-image-caption">
+            <div class="label">Selected vendor</div>
+            <div class="title" id="card-title">—</div>
+            <div class="meta" id="card-meta">Choose a row from the list</div>
+          </div>
+        </div>
+
+        <div class="dgs-v2-detail-body empty" id="detail-body">
+          <p id="detail-empty-msg">Select a vendor to view profile and cabinets.</p>
+          <div id="detail-content" hidden>
+            <div class="dgs-v2-section-label">Profile</div>
+            <dl class="dgs-v2-fields" id="detail-fields"></dl>
+            <div class="dgs-v2-section-label">Cabinets</div>
+            <div class="dgs-v2-lines-wrap">
+              <table class="dgs-v2-lines-table">
+                <thead>
+                  <tr>
+                    <th>Cabinet</th>
+                    <th>Version</th>
+                    <th>Themes</th>
+                  </tr>
+                </thead>
+                <tbody id="cabinets-tbody"></tbody>
+              </table>
+            </div>
+            <p class="dgs-v2-lines-status" id="cabinets-status"></p>
+          </div>
+        </div>
+      </aside>
+    </div>
+  </div>
+
+  <script src="assets/auth.js"></script>
+  <script src="assets/shell.js"></script>
+  <script src="assets/vendors-v2.js"></script>
+  <script>DGS.boot("vendors", () => VendorsV2.init());</script>
+</body>
+</html>

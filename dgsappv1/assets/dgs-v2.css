@@ -20,6 +20,8 @@
 
 body.dgs-contracts-v2.dgs-app,
 body.dgs-assets-v2.dgs-app,
+body.dgs-vendors-v2.dgs-app,
+body.dgs-casinos-v2.dgs-app,
 body.dgs-asset-hub.dgs-app,
 body.dgs-warehouse-v2.dgs-app,
 body.dgs-slot-master-v2.dgs-app {
@@ -30,6 +32,8 @@ body.dgs-slot-master-v2.dgs-app {
 
 body.dgs-contracts-v2 .dgs-v2-main,
 body.dgs-assets-v2 .dgs-v2-main,
+body.dgs-vendors-v2 .dgs-v2-main,
+body.dgs-casinos-v2 .dgs-v2-main,
 body.dgs-asset-hub .dgs-v2-main,
 body.dgs-warehouse-v2 .dgs-v2-main,
 body.dgs-slot-master-v2 .dgs-v2-main {
@@ -273,6 +277,37 @@ body.dgs-slot-master-v2 .dgs-v2-main {
   border: 1px solid var(--dgs-v2-border);
   border-radius: 16px;
   overflow: hidden;
+}
+
+.dgs-v2-image-card.dgs-v2-text-hero {
+  background: linear-gradient(135deg, #1a2332 0%, #141922 100%);
+}
+
+.dgs-v2-text-hero-body {
+  padding: 20px 18px 18px;
+}
+
+.dgs-v2-text-hero-state {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--dgs-v2-accent);
+  margin-bottom: 8px;
+}
+
+.dgs-v2-text-hero-title {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--dgs-v2-heading);
+  line-height: 1.25;
+  margin-bottom: 6px;
+}
+
+.dgs-v2-text-hero-meta {
+  font-size: 12px;
+  color: var(--dgs-v2-text-muted);
+  line-height: 1.4;
 }
 
 .dgs-v2-image-hero {
