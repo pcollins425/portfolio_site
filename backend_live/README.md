@@ -53,7 +53,20 @@ The image sets **`API_HOST=0.0.0.0`** inside the container; you do not need to d
 
 ### Vendor / cabinet images (NAS via WSL → Docker bind)
 
-**Docker Desktop on Windows cannot mount CIFS inside the container** (`Unable to apply new capability set`). Mount the NAS in **WSL** (same idea as `mount_usb.sh`), then bind into Docker.
+**Docker Desktop on Windows cannot mount CIFS inside the container** (`Unable to apply new capability set`). Mount the NAS in a **user WSL distro** (Ubuntu — not `docker-desktop`), then bind into Docker.
+
+**One-time:** install Ubuntu on the slot server if `wsl -l -v` only shows `docker-desktop`:
+
+```powershell
+wsl --install -d Ubuntu
+```
+
+Reboot if prompted, create a Linux username, then:
+
+```powershell
+wsl -d Ubuntu bash -c "sudo apt-get update && sudo apt-get install -y cifs-utils"
+wsl -l -v
+```
 
 Add to **`backend_live/.env`**:
 
