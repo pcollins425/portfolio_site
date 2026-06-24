@@ -51,33 +51,48 @@ Point your tunnel at this host/port. **`MSSQL_*`** = **`dashboard_perf_ro`** for
 
 The image sets **`API_HOST=0.0.0.0`** inside the container; you do not need to duplicate that in **`.env`** unless you override it.
 
-### Vendor / cabinet images (NAS CIFS mount)
+### Vendor / cabinet images (NAS via WSL → Docker bind)
 
-On **DGS Slot Server**, the container **mounts the NAS share at startup** (same files as Windows **`M:\Paul Collins\tableau images`**). No robocopy sync step when this is configured.
+**Docker Desktop on Windows cannot mount CIFS inside the container** (`Unable to apply new capability set`). Mount the NAS in **WSL** (same idea as `mount_usb.sh`), then bind into Docker.
 
 Add to **`backend_live/.env`**:
 
 ```env
+NAS_MEDIA_MODE=wsl
 NAS_MEDIA_SHARE=//192.168.1.99/DGS_Analytics
 NAS_MEDIA_SUBPATH=Paul Collins/tableau images
 NAS_MEDIA_USERNAME=...
 NAS_MEDIA_PASSWORD=...
-# NAS_MEDIA_DOMAIN=   # if needed
+NAS_MEDIA_WSL_BIND=//wsl.localhost/Ubuntu/mnt/dgs-nas-media
 MEDIA_HEALTH_PROBE=logos/logo_AGS.png
 ```
 
-Rebuild/recreate after changing **`.env`**: **`docker compose --env-file backend_live/.env up -d --build`**.
+Replace **`Ubuntu`** with your WSL distro name (`wsl -l -v`).
+
+**Start (mount + compose):**
+
+```powershell
+scripts\start-backend-with-nas-media.cmd
+```
+
+Or mount once, then compose as usual:
+
+```powershell
+scripts\mount_nas_media_wsl.cmd
+docker compose --env-file backend_live\.env up -d --build
+```
 
 Verify:
 
 ```powershell
 curl http://127.0.0.1:9001/api/media/health
-curl http://127.0.0.1:9001/api/media/cabinets/ags/AGS_Revel.png -OutFile $null; $?
 ```
 
-Expect **`ok: true`**, **`nas_mount: true`**, **`probe_ok: true`**. New PNGs on the NAS are visible after DB path update — no sync.
+Expect **`ok: true`**, **`nas_mount: false`**, **`probe_ok: true`**, **`media_root": "/media/tableau-images"`**.
 
-**Fallback (no NAS creds in container):** keep **`MEDIA_ROOT_HOST`** bind + **`scripts/sync_tableau_images.cmd`**.
+**Linux Docker host (no WSL):** set **`NAS_MEDIA_MODE=container`** — entrypoint mounts CIFS inside the container (requires **`privileged: true`** if your runtime blocks **`cap_add`**).
+
+**Fallback:** **`MEDIA_ROOT_HOST`** bind + **`scripts/sync_tableau_images.cmd`**.
 
 **Auto-redeploy after git push:** from repo root, **`bash scripts/deploy-backend-docker.sh`** (pull + down + up **`--build`**). For unattended updates, see **`scripts/README.md`** — cron polling (**`check-backend-updates.sh`**) or a GitHub webhook (**`github-webhook-listener.py`**).
 

@@ -1,8 +1,38 @@
 #!/bin/bash
-# Mount NAS tableau images via CIFS when NAS_MEDIA_SHARE is set, then start the API.
+# Mount NAS tableau images via CIFS when NAS_MEDIA_MODE=container, then start the API.
+# On Docker Desktop (Windows), use NAS_MEDIA_MODE=wsl + scripts/mount_nas_media_wsl.sh instead.
 set -euo pipefail
 
+media_bind="/media/tableau-images"
+probe="${MEDIA_HEALTH_PROBE:-logos/logo_AGS.png}"
+
+use_bind_mount() {
+  if [ -f "${media_bind}/${probe}" ]; then
+    export MEDIA_ROOT="$media_bind"
+    echo "docker-entrypoint: using bind-mounted MEDIA_ROOT=${MEDIA_ROOT}"
+    return 0
+  fi
+  return 1
+}
+
 mount_nas_media() {
+  local mode="${NAS_MEDIA_MODE:-container}"
+  if [ "$mode" = "wsl" ] || [ "$mode" = "off" ]; then
+    if use_bind_mount; then
+      return 0
+    fi
+    if [ "$mode" = "wsl" ]; then
+      echo "docker-entrypoint: NAS_MEDIA_MODE=wsl but bind mount missing at ${media_bind}" >&2
+      echo "docker-entrypoint: run scripts/mount_nas_media_wsl.cmd on the host first" >&2
+      exit 1
+    fi
+    return 0
+  fi
+
+  if use_bind_mount; then
+    return 0
+  fi
+
   local share="${NAS_MEDIA_SHARE:-}"
   if [ -z "$share" ]; then
     return 0
@@ -36,7 +66,7 @@ mount_nas_media() {
     echo "docker-entrypoint: mounting ${share} -> ${mount_point}"
     if ! mount -t cifs -o "$opts" "$share" "$mount_point"; then
       rm -f "$cred_file"
-      echo "docker-entrypoint: CIFS mount failed" >&2
+      echo "docker-entrypoint: CIFS mount failed (on Docker Desktop use NAS_MEDIA_MODE=wsl)" >&2
       exit 1
     fi
     rm -f "$cred_file"

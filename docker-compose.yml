@@ -21,8 +21,6 @@ services:
       dockerfile: Dockerfile
     container_name: portfolio_backend_live
     restart: unless-stopped
-    cap_add:
-      - SYS_ADMIN
     # Bind to loopback only: tunnel / local callers on host use 127.0.0.1:9001
     ports:
       - "127.0.0.1:9001:9001"
@@ -38,8 +36,8 @@ services:
     volumes:
       - ${ASSISTANT_WORKSPACE_HOST:-../cursor-assistant}:/workspace:rw
       - assistant_sessions:/app/data/assistant_sessions
-      # Local mirror fallback only — remove this line when NAS_MEDIA_SHARE is set in .env.
-      - ${MEDIA_ROOT_HOST:-../portfolio_media/tableau-images}:/media/tableau-images:ro
+      # NAS via WSL bind (NAS_MEDIA_WSL_BIND) or local mirror (MEDIA_ROOT_HOST). See mount_nas_media_wsl.cmd.
+      - ${NAS_MEDIA_WSL_BIND:-${MEDIA_ROOT_HOST:-../portfolio_media/tableau-images}}:/media/tableau-images:ro
 
 volumes:
   assistant_sessions:
