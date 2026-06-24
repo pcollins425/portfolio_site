@@ -1,7 +1,12 @@
 #!/bin/bash
-# Mount NAS tableau images via CIFS when NAS_MEDIA_MODE=container, then start the API.
-# On Docker Desktop (Windows), use NAS_MEDIA_MODE=wsl + scripts/mount_nas_media_wsl.sh instead.
+# Start API — SMB media mode needs no NAS mount; WSL/container modes handled in entrypoint.
 set -euo pipefail
+
+mode="${NAS_MEDIA_MODE:-}"
+if [ "$mode" = "smb" ]; then
+  echo "docker-entrypoint: NAS_MEDIA_MODE=smb — reading media over SMB (no mount)"
+  exec "$@"
+fi
 
 media_bind="/media/tableau-images"
 probe="${MEDIA_HEALTH_PROBE:-logos/logo_AGS.png}"
@@ -66,7 +71,7 @@ mount_nas_media() {
     echo "docker-entrypoint: mounting ${share} -> ${mount_point}"
     if ! mount -t cifs -o "$opts" "$share" "$mount_point"; then
       rm -f "$cred_file"
-      echo "docker-entrypoint: CIFS mount failed (on Docker Desktop use NAS_MEDIA_MODE=wsl)" >&2
+      echo "docker-entrypoint: CIFS mount failed (use NAS_MEDIA_MODE=smb on Docker Desktop)" >&2
       exit 1
     fi
     rm -f "$cred_file"

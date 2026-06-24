@@ -51,47 +51,24 @@ Point your tunnel at this host/port. **`MSSQL_*`** = **`dashboard_perf_ro`** for
 
 The image sets **`API_HOST=0.0.0.0`** inside the container; you do not need to duplicate that in **`.env`** unless you override it.
 
-### Vendor / cabinet images (NAS via WSL → Docker bind)
+### Vendor / cabinet images (NAS over SMB — no mount script)
 
-**Docker Desktop on Windows cannot mount CIFS inside the container** (`Unable to apply new capability set`). Mount the NAS in a **user WSL distro** (Ubuntu — not `docker-desktop`), then bind into Docker.
-
-**One-time:** install Ubuntu on the slot server if `wsl -l -v` only shows `docker-desktop`:
-
-```powershell
-wsl --install -d Ubuntu
-```
-
-Reboot if prompted, create a Linux username, then:
-
-```powershell
-wsl -d Ubuntu bash -c "sudo apt-get update && sudo apt-get install -y cifs-utils"
-wsl -l -v
-```
+**Preferred on DGS Slot Server:** the API reads files **directly from the NAS over SMB**. Drop a PNG on `M:\`, update `image_media_path` in DB — no sync, no WSL mount script.
 
 Add to **`backend_live/.env`**:
 
 ```env
-NAS_MEDIA_MODE=wsl
+NAS_MEDIA_MODE=smb
 NAS_MEDIA_SHARE=//192.168.1.99/DGS_Analytics
 NAS_MEDIA_SUBPATH=Paul Collins/tableau images
 NAS_MEDIA_USERNAME=...
 NAS_MEDIA_PASSWORD=...
-NAS_MEDIA_WSL_BIND=//wsl.localhost/Ubuntu/mnt/dgs-nas-media
 MEDIA_HEALTH_PROBE=logos/logo_AGS.png
 ```
 
-Replace **`Ubuntu`** with your WSL distro name (`wsl -l -v`).
-
-**Start (mount + compose):**
+Rebuild after pull:
 
 ```powershell
-scripts\start-backend-with-nas-media.cmd
-```
-
-Or mount once, then compose as usual:
-
-```powershell
-scripts\mount_nas_media_wsl.cmd
 docker compose --env-file backend_live\.env up -d --build
 ```
 
@@ -101,11 +78,11 @@ Verify:
 curl http://127.0.0.1:9001/api/media/health
 ```
 
-Expect **`ok: true`**, **`nas_mount: false`**, **`probe_ok: true`**, **`media_root": "/media/tableau-images"`**.
+Expect **`media_mode": "smb"`**, **`ok": true`**.
 
-**Linux Docker host (no WSL):** set **`NAS_MEDIA_MODE=container`** — entrypoint mounts CIFS inside the container (requires **`privileged: true`** if your runtime blocks **`cap_add`**).
+**Legacy WSL mount** (`NAS_MEDIA_MODE=wsl`) remains if SMB is blocked; requires **`scripts/mount_nas_media_wsl.cmd`** and bind mount.
 
-**Fallback:** **`MEDIA_ROOT_HOST`** bind + **`scripts/sync_tableau_images.cmd`**.
+**Fallback:** **`MEDIA_ROOT_HOST`** + **`scripts/sync_tableau_images.cmd`**.
 
 **Auto-redeploy after git push:** from repo root, **`bash scripts/deploy-backend-docker.sh`** (pull + down + up **`--build`**). For unattended updates, see **`scripts/README.md`** — cron polling (**`check-backend-updates.sh`**) or a GitHub webhook (**`github-webhook-listener.py`**).
 
