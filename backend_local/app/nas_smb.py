@@ -13,12 +13,16 @@ _session_lock = threading.Lock()
 _session_ready = False
 
 
+def _env(name: str, default: str = "") -> str:
+    return (os.environ.get(name) or default).replace("\r", "").strip()
+
+
 def smb_enabled() -> bool:
-    return (os.environ.get("NAS_MEDIA_MODE") or "").strip().lower() == "smb"
+    return _env("NAS_MEDIA_MODE").lower() == "smb"
 
 
 def _share_host() -> str:
-    share = (os.environ.get("NAS_MEDIA_SHARE") or "").strip().replace("\\", "/")
+    share = _env("NAS_MEDIA_SHARE").replace("\\", "/")
     if share.startswith("//"):
         share = share[2:]
     host = share.split("/", 1)[0]
@@ -28,10 +32,10 @@ def _share_host() -> str:
 
 
 def _smb_uri(rel_path: str) -> str:
-    share = (os.environ.get("NAS_MEDIA_SHARE") or "").strip().replace("\\", "/")
+    share = _env("NAS_MEDIA_SHARE").replace("\\", "/")
     if not share.startswith("//"):
         share = f"//{share.lstrip('/')}"
-    subpath = (os.environ.get("NAS_MEDIA_SUBPATH") or "Paul Collins/tableau images").strip("/")
+    subpath = _env("NAS_MEDIA_SUBPATH", "Paul Collins/tableau images").strip("/")
     rel = normalize_relative_path(rel_path)
     if subpath:
         return f"{share}/{subpath}/{rel}"
@@ -45,8 +49,9 @@ def _ensure_session() -> None:
     with _session_lock:
         if _session_ready:
             return
-        username = (os.environ.get("NAS_MEDIA_USERNAME") or "").strip()
-        password = (os.environ.get("NAS_MEDIA_PASSWORD") or "")
+        username = _env("NAS_MEDIA_USERNAME")
+        password = os.environ.get("NAS_MEDIA_PASSWORD") or ""
+        password = password.replace("\r", "")
         if not username or not password:
             raise RuntimeError("NAS_MEDIA_USERNAME and NAS_MEDIA_PASSWORD required for SMB mode")
         host = _share_host()
@@ -54,10 +59,10 @@ def _ensure_session() -> None:
             "username": username,
             "password": password,
         }
-        domain = (os.environ.get("NAS_MEDIA_DOMAIN") or "").strip()
+        domain = _env("NAS_MEDIA_DOMAIN")
         if domain and "\\" not in username:
             kwargs["username"] = f"{domain}\\{username}"
-        port = (os.environ.get("NAS_MEDIA_PORT") or "").strip()
+        port = _env("NAS_MEDIA_PORT")
         if port:
             kwargs["port"] = int(port)
         smbclient.register_session(host, **kwargs)
@@ -81,12 +86,15 @@ def read_smb_file(rel_path: str) -> bytes:
         with smbclient.open_file(uri, mode="rb") as handle:
             return handle.read()
     except OSError as exc:
+        msg = str(exc).lower()
+        if "access" in msg or "denied" in msg or "logon" in msg or "auth" in msg:
+            raise PermissionError(f"NAS authentication or permission failed: {exc}") from exc
         raise FileNotFoundError(rel_path) from exc
 
 
 def smb_display_root() -> str:
-    share = (os.environ.get("NAS_MEDIA_SHARE") or "").strip().replace("\\", "/")
-    subpath = (os.environ.get("NAS_MEDIA_SUBPATH") or "").strip("/")
+    share = _env("NAS_MEDIA_SHARE").replace("\\", "/")
+    subpath = _env("NAS_MEDIA_SUBPATH").strip("/")
     if subpath:
         return f"{share}/{subpath}"
     return share

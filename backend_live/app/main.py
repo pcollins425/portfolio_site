@@ -9,6 +9,13 @@ from app.routers.v1 import health as v1_health
 
 app_settings.load_local_env()
 
+import logging
+import os
+
+_log = logging.getLogger("app.startup")
+_media_mode = (os.environ.get("NAS_MEDIA_MODE") or "").replace("\r", "").strip() or "filesystem"
+_log.info("NAS_MEDIA_MODE=%s", _media_mode)
+
 app = FastAPI(title="Portfolio API (live)", version="0.1.0")
 
 app.add_middleware(

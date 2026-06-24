@@ -76,6 +76,8 @@ def get_media(media_path: str):
             data = read_smb_file(rel)
         except FileNotFoundError as exc:
             raise HTTPException(status_code=404, detail="media not found") from exc
+        except PermissionError as exc:
+            raise HTTPException(status_code=503, detail=str(exc)) from exc
         except Exception as exc:
             raise HTTPException(status_code=503, detail=f"NAS read failed: {exc}") from exc
         return StreamingResponse(io.BytesIO(data), media_type=media_type or "application/octet-stream", headers=headers)

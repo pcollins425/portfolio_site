@@ -2,7 +2,7 @@
 # Start API — SMB media mode needs no NAS mount; WSL/container modes handled in entrypoint.
 set -euo pipefail
 
-mode="${NAS_MEDIA_MODE:-}"
+mode="$(printf '%s' "${NAS_MEDIA_MODE:-}" | tr -d '\r\n' | tr '[:upper:]' '[:lower:]')"
 if [ "$mode" = "smb" ]; then
   echo "docker-entrypoint: NAS_MEDIA_MODE=smb — reading media over SMB (no mount)"
   exec "$@"

@@ -25,8 +25,7 @@ services:
     ports:
       - "127.0.0.1:9001:9001"
     env_file:
-      - path: ./backend_live/.env
-        required: false
+      - ./backend_live/.env
     # Assistant: host clone → /workspace (default: sibling ../cursor-assistant)
     # Optional ASSISTANT_WORKSPACE_HOST in backend_live/.env — use:
     #   docker compose --env-file backend_live/.env up -d --build
