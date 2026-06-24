@@ -1101,12 +1101,47 @@ body.dgs-warehouse-v2 .dgs-v2-drawer-body {
   color: var(--dgs-v2-text-muted);
 }
 
-.dgs-v2-wh-serial-row--link {
-  cursor: pointer;
+.dgs-v2-wh-serial-grid tbody tr {
+  cursor: default;
 }
 
-.dgs-v2-wh-serial-row--link:hover {
-  background: rgba(110, 181, 255, 0.06);
+.dgs-v2-wh-serial-grid tbody tr:hover {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.dgs-v2-wh-serial-cell,
+.dgs-v2-wh-asset-cell,
+.dgs-v2-wh-date-cell {
+  white-space: nowrap;
+}
+
+.dgs-v2-wh-serial-cell {
+  color: var(--dgs-v2-text);
+}
+
+.dgs-v2-wh-asset-cell {
+  min-width: 5.5rem;
+}
+
+a.dgs-v2-wh-asset-link {
+  display: inline-block;
+  padding: 4px 10px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--dgs-v2-heading);
+  font-family: ui-monospace, "Cascadia Code", "Segoe UI Mono", monospace;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.2;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+a.dgs-v2-wh-asset-link:hover {
+  border-color: var(--dgs-v2-accent-border);
+  background: var(--dgs-v2-accent-bg);
+  color: #f3f5f9;
 }
 
 @media (max-width: 1100px) {

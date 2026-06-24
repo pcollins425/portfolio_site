@@ -269,28 +269,18 @@
       els.drawerTbody.innerHTML = data.items.length
         ? data.items.map((row) => {
             const hub = row.asset_id ? assetHubHref(row.asset_id) : "";
-            const serialCell = hub
-              ? `<a class="dgs-v2-hub-serial-link" href="${esc(hub)}">${esc(row.serial)}</a>`
-              : esc(row.serial || "—");
             const assetCell = hub
-              ? `<a class="dgs-v2-hub-serial-link mono" href="${esc(hub)}">${esc(row.asset_id)}</a>`
+              ? `<a class="dgs-v2-wh-asset-link" href="${esc(hub)}">${esc(row.asset_id)}</a>`
               : `<span class="dgs-v2-hub-muted">—</span>`;
             return `
-            <tr class="${hub ? "dgs-v2-wh-serial-row--link" : ""}"${hub ? ` data-hub-href="${esc(hub)}"` : ""}>
-              <td class="mono">${serialCell}</td>
-              <td>${assetCell}</td>
-              <td>${esc(fmtDate(row.date_received))}</td>
+            <tr>
+              <td class="mono dgs-v2-wh-serial-cell">${esc(row.serial || "—")}</td>
+              <td class="dgs-v2-wh-asset-cell">${assetCell}</td>
+              <td class="dgs-v2-wh-date-cell">${esc(fmtDate(row.date_received))}</td>
               <td>${esc(row.previous_location || "—")}</td>
             </tr>`;
           }).join("")
         : `<tr><td colspan="4" class="dgs-v2-lines-status">No serials found.</td></tr>`;
-
-      els.drawerTbody.querySelectorAll("tr[data-hub-href]").forEach((tr) => {
-        tr.addEventListener("click", (e) => {
-          if (e.target.closest("a")) return;
-          window.location.href = tr.dataset.hubHref;
-        });
-      });
 
       const start = data.total_items === 0 ? 0 : (data.page - 1) * data.page_size + 1;
       const end = Math.min(data.page * data.page_size, data.total_items);
