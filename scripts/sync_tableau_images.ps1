@@ -26,10 +26,15 @@ if (-not $env:MEDIA_ROOT_HOST -and (Test-Path $envFile)) {
 }
 
 if ($env:MEDIA_ROOT_HOST) {
-    $Dest = $env:MEDIA_ROOT_HOST
+    $Dest = [System.IO.Path]::GetFullPath($env:MEDIA_ROOT_HOST)
 } else {
     $Dest = Join-Path (Split-Path $RepoRoot -Parent) "portfolio_media\tableau-images"
+    $Dest = [System.IO.Path]::GetFullPath($Dest)
 }
+
+Write-Host ""
+Write-Host "MEDIA_ROOT_HOST = $Dest"
+Write-Host ""
 
 New-Item -ItemType Directory -Force -Path $Dest | Out-Null
 
