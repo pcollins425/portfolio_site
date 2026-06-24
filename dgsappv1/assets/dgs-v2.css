@@ -25,6 +25,7 @@ body.dgs-warehouse-v2.dgs-app,
 body.dgs-slot-master-v2.dgs-app {
   height: 100vh;
   overflow: hidden;
+  color-scheme: dark;
 }
 
 body.dgs-contracts-v2 .dgs-v2-main,
@@ -1207,6 +1208,18 @@ body.dgs-slot-master-v2 .dgs-v2-metrics {
   padding: 0;
   width: 100%;
   cursor: pointer;
+  color-scheme: dark;
+}
+
+.dgs-v2-sm-cascade-select select option {
+  background-color: var(--dgs-v2-card);
+  color: var(--dgs-v2-heading);
+}
+
+.dgs-v2-sm-cascade-select select option:checked,
+.dgs-v2-sm-cascade-select select option:hover {
+  background-color: var(--dgs-v2-accent-bg);
+  color: var(--dgs-v2-heading);
 }
 
 .dgs-v2-sm-cascade-select select:disabled {
