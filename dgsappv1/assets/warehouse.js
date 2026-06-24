@@ -2,7 +2,9 @@
   "use strict";
 
   const params = new URLSearchParams(window.location.search);
-  const API_BASE = (params.get("api") || "https://api.collinsmediallc.com").replace(/\/$/, "");
+  const API_BASE = (window.DGS ? DGS.apiBase() : "").replace(/\/$/, "") ||
+    params.get("api")?.replace(/\/$/, "") ||
+    "https://api.collinsmediallc.com";
 
   const state = {
     pivot: null,
@@ -85,6 +87,16 @@
     return String(property || "").replace(/\s+Warehouse$/i, "").trim() || property;
   }
 
+  function assetHubHref(assetId) {
+    if (!assetId) return "";
+    if (window.DGS) {
+      return DGS.withApi(`asset-hub.html?id=${encodeURIComponent(assetId)}`);
+    }
+    const url = new URL("asset-hub.html", window.location.href);
+    url.searchParams.set("id", assetId);
+    return url.pathname + url.search;
+  }
+
   function renderSummaryCards() {
     const p = state.pivot;
     if (!p) return;
@@ -93,9 +105,9 @@
       .map((col) => {
         const active = col.property === state.highlightProperty;
         return `
-        <button type="button" class="summary-card${active ? " active" : ""}" data-property="${esc(col.property)}">
-          <span class="summary-card__count">${fmtNum(col.total)}</span>
-          <span class="summary-card__label">${esc(col.property)}</span>
+        <button type="button" class="dgs-v2-wh-summary-card${active ? " active" : ""}" data-property="${esc(col.property)}">
+          <span class="dgs-v2-wh-summary-card__count">${fmtNum(col.total)}</span>
+          <span class="dgs-v2-wh-summary-card__label">${esc(col.property)}</span>
         </button>`;
       })
       .join("");
@@ -248,24 +260,37 @@
     const filter = state.drawer.filter;
     if (!filter) return;
 
-    els.drawerTbody.innerHTML = `<tr><td colspan="3" class="subtitle">Loading…</td></tr>`;
+    els.drawerTbody.innerHTML = `<tr><td colspan="4" class="dgs-v2-lines-status">Loading…</td></tr>`;
     try {
       const data = await fetchJson(buildSerialsPath(filter));
       state.drawer.totalPages = data.total_pages || 1;
       state.drawer.totalItems = data.total_items || 0;
 
       els.drawerTbody.innerHTML = data.items.length
-        ? data.items
-            .map(
-              (row) => `
-            <tr>
-              <td class="mono">${esc(row.serial)}</td>
+        ? data.items.map((row) => {
+            const hub = row.asset_id ? assetHubHref(row.asset_id) : "";
+            const serialCell = hub
+              ? `<a class="dgs-v2-hub-serial-link" href="${esc(hub)}">${esc(row.serial)}</a>`
+              : esc(row.serial || "—");
+            const assetCell = hub
+              ? `<a class="dgs-v2-hub-serial-link mono" href="${esc(hub)}">${esc(row.asset_id)}</a>`
+              : `<span class="dgs-v2-hub-muted">—</span>`;
+            return `
+            <tr class="${hub ? "dgs-v2-wh-serial-row--link" : ""}"${hub ? ` data-hub-href="${esc(hub)}"` : ""}>
+              <td class="mono">${serialCell}</td>
+              <td>${assetCell}</td>
               <td>${esc(fmtDate(row.date_received))}</td>
               <td>${esc(row.previous_location || "—")}</td>
-            </tr>`
-            )
-            .join("")
-        : `<tr><td colspan="3" class="subtitle">No serials found.</td></tr>`;
+            </tr>`;
+          }).join("")
+        : `<tr><td colspan="4" class="dgs-v2-lines-status">No serials found.</td></tr>`;
+
+      els.drawerTbody.querySelectorAll("tr[data-hub-href]").forEach((tr) => {
+        tr.addEventListener("click", (e) => {
+          if (e.target.closest("a")) return;
+          window.location.href = tr.dataset.hubHref;
+        });
+      });
 
       const start = data.total_items === 0 ? 0 : (data.page - 1) * data.page_size + 1;
       const end = Math.min(data.page * data.page_size, data.total_items);
@@ -278,7 +303,7 @@
       els.drawerPager.hidden = data.total_pages <= 1;
       els.drawerPrevPage.disabled = data.page <= 1;
       els.drawerNextPage.disabled = data.page >= data.total_pages;
-      els.drawerPager.querySelector(".pager__label").textContent = `Page ${data.page} of ${data.total_pages}`;
+      els.drawerPager.querySelector(".dgs-v2-pager__label").textContent = `Page ${data.page} of ${data.total_pages}`;
     } catch (err) {
       els.drawerTbody.innerHTML = "";
       els.drawerStatus.textContent = err.message || String(err);
@@ -394,7 +419,7 @@
 
   async function init() {
     showError(null);
-    els.pivotTbody.innerHTML = `<tr><td colspan="6" class="subtitle">Loading pivot…</td></tr>`;
+    els.pivotTbody.innerHTML = `<tr><td colspan="6" class="dgs-v2-lines-status">Loading pivot…</td></tr>`;
     try {
       state.pivot = await fetchJson("/api/warehouse-inventory/pivot");
       els.grandTotal.textContent = fmtNum(state.pivot.grand_total);

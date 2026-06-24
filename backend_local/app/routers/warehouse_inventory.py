@@ -388,6 +388,7 @@ def warehouse_serials(
             f"""
             SELECT
                 serial_no,
+                asset_id,
                 manufac,
                 model_no,
                 property,
@@ -410,6 +411,7 @@ def warehouse_serials(
     items = [
         {
             "serial": _json_value(r.get("serial_no")),
+            "asset_id": _json_value(r.get("asset_id")),
             "manufacturer": _json_value(r.get("manufac")),
             "cabinet": _json_value(r.get("model_no")),
             "property": _json_value(r.get("property")),
