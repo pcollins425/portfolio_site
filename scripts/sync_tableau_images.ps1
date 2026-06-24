@@ -9,6 +9,7 @@
 #   .\scripts\sync_tableau_images.ps1
 #
 # Optional: schedule via Task Scheduler after NAS image updates.
+# On hosts with restricted execution policy, use scripts\sync_tableau_images.cmd instead.
 
 $ErrorActionPreference = "Stop"
 
