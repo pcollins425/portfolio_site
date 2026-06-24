@@ -14,6 +14,7 @@ from jwt import InvalidTokenError
 
 from app import emaint_demo_permissions as perms
 from app import mssql
+from app.settings import api_port
 
 _GOOGLE_AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth"
 _GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token"
@@ -56,9 +57,10 @@ def google_client_secret() -> str:
 
 
 def oauth_redirect_uri() -> str:
-    local = (os.environ.get("EMAINT_DEMO_OAUTH_REDIRECT_URI_LOCAL") or "").strip()
-    if local:
-        return local
+    if _local_oauth_enabled():
+        local = (os.environ.get("EMAINT_DEMO_OAUTH_REDIRECT_URI_LOCAL") or "").strip()
+        if local:
+            return local
     value = (os.environ.get("EMAINT_DEMO_OAUTH_REDIRECT_URI") or "").strip()
     if not value:
         raise RuntimeError("EMAINT_DEMO_OAUTH_REDIRECT_URI is not configured")
@@ -66,6 +68,8 @@ def oauth_redirect_uri() -> str:
 
 
 def _local_oauth_enabled() -> bool:
+    if api_port() != 9002:
+        return False
     return bool((os.environ.get("EMAINT_DEMO_OAUTH_REDIRECT_URI_LOCAL") or "").strip())
 
 

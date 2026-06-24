@@ -57,7 +57,12 @@
 
   function withApi(href) {
     const url = new URL(href, window.location.href);
-    if (params.get("api")) url.searchParams.set("api", params.get("api"));
+    const api = params.get("api");
+    if (!api) return url.pathname + url.search;
+    if (!isLocalDev() && (api.includes("127.0.0.1") || api.includes("localhost"))) {
+      return url.pathname + url.search;
+    }
+    url.searchParams.set("api", api);
     return url.pathname + url.search;
   }
 

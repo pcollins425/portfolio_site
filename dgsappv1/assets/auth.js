@@ -2,6 +2,8 @@
   "use strict";
 
   const AUTH_TOKEN_KEY = "emaint_demo_token";
+  const PRODUCTION_API = "https://api.collinsmediallc.com";
+  const LOCAL_API = "http://127.0.0.1:9002";
   const params = new URLSearchParams(window.location.search);
 
   const state = {
@@ -9,8 +11,32 @@
     user: null,
   };
 
+  function isLocalFrontend() {
+    const h = window.location.hostname;
+    return h === "localhost" || h === "127.0.0.1";
+  }
+
+  function isLocalApi(url) {
+    return /\/\/(localhost|127\.0\.0\.1)(:\d+)?/i.test(url);
+  }
+
+  function resolveApiBase(raw) {
+    const base = (raw || "").replace(/\/$/, "");
+    if (!base) return isLocalFrontend() ? LOCAL_API : PRODUCTION_API;
+    if (!isLocalFrontend() && isLocalApi(base)) return PRODUCTION_API;
+    return base;
+  }
+
   function apiBase() {
-    return (params.get("api") || "https://api.collinsmediallc.com").replace(/\/$/, "");
+    return resolveApiBase(params.get("api"));
+  }
+
+  function stripStaleLocalApiParam() {
+    const raw = params.get("api");
+    if (!raw || isLocalFrontend() || !isLocalApi(raw)) return;
+    params.delete("api");
+    const qs = params.toString();
+    window.history.replaceState({}, "", `${window.location.pathname}${qs ? `?${qs}` : ""}`);
   }
 
   function getToken() {
@@ -79,6 +105,7 @@
   }
 
   async function ensureAuth() {
+    stripStaleLocalApiParam();
     captureAuthTokenFromUrl();
     let cfg = { required: false };
     try {
@@ -108,6 +135,7 @@
   }
 
   function initLoginPage() {
+    stripStaleLocalApiParam();
     const err = params.get("error");
     const errNode = document.getElementById("login-error");
     if (err && errNode) {
