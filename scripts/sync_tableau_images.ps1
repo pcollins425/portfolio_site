@@ -16,6 +16,15 @@ $ErrorActionPreference = "Stop"
 $Source = "M:\Paul Collins\tableau images"
 $RepoRoot = Split-Path $PSScriptRoot -Parent
 
+$envFile = Join-Path $RepoRoot "backend_live\.env"
+if (-not $env:MEDIA_ROOT_HOST -and (Test-Path $envFile)) {
+    Get-Content $envFile | ForEach-Object {
+        if ($_ -match '^\s*MEDIA_ROOT_HOST\s*=\s*(.+)\s*$') {
+            $env:MEDIA_ROOT_HOST = $Matches[1].Trim().Trim('"')
+        }
+    }
+}
+
 if ($env:MEDIA_ROOT_HOST) {
     $Dest = $env:MEDIA_ROOT_HOST
 } else {

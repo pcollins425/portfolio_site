@@ -1,20 +1,30 @@
 @echo off
-setlocal
+setlocal EnableDelayedExpansion
 
 REM Sync NAS tableau images -> MEDIA_ROOT_HOST for Docker bind mount.
-REM Does not require PowerShell script execution policy (uses robocopy directly).
-REM
-REM Override dest:
-REM   set MEDIA_ROOT_HOST=D:\dgs\tableau-images
-REM   scripts\sync_tableau_images.cmd
+REM Reads MEDIA_ROOT_HOST from backend_live\.env when not set in the environment.
+REM Default dest (no .env): sibling ../portfolio_media/tableau-images (matches docker-compose).
 
 set "SOURCE=M:\Paul Collins\tableau images"
+set "REPO_ROOT=%~dp0.."
+set "ENV_FILE=%REPO_ROOT%backend_live\.env"
+
+if not defined MEDIA_ROOT_HOST (
+  if exist "%ENV_FILE%" (
+    for /f "usebackq eol=# tokens=1,* delims==" %%a in ("%ENV_FILE%") do (
+      if /i "%%a"=="MEDIA_ROOT_HOST" set "MEDIA_ROOT_HOST=%%b"
+    )
+  )
+)
 
 if defined MEDIA_ROOT_HOST (
   set "DEST=%MEDIA_ROOT_HOST%"
 ) else (
-  set "DEST=%~dp0..\portfolio_media\tableau-images"
+  set "DEST=%REPO_ROOT%..\portfolio_media\tableau-images"
 )
+
+REM Trim optional quotes from .env value
+set "DEST=%DEST:"=%"
 
 if not exist "%SOURCE%\" (
   echo ERROR: NAS source not found: %SOURCE%
@@ -33,5 +43,5 @@ if %RC% GEQ 8 (
 )
 
 echo Done. No container restart needed — bind mount picks up new files immediately.
-echo Verify: Test-Path "%DEST%\cabinets\ags\AGS_Spectra_43.png"
+echo Verify: Test-Path "%DEST%\cabinets\ags\AGS_Revel.png"
 exit /b 0
