@@ -589,6 +589,11 @@ body.dgs-asset-hub .dgs-v2-hub-main {
   font-size: 13px;
 }
 
+.dgs-v2-hub-loading[hidden],
+.dgs-v2-hub-body[hidden] {
+  display: none !important;
+}
+
 .dgs-v2-hub-body {
   flex: 1;
   display: flex;
