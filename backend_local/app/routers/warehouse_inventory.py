@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import math
 import os
+import re
 from datetime import date, datetime
 from io import BytesIO
 
@@ -267,6 +268,15 @@ def _search_clause(search: str) -> tuple[str, tuple]:
     return sql, (like, like, like, like)
 
 
+def _compinfo_alias_sql(fragment: str, alias: str = "ci") -> str:
+    """Qualify compinfo_landing columns when the FROM clause uses a table alias."""
+    if not fragment:
+        return fragment
+    for col in ("property", "manufac", "model_no", "serial_no", "prev_loca", "asset_id"):
+        fragment = re.sub(rf"\b{col}\b", f"{alias}.{col}", fragment)
+    return fragment
+
+
 @router.get("/health")
 def warehouse_inventory_health():
     catalog = _catalog()
@@ -384,21 +394,28 @@ def warehouse_serials(
         total_items = int(count_row["n"])
 
         offset = (page - 1) * page_size
+        filter_sql_ci = _compinfo_alias_sql(filter_sql)
+        search_sql_ci = _compinfo_alias_sql(search_sql)
         item_rows = _field_query(
             f"""
             SELECT
-                serial_no,
-                asset_id,
-                manufac,
-                model_no,
-                property,
-                prev_loca,
-                purch_date,
-                adddate
-            FROM inventory.compinfo_landing
-            {filter_sql}
-            {search_sql}
-            ORDER BY model_no, manufac, serial_no
+                ci.serial_no,
+                COALESCE(
+                    NULLIF(LTRIM(RTRIM(ci.asset_id)), N''),
+                    a.reference_key
+                ) AS asset_id,
+                ci.manufac,
+                ci.model_no,
+                ci.property,
+                ci.prev_loca,
+                ci.purch_date,
+                ci.adddate
+            FROM inventory.compinfo_landing AS ci
+            LEFT JOIN inventory.assets AS a
+                ON LTRIM(RTRIM(a.serial_number)) = LTRIM(RTRIM(ci.serial_no))
+            {filter_sql_ci}
+            {search_sql_ci}
+            ORDER BY ci.model_no, ci.manufac, ci.serial_no
             OFFSET {offset} ROWS FETCH NEXT {page_size} ROWS ONLY
             """,
             tuple(params),
