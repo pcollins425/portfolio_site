@@ -2,7 +2,9 @@
   "use strict";
 
   const params = new URLSearchParams(window.location.search);
-  const API_BASE = (params.get("api") || "https://api.collinsmediallc.com").replace(/\/$/, "");
+  const API_BASE = (window.DGS ? DGS.apiBase() : "").replace(/\/$/, "") ||
+    params.get("api")?.replace(/\/$/, "") ||
+    "https://api.collinsmediallc.com";
 
   const SUMMARY_FIELDS = [
     ["zone", "Zone"],
@@ -187,31 +189,50 @@
         : `Showing ${start.toLocaleString()}–${end.toLocaleString()} of ${state.total.toLocaleString()} active · ${casinoLabel}${searchNote}`;
   }
 
+  function assetHubHref(assetId) {
+    if (!assetId) return "";
+    if (window.DGS) {
+      return DGS.withApi(`asset-hub.html?id=${encodeURIComponent(assetId)}`);
+    }
+    const url = new URL("asset-hub.html", window.location.href);
+    url.searchParams.set("id", assetId);
+    return url.pathname + url.search;
+  }
+
   function renderFkChips(d) {
+    const hub = d.asset_id ? assetHubHref(d.asset_id) : "";
+    const assetChip = hub
+      ? `<a class="dgs-v2-sm-fk-chip dgs-v2-sm-fk-chip--hub" href="${esc(hub)}">
+        <span class="dgs-v2-sm-fk-chip__label">Asset</span>
+        <span class="dgs-v2-wh-asset-link">${esc(d.asset_id)}</span>
+        <span class="dgs-v2-sm-fk-chip__name">${esc(d.vendor_name)} · ${esc(d.cabinet_name)}</span>
+      </a>`
+      : `<div class="dgs-v2-sm-fk-chip">
+        <span class="dgs-v2-sm-fk-chip__label">Asset</span>
+        <span class="dgs-v2-sm-fk-chip__key">${esc(d.asset_id || "—")}</span>
+        <span class="dgs-v2-sm-fk-chip__name">${esc(d.vendor_name)} · ${esc(d.cabinet_name)}</span>
+      </div>`;
+
     els.fkChips.innerHTML = `
-      <div class="fk-chip fk-chip--primary">
-        <span class="fk-chip__label">Asset</span>
-        <span class="fk-chip__key">${esc(d.asset_id)}</span>
-        <span class="fk-chip__name">${esc(d.vendor_name)} · ${esc(d.cabinet_name)}</span>
+      ${assetChip}
+      <div class="dgs-v2-sm-fk-chip">
+        <span class="dgs-v2-sm-fk-chip__label">Casino</span>
+        <span class="dgs-v2-sm-fk-chip__key">${esc(d.casino_id)}</span>
+        <span class="dgs-v2-sm-fk-chip__name">${esc(d.casino_name)}</span>
       </div>
-      <div class="fk-chip">
-        <span class="fk-chip__label">Casino</span>
-        <span class="fk-chip__key">${esc(d.casino_id)}</span>
-        <span class="fk-chip__name">${esc(d.casino_name)}</span>
-      </div>
-      <div class="fk-chip">
-        <span class="fk-chip__label">Theme</span>
-        <span class="fk-chip__key">${esc(d.theme_id)}</span>
-        <span class="fk-chip__name">${esc(d.theme_name || "—")}</span>
+      <div class="dgs-v2-sm-fk-chip">
+        <span class="dgs-v2-sm-fk-chip__label">Theme</span>
+        <span class="dgs-v2-sm-fk-chip__key">${esc(d.theme_id)}</span>
+        <span class="dgs-v2-sm-fk-chip__name">${esc(d.theme_name || "—")}</span>
       </div>`;
   }
 
   function renderSummaryStrip(d) {
     els.summaryStrip.innerHTML = SUMMARY_FIELDS.map(
       ([key, label]) => `
-      <div class="smm-summary-item">
-        <span class="smm-summary-item__label">${esc(label)}</span>
-        <span class="smm-summary-item__value">${esc(key.includes("date") ? fmtDate(d[key]) : d[key] || "—")}</span>
+      <div class="dgs-v2-sm-summary-item">
+        <span class="dgs-v2-sm-summary-item__label">${esc(label)}</span>
+        <span class="dgs-v2-sm-summary-item__value">${esc(key.includes("date") ? fmtDate(d[key]) : d[key] || "—")}</span>
       </div>`
     ).join("");
   }
@@ -235,8 +256,8 @@
         }
         const disabled = state.permissions.can_write ? "" : " disabled";
         return `
-          <label class="smm-edit-field">
-            <span class="smm-edit-field__label">${esc(col)}</span>
+          <label class="dgs-v2-sm-edit-field">
+            <span class="dgs-v2-sm-edit-field__label">${esc(col)}</span>
             <input type="${inputType}" data-field="${esc(col)}" value="${esc(inputVal)}"${disabled} />
           </label>`;
       })
@@ -271,18 +292,18 @@
         const selected = state.selectedKey === row.reference_key;
         const active = row.is_active;
         return `
-        <button type="button" class="smm-history-row${selected ? " selected" : ""}${active ? " is-active" : ""}" data-key="${esc(row.reference_key)}">
-          <span class="smm-history-row__dot" aria-hidden="true"></span>
-          <span class="smm-history-row__main">
-            <span class="smm-history-row__title">${esc(row.reference_key)} · ${active ? "Active" : "Inactive"}</span>
-            <span class="smm-history-row__sub">${esc(row.theme_name || "—")} · ${esc(row.casino_name || "—")} · ${esc(row.zbl || "—")}</span>
+        <button type="button" class="dgs-v2-sm-history-row${selected ? " selected" : ""}${active ? " is-active" : ""}" data-key="${esc(row.reference_key)}">
+          <span class="dgs-v2-sm-history-row__dot" aria-hidden="true"></span>
+          <span class="dgs-v2-sm-history-row__main">
+            <span class="dgs-v2-sm-history-row__title">${esc(row.reference_key)} · ${active ? "Active" : "Inactive"}</span>
+            <span class="dgs-v2-sm-history-row__sub">${esc(row.theme_name || "—")} · ${esc(row.casino_name || "—")} · ${esc(row.zbl || "—")}</span>
           </span>
-          <span class="smm-history-row__date">${esc(fmtDate(row.lastconver || row.date_instl))}</span>
+          <span class="dgs-v2-sm-history-row__date">${esc(fmtDate(row.lastconver || row.date_instl))}</span>
         </button>`;
       })
       .join("");
 
-    els.historyList.querySelectorAll(".smm-history-row").forEach((btn) => {
+    els.historyList.querySelectorAll(".dgs-v2-sm-history-row").forEach((btn) => {
       btn.addEventListener("click", () => loadHistorySnapshot(btn.dataset.key));
     });
   }
