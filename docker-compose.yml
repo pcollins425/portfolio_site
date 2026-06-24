@@ -8,12 +8,11 @@
 # Typical (same machine as **`cloudflared`**):
 #   docker compose --env-file backend_live/.env up -d --build
 #
-# **`backend_live/.env`:** `MEDIA_ROOT=/media/tableau-images` (container path) and
-# **`MEDIA_ROOT_HOST`** (host folder outside this repo — see `scripts/sync_tableau_images.ps1`).
-# Docker Desktop cannot bind-mount M:/ or UNC; sync NAS → `MEDIA_ROOT_HOST` instead.
+# **`backend_live/.env`:** media via **NAS CIFS mount** (preferred on slot server) or local bind fallback.
 #
 # Smoke test:
 #   curl http://127.0.0.1:9001/health
+#   curl http://127.0.0.1:9001/api/media/health
 
 services:
   backend_live:
@@ -22,6 +21,8 @@ services:
       dockerfile: Dockerfile
     container_name: portfolio_backend_live
     restart: unless-stopped
+    cap_add:
+      - SYS_ADMIN
     # Bind to loopback only: tunnel / local callers on host use 127.0.0.1:9001
     ports:
       - "127.0.0.1:9001:9001"
@@ -37,7 +38,7 @@ services:
     volumes:
       - ${ASSISTANT_WORKSPACE_HOST:-../cursor-assistant}:/workspace:rw
       - assistant_sessions:/app/data/assistant_sessions
-      # Contracts media — host path outside repo (MEDIA_ROOT_HOST in backend_live/.env).
+      # Local mirror fallback only — remove this line when NAS_MEDIA_SHARE is set in .env.
       - ${MEDIA_ROOT_HOST:-../portfolio_media/tableau-images}:/media/tableau-images:ro
 
 volumes:

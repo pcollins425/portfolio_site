@@ -14,10 +14,24 @@ router = APIRouter(prefix="/api/media", tags=["media"])
 
 @router.get("/health")
 def media_health():
+    import os
+
     root = media_root()
+    probe = (os.environ.get("MEDIA_HEALTH_PROBE") or "logos/logo_AGS.png").strip()
+    probe_ok = bool(root and probe and (root / probe).is_file())
+    nas = bool((os.environ.get("NAS_MEDIA_SHARE") or "").strip())
+    if root is None:
+        ok = False
+    elif nas:
+        ok = probe_ok
+    else:
+        ok = True
     return {
-        "ok": root is not None,
+        "ok": ok,
         "media_root": str(root) if root else None,
+        "nas_mount": nas,
+        "probe": probe,
+        "probe_ok": probe_ok,
     }
 
 

@@ -51,6 +51,34 @@ Point your tunnel at this host/port. **`MSSQL_*`** = **`dashboard_perf_ro`** for
 
 The image sets **`API_HOST=0.0.0.0`** inside the container; you do not need to duplicate that in **`.env`** unless you override it.
 
+### Vendor / cabinet images (NAS CIFS mount)
+
+On **DGS Slot Server**, the container **mounts the NAS share at startup** (same files as Windows **`M:\Paul Collins\tableau images`**). No robocopy sync step when this is configured.
+
+Add to **`backend_live/.env`**:
+
+```env
+NAS_MEDIA_SHARE=//192.168.1.99/DGS_Analytics
+NAS_MEDIA_SUBPATH=Paul Collins/tableau images
+NAS_MEDIA_USERNAME=...
+NAS_MEDIA_PASSWORD=...
+# NAS_MEDIA_DOMAIN=   # if needed
+MEDIA_HEALTH_PROBE=logos/logo_AGS.png
+```
+
+Rebuild/recreate after changing **`.env`**: **`docker compose --env-file backend_live/.env up -d --build`**.
+
+Verify:
+
+```powershell
+curl http://127.0.0.1:9001/api/media/health
+curl http://127.0.0.1:9001/api/media/cabinets/ags/AGS_Revel.png -OutFile $null; $?
+```
+
+Expect **`ok: true`**, **`nas_mount: true`**, **`probe_ok: true`**. New PNGs on the NAS are visible after DB path update — no sync.
+
+**Fallback (no NAS creds in container):** keep **`MEDIA_ROOT_HOST`** bind + **`scripts/sync_tableau_images.cmd`**.
+
 **Auto-redeploy after git push:** from repo root, **`bash scripts/deploy-backend-docker.sh`** (pull + down + up **`--build`**). For unattended updates, see **`scripts/README.md`** — cron polling (**`check-backend-updates.sh`**) or a GitHub webhook (**`github-webhook-listener.py`**).
 
 ## Assistant (Cursor SDK) in Docker
