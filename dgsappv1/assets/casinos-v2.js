@@ -5,8 +5,18 @@
     new URLSearchParams(window.location.search).get("api")?.replace(/\/$/, "") ||
     "https://api.collinsmediallc.com";
 
-  const CARTO_DARK =
-    "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png";
+  // Voyager reads clearly (roads, water, labels); CSS tones it to sit in the dark panel.
+  const MAP_TILES = "https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png";
+
+  function casinoMapPin() {
+    return L.divIcon({
+      className: "dgs-casino-map-pin",
+      html:
+        '<div class="dgs-casino-map-pin-wrap"><div class="dgs-casino-map-pin-halo"></div><div class="dgs-casino-map-pin-core"></div></div>',
+      iconSize: [28, 28],
+      iconAnchor: [14, 14],
+    });
+  }
 
   const state = {
     items: [],
@@ -271,22 +281,16 @@
         scrollWheelZoom: false,
         zoomControl: true,
         attributionControl: true,
-      }).setView([lat, lon], 11);
+      }).setView([lat, lon], 12);
 
-      L.tileLayer(CARTO_DARK, {
+      L.tileLayer(MAP_TILES, {
         attribution:
           '&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a> &copy; <a href="https://carto.com/">CARTO</a>',
         subdomains: "abcd",
         maxZoom: 19,
       }).addTo(state.map);
 
-      state.mapMarker = L.circleMarker([lat, lon], {
-        radius: 7,
-        color: "#6eb5ff",
-        weight: 2,
-        fillColor: "#6eb5ff",
-        fillOpacity: 0.9,
-      }).addTo(state.map);
+      state.mapMarker = L.marker([lat, lon], { icon: casinoMapPin() }).addTo(state.map);
 
       requestAnimationFrame(() => state.map?.invalidateSize());
     } catch (err) {
