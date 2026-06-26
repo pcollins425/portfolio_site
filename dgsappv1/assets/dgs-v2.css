@@ -1869,14 +1869,14 @@ body.dgs-casinos-v2 .dgs-v2-casino-map-wrap {
   gap: 6px;
   padding: 1px;
   border-radius: 11px;
-  background: linear-gradient(180deg, rgba(110, 181, 255, 0.18), rgba(255, 255, 255, 0.06));
+  background: linear-gradient(180deg, rgba(110, 181, 255, 0.12), rgba(255, 255, 255, 0.04));
 }
 
 body.dgs-casinos-v2 .dgs-v2-casino-map {
   height: 220px;
   border-radius: 10px;
   overflow: hidden;
-  background: #dbe3ea;
+  background: #2b2b2b;
   color: var(--dgs-v2-text-muted);
   font-size: 12px;
   display: flex;
@@ -1884,16 +1884,12 @@ body.dgs-casinos-v2 .dgs-v2-casino-map {
   justify-content: center;
   text-align: center;
   padding: 12px;
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.1);
 }
 
 body.dgs-casinos-v2 .dgs-v2-casino-map .leaflet-container {
-  background: #dbe3ea;
+  background: #2b2b2b;
   font-family: inherit;
-}
-
-body.dgs-casinos-v2 .dgs-v2-casino-map .leaflet-tile-pane {
-  filter: brightness(0.92) saturate(0.95) contrast(1.08);
 }
 
 body.dgs-casinos-v2 .dgs-v2-casino-map .leaflet-control-zoom a {

@@ -5,8 +5,20 @@
     new URLSearchParams(window.location.search).get("api")?.replace(/\/$/, "") ||
     "https://api.collinsmediallc.com";
 
-  // Voyager reads clearly (roads, water, labels); CSS tones it to sit in the dark panel.
-  const MAP_TILES = "https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png";
+  // Bootleaf uses Carto light_all for readable roads/labels; dark equivalent = Esri Dark Gray Canvas.
+  const MAP_ATTRIBUTION =
+    'Tiles &copy; <a href="https://www.esri.com/">Esri</a> &mdash; Esri, TomTom, Garmin, FAO, NOAA, USGS';
+
+  function addDarkBasemap(map) {
+    L.tileLayer(
+      "https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}",
+      { maxZoom: 16, attribution: MAP_ATTRIBUTION }
+    ).addTo(map);
+    L.tileLayer(
+      "https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Reference/MapServer/tile/{z}/{y}/{x}",
+      { maxZoom: 16 }
+    ).addTo(map);
+  }
 
   function casinoMapPin() {
     return L.divIcon({
@@ -283,12 +295,7 @@
         attributionControl: true,
       }).setView([lat, lon], 12);
 
-      L.tileLayer(MAP_TILES, {
-        attribution:
-          '&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a> &copy; <a href="https://carto.com/">CARTO</a>',
-        subdomains: "abcd",
-        maxZoom: 19,
-      }).addTo(state.map);
+      addDarkBasemap(state.map);
 
       state.mapMarker = L.marker([lat, lon], { icon: casinoMapPin() }).addTo(state.map);
 
