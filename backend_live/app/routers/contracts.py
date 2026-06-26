@@ -338,7 +338,12 @@ def contract_detail(reference_key: str):
             }
         )
 
-    document_rows = list_contract_documents(key)
+    document_rows: list[dict] = []
+    try:
+        document_rows = list_contract_documents(key)
+    except Exception:
+        # Do not fail contract detail (vendor/cabinet images) when document grants are missing.
+        document_rows = []
 
     return {
         "reference_key": _json_value(h.get("reference_key")),
