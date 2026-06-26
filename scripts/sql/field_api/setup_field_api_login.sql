@@ -133,6 +133,9 @@ GO
 GRANT SELECT ON OBJECT::[clients].[casino_view] TO [dgs_field_api];
 GO
 
+GRANT SELECT ON OBJECT::[dashboard].[vw_performance_report] TO [dgs_field_api];
+GO
+
 GRANT SELECT ON OBJECT::[projects].[ims] TO [dgs_field_api];
 GO
 

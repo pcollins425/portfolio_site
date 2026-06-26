@@ -6,6 +6,12 @@
   <title>Casinos — DGS Application</title>
   <link rel="stylesheet" href="assets/dgs.css" />
   <link rel="stylesheet" href="assets/dgs-v2.css" />
+  <link
+    rel="stylesheet"
+    href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+    integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
+    crossorigin=""
+  />
 </head>
 <body class="dgs-app dgs-casinos-v2">
   <aside class="dgs-sidebar" id="dgs-sidebar">
@@ -30,36 +36,35 @@
       <div>
         <p class="dgs-v2-eyebrow">Commerce</p>
         <h1>Casinos</h1>
-        <p class="dgs-v2-subtitle">casinos-v2.html · <code>clients.casinos</code> · read-only browse</p>
+        <p class="dgs-v2-subtitle">Performance + location · latest month via <code>slot_master_id</code></p>
       </div>
-      <div class="dgs-v2-pilot-note">Split layout · tribe &amp; state context</div>
+      <div class="dgs-v2-pilot-note" id="perf-note">Select a casino for metrics</div>
     </header>
 
     <div id="error-box" class="dgs-v2-error" hidden></div>
 
-    <div class="dgs-v2-metrics" id="stat-row" aria-label="Summary statistics">
+    <div class="dgs-v2-metrics dgs-v2-metrics--perf" id="stat-row" aria-label="Selected casino performance">
       <div class="dgs-v2-metric">
-        <div class="dgs-v2-metric-label">Casinos</div>
-        <div class="dgs-v2-metric-value" id="stat-total">—</div>
+        <div class="dgs-v2-metric-label" id="stat-adw-label">Avg ADW</div>
+        <div class="dgs-v2-metric-value" id="stat-adw">—</div>
+        <div class="dgs-v2-metric-sub" id="stat-adw-sub">per machine / day</div>
       </div>
       <div class="dgs-v2-metric">
-        <div class="dgs-v2-metric-label">Licensed</div>
-        <div class="dgs-v2-metric-value" id="stat-licensed">—</div>
+        <div class="dgs-v2-metric-label" id="stat-win-label">Avg Win Index</div>
+        <div class="dgs-v2-metric-value" id="stat-win-index">—</div>
+        <div class="dgs-v2-metric-sub" id="stat-win-sub">vs par 1.00</div>
       </div>
       <div class="dgs-v2-metric">
-        <div class="dgs-v2-metric-label">States</div>
-        <div class="dgs-v2-metric-value" id="stat-states">—</div>
-      </div>
-      <div class="dgs-v2-metric">
-        <div class="dgs-v2-metric-label">Active deployments</div>
-        <div class="dgs-v2-metric-value" id="stat-active">—</div>
+        <div class="dgs-v2-metric-label" id="stat-comm-label">Sum Commission</div>
+        <div class="dgs-v2-metric-value" id="stat-commission">—</div>
+        <div class="dgs-v2-metric-sub" id="stat-comm-sub">—</div>
       </div>
     </div>
 
     <div class="dgs-v2-split">
       <section class="dgs-v2-list-panel">
         <div class="dgs-v2-toolbar">
-          <input id="search-input" type="search" placeholder="Search casino, tribe, or ID…" autocomplete="off" />
+          <input id="search-input" type="search" placeholder="Search casinos, tribes, states…" autocomplete="off" />
           <button id="search-btn" type="button" class="dgs-v2-btn dgs-v2-btn--primary">Search</button>
           <button id="clear-search" type="button" class="dgs-v2-btn">Clear</button>
         </div>
@@ -68,10 +73,11 @@
             <thead>
               <tr>
                 <th>State</th>
-                <th>Casino</th>
                 <th>Tribe</th>
-                <th>Licensed</th>
-                <th>Active</th>
+                <th>Casino</th>
+                <th class="num">Active Count</th>
+                <th class="num">ADW</th>
+                <th class="num">Win Index</th>
               </tr>
             </thead>
             <tbody id="casinos-tbody"></tbody>
@@ -81,12 +87,15 @@
       </section>
 
       <aside class="dgs-v2-detail" id="detail-panel">
-        <div class="dgs-v2-image-card dgs-v2-text-hero" id="hero-card">
-          <div class="dgs-v2-text-hero-body">
-            <div class="dgs-v2-text-hero-state" id="hero-state">—</div>
-            <div class="dgs-v2-text-hero-title" id="hero-title">Select a casino</div>
-            <div class="dgs-v2-text-hero-meta" id="hero-meta">Choose a row from the list</div>
-          </div>
+        <div class="dgs-v2-casino-identity" id="casino-identity">
+          <div class="dgs-v2-casino-id" id="hero-id">—</div>
+          <h2 class="dgs-v2-casino-title" id="hero-title">Select a casino</h2>
+          <div class="dgs-v2-casino-location" id="hero-location">Choose a row from the list</div>
+        </div>
+
+        <div class="dgs-v2-casino-map-wrap" id="map-wrap" hidden>
+          <div class="dgs-v2-casino-map" id="casino-map" aria-label="Casino location map"></div>
+          <a class="dgs-v2-casino-map-link" id="map-external-link" href="#" target="_blank" rel="noopener noreferrer">Open in Google Maps ↗</a>
         </div>
 
         <div class="dgs-v2-detail-body empty" id="detail-body">
@@ -106,6 +115,11 @@
 
   <script src="assets/auth.js"></script>
   <script src="assets/shell.js"></script>
+  <script
+    src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+    integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvXl5Bo="
+    crossorigin=""
+  ></script>
   <script src="assets/casinos-v2.js"></script>
   <script>DGS.boot("casinos", () => CasinosV2.init());</script>
 </body>

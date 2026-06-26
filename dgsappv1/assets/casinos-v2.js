@@ -5,8 +5,10 @@
     new URLSearchParams(window.location.search).get("api")?.replace(/\/$/, "") ||
     "https://api.collinsmediallc.com";
 
+  const CARTO_DARK =
+    "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png";
+
   const state = {
-    summary: null,
     items: [],
     page: 1,
     pageSize: 50,
@@ -14,22 +16,33 @@
     search: "",
     selectedKey: null,
     detail: null,
+    map: null,
+    mapMarker: null,
   };
 
   const els = {
     errorBox: document.getElementById("error-box"),
-    statTotal: document.getElementById("stat-total"),
-    statLicensed: document.getElementById("stat-licensed"),
-    statStates: document.getElementById("stat-states"),
-    statActive: document.getElementById("stat-active"),
+    perfNote: document.getElementById("perf-note"),
+    statAdw: document.getElementById("stat-adw"),
+    statWinIndex: document.getElementById("stat-win-index"),
+    statCommission: document.getElementById("stat-commission"),
+    statAdwLabel: document.getElementById("stat-adw-label"),
+    statWinLabel: document.getElementById("stat-win-label"),
+    statCommLabel: document.getElementById("stat-comm-label"),
+    statAdwSub: document.getElementById("stat-adw-sub"),
+    statWinSub: document.getElementById("stat-win-sub"),
+    statCommSub: document.getElementById("stat-comm-sub"),
     searchInput: document.getElementById("search-input"),
     searchBtn: document.getElementById("search-btn"),
     clearSearch: document.getElementById("clear-search"),
     tbody: document.getElementById("casinos-tbody"),
     listStatus: document.getElementById("list-status"),
-    heroState: document.getElementById("hero-state"),
+    heroId: document.getElementById("hero-id"),
     heroTitle: document.getElementById("hero-title"),
-    heroMeta: document.getElementById("hero-meta"),
+    heroLocation: document.getElementById("hero-location"),
+    mapWrap: document.getElementById("map-wrap"),
+    mapEl: document.getElementById("casino-map"),
+    mapLink: document.getElementById("map-external-link"),
     detailBody: document.getElementById("detail-body"),
     detailEmptyMsg: document.getElementById("detail-empty-msg"),
     detailContent: document.getElementById("detail-content"),
@@ -68,9 +81,47 @@
     return d.toLocaleDateString(undefined, { year: "numeric", month: "2-digit", day: "2-digit" });
   }
 
-  function fmtNum(n) {
-    if (n === null || n === undefined) return "—";
-    return Number(n).toLocaleString();
+  function fmtMonth(iso) {
+    if (!iso) return null;
+    const d = new Date(String(iso).slice(0, 10) + "T00:00:00");
+    if (Number.isNaN(d.getTime())) return null;
+    return d.toLocaleDateString(undefined, { month: "short", year: "numeric" });
+  }
+
+  function fmtNum(n, digits) {
+    if (n === null || n === undefined || Number.isNaN(Number(n))) return "—";
+    return Number(n).toLocaleString(undefined, {
+      minimumFractionDigits: digits ?? 0,
+      maximumFractionDigits: digits ?? 0,
+    });
+  }
+
+  function fmtMoney(n) {
+    if (n === null || n === undefined || Number.isNaN(Number(n))) return "—";
+    return `$${Number(n).toLocaleString(undefined, {
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0,
+    })}`;
+  }
+
+  function fmtAdw(n) {
+    if (n === null || n === undefined || Number.isNaN(Number(n))) return "—";
+    return `$${Number(n).toLocaleString(undefined, {
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0,
+    })}`;
+  }
+
+  function fmtWinIndex(n) {
+    if (n === null || n === undefined || Number.isNaN(Number(n))) return "—";
+    return Number(n).toFixed(2);
+  }
+
+  function winIndexClass(n) {
+    if (n === null || n === undefined || Number.isNaN(Number(n))) return "";
+    if (Number(n) >= 1) return "dgs-v2-win-index--good";
+    if (Number(n) >= 0.9) return "dgs-v2-win-index--warn";
+    return "dgs-v2-win-index--muted";
   }
 
   function showError(msg) {
@@ -88,32 +139,53 @@
     return url.pathname + url.search;
   }
 
-  function renderSummary() {
-    const s = state.summary;
-    if (!s) return;
-    els.statTotal.textContent = fmtNum(s.total);
-    els.statLicensed.textContent = fmtNum(s.licensed);
-    els.statStates.textContent = fmtNum(s.states);
-    els.statActive.textContent = fmtNum(s.active_casinos);
+  function performanceFromDetail(d) {
+    return d?.performance || null;
   }
 
-  function licensedLabel(v) {
-    if (v === null || v === undefined) return "—";
-    return v ? "Yes" : "No";
+  function renderPerformanceMetrics(d) {
+    const perf = performanceFromDetail(d);
+    const month = perf?.month ? fmtMonth(perf.month) : null;
+    const monthSuffix = month ? ` · ${month}` : "";
+
+    els.statAdwLabel.textContent = `Avg ADW${monthSuffix}`;
+    els.statWinLabel.textContent = `Avg Win Index${monthSuffix}`;
+    els.statCommLabel.textContent = `Sum Commission${monthSuffix}`;
+
+    els.statAdw.textContent = perf ? fmtAdw(perf.avg_adw) : "—";
+    els.statWinIndex.textContent = perf ? fmtWinIndex(perf.avg_win_index) : "—";
+    els.statWinIndex.className = `dgs-v2-metric-value ${winIndexClass(perf?.avg_win_index)}`;
+    els.statCommission.textContent = perf ? fmtMoney(perf.sum_commission) : "—";
+
+    els.statAdwSub.textContent = "per machine / day";
+    els.statWinSub.textContent = "vs par 1.00";
+    els.statCommSub.textContent = perf
+      ? `${fmtNum(perf.machine_count)} machines with revenue`
+      : "No recent performance";
+
+    if (!d) {
+      els.perfNote.textContent = "Select a casino for metrics";
+    } else if (perf) {
+      els.perfNote.textContent = `${d.casino_name || d.reference_key} · ${month || "latest month"}`;
+    } else {
+      els.perfNote.textContent = `${d.casino_name || d.reference_key} · no linked revenue yet`;
+    }
   }
 
   function renderList() {
     els.tbody.innerHTML = state.items
-      .map(
-        (row) => `
+      .map((row) => {
+        const winCls = winIndexClass(row.win_index);
+        return `
         <tr data-key="${esc(row.reference_key)}" class="${row.reference_key === state.selectedKey ? "selected" : ""}">
           <td class="mono">${esc(row.state_abbreviation || "—")}</td>
-          <td>${esc(row.casino_name || row.casino_short || "—")}</td>
           <td>${esc(row.tribe_name || "—")}</td>
-          <td>${licensedLabel(row.licensed)}</td>
-          <td>${fmtNum(row.active_machines)}</td>
-        </tr>`
-      )
+          <td>${esc(row.casino_name || row.casino_short || "—")}</td>
+          <td class="num">${fmtNum(row.active_machines)}</td>
+          <td class="num">${fmtAdw(row.avg_adw)}</td>
+          <td class="num ${winCls}">${fmtWinIndex(row.win_index)}</td>
+        </tr>`;
+      })
       .join("");
 
     els.tbody.querySelectorAll("tr[data-key]").forEach((tr) => {
@@ -144,17 +216,69 @@
     return field(label, value);
   }
 
-  function renderHero(d) {
+  function locationLine(d) {
+    const tribe = d.tribe_name ? `${d.tribe_name}` : "";
+    const addr = d.location_label || [d.address, d.city, d.zip].filter(Boolean).join(", ");
+    if (tribe && addr) return `${tribe} · ${addr}`;
+    return tribe || addr || d.reference_key || "—";
+  }
+
+  function renderIdentity(d) {
     if (!d) {
-      els.heroState.textContent = "—";
+      els.heroId.textContent = "—";
       els.heroTitle.textContent = "Select a casino";
-      els.heroMeta.textContent = "Choose a row from the list";
+      els.heroLocation.textContent = "Choose a row from the list";
       return;
     }
-    els.heroState.textContent = d.state_abbreviation || d.state || "—";
+    const stateAbbr = d.state_abbreviation || d.state || "—";
+    els.heroId.textContent = `${stateAbbr} · ${d.reference_key}`;
     els.heroTitle.textContent = d.casino_name || d.casino_short || d.reference_key;
-    const tribe = d.tribe_name ? `${d.tribe_name} · ` : "";
-    els.heroMeta.textContent = `${tribe}${d.reference_key} · ${fmtNum(d.active_machines)} active machines`;
+    els.heroLocation.textContent = locationLine(d);
+  }
+
+  function destroyMap() {
+    if (state.map) {
+      state.map.remove();
+      state.map = null;
+      state.mapMarker = null;
+    }
+  }
+
+  function renderMap(d) {
+    destroyMap();
+    if (!d?.has_map || d.latitude == null || d.longitude == null) {
+      els.mapWrap.hidden = true;
+      return;
+    }
+
+    els.mapWrap.hidden = false;
+    const lat = Number(d.latitude);
+    const lon = Number(d.longitude);
+    const gmaps = `https://www.google.com/maps?q=${lat},${lon}`;
+    els.mapLink.href = gmaps;
+
+    state.map = L.map(els.mapEl, {
+      scrollWheelZoom: false,
+      zoomControl: true,
+      attributionControl: true,
+    }).setView([lat, lon], 11);
+
+    L.tileLayer(CARTO_DARK, {
+      attribution:
+        '&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a> &copy; <a href="https://carto.com/">CARTO</a>',
+      subdomains: "abcd",
+      maxZoom: 19,
+    }).addTo(state.map);
+
+    state.mapMarker = L.circleMarker([lat, lon], {
+      radius: 7,
+      color: "#6eb5ff",
+      weight: 2,
+      fillColor: "#6eb5ff",
+      fillOpacity: 0.9,
+    }).addTo(state.map);
+
+    requestAnimationFrame(() => state.map?.invalidateSize());
   }
 
   function renderDetailFields(d) {
@@ -171,6 +295,7 @@
       field("Abbreviation", d.casino_abbreviation || "—"),
       field("Tribe", d.tribe_name || "—"),
       field("State", d.state ? `${d.state} (${d.state_abbreviation || "—"})` : d.state_abbreviation || "—"),
+      field("Address", d.location_label || "—"),
       field("Sales", d.sales || "—"),
       field("eMaint property", d.emaint_property || "—"),
       field("Licensed", d.licensed),
@@ -211,25 +336,27 @@
 
     setDetailEmpty(true);
     els.detailEmptyMsg.textContent = "Loading casino…";
-    renderHero(null);
+    renderIdentity(null);
+    renderPerformanceMetrics(null);
+    destroyMap();
+    els.mapWrap.hidden = true;
     els.heroTitle.textContent = "Loading…";
 
     try {
       state.detail = await fetchJson(`/api/commerce/casinos/${encodeURIComponent(referenceKey)}`);
       setDetailEmpty(false);
       renderDetailFields(state.detail);
-      renderHero(state.detail);
+      renderIdentity(state.detail);
+      renderPerformanceMetrics(state.detail);
+      renderMap(state.detail);
     } catch (err) {
       state.detail = null;
       setDetailEmpty(true);
       els.detailEmptyMsg.textContent = err.message || String(err);
-      renderHero(null);
+      renderIdentity(null);
+      renderPerformanceMetrics(null);
+      destroyMap();
     }
-  }
-
-  async function loadSummary() {
-    state.summary = await fetchJson("/api/commerce/casinos/summary");
-    renderSummary();
   }
 
   async function loadList() {
@@ -247,9 +374,10 @@
 
   async function init() {
     showError(null);
-    els.tbody.innerHTML = `<tr><td colspan="5" class="dgs-v2-lines-status">Loading…</td></tr>`;
+    els.tbody.innerHTML = `<tr><td colspan="6" class="dgs-v2-lines-status">Loading…</td></tr>`;
+    renderPerformanceMetrics(null);
     try {
-      await Promise.all([loadSummary(), loadList()]);
+      await loadList();
     } catch (err) {
       showError(err.message || String(err));
       els.tbody.innerHTML = "";

@@ -211,6 +211,67 @@ def vendor_detail(reference_key: str):
 
 # --- Casinos ---
 
+_PERF_VIEW = "[dashboard].[vw_performance_report]"
+
+_CASINO_PERF_LATEST_CTE = f"""
+WITH casino_perf AS (
+    SELECT
+        sm.casino_id,
+        CONVERT(date, mr.[date]) AS performance_month,
+        AVG(CAST(mr.ADW AS float)) AS avg_adw,
+        AVG(CAST(mr.WIN_Index AS float)) AS avg_win_index,
+        SUM(CAST(mr.Commission AS float)) AS sum_commission,
+        COUNT(*) AS performance_machines
+    FROM {_PERF_VIEW} AS mr
+    INNER JOIN inventory.slot_master_migration AS sm
+        ON sm.reference_key = mr.slot_master_id
+    WHERE mr.slot_master_id IS NOT NULL
+      AND LTRIM(RTRIM(mr.slot_master_id)) <> N''
+      AND mr.[date] IS NOT NULL
+    GROUP BY sm.casino_id, CONVERT(date, mr.[date])
+),
+casino_perf_latest AS (
+    SELECT cp.*
+    FROM casino_perf AS cp
+    INNER JOIN (
+        SELECT casino_id, MAX(performance_month) AS performance_month
+        FROM casino_perf
+        GROUP BY casino_id
+    ) AS latest
+        ON latest.casino_id = cp.casino_id
+       AND latest.performance_month = cp.performance_month
+)
+"""
+
+
+def _performance_block(row) -> dict | None:
+    if not row or row.get("performance_month") is None:
+        return None
+    return {
+        "month": _json_value(row.get("performance_month")),
+        "avg_adw": _json_value(row.get("avg_adw")),
+        "avg_win_index": _json_value(row.get("avg_win_index")),
+        "sum_commission": _json_value(row.get("sum_commission")),
+        "machine_count": int(row.get("performance_machines") or 0),
+    }
+
+
+def _location_label(row) -> str | None:
+    parts = [
+        str(row.get("address") or "").strip(),
+        str(row.get("city") or "").strip(),
+        " ".join(
+            p
+            for p in (
+                str(row.get("state_abbreviation") or "").strip(),
+                str(row.get("zip") or "").strip(),
+            )
+            if p
+        ).strip(),
+    ]
+    cleaned = [p for p in parts if p]
+    return ", ".join(cleaned) if cleaned else None
+
 
 @casinos_router.get("/summary")
 def casinos_summary():
@@ -269,6 +330,7 @@ def list_casinos(
         offset = (page - 1) * page_size
         rows = _field_query(
             f"""
+            {_CASINO_PERF_LATEST_CTE}
             SELECT
                 cv.reference_key,
                 cv.casino_name,
@@ -277,14 +339,19 @@ def list_casinos(
                 cv.tribe_name,
                 cv.state_id,
                 cv.state_abbreviation,
-                c.licensed,
                 c.emaint_property,
                 c.sales,
                 (SELECT COUNT(*)
                  FROM inventory.slot_master_migration sm
-                 WHERE sm.casino_id = cv.reference_key AND sm.is_active = 1) AS active_machines
+                 WHERE sm.casino_id = cv.reference_key AND sm.is_active = 1) AS active_machines,
+                perf.performance_month,
+                perf.avg_adw,
+                perf.avg_win_index,
+                perf.sum_commission,
+                perf.performance_machines
             FROM clients.casino_view AS cv
             INNER JOIN clients.casinos AS c ON c.reference_key = cv.reference_key
+            LEFT JOIN casino_perf_latest AS perf ON perf.casino_id = cv.reference_key
             {where}
             ORDER BY cv.state_abbreviation, cv.casino_name
             OFFSET {offset} ROWS FETCH NEXT {page_size} ROWS ONLY
@@ -294,22 +361,26 @@ def list_casinos(
     except Exception as exc:
         raise HTTPException(status_code=503, detail=f"database error: {exc}") from exc
 
-    items = [
-        {
-            "reference_key": _json_value(r.get("reference_key")),
-            "casino_name": _json_value(r.get("casino_name")),
-            "casino_short": _json_value(r.get("casino_short")),
-            "tribe_id": _json_value(r.get("tribe_id")),
-            "tribe_name": _json_value(r.get("tribe_name")),
-            "state_id": _json_value(r.get("state_id")),
-            "state_abbreviation": _json_value(r.get("state_abbreviation")),
-            "licensed": bool(r.get("licensed")) if r.get("licensed") is not None else None,
-            "emaint_property": _json_value(r.get("emaint_property")),
-            "sales": _json_value(r.get("sales")),
-            "active_machines": int(r.get("active_machines") or 0),
-        }
-        for r in rows
-    ]
+    items = []
+    for r in rows:
+        perf = _performance_block(r)
+        items.append(
+            {
+                "reference_key": _json_value(r.get("reference_key")),
+                "casino_name": _json_value(r.get("casino_name")),
+                "casino_short": _json_value(r.get("casino_short")),
+                "tribe_id": _json_value(r.get("tribe_id")),
+                "tribe_name": _json_value(r.get("tribe_name")),
+                "state_id": _json_value(r.get("state_id")),
+                "state_abbreviation": _json_value(r.get("state_abbreviation")),
+                "emaint_property": _json_value(r.get("emaint_property")),
+                "sales": _json_value(r.get("sales")),
+                "active_machines": int(r.get("active_machines") or 0),
+                "performance": perf,
+                "avg_adw": perf.get("avg_adw") if perf else None,
+                "win_index": perf.get("avg_win_index") if perf else None,
+            }
+        )
     return {
         "items": items,
         "total": total,
@@ -327,7 +398,8 @@ def casino_detail(reference_key: str):
 
     try:
         rows = _field_query(
-            """
+            f"""
+            {_CASINO_PERF_LATEST_CTE}
             SELECT
                 c.reference_key,
                 c.casino_name,
@@ -357,11 +429,22 @@ def casino_detail(reference_key: str):
                 c.slot_director_email,
                 c.accounting_name,
                 c.accounting_email,
+                c.address,
+                c.city,
+                c.zip,
+                c.latitude,
+                c.longitude,
                 c.update_by,
-                c.update_date
+                c.update_date,
+                perf.performance_month,
+                perf.avg_adw,
+                perf.avg_win_index,
+                perf.sum_commission,
+                perf.performance_machines
             FROM clients.casinos AS c
             LEFT JOIN clients.tribes AS t ON t.reference_key = c.tribe_id
             LEFT JOIN clients.states AS s ON s.reference_key = COALESCE(c.state_id, t.state_id)
+            LEFT JOIN casino_perf_latest AS perf ON perf.casino_id = c.reference_key
             WHERE c.reference_key = %s
             """,
             (cid,),
@@ -387,6 +470,12 @@ def casino_detail(reference_key: str):
     except Exception as exc:
         raise HTTPException(status_code=503, detail=f"database error: {exc}") from exc
 
+    lat = _json_value(r.get("latitude"))
+    lon = _json_value(r.get("longitude"))
+    has_map = lat is not None and lon is not None
+    location_label = _location_label(r)
+    performance = _performance_block(r)
+
     return {
         "reference_key": _json_value(r.get("reference_key")),
         "casino_name": _json_value(r.get("casino_name")),
@@ -398,6 +487,13 @@ def casino_detail(reference_key: str):
         "state_id": _json_value(r.get("state_id")),
         "state": _json_value(r.get("state")),
         "state_abbreviation": _json_value(r.get("state_abbreviation")),
+        "address": _json_value(r.get("address")),
+        "city": _json_value(r.get("city")),
+        "zip": _json_value(r.get("zip")),
+        "location_label": location_label,
+        "latitude": lat,
+        "longitude": lon,
+        "has_map": has_map,
         "sales": _json_value(r.get("sales")),
         "licensed": _bool_label(r.get("licensed")),
         "signed_master_agreement": _bool_label(r.get("signed_master_agreement")),
@@ -420,4 +516,5 @@ def casino_detail(reference_key: str):
         "update_date": _json_value(r.get("update_date")),
         "active_machines": int(active_machines.get("n") or 0),
         "project_count": int(project_count.get("n") or 0),
+        "performance": performance,
     }
