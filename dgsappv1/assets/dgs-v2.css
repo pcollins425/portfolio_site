@@ -470,6 +470,130 @@ body.dgs-slot-master-v2 .dgs-v2-main {
   color: #e2e8f0;
 }
 
+.dgs-v2-doc-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.dgs-v2-doc-dropzone {
+  border: 1px dashed var(--dgs-v2-border);
+  border-radius: 10px;
+  padding: 14px 12px;
+  text-align: center;
+  cursor: pointer;
+  background: rgba(255, 255, 255, 0.02);
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.dgs-v2-doc-dropzone:hover,
+.dgs-v2-doc-dropzone.is-dragover {
+  border-color: var(--dgs-v2-accent-border);
+  background: var(--dgs-v2-accent-bg);
+}
+
+.dgs-v2-doc-dropzone.is-uploading {
+  opacity: 0.65;
+  pointer-events: none;
+}
+
+.dgs-v2-doc-dropzone-title {
+  margin: 0;
+  font-size: 12px;
+  color: var(--dgs-v2-heading);
+  font-weight: 600;
+}
+
+.dgs-v2-doc-dropzone-hint {
+  margin: 4px 0 0;
+  font-size: 11px;
+  color: var(--dgs-v2-text-dim);
+}
+
+.dgs-v2-doc-preview {
+  border: 1px solid var(--dgs-v2-border-soft);
+  border-radius: 10px;
+  overflow: hidden;
+  background: #fff;
+  min-height: 180px;
+}
+
+.dgs-v2-doc-preview iframe {
+  display: block;
+  width: 100%;
+  height: 220px;
+  border: 0;
+}
+
+.dgs-v2-doc-preview-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 10px;
+  background: var(--dgs-v2-card-head);
+  border-top: 1px solid var(--dgs-v2-border-soft);
+  font-size: 11px;
+  color: var(--dgs-v2-text-muted);
+}
+
+.dgs-v2-doc-preview-meta a {
+  color: var(--dgs-v2-accent);
+  text-decoration: none;
+}
+
+.dgs-v2-doc-preview-meta a:hover {
+  text-decoration: underline;
+}
+
+.dgs-v2-doc-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.dgs-v2-doc-list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 1px solid var(--dgs-v2-border-soft);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.02);
+  font-size: 12px;
+}
+
+.dgs-v2-doc-list li a {
+  color: var(--dgs-v2-accent);
+  text-decoration: none;
+}
+
+.dgs-v2-doc-list li a:hover {
+  text-decoration: underline;
+}
+
+.dgs-v2-doc-list .dgs-v2-doc-slot {
+  color: var(--dgs-v2-text-dim);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.dgs-v2-doc-status {
+  margin: 0;
+  font-size: 11px;
+  color: var(--dgs-v2-text-muted);
+  min-height: 14px;
+}
+
+.dgs-v2-doc-status.is-error {
+  color: #fca5a5;
+}
+
 .dgs-v2-lines-wrap {
   border: 1px solid var(--dgs-v2-border-soft);
   border-radius: 10px;

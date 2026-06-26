@@ -1,4 +1,4 @@
-"""Vendor contracts read API — inventory.contract* tables."""
+"""Vendor contracts API — inventory.contract* tables."""
 
 from __future__ import annotations
 
@@ -6,10 +6,13 @@ import math
 import os
 from datetime import date, datetime
 from decimal import Decimal
+from typing import Annotated, Any
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, File, Form, HTTPException, Query, UploadFile
 
 from app import mssql
+from app.auth_deps import require_demo_user
+from app.contract_documents_service import list_contract_documents, upload_contract_document
 
 router = APIRouter(prefix="/api/contracts", tags=["contracts"])
 
@@ -335,6 +338,8 @@ def contract_detail(reference_key: str):
             }
         )
 
+    document_rows = list_contract_documents(key)
+
     return {
         "reference_key": _json_value(h.get("reference_key")),
         "agreement_id": _json_value(h.get("agreement_id")),
@@ -350,9 +355,85 @@ def contract_detail(reference_key: str):
         "payment_date": _json_value(h.get("payment_date")),
         "contract_file": _json_value(h.get("contract_file")),
         "notes": _json_value(h.get("notes")),
+        "documents": document_rows,
         "lines": lines,
         "cabinet_images": cabinet_images,
         "line_count": len(lines),
         "serial_count": sum(ln["serial_count"] for ln in lines),
         "linked_serial_count": sum(ln["linked_serial_count"] for ln in lines),
+    }
+
+
+@router.post("/{reference_key}/documents")
+async def upload_contract_document_route(
+    reference_key: str,
+    role: Annotated[str, Form(description="agreement or bol")],
+    file: UploadFile = File(...),
+    user: Annotated[dict[str, Any] | None, require_demo_user] = None,
+):
+    """Upload a contract PDF to NAS and register inventory.document rows."""
+    key = reference_key.strip()
+    if not key:
+        raise HTTPException(status_code=400, detail="reference_key is required")
+
+    role_norm = (role or "").strip().lower()
+    if role_norm not in {"agreement", "bol"}:
+        raise HTTPException(status_code=400, detail="role must be agreement or bol")
+
+    filename = (file.filename or "").strip()
+    if not filename:
+        raise HTTPException(status_code=400, detail="filename required")
+    if not filename.lower().endswith(".pdf"):
+        raise HTTPException(status_code=400, detail="only PDF uploads are supported")
+
+    content_type = (file.content_type or "").lower()
+    if content_type and content_type not in {"application/pdf", "application/x-pdf"}:
+        raise HTTPException(status_code=400, detail="only PDF uploads are supported")
+
+    try:
+        header_rows = _field_query(
+            """
+            SELECT c.reference_key, c.agreement_id, v.vendor_name
+            FROM inventory.contract c
+            INNER JOIN vendors.vendors v ON v.reference_key = c.vendor_id
+            WHERE c.reference_key = %s
+            """,
+            (key,),
+        )
+    except Exception as exc:
+        raise HTTPException(status_code=503, detail=f"database error: {exc}") from exc
+
+    if not header_rows:
+        raise HTTPException(status_code=404, detail=f"contract not found: {key!r}")
+
+    h = header_rows[0]
+    file_bytes = await file.read()
+    if not file_bytes:
+        raise HTTPException(status_code=400, detail="empty file")
+
+    update_by = (user or {}).get("email") or (user or {}).get("sub") or "dgsapp_document_upload"
+
+    try:
+        uploaded = upload_contract_document(
+            contract_reference_key=key,
+            role=role_norm,
+            filename=filename,
+            file_bytes=file_bytes,
+            vendor_name=str(h.get("vendor_name") or ""),
+            agreement_id=str(h.get("agreement_id") or ""),
+            update_by=update_by,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except PermissionError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    except OSError as exc:
+        raise HTTPException(status_code=503, detail=f"NAS write failed: {exc}") from exc
+    except Exception as exc:
+        raise HTTPException(status_code=503, detail=f"upload failed: {exc}") from exc
+
+    documents = list_contract_documents(key)
+    return {
+        "uploaded": uploaded,
+        "documents": documents,
     }

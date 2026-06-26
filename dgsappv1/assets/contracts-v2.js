@@ -17,6 +17,8 @@
     expandedLine: null,
     serialCache: {},
     mediaUrls: {},
+    documentUrls: {},
+    docUploading: false,
   };
 
   const els = {
@@ -43,6 +45,13 @@
     serialExpansion: document.getElementById("serial-expansion"),
     serialExpansionMeta: document.getElementById("serial-expansion-meta"),
     serialExpansionBody: document.getElementById("serial-expansion-body"),
+    agreementDropzone: document.getElementById("agreement-dropzone"),
+    agreementFileInput: document.getElementById("agreement-file-input"),
+    agreementDocPreview: document.getElementById("agreement-doc-preview"),
+    bolDropzone: document.getElementById("bol-dropzone"),
+    bolFileInput: document.getElementById("bol-file-input"),
+    bolDocList: document.getElementById("bol-doc-list"),
+    docUploadStatus: document.getElementById("doc-upload-status"),
   };
 
   function apiUrl(path) {
@@ -107,6 +116,13 @@
     state.mediaUrls = {};
   }
 
+  function revokeDocumentUrls() {
+    for (const url of Object.values(state.documentUrls)) {
+      if (url) URL.revokeObjectURL(url);
+    }
+    state.documentUrls = {};
+  }
+
   async function loadMediaUrl(relPath) {
     if (!relPath) return null;
     if (state.mediaUrls[relPath]) return state.mediaUrls[relPath];
@@ -117,6 +133,151 @@
     const url = URL.createObjectURL(blob);
     state.mediaUrls[relPath] = url;
     return url;
+  }
+
+  async function loadDocumentUrl(relPath) {
+    if (!relPath) return null;
+    if (state.documentUrls[relPath]) return state.documentUrls[relPath];
+    const headers = window.DGSAuth ? DGSAuth.authHeaders() : {};
+    const res = await fetch(apiUrl(`/api/documents/${encodeURIComponent(relPath)}`), { headers });
+    if (!res.ok) return null;
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    state.documentUrls[relPath] = url;
+    return url;
+  }
+
+  function setDocUploadStatus(msg, isError) {
+    if (!els.docUploadStatus) return;
+    els.docUploadStatus.textContent = msg || "";
+    els.docUploadStatus.classList.toggle("is-error", Boolean(isError));
+  }
+
+  function docDisplayName(doc) {
+    return doc.original_filename || (doc.nas_rel_path || "").split("/").pop() || doc.reference_key || "Document";
+  }
+
+  async function renderDocuments(d) {
+    if (!els.agreementDocPreview || !els.bolDocList) return;
+
+    const docs = d?.documents || [];
+    const agreements = docs.filter((doc) => doc.role === "agreement");
+    const bols = docs.filter((doc) => doc.role === "bol");
+
+    if (!agreements.length) {
+      els.agreementDocPreview.hidden = true;
+      els.agreementDocPreview.innerHTML = "";
+    } else {
+      const doc = agreements[0];
+      const url = await loadDocumentUrl(doc.nas_rel_path);
+      els.agreementDocPreview.hidden = false;
+      if (url) {
+        els.agreementDocPreview.innerHTML = `
+          <iframe src="${url}" title="Agreement PDF"></iframe>
+          <div class="dgs-v2-doc-preview-meta">
+            <span>${esc(docDisplayName(doc))}</span>
+            <a href="${url}" target="_blank" rel="noopener">Open</a>
+          </div>`;
+      } else {
+        els.agreementDocPreview.innerHTML = `
+          <div class="dgs-v2-doc-preview-meta">
+            <span>${esc(docDisplayName(doc))}</span>
+            <span>Preview unavailable</span>
+          </div>`;
+      }
+    }
+
+    if (!bols.length) {
+      els.bolDocList.innerHTML = "";
+    } else {
+      const items = await Promise.all(
+        bols.map(async (doc) => {
+          const url = await loadDocumentUrl(doc.nas_rel_path);
+          const slot = doc.sequence_no ? `BOL ${doc.sequence_no}` : "BOL";
+          const openLink = url
+            ? `<a href="${url}" target="_blank" rel="noopener">Open</a>`
+            : `<span>Unavailable</span>`;
+          return `<li><span><span class="dgs-v2-doc-slot">${esc(slot)}</span> ${esc(docDisplayName(doc))}</span>${openLink}</li>`;
+        })
+      );
+      els.bolDocList.innerHTML = items.join("");
+    }
+  }
+
+  async function uploadDocument(role, file) {
+    if (!state.selectedKey || !file) return;
+    if (state.docUploading) return;
+
+    if (!file.name.toLowerCase().endsWith(".pdf")) {
+      setDocUploadStatus("Only PDF files are supported.", true);
+      return;
+    }
+
+    state.docUploading = true;
+    setDocUploadStatus(`Uploading ${file.name}…`);
+    const dropzones = [els.agreementDropzone, els.bolDropzone].filter(Boolean);
+    dropzones.forEach((dz) => dz.classList.add("is-uploading"));
+
+    try {
+      const form = new FormData();
+      form.append("role", role);
+      form.append("file", file, file.name);
+      const headers = window.DGSAuth ? DGSAuth.authHeaders() : {};
+      const res = await fetch(apiUrl(`/api/contracts/${encodeURIComponent(state.selectedKey)}/documents`), {
+        method: "POST",
+        headers,
+        body: form,
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        const msg = body.detail || body.message || res.statusText;
+        throw new Error(typeof msg === "string" ? msg : JSON.stringify(msg));
+      }
+
+      revokeDocumentUrls();
+      state.detail = { ...state.detail, documents: body.documents || [] };
+      await renderDocuments(state.detail);
+      setDocUploadStatus(`Uploaded ${file.name}.`);
+    } catch (err) {
+      setDocUploadStatus(err.message || String(err), true);
+    } finally {
+      state.docUploading = false;
+      dropzones.forEach((dz) => dz.classList.remove("is-uploading"));
+    }
+  }
+
+  function bindDropzone(dropzone, input, role) {
+    if (!dropzone || !input) return;
+
+    dropzone.addEventListener("click", () => {
+      if (!state.selectedKey || state.docUploading) return;
+      input.click();
+    });
+
+    input.addEventListener("change", () => {
+      const file = input.files?.[0];
+      input.value = "";
+      if (file) uploadDocument(role, file);
+    });
+
+    dropzone.addEventListener("dragover", (e) => {
+      e.preventDefault();
+      dropzone.classList.add("is-dragover");
+    });
+    dropzone.addEventListener("dragenter", (e) => {
+      e.preventDefault();
+      dropzone.classList.add("is-dragover");
+    });
+    dropzone.addEventListener("dragleave", () => {
+      dropzone.classList.remove("is-dragover");
+    });
+    dropzone.addEventListener("drop", (e) => {
+      e.preventDefault();
+      dropzone.classList.remove("is-dragover");
+      if (!state.selectedKey || state.docUploading) return;
+      const file = e.dataTransfer?.files?.[0];
+      if (file) uploadDocument(role, file);
+    });
   }
 
   function placeholderBox(label) {
@@ -409,10 +570,12 @@
     state.serialCache = {};
     hideSerialExpansion();
     revokeMediaUrls();
+    revokeDocumentUrls();
     renderList();
 
     setDetailEmpty(true);
     els.detailEmptyMsg.textContent = "Loading agreement…";
+    setDocUploadStatus("");
     els.vendorLogo.innerHTML = placeholderBox("Loading…");
     els.cabinetRow.innerHTML = "";
 
@@ -421,12 +584,17 @@
       setDetailEmpty(false);
       renderDetailFields(state.detail);
       renderLines();
-      await renderImageCard(state.detail);
+      await Promise.all([renderImageCard(state.detail), renderDocuments(state.detail)]);
     } catch (err) {
       state.detail = null;
       setDetailEmpty(true);
       els.detailEmptyMsg.textContent = err.message || String(err);
       await renderImageCard(null);
+      if (els.agreementDocPreview) {
+        els.agreementDocPreview.hidden = true;
+        els.agreementDocPreview.innerHTML = "";
+      }
+      if (els.bolDocList) els.bolDocList.innerHTML = "";
       els.linesTbody.innerHTML = "";
       els.linesStatus.textContent = "";
       hideSerialExpansion();
@@ -453,6 +621,8 @@
 
   async function init() {
     showError(null);
+    bindDropzone(els.agreementDropzone, els.agreementFileInput, "agreement");
+    bindDropzone(els.bolDropzone, els.bolFileInput, "bol");
     els.tbody.innerHTML = `<tr><td colspan="5" class="dgs-v2-lines-status">Loading…</td></tr>`;
     try {
       await Promise.all([loadSummary(), loadList()]);
@@ -467,6 +637,7 @@
     state.page = 1;
     state.selectedKey = null;
     revokeMediaUrls();
+    revokeDocumentUrls();
     loadList().catch((err) => showError(err.message || String(err)));
   });
 
@@ -476,6 +647,7 @@
     state.page = 1;
     state.selectedKey = null;
     revokeMediaUrls();
+    revokeDocumentUrls();
     loadList().catch((err) => showError(err.message || String(err)));
   });
 
@@ -485,6 +657,7 @@
       state.page = 1;
       state.selectedKey = null;
       revokeMediaUrls();
+      revokeDocumentUrls();
       loadList().catch((err) => showError(err.message || String(err)));
     }
   });

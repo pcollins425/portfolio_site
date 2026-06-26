@@ -30,7 +30,7 @@
       <div>
         <p class="dgs-v2-eyebrow">Vendor agreements</p>
         <h1>Contracts</h1>
-        <p class="dgs-v2-subtitle">contracts-v2.html · <code>inventory.contract</code> · read-only browse</p>
+        <p class="dgs-v2-subtitle">contracts-v2.html · <code>inventory.contract</code> · agreements &amp; BOL PDFs</p>
       </div>
       <div class="dgs-v2-pilot-note">Split layout · vendor images from NAS</div>
     </header>
@@ -100,6 +100,25 @@
           <div id="detail-content" hidden>
             <div class="dgs-v2-section-label">Header</div>
             <dl class="dgs-v2-fields" id="detail-fields"></dl>
+            <div class="dgs-v2-section-label">Agreement document</div>
+            <div class="dgs-v2-doc-panel" id="agreement-doc-panel">
+              <div class="dgs-v2-doc-dropzone" id="agreement-dropzone" data-role="agreement">
+                <p class="dgs-v2-doc-dropzone-title">Drop agreement PDF here</p>
+                <p class="dgs-v2-doc-dropzone-hint">or click to choose file</p>
+                <input type="file" id="agreement-file-input" accept="application/pdf,.pdf" hidden />
+              </div>
+              <div class="dgs-v2-doc-preview" id="agreement-doc-preview" hidden></div>
+            </div>
+            <div class="dgs-v2-section-label">Bills of lading</div>
+            <div class="dgs-v2-doc-panel" id="bol-doc-panel">
+              <ul class="dgs-v2-doc-list" id="bol-doc-list"></ul>
+              <div class="dgs-v2-doc-dropzone" id="bol-dropzone" data-role="bol">
+                <p class="dgs-v2-doc-dropzone-title">Drop BOL PDF here</p>
+                <p class="dgs-v2-doc-dropzone-hint">Adds next shipment slot (max 6)</p>
+                <input type="file" id="bol-file-input" accept="application/pdf,.pdf" hidden />
+              </div>
+            </div>
+            <p class="dgs-v2-doc-status" id="doc-upload-status"></p>
             <div class="dgs-v2-section-label">Line items</div>
             <div class="dgs-v2-lines-wrap">
               <table class="dgs-v2-lines-table">

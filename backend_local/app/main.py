@@ -4,10 +4,17 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app import settings as app_settings
-from app.routers import assistant, assets, auth, commerce, contracts, emaint_demo, expenses, field, master_revenue, media, slot_master, warehouse_inventory
+from app.routers import assistant, assets, auth, commerce, contracts, documents, emaint_demo, expenses, field, master_revenue, media, slot_master, warehouse_inventory
 from app.routers.v1 import health as v1_health
 
 app_settings.load_local_env()
+
+import logging
+import os
+
+_log = logging.getLogger("app.startup")
+_media_mode = (os.environ.get("NAS_MEDIA_MODE") or "").replace("\r", "").strip() or "filesystem"
+_log.info("NAS_MEDIA_MODE=%s", _media_mode)
 
 app = FastAPI(title="Portfolio API (live)", version="0.1.0")
 
@@ -28,6 +35,7 @@ app.include_router(commerce.casinos_router)
 app.include_router(commerce.vendors_router)
 app.include_router(assets.router)
 app.include_router(media.router)
+app.include_router(documents.router)
 app.include_router(slot_master.router)
 app.include_router(expenses.router)
 app.include_router(assistant.router)
