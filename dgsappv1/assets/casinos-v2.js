@@ -251,34 +251,48 @@
       return;
     }
 
+    if (typeof window.L === "undefined") {
+      els.mapWrap.hidden = false;
+      els.mapEl.innerHTML = "";
+      els.mapEl.textContent = "Map unavailable (Leaflet failed to load).";
+      els.mapLink.href = `https://www.google.com/maps?q=${Number(d.latitude)},${Number(d.longitude)}`;
+      return;
+    }
+
     els.mapWrap.hidden = false;
+    els.mapEl.innerHTML = "";
     const lat = Number(d.latitude);
     const lon = Number(d.longitude);
     const gmaps = `https://www.google.com/maps?q=${lat},${lon}`;
     els.mapLink.href = gmaps;
 
-    state.map = L.map(els.mapEl, {
-      scrollWheelZoom: false,
-      zoomControl: true,
-      attributionControl: true,
-    }).setView([lat, lon], 11);
+    try {
+      state.map = L.map(els.mapEl, {
+        scrollWheelZoom: false,
+        zoomControl: true,
+        attributionControl: true,
+      }).setView([lat, lon], 11);
 
-    L.tileLayer(CARTO_DARK, {
-      attribution:
-        '&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a> &copy; <a href="https://carto.com/">CARTO</a>',
-      subdomains: "abcd",
-      maxZoom: 19,
-    }).addTo(state.map);
+      L.tileLayer(CARTO_DARK, {
+        attribution:
+          '&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a> &copy; <a href="https://carto.com/">CARTO</a>',
+        subdomains: "abcd",
+        maxZoom: 19,
+      }).addTo(state.map);
 
-    state.mapMarker = L.circleMarker([lat, lon], {
-      radius: 7,
-      color: "#6eb5ff",
-      weight: 2,
-      fillColor: "#6eb5ff",
-      fillOpacity: 0.9,
-    }).addTo(state.map);
+      state.mapMarker = L.circleMarker([lat, lon], {
+        radius: 7,
+        color: "#6eb5ff",
+        weight: 2,
+        fillColor: "#6eb5ff",
+        fillOpacity: 0.9,
+      }).addTo(state.map);
 
-    requestAnimationFrame(() => state.map?.invalidateSize());
+      requestAnimationFrame(() => state.map?.invalidateSize());
+    } catch (err) {
+      console.warn("Casinos map render failed:", err);
+      els.mapEl.textContent = "Map could not be rendered.";
+    }
   }
 
   function renderDetailFields(d) {
@@ -356,6 +370,7 @@
       renderIdentity(null);
       renderPerformanceMetrics(null);
       destroyMap();
+      els.mapWrap.hidden = true;
     }
   }
 

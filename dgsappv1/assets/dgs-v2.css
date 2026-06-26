@@ -1874,6 +1874,13 @@ body.dgs-casinos-v2 .dgs-v2-casino-map {
   border-radius: 10px;
   overflow: hidden;
   background: #141922;
+  color: var(--dgs-v2-text-muted);
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 12px;
 }
 
 body.dgs-casinos-v2 .dgs-v2-casino-map .leaflet-container {
