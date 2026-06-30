@@ -5,6 +5,12 @@
     new URLSearchParams(window.location.search).get("api")?.replace(/\/$/, "") ||
     "https://api.collinsmediallc.com";
 
+  const AssetNav = window.DGSAssetNav || {
+    hubHref: () => "",
+    assetsHref: () => "assets-v2.html",
+    assetsActionHtml: () => "",
+  };
+
   const params = new URLSearchParams(window.location.search);
 
   const state = {
@@ -144,10 +150,13 @@
       ["update_by", esc(a.update_by || "—")],
     ];
     const body = `<div class="dgs-v2-hub-kv-grid">${fields.map(([k, v]) => kv(k, v)).join("")}</div>`;
-    const assetsHref = a.reference_key
-      ? pageUrl("assets-v2.html")
-      : null;
-    return tileWide("Asset record · inventory.assets", body, assetsHref, "Open in Assets →");
+    const assetsHref = AssetNav.assetsHref({ assetId: a.reference_key });
+    return tileWide(
+      "Asset record · inventory.assets",
+      body,
+      assetsHref,
+      "Go to Assets →"
+    );
   }
 
   function renderCompinfoTile(c) {
@@ -155,8 +164,8 @@
       return tile(
         "COMPINFO",
         `<p class="dgs-v2-hub-empty">No COMPINFO row linked to this asset.</p>`,
-        pageUrl("assets-v2.html"),
-        "Open in Assets →"
+        AssetNav.assetsHref(),
+        "Go to Assets →"
       );
     }
     const body = [
@@ -168,8 +177,8 @@
     return tile(
       "COMPINFO",
       body,
-      pageUrl("assets-v2.html"),
-      "Open in Assets →"
+      AssetNav.assetsHref({ compid: c.compid }),
+      "Go to Assets →"
     );
   }
 
@@ -179,7 +188,7 @@
         "Contract line",
         `<p class="dgs-v2-hub-empty">Not linked on a contract serial.</p>`,
         pageUrl("contracts-v2.html"),
-        "Open in Contracts →"
+        "Go to Contracts →"
       );
     }
     const body = [
@@ -190,7 +199,7 @@
     const href = c.contract_reference_key
       ? pageUrl("contracts-v2.html")
       : pageUrl("contracts-v2.html");
-    return tile("Contract line", body, href, "Open in Contracts →");
+    return tile("Contract line", body, href, "Go to Contracts →");
   }
 
   function renderSlotMasterTile(sm) {
@@ -200,7 +209,7 @@
         "Slot master",
         `<p class="dgs-v2-hub-empty">No slot master migration rows.</p>`,
         pageUrl("slot_master.html"),
-        "Open in Slot Master →"
+        "Go to Slot Master →"
       );
     }
     let body;
@@ -214,7 +223,10 @@
     } else {
       body = `<p class="dgs-v2-hub-empty">No active floor row · ${sm.history_count} historical row${sm.history_count === 1 ? "" : "s"}</p>`;
     }
-    return tile("Slot master", body, pageUrl("slot_master.html"), "Open in Slot Master →");
+    const slotHref = active?.casino_id
+      ? pageUrl("slot_master.html", { casino: active.casino_id })
+      : pageUrl("slot_master.html");
+    return tile("Slot master", body, slotHref, "Go to Slot Master →");
   }
 
   function renderWarehouseTile(w, compinfo) {
@@ -226,7 +238,7 @@
         "Warehouse",
         `<p class="dgs-v2-hub-empty">${esc(note)}</p>`,
         pageUrl("warehouse.html"),
-        "Open in Warehouse →"
+        "Go to Warehouse →"
       );
     }
     const body = [
@@ -234,7 +246,7 @@
       w.status ? `<div>status · ${esc(w.status)}</div>` : "",
       w.compid ? `<div>compid · <span class="mono">${esc(w.compid)}</span></div>` : "",
     ].join("");
-    return tile("Warehouse", body, pageUrl("warehouse.html"), "Open in Warehouse →");
+    return tile("Warehouse", body, pageUrl("warehouse.html"), "Go to Warehouse →");
   }
 
   function renderTiles(hub) {

@@ -90,13 +90,7 @@
   }
 
   function assetHubHref(assetId) {
-    if (!assetId) return "";
-    if (window.DGS) {
-      return DGS.withApi(`asset-hub.html?id=${encodeURIComponent(assetId)}`);
-    }
-    const url = new URL("asset-hub.html", window.location.href);
-    url.searchParams.set("id", assetId);
-    return url.pathname + url.search;
+    return (window.DGSAssetNav && DGSAssetNav.hubHref(assetId)) || "";
   }
 
   function fmtNum(n) {
@@ -535,18 +529,22 @@
             </thead>
           <tbody>
             ${data.serials
-              .map(
-                (s) => `
-              <tr class="${s.linked ? "is-linked" : "is-missing"}">
-                <td class="mono">${esc(s.serial_number)}</td>
-                <td class="mono">${
+              .map((s) => {
+                const serialCell =
+                  s.linked && s.asset_id
+                    ? `<a class="dgs-v2-hub-serial-link" href="${esc(assetHubHref(s.asset_id))}">${esc(s.serial_number)}</a>`
+                    : esc(s.serial_number);
+                const assetCell =
                   s.linked && s.asset_id
                     ? `<a class="dgs-v2-hub-serial-link" href="${esc(assetHubHref(s.asset_id))}">${esc(s.asset_id)}</a>`
-                    : esc(s.asset_id || "—")
-                }</td>
+                    : esc(s.asset_id || "—");
+                return `
+              <tr class="${s.linked ? "is-linked" : "is-missing"}">
+                <td class="mono">${serialCell}</td>
+                <td class="mono">${assetCell}</td>
                 <td>${s.linked ? "Linked" : "Missing"}</td>
-              </tr>`
-              )
+              </tr>`;
+              })
               .join("")}
           </tbody>
         </table>

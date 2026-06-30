@@ -5,6 +5,13 @@
     new URLSearchParams(window.location.search).get("api")?.replace(/\/$/, "") ||
     "https://api.collinsmediallc.com";
 
+  const AssetNav = window.DGSAssetNav || {
+    hubHref: () => "",
+    hubLinkHtml: (_, label) => String(label ?? "—"),
+    hubActionHtml: () => "",
+    assetsActionHtml: () => "",
+  };
+
   const state = {
     summary: null,
     items: [],
@@ -37,6 +44,7 @@
     detailEmptyMsg: document.getElementById("detail-empty-msg"),
     detailContent: document.getElementById("detail-content"),
     detailFields: document.getElementById("detail-fields"),
+    assetNavActions: document.getElementById("asset-nav-actions"),
     prepActions: document.getElementById("prep-actions"),
     prepStatus: document.getElementById("prep-status"),
     prepHint: document.getElementById("prep-hint"),
@@ -159,20 +167,26 @@
 
   function renderList() {
     els.tbody.innerHTML = state.items
-      .map(
-        (row) => `
+      .map((row) => {
+        const serialCell = row.asset_id
+          ? AssetNav.hubLinkHtml(row.asset_id, row.serial_no || row.asset_id)
+          : esc(row.serial_no || "—");
+        return `
         <tr data-key="${esc(row.compid)}" class="${row.compid === state.selectedKey ? "selected" : ""}">
           <td class="mono">${esc(row.compid)}</td>
-          <td class="mono">${esc(row.serial_no || "—")}</td>
+          <td class="mono">${serialCell}</td>
           <td>${esc(row.comp_desc || "—")}</td>
           <td>${esc(row.property || "—")}</td>
           <td>${esc(row.status || "—")}</td>
-        </tr>`
-      )
+        </tr>`;
+      })
       .join("");
 
     els.tbody.querySelectorAll("tr[data-key]").forEach((tr) => {
       tr.addEventListener("click", () => openDetail(tr.dataset.key));
+    });
+    els.tbody.querySelectorAll("a.dgs-v2-hub-serial-link").forEach((link) => {
+      link.addEventListener("click", (event) => event.stopPropagation());
     });
 
     const start = state.total === 0 ? 0 : (state.page - 1) * state.pageSize + 1;
@@ -188,10 +202,28 @@
     return `<dt>${esc(label)}</dt><dd>${esc(value)}</dd>`;
   }
 
+  function fieldHtml(label, valueHtml) {
+    return `<dt>${esc(label)}</dt><dd>${valueHtml}</dd>`;
+  }
+
+  function renderAssetNavActions(d) {
+    if (!els.assetNavActions) return;
+    if (!d || !d.asset_id) {
+      els.assetNavActions.hidden = true;
+      els.assetNavActions.innerHTML = "";
+      return;
+    }
+    els.assetNavActions.hidden = false;
+    els.assetNavActions.innerHTML = AssetNav.hubActionHtml(d.asset_id);
+  }
+
   function renderDetailFields(d) {
+    const refKeyHtml = d.asset_id
+      ? AssetNav.hubLinkHtml(d.asset_id, d.asset_id)
+      : "—";
     els.detailFields.innerHTML = [
       field("Asset ID", d.compid),
-      field("Reference key", d.asset_id || "—"),
+      fieldHtml("Reference key", refKeyHtml),
       field("Serial", d.serial_no || "—"),
       field("Status", d.status || "—"),
       field("Game title", d.comp_desc || "—"),
@@ -307,6 +339,9 @@
     els.detailBody.classList.toggle("empty", empty);
     els.detailEmptyMsg.hidden = !empty;
     els.detailContent.hidden = empty;
+    if (empty) {
+      renderAssetNavActions(null);
+    }
   }
 
   async function openDetail(compid) {
@@ -321,6 +356,7 @@
     try {
       state.detail = await fetchJson(`/api/assets/${encodeURIComponent(compid)}`);
       setDetailEmpty(false);
+      renderAssetNavActions(state.detail);
       renderDetailFields(state.detail);
       renderPrepActions(state.detail);
       await renderImageCard(state.detail);
@@ -337,7 +373,33 @@
     renderSummary();
   }
 
-  async function loadList() {
+  async function openDetailByAssetId(assetId) {
+    const target = String(assetId || "").trim();
+    if (!target) return;
+
+    let match = state.items.find((row) => row.asset_id === target);
+    if (match) {
+      await openDetail(match.compid);
+      return;
+    }
+
+    state.search = target;
+    els.searchInput.value = target;
+    state.page = 1;
+    state.selectedKey = null;
+    await loadList({ skipAutoSelect: true });
+    match = state.items.find((row) => row.asset_id === target);
+    if (match) {
+      await openDetail(match.compid);
+      return;
+    }
+    if (state.items.length === 1) {
+      await openDetail(state.items[0].compid);
+    }
+  }
+
+  async function loadList(options) {
+    const skipAutoSelect = options && options.skipAutoSelect;
     const q = encodeURIComponent(state.search);
     const path = `/api/assets?q=${q}&page=${state.page}&page_size=${state.pageSize}`;
     const data = await fetchJson(path);
@@ -345,7 +407,7 @@
     state.total = data.total || 0;
     renderList();
 
-    if (!state.selectedKey && state.items.length) {
+    if (!skipAutoSelect && !state.selectedKey && state.items.length) {
       await openDetail(state.items[0].compid);
     }
   }
@@ -354,8 +416,19 @@
     showError(null);
     els.tbody.innerHTML = `<tr><td colspan="5" class="dgs-v2-lines-status">Loading…</td></tr>`;
     await loadPrepStatusConfig();
+    const params = new URLSearchParams(window.location.search);
+    const deepAsset = (params.get("asset") || params.get("id") || "").trim();
+    const deepCompid = (params.get("compid") || "").trim();
     try {
-      await Promise.all([loadSummary(), loadList()]);
+      await loadSummary();
+      await loadList({ skipAutoSelect: !!(deepAsset || deepCompid) });
+      if (deepCompid) {
+        await openDetail(deepCompid);
+      } else if (deepAsset) {
+        await openDetailByAssetId(deepAsset);
+      } else if (!state.selectedKey && state.items.length) {
+        await openDetail(state.items[0].compid);
+      }
     } catch (err) {
       showError(err.message || String(err));
       els.tbody.innerHTML = "";

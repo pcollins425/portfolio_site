@@ -627,9 +627,20 @@
         </section>`;
     }
 
+    let assetNavSection = "";
+    if (TABLE_ID === "compinfo") {
+      const asset = assetFromRecord(record);
+      const hubHref =
+        window.DGSAssetNav && asset && asset.asset_id ? DGSAssetNav.hubHref(asset.asset_id) : "";
+      if (hubHref) {
+        assetNavSection = `<section class="asset-nav-section"><a class="dgs-v2-hub-tile-link" href="${escapeHtml(hubHref)}">Go to Asset hub →</a></section>`;
+      }
+    }
+
     wrap.innerHTML = `
       <div class="form-grid">${parts.join("")}</div>
       ${attrLines.length ? `<section class="attributes-summary"><h3 class="editor-title">Attributes (read-only summary)</h3>${attrLines.join("")}</section>` : ""}
+      ${assetNavSection}
       ${prepSection}
       ${opsSection}
       ${editor}`;
@@ -1060,6 +1071,11 @@
 
     const title = asset.comp_desc || asset.compid || "Asset";
     const statusText = asset.status ? String(asset.status) : "(no status)";
+    const hubHref =
+      window.DGSAssetNav && asset.asset_id ? DGSAssetNav.hubHref(asset.asset_id) : "";
+    const hubAction = hubHref
+      ? `<p><a class="dgs-v2-hub-tile-link" href="${escapeHtml(hubHref)}">Go to Asset hub →</a></p>`
+      : "";
     card.innerHTML = `
       <h3>${escapeHtml(title)}</h3>
       <p>Asset ID: ${escapeHtml(fmtCell(asset.compid))}</p>
@@ -1067,6 +1083,7 @@
       <p>Reference key: ${escapeHtml(fmtCell(asset.asset_id))}</p>
       <p>Property: ${escapeHtml(fmtCell(asset.property))}</p>
       <p class="scan-current-status"><strong>Status:</strong> ${escapeHtml(statusText)}</p>
+      ${hubAction}
     `;
     result.hidden = false;
   }

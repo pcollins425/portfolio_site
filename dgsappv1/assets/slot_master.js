@@ -6,6 +6,11 @@
     params.get("api")?.replace(/\/$/, "") ||
     "https://api.collinsmediallc.com";
 
+  const AssetNav = window.DGSAssetNav || {
+    hubHref: () => "",
+    hubLinkHtml: (_, label) => String(label ?? "—"),
+  };
+
   const SUMMARY_FIELDS = [
     ["zone", "Zone"],
     ["bank", "Bank"],
@@ -162,20 +167,27 @@
 
   function renderList() {
     els.tbody.innerHTML = state.machines
-      .map(
-        (row) => `
+      .map((row) => {
+        const serialLabel = row.serial || "—";
+        const serialCell = row.asset_id
+          ? AssetNav.hubLinkHtml(row.asset_id, serialLabel)
+          : esc(serialLabel);
+        return `
         <tr data-key="${esc(row.reference_key)}" class="${row.reference_key === state.selectedKey ? "selected" : ""}">
-          <td class="mono">${esc(row.serial)}</td>
+          <td class="mono">${serialCell}</td>
           <td>${esc(row.vendor_name)} · ${esc(row.cabinet_name)}</td>
           <td>${esc(row.theme_name || "—")}</td>
           <td>${esc(row.zbl || "—")}</td>
           <td>${esc(row.Hold || "—")}</td>
-        </tr>`
-      )
+        </tr>`;
+      })
       .join("");
 
     els.tbody.querySelectorAll("tr[data-key]").forEach((tr) => {
       tr.addEventListener("click", () => openDetail(tr.dataset.key));
+    });
+    els.tbody.querySelectorAll("a.dgs-v2-hub-serial-link").forEach((link) => {
+      link.addEventListener("click", (event) => event.stopPropagation());
     });
 
     const start = state.total === 0 ? 0 : (state.page - 1) * state.pageSize + 1;
@@ -189,18 +201,8 @@
         : `Showing ${start.toLocaleString()}–${end.toLocaleString()} of ${state.total.toLocaleString()} active · ${casinoLabel}${searchNote}`;
   }
 
-  function assetHubHref(assetId) {
-    if (!assetId) return "";
-    if (window.DGS) {
-      return DGS.withApi(`asset-hub.html?id=${encodeURIComponent(assetId)}`);
-    }
-    const url = new URL("asset-hub.html", window.location.href);
-    url.searchParams.set("id", assetId);
-    return url.pathname + url.search;
-  }
-
   function renderFkChips(d) {
-    const hub = d.asset_id ? assetHubHref(d.asset_id) : "";
+    const hub = d.asset_id ? AssetNav.hubHref(d.asset_id) : "";
     const assetChip = hub
       ? `<a class="dgs-v2-sm-fk-chip dgs-v2-sm-fk-chip--hub" href="${esc(hub)}">
         <span class="dgs-v2-sm-fk-chip__label">Asset</span>
@@ -314,7 +316,10 @@
 
     els.detailEyebrow.textContent = d.is_active ? "Active deployment" : "Historical snapshot";
     els.detailTitle.textContent = d.serial || d.reference_key || "Machine";
-    els.detailSubtitle.textContent = `${d.reference_key || ""} · ${d.asset_id || ""} · ${d.theme_id || ""}`;
+    const assetPart = d.asset_id
+      ? AssetNav.hubLinkHtml(d.asset_id, d.asset_id)
+      : "—";
+    els.detailSubtitle.innerHTML = `${esc(d.reference_key || "")} · ${assetPart} · ${esc(d.theme_id || "")}`;
     els.detailActiveBadge.hidden = !d.is_active;
     renderFkChips(d);
     renderSummaryStrip(d);

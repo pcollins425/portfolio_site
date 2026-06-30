@@ -88,13 +88,7 @@
   }
 
   function assetHubHref(assetId) {
-    if (!assetId) return "";
-    if (window.DGS) {
-      return DGS.withApi(`asset-hub.html?id=${encodeURIComponent(assetId)}`);
-    }
-    const url = new URL("asset-hub.html", window.location.href);
-    url.searchParams.set("id", assetId);
-    return url.pathname + url.search;
+    return (window.DGSAssetNav && DGSAssetNav.hubHref(assetId)) || "";
   }
 
   function renderSummaryCards() {
@@ -269,12 +263,17 @@
       els.drawerTbody.innerHTML = data.items.length
         ? data.items.map((row) => {
             const hub = row.asset_id ? assetHubHref(row.asset_id) : "";
+            const serialLabel = row.serial || "—";
+            const serialCell =
+              hub && row.serial
+                ? `<a class="dgs-v2-hub-serial-link" href="${esc(hub)}">${esc(serialLabel)}</a>`
+                : esc(serialLabel);
             const assetCell = hub
               ? `<a class="dgs-v2-wh-asset-link" href="${esc(hub)}">${esc(row.asset_id)}</a>`
               : `<span class="dgs-v2-hub-muted">—</span>`;
             return `
             <tr>
-              <td class="mono dgs-v2-wh-serial-cell">${esc(row.serial || "—")}</td>
+              <td class="mono dgs-v2-wh-serial-cell">${serialCell}</td>
               <td class="dgs-v2-wh-asset-cell">${assetCell}</td>
               <td class="dgs-v2-wh-date-cell">${esc(fmtDate(row.date_received))}</td>
               <td>${esc(row.previous_location || "—")}</td>

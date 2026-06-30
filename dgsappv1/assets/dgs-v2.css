@@ -880,6 +880,26 @@ body.dgs-asset-hub .dgs-v2-hub-main {
   gap: 12px;
 }
 
+.dgs-v2-asset-nav-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  margin: 0 0 12px;
+}
+
+.dgs-v2-asset-nav-actions:empty {
+  display: none;
+}
+
+body.dgs-slot-master-v2 .dgs-v2-detail-subtitle a.dgs-v2-hub-serial-link {
+  color: #93c5fd;
+  text-decoration: none;
+}
+
+body.dgs-slot-master-v2 .dgs-v2-detail-subtitle a.dgs-v2-hub-serial-link:hover {
+  text-decoration: underline;
+}
+
 .dgs-v2-hub-tile-body {
   font-size: 13px;
   color: var(--dgs-v2-text);
