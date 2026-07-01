@@ -160,6 +160,20 @@
     els.stat_kits.textContent = s.kits;
   }
 
+  function formatQty(value) {
+    const n = Number(value);
+    if (!Number.isFinite(n)) return "—";
+    if (Math.abs(n - Math.round(n)) < 0.001) return String(Math.round(n));
+    return n.toFixed(2);
+  }
+
+  function formatBinDescrips(bin) {
+    const text = (bin.software_descrips || "").trim();
+    if (text) return text;
+    if (Number(bin.software_count) > 0) return "—";
+    return "Empty";
+  }
+
   function renderBinsList() {
     const tbody = els.bins_tbody;
     tbody.innerHTML = "";
@@ -167,9 +181,9 @@
       const tr = document.createElement("tr");
       if (b.uuid === state.selectedBinId) tr.classList.add("dgs-v2-row--selected");
       tr.innerHTML = `
-        <td>${esc(b.shelf_code || "—")}</td>
-        <td><span class="dgs-v2-bin-chip">${esc(b.barcode || b.reference_key || "—")}</span></td>
-        <td>${esc(b.software_count)}</td>`;
+        <td class="mono">${esc(b.shelf_code || "—")}</td>
+        <td class="dgs-v2-col--desktop dgs-v2-bin-desc">${esc(formatBinDescrips(b))}</td>
+        <td class="dgs-v2-bin-qty num">${esc(formatQty(b.total_qty ?? b.software_count))}</td>`;
       tr.addEventListener("click", () => selectBin(b.uuid));
       tbody.appendChild(tr);
     }

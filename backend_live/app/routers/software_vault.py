@@ -79,6 +79,8 @@ def _bin_row(r: dict) -> dict:
         "label": _json_value(r.get("label")),
         "is_active": bool(r.get("is_active")) if r.get("is_active") is not None else True,
         "software_count": int(r.get("software_count") or 0),
+        "total_qty": float(r.get("total_qty") or 0),
+        "software_descrips": _json_value(r.get("software_descrips")),
     }
 
 
@@ -168,7 +170,16 @@ def list_bins(
                 b.shelf_code,
                 b.label,
                 b.is_active,
-                (SELECT COUNT(*) FROM inventory.software AS s WHERE s.bin_id = b.uuid) AS software_count
+                (SELECT COUNT(*) FROM inventory.software AS s WHERE s.bin_id = b.uuid) AS software_count,
+                (SELECT COALESCE(SUM(s.qty_on_hand), 0) FROM inventory.software AS s WHERE s.bin_id = b.uuid) AS total_qty,
+                (
+                    SELECT STUFF((
+                        SELECT DISTINCT N'; ' + NULLIF(LTRIM(RTRIM(s.descrip)), N'')
+                        FROM inventory.software AS s
+                        WHERE s.bin_id = b.uuid
+                        FOR XML PATH(''), TYPE
+                    ).value('nvarchar(max)', 'NVARCHAR(MAX)'), 1, 2, N'')
+                ) AS software_descrips
             FROM inventory.storage_bin AS b
             WHERE {where_sql}
             ORDER BY b.shelf_code, b.reference_key

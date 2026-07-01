@@ -76,16 +76,16 @@
             <select id="bins-section" aria-label="Section filter">
               <option value="">All sections</option>
             </select>
-            <input id="bins-search" type="search" placeholder="Shelf, barcode, label…" autocomplete="off" />
+            <input id="bins-search" type="search" placeholder="Shelf, label…" autocomplete="off" />
             <button id="bins-search-btn" type="button" class="dgs-v2-btn dgs-v2-btn--primary">Search</button>
           </div>
           <div class="dgs-v2-grid-wrap">
-            <table class="dgs-v2-grid">
+            <table class="dgs-v2-grid" id="bins-table">
               <thead>
                 <tr>
                   <th>Shelf</th>
-                  <th>Barcode</th>
-                  <th>Items</th>
+                  <th class="dgs-v2-col--desktop">Software</th>
+                  <th class="dgs-v2-bin-qty">Qty</th>
                 </tr>
               </thead>
               <tbody id="bins-tbody"></tbody>

@@ -2066,6 +2066,27 @@ body.dgs-software-vault-v2 .dgs-v2-bin-chip {
   font-family: ui-monospace, monospace;
 }
 
+body.dgs-software-vault-v2 .dgs-v2-bin-desc {
+  max-width: 360px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--dgs-v2-text-muted);
+  font-size: 12px;
+}
+
+body.dgs-software-vault-v2 .dgs-v2-bin-qty,
+body.dgs-software-vault-v2 .dgs-v2-grid th.dgs-v2-bin-qty,
+body.dgs-software-vault-v2 .dgs-v2-grid td.dgs-v2-bin-qty {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+body.dgs-software-vault-v2 #bins-table {
+  min-width: 0;
+}
+
 body.dgs-software-vault-v2 tr.dgs-v2-row--selected td {
   background: color-mix(in srgb, var(--dgs-v2-accent) 10%, transparent);
 }
@@ -2236,7 +2257,19 @@ body.dgs-software-vault-v2 .dgs-v2-kit-pull-missing td {
     -webkit-overflow-scrolling: touch;
   }
 
-  body.dgs-software-vault-v2 .dgs-v2-grid {
+  body.dgs-software-vault-v2 .dgs-v2-col--desktop {
+    display: none;
+  }
+
+  body.dgs-software-vault-v2 #bins-table {
+    min-width: 0;
+  }
+
+  body.dgs-software-vault-v2 .dgs-v2-grid-wrap:has(#bins-table) {
+    overflow-x: visible;
+  }
+
+  body.dgs-software-vault-v2 .dgs-v2-grid:not(#bins-table) {
     min-width: 520px;
   }
 }
