@@ -2164,32 +2164,35 @@ body.dgs-software-vault-v2 .dgs-v2-kit-pull-missing td {
     flex: 1;
     min-width: 0;
     min-height: 0;
+    display: flex;
+    flex-direction: column;
   }
 
   body.dgs-software-vault-v2 .dgs-v2-main {
-    padding: 12px 12px 16px;
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    padding: 12px 12px max(16px, env(safe-area-inset-bottom));
     gap: 10px;
-    overflow-y: auto;
-    -webkit-overflow-scrolling: touch;
+    overflow: hidden;
   }
 
   body.dgs-software-vault-v2 .dgs-v2-page-header {
     display: none;
   }
 
-  body.dgs-software-vault-v2 .dgs-v2-metrics {
-    gap: 8px;
+  body.dgs-software-vault-v2 #error-box {
+    flex-shrink: 0;
   }
 
   body.dgs-software-vault-v2 .dgs-v2-metrics#stat-row {
     display: none;
   }
 
-  body.dgs-software-vault-v2 .dgs-v2-metric {
-    padding: 10px 12px;
-  }
-
+  body.dgs-software-vault-v2 .dgs-v2-scan-actions,
   body.dgs-software-vault-v2 .dgs-v2-vault-tabs {
+    flex-shrink: 0;
     margin-bottom: 0;
   }
 
@@ -2200,16 +2203,46 @@ body.dgs-software-vault-v2 .dgs-v2-kit-pull-missing td {
     padding: 10px 8px;
   }
 
-  body.dgs-software-vault-v2 .dgs-v2-scan-actions {
-    margin-bottom: 0;
-  }
-
   body.dgs-software-vault-v2 .dgs-v2-scan-actions .dgs-v2-btn--primary {
     flex: 1 1 100%;
   }
 
+  body.dgs-software-vault-v2 .dgs-v2-vault-panel {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  body.dgs-software-vault-v2 .dgs-v2-vault-panel .dgs-v2-split {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  body.dgs-software-vault-v2 .dgs-v2-vault-panel > .dgs-v2-list-panel,
+  body.dgs-software-vault-v2 .dgs-v2-split .dgs-v2-list-panel {
+    flex: 1;
+    min-height: 0;
+    max-height: none;
+    display: flex;
+    flex-direction: column;
+  }
+
+  body.dgs-software-vault-v2 .dgs-v2-split .dgs-v2-detail {
+    display: none;
+  }
+
+  body.dgs-software-vault-v2 .dgs-v2-list-status {
+    flex-shrink: 0;
+  }
+
   body.dgs-software-vault-v2 .dgs-v2-toolbar {
     flex-wrap: wrap;
+    flex-shrink: 0;
     padding: 10px 12px;
     gap: 8px;
   }
@@ -2223,28 +2256,6 @@ body.dgs-software-vault-v2 .dgs-v2-kit-pull-missing td {
 
   body.dgs-software-vault-v2 .dgs-v2-toolbar .dgs-v2-btn {
     flex: 1 1 calc(50% - 4px);
-  }
-
-  body.dgs-software-vault-v2 .dgs-v2-vault-panel {
-    flex: none;
-    min-height: 360px;
-    overflow: visible;
-  }
-
-  body.dgs-software-vault-v2 .dgs-v2-vault-panel .dgs-v2-split {
-    display: block;
-    flex: none;
-    overflow: visible;
-  }
-
-  body.dgs-software-vault-v2 .dgs-v2-vault-panel > .dgs-v2-list-panel,
-  body.dgs-software-vault-v2 .dgs-v2-split .dgs-v2-list-panel {
-    min-height: 360px;
-    max-height: calc(100dvh - 300px);
-  }
-
-  body.dgs-software-vault-v2 .dgs-v2-split .dgs-v2-detail {
-    display: none;
   }
 
   body.dgs-software-vault-v2 .dgs-v2-vault-detail-bar {
@@ -2293,16 +2304,10 @@ body.dgs-software-vault-v2 .dgs-v2-kit-pull-missing td {
   }
 
   body.dgs-software-vault-v2 .dgs-v2-grid-wrap {
-    overflow-x: auto;
+    flex: 1;
+    min-height: 0;
+    overflow: auto;
     -webkit-overflow-scrolling: touch;
-  }
-
-  body.dgs-software-vault-v2 .dgs-v2-col--desktop {
-    display: none;
-  }
-
-  body.dgs-software-vault-v2 #bins-table {
-    min-width: 0;
   }
 
   body.dgs-software-vault-v2 .dgs-v2-grid-wrap:has(#bins-table) {
@@ -2311,5 +2316,9 @@ body.dgs-software-vault-v2 .dgs-v2-kit-pull-missing td {
 
   body.dgs-software-vault-v2 .dgs-v2-grid:not(#bins-table) {
     min-width: 520px;
+  }
+
+  body.dgs-software-vault-v2 .dgs-v2-col--desktop {
+    display: none;
   }
 }
