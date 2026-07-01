@@ -22,6 +22,9 @@
 
   const MOBILE_MQ = window.matchMedia("(max-width: 900px)");
 
+  let qrScanner = null;
+  let qrLibPromise = null;
+
   const els = {};
 
   function $(id) {
@@ -35,9 +38,13 @@
       "stat-software",
       "stat-unplaced",
       "stat-kits",
-      "scan-input",
-      "scan-btn",
       "scan-result",
+      "btn-open-scan",
+      "vault-scan-modal",
+      "vault-scan-close",
+      "vault-scan-wedge",
+      "vault-scan-status",
+      "vault-scan-restart",
       "bins-section",
       "bins-search",
       "bins-search-btn",
@@ -369,19 +376,126 @@
     renderKitPull();
   }
 
-  async function resolveScan() {
-    const q = els.scan_input.value.trim();
-    if (!q) return;
-    els.scan_result.textContent = "…";
+  function setVaultScanStatus(msg, isError) {
+    const node = els.vault_scan_status;
+    if (!node) return;
+    node.textContent = msg;
+    node.classList.toggle("dgs-v2-error", Boolean(isError));
+  }
+
+  function loadQrLibrary() {
+    if (window.Html5Qrcode) return Promise.resolve();
+    if (qrLibPromise) return qrLibPromise;
+    qrLibPromise = new Promise((resolve, reject) => {
+      const script = document.createElement("script");
+      script.src = "https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js";
+      script.onload = () => resolve();
+      script.onerror = () => reject(new Error("Camera library failed to load."));
+      document.head.appendChild(script);
+    });
+    return qrLibPromise;
+  }
+
+  async function stopVaultScanCamera() {
+    if (!qrScanner) return;
+    try {
+      await qrScanner.stop();
+    } catch (_err) {}
+    try {
+      qrScanner.clear();
+    } catch (_err) {}
+    qrScanner = null;
+  }
+
+  async function startVaultScanCamera() {
+    const restartBtn = els.vault_scan_restart;
+    if (restartBtn) restartBtn.hidden = true;
+    setVaultScanStatus("Requesting camera permission…");
+
+    try {
+      await loadQrLibrary();
+    } catch (err) {
+      setVaultScanStatus(String(err.message || err), true);
+      if (restartBtn) restartBtn.hidden = false;
+      return;
+    }
+
+    await stopVaultScanCamera();
+    qrScanner = new Html5Qrcode("vault-scan-reader");
+    try {
+      await qrScanner.start(
+        { facingMode: "environment" },
+        { fps: 10, qrbox: { width: 250, height: 150 }, aspectRatio: 1.0 },
+        (decoded) => {
+          handleVaultScanCode(decoded, "camera");
+        },
+        () => {}
+      );
+      setVaultScanStatus("Camera live — point at a bin barcode or QR code.");
+    } catch (err) {
+      setVaultScanStatus(String(err.message || err), true);
+      if (restartBtn) restartBtn.hidden = false;
+    }
+  }
+
+  async function openVaultScanModal() {
+    const modal = els.vault_scan_modal;
+    if (!modal) return;
+    closeMobileDetail();
+    modal.hidden = false;
+    modal.setAttribute("aria-hidden", "false");
+    document.body.classList.add("vault-scan-open");
+    setVaultScanStatus("Starting camera…");
+    if (els.vault_scan_wedge) {
+      els.vault_scan_wedge.value = "";
+      els.vault_scan_wedge.focus();
+    }
+    await startVaultScanCamera();
+  }
+
+  async function closeVaultScanModal() {
+    await stopVaultScanCamera();
+    const modal = els.vault_scan_modal;
+    if (modal) {
+      modal.hidden = true;
+      modal.setAttribute("aria-hidden", "true");
+    }
+    document.body.classList.remove("vault-scan-open");
+    if (els.vault_scan_wedge) els.vault_scan_wedge.value = "";
+    setVaultScanStatus("Open scan to start camera.");
+    if (els.vault_scan_restart) els.vault_scan_restart.hidden = true;
+  }
+
+  async function handleVaultScanCode(code, source) {
+    const token = String(code || "").trim();
+    if (!token) return;
+    setVaultScanStatus(`Looking up ${token}${source ? ` (${source})` : ""}…`);
+    const ok = await resolveScan(token, { fromModal: true });
+    if (ok) return;
+  }
+
+  async function resolveScan(rawQ, opts = {}) {
+    const q = String(rawQ ?? "").trim();
+    if (!q) return false;
+    const fromModal = Boolean(opts.fromModal);
+    if (!fromModal && els.scan_result) els.scan_result.textContent = "…";
     try {
       const data = await fetchJson(`/api/software-vault/scan?${new URLSearchParams({ q })}`);
       const b = data.bin;
-      els.scan_result.textContent = `→ ${b.shelf_code} (${b.barcode})`;
+      if (els.scan_result) els.scan_result.textContent = `→ ${b.shelf_code}`;
       setTab("bins");
       await loadBins();
       await selectBin(b.uuid);
+      if (fromModal) await closeVaultScanModal();
+      return true;
     } catch (e) {
-      els.scan_result.textContent = String(e.message || e);
+      const msg = String(e.message || e);
+      if (fromModal) setVaultScanStatus(msg, true);
+      else {
+        if (els.scan_result) els.scan_result.textContent = msg;
+        showError(msg);
+      }
+      return false;
     }
   }
 
@@ -403,9 +517,26 @@
       loadSoftwareList().catch((e) => showError(String(e)));
     });
     els.kit_load_btn.addEventListener("click", () => loadKitPull().catch((e) => showError(String(e))));
-    els.scan_btn.addEventListener("click", () => resolveScan().catch((e) => showError(String(e))));
-    els.scan_input.addEventListener("keydown", (e) => {
-      if (e.key === "Enter") resolveScan().catch((er) => showError(String(er)));
+    els.btn_open_scan.addEventListener("click", () => {
+      openVaultScanModal().catch((e) => showError(String(e.message || e)));
+    });
+    els.vault_scan_close.addEventListener("click", () => {
+      closeVaultScanModal().catch(() => {});
+    });
+    els.vault_scan_modal.addEventListener("click", (e) => {
+      if (e.target === els.vault_scan_modal) closeVaultScanModal().catch(() => {});
+    });
+    els.vault_scan_restart.addEventListener("click", () => {
+      startVaultScanCamera().catch((e) => setVaultScanStatus(String(e.message || e), true));
+    });
+    els.vault_scan_wedge.addEventListener("keydown", (e) => {
+      if (e.key !== "Enter") return;
+      e.preventDefault();
+      handleVaultScanCode(els.vault_scan_wedge.value, "USB / keyboard").catch((er) =>
+        setVaultScanStatus(String(er.message || er), true)
+      );
+      els.vault_scan_wedge.value = "";
+      els.vault_scan_wedge.focus();
     });
     document.querySelectorAll(".vault-detail-close").forEach((btn) => {
       btn.addEventListener("click", closeMobileDetail);

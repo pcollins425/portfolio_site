@@ -56,10 +56,8 @@
       </div>
     </div>
 
-    <div class="dgs-v2-scan-bar">
-      <label class="dgs-v2-section-label" for="scan-input">Scan bin</label>
-      <input id="scan-input" type="search" placeholder="BIN:BIN-… or shelf code (01-01-01)" autocomplete="off" />
-      <button id="scan-btn" type="button" class="dgs-v2-btn dgs-v2-btn--primary">Resolve</button>
+    <div class="dgs-v2-scan-actions">
+      <button id="btn-open-scan" type="button" class="dgs-v2-btn dgs-v2-btn--primary">Scan bin</button>
       <span id="scan-result" class="dgs-v2-lines-status"></span>
     </div>
 
@@ -185,6 +183,27 @@
         </div>
         <div class="dgs-v2-list-status" id="kits-status"></div>
       </section>
+    </div>
+  </div>
+
+  <div class="scan-modal dgs-v2-scan-modal" id="vault-scan-modal" hidden aria-hidden="true">
+    <div class="dgs-v2-scan-dialog" role="dialog" aria-labelledby="vault-scan-title">
+      <div class="dgs-v2-scan-dialog-head">
+        <div>
+          <p class="dgs-v2-eyebrow">Bin lookup</p>
+          <h2 id="vault-scan-title">Scan bin</h2>
+        </div>
+        <button type="button" id="vault-scan-close" class="dgs-v2-drawer-close" aria-label="Close scanner">×</button>
+      </div>
+      <div class="dgs-v2-scan-dialog-body">
+        <label class="dgs-v2-section-label" for="vault-scan-wedge">USB / keyboard scanner</label>
+        <input id="vault-scan-wedge" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Click here, then scan…" />
+        <p class="dgs-v2-lines-status">Most USB scanners type the code and press Enter.</p>
+        <label class="dgs-v2-section-label dgs-v2-scan-camera-label">Phone camera</label>
+        <div id="vault-scan-reader" class="dgs-v2-scan-reader"></div>
+        <p id="vault-scan-status" class="dgs-v2-lines-status">Open scan to start camera.</p>
+        <button type="button" id="vault-scan-restart" class="dgs-v2-btn" hidden>Restart camera</button>
+      </div>
     </div>
   </div>
 

@@ -2028,16 +2028,79 @@ body.dgs-software-vault-v2 .dgs-v2-vault-panel > .dgs-v2-list-panel {
   min-height: 0;
 }
 
-body.dgs-software-vault-v2 .dgs-v2-scan-bar {
+body.dgs-software-vault-v2 .dgs-v2-scan-actions {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
   align-items: center;
+  gap: 10px 12px;
   margin-bottom: 16px;
-  padding: 12px 14px;
-  border: 1px solid var(--dgs-v2-border);
-  border-radius: 10px;
+}
+
+body.dgs-software-vault-v2 .dgs-v2-scan-modal {
+  z-index: 60;
+  background: rgba(0, 0, 0, 0.55);
+}
+
+body.dgs-software-vault-v2 .dgs-v2-scan-dialog {
+  width: min(480px, 100%);
+  max-height: min(92dvh, 720px);
+  overflow: auto;
   background: var(--dgs-v2-card);
+  color: var(--dgs-v2-text);
+  border: 1px solid var(--dgs-v2-border);
+  border-radius: 16px;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.45);
+}
+
+body.dgs-software-vault-v2 .dgs-v2-scan-dialog-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 18px 18px 14px;
+  border-bottom: 1px solid var(--dgs-v2-border);
+  background: var(--dgs-v2-card-head);
+}
+
+body.dgs-software-vault-v2 .dgs-v2-scan-dialog-head h2 {
+  margin: 4px 0 0;
+  font-size: 22px;
+  color: var(--dgs-v2-heading);
+}
+
+body.dgs-software-vault-v2 .dgs-v2-scan-dialog-body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 16px 18px 20px;
+}
+
+body.dgs-software-vault-v2 .dgs-v2-scan-dialog-body input[type="text"] {
+  width: 100%;
+  padding: 10px 14px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: var(--dgs-v2-bg);
+  color: var(--dgs-v2-text);
+  font: inherit;
+  font-size: 14px;
+}
+
+body.dgs-software-vault-v2 .dgs-v2-scan-camera-label {
+  margin-top: 8px;
+}
+
+body.dgs-software-vault-v2 .dgs-v2-scan-reader {
+  width: 100%;
+  min-height: 220px;
+  border: 1px solid var(--dgs-v2-border);
+  border-radius: 12px;
+  overflow: hidden;
+  background: #0f172a;
+}
+
+body.dgs-software-vault-v2 .dgs-v2-scan-dialog-body .dgs-v2-btn {
+  align-self: flex-start;
 }
 
 body.dgs-software-vault-v2 .dgs-v2-vault-detail-bar {
@@ -2049,11 +2112,6 @@ body.dgs-software-vault-v2 .vault-detail-backdrop {
   inset: 0;
   z-index: 40;
   background: rgba(0, 0, 0, 0.5);
-}
-
-body.dgs-software-vault-v2 .dgs-v2-scan-bar input {
-  flex: 1 1 200px;
-  min-width: 0;
 }
 
 body.dgs-software-vault-v2 .dgs-v2-bin-chip {
@@ -2142,13 +2200,11 @@ body.dgs-software-vault-v2 .dgs-v2-kit-pull-missing td {
     padding: 10px 8px;
   }
 
-  body.dgs-software-vault-v2 .dgs-v2-scan-bar {
+  body.dgs-software-vault-v2 .dgs-v2-scan-actions {
     margin-bottom: 0;
-    padding: 10px 12px;
   }
 
-  body.dgs-software-vault-v2 .dgs-v2-scan-bar input,
-  body.dgs-software-vault-v2 .dgs-v2-scan-bar .dgs-v2-btn {
+  body.dgs-software-vault-v2 .dgs-v2-scan-actions .dgs-v2-btn--primary {
     flex: 1 1 100%;
   }
 
