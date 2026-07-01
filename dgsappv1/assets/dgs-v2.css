@@ -2135,6 +2135,10 @@ body.dgs-software-vault-v2 .dgs-v2-kit-pull-missing td {
     gap: 8px;
   }
 
+  body.dgs-software-vault-v2 .dgs-v2-metrics#stat-row {
+    display: none;
+  }
+
   body.dgs-software-vault-v2 .dgs-v2-metric {
     padding: 10px 12px;
   }
