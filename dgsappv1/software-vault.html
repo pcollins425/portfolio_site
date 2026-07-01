@@ -24,6 +24,7 @@
   </aside>
 
   <div id="dgs-nav-flyout" class="dgs-nav-flyout" hidden></div>
+  <div class="detail-backdrop vault-detail-backdrop" id="vault-detail-backdrop" hidden></div>
 
   <div class="dgs-main dgs-v2-main">
     <header class="dgs-v2-page-header">
@@ -93,6 +94,10 @@
           <div class="dgs-v2-list-status" id="bins-status"></div>
         </section>
         <aside class="dgs-v2-detail" id="bin-detail">
+          <div class="dgs-v2-vault-detail-bar">
+            <span class="dgs-v2-section-label">Bin details</span>
+            <button type="button" class="dgs-v2-drawer-close vault-detail-close" aria-label="Close bin details">×</button>
+          </div>
           <div class="dgs-v2-detail-body empty" id="bin-detail-body">
             <p>Select a bin to view contents.</p>
             <div id="bin-detail-content" hidden>
@@ -141,6 +146,10 @@
           <div class="dgs-v2-list-status" id="software-status"></div>
         </section>
         <aside class="dgs-v2-detail" id="software-detail">
+          <div class="dgs-v2-vault-detail-bar">
+            <span class="dgs-v2-section-label">Software details</span>
+            <button type="button" class="dgs-v2-drawer-close vault-detail-close" aria-label="Close software details">×</button>
+          </div>
           <div class="dgs-v2-detail-body empty" id="software-detail-body">
             <p>Select software to view details.</p>
             <div id="software-detail-content" hidden>

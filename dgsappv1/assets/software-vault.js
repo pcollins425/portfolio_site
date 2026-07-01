@@ -17,7 +17,10 @@
     selectedItem: null,
     kits: [],
     kitPull: null,
+    mobileDetailOpen: false,
   };
+
+  const MOBILE_MQ = window.matchMedia("(max-width: 900px)");
 
   const els = {};
 
@@ -57,6 +60,7 @@
       "kit-descrip",
       "kit-lines-tbody",
       "kits-status",
+      "vault_detail_backdrop",
     ].forEach((id) => {
       els[id.replace(/-/g, "_")] = $(id);
     });
@@ -97,7 +101,47 @@
     box.textContent = msg;
   }
 
+  function isMobile() {
+    return MOBILE_MQ.matches;
+  }
+
+  function activeDetailEl() {
+    return state.tab === "software"
+      ? document.getElementById("software-detail")
+      : document.getElementById("bin-detail");
+  }
+
+  function openMobileDetail() {
+    if (!isMobile()) return;
+    const detail = activeDetailEl();
+    if (!detail || detail.querySelector(".dgs-v2-detail-body")?.classList.contains("empty")) return;
+    state.mobileDetailOpen = true;
+    document.body.classList.add("vault-detail-open");
+    if (els.vault_detail_backdrop) els.vault_detail_backdrop.hidden = false;
+    detail.classList.add("dgs-v2-detail--sheet");
+    detail.setAttribute("aria-hidden", "false");
+  }
+
+  function closeMobileDetail() {
+    state.mobileDetailOpen = false;
+    document.body.classList.remove("vault-detail-open");
+    if (els.vault_detail_backdrop) els.vault_detail_backdrop.hidden = true;
+    document.querySelectorAll(".dgs-v2-detail--sheet").forEach((node) => {
+      node.classList.remove("dgs-v2-detail--sheet");
+      node.setAttribute("aria-hidden", "true");
+    });
+  }
+
+  function prepareMobileShell() {
+    if (!isMobile()) return;
+    localStorage.setItem("dgs-rail-collapsed", "1");
+    document.body.classList.add("dgs-rail-collapsed");
+    const btn = document.getElementById("dgs-rail-toggle");
+    if (btn) btn.setAttribute("aria-expanded", "false");
+  }
+
   function setTab(tab) {
+    closeMobileDetail();
     state.tab = tab;
     document.querySelectorAll(".dgs-v2-vault-tab").forEach((btn) => {
       btn.classList.toggle("active", btn.dataset.tab === tab);
@@ -180,6 +224,7 @@
       if (!data.software?.length) {
         stbody.innerHTML = `<tr><td colspan="3">Empty bin</td></tr>`;
       }
+      openMobileDetail();
     } catch (e) {
       showError(String(e.message || e));
     }
@@ -249,6 +294,7 @@
         ["Cabinets", cabinets],
         ["Metadata", meta],
       ]);
+      openMobileDetail();
     } catch (e) {
       showError(String(e.message || e));
     }
@@ -355,10 +401,21 @@
     els.scan_input.addEventListener("keydown", (e) => {
       if (e.key === "Enter") resolveScan().catch((er) => showError(String(er)));
     });
+    document.querySelectorAll(".vault-detail-close").forEach((btn) => {
+      btn.addEventListener("click", closeMobileDetail);
+    });
+    if (els.vault_detail_backdrop) {
+      els.vault_detail_backdrop.addEventListener("click", closeMobileDetail);
+    }
+    MOBILE_MQ.addEventListener("change", () => {
+      if (!isMobile()) closeMobileDetail();
+      else prepareMobileShell();
+    });
   }
 
   async function init() {
     cacheEls();
+    prepareMobileShell();
     wireEvents();
     setTab("bins");
     try {
