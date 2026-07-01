@@ -2010,6 +2010,24 @@ body.dgs-software-vault-v2 .dgs-v2-vault-panel[hidden] {
   display: none !important;
 }
 
+body.dgs-software-vault-v2 .dgs-v2-vault-panel {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+
+body.dgs-software-vault-v2 .dgs-v2-vault-panel .dgs-v2-split {
+  flex: 1;
+  min-height: 0;
+}
+
+body.dgs-software-vault-v2 .dgs-v2-vault-panel > .dgs-v2-list-panel {
+  flex: 1;
+  min-height: 0;
+}
+
 body.dgs-software-vault-v2 .dgs-v2-scan-bar {
   display: flex;
   flex-wrap: wrap;
