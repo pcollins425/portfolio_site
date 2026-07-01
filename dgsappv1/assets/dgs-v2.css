@@ -1973,3 +1973,67 @@ body.dgs-casinos-v2 .dgs-v2-detail-body {
     grid-template-columns: 1fr;
   }
 }
+
+/* Software Vault */
+body.dgs-software-vault-v2 .dgs-v2-vault-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+body.dgs-software-vault-v2 .dgs-v2-vault-tab {
+  appearance: none;
+  border: 1px solid var(--dgs-v2-border);
+  background: var(--dgs-v2-surface);
+  color: var(--dgs-v2-text-muted);
+  padding: 8px 14px;
+  border-radius: 8px;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+body.dgs-software-vault-v2 .dgs-v2-vault-tab.active {
+  border-color: var(--dgs-v2-accent);
+  color: var(--dgs-v2-accent);
+  background: color-mix(in srgb, var(--dgs-v2-accent) 12%, transparent);
+}
+
+body.dgs-software-vault-v2 .dgs-v2-vault-panel[hidden] {
+  display: none !important;
+}
+
+body.dgs-software-vault-v2 .dgs-v2-scan-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 16px;
+  padding: 12px 14px;
+  border: 1px solid var(--dgs-v2-border);
+  border-radius: 10px;
+  background: var(--dgs-v2-surface);
+}
+
+body.dgs-software-vault-v2 .dgs-v2-scan-bar input {
+  flex: 1 1 200px;
+  min-width: 0;
+}
+
+body.dgs-software-vault-v2 .dgs-v2-bin-chip {
+  display: inline-block;
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--dgs-v2-accent) 18%, transparent);
+  color: var(--dgs-v2-accent);
+  font-family: ui-monospace, monospace;
+}
+
+body.dgs-software-vault-v2 tr.dgs-v2-row--selected td {
+  background: color-mix(in srgb, var(--dgs-v2-accent) 10%, transparent);
+}
+
+body.dgs-software-vault-v2 .dgs-v2-kit-pull-missing td {
+  color: #f0a060;
+}

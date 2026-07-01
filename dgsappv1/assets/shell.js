@@ -33,7 +33,10 @@
     {
       id: "operations",
       label: "Operations",
-      items: [{ id: "operations", label: "Operations", href: "operations.html?t=projects" }],
+      items: [
+        { id: "software_vault", label: "Software Vault", href: "software-vault.html" },
+        { id: "operations", label: "Operations (eMaint)", href: "operations.html?t=projects" },
+      ],
     },
     {
       id: "finance",

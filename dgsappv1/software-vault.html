@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Software Vault — DGS Application</title>
+  <link rel="stylesheet" href="assets/dgs.css" />
+  <link rel="stylesheet" href="assets/dgs-v2.css" />
+</head>
+<body class="dgs-app dgs-software-vault-v2">
+  <aside class="dgs-sidebar" id="dgs-sidebar">
+    <div class="dgs-sidebar-brand">
+      <div class="dgs-brand-text">
+        <span class="dgs-brand-eyebrow">Dynamic Gaming Solutions</span>
+        <span class="dgs-brand-title">DGS Application</span>
+      </div>
+      <button type="button" id="dgs-rail-toggle" class="dgs-rail-toggle" aria-expanded="true" title="Collapse navigation">◧</button>
+    </div>
+    <nav class="dgs-sidebar-nav" id="dgs-app-nav" aria-label="Application"></nav>
+    <div class="dgs-sidebar-account" id="sidebar-account" hidden>
+      <span class="dgs-sidebar-user" id="user-label"></span>
+      <button type="button" id="btn-sign-out" class="dgs-sidebar-signout">Sign out</button>
+    </div>
+  </aside>
+
+  <div id="dgs-nav-flyout" class="dgs-nav-flyout" hidden></div>
+
+  <div class="dgs-main dgs-v2-main">
+    <header class="dgs-v2-page-header">
+      <div>
+        <p class="dgs-v2-eyebrow">Operations · physical software vault</p>
+        <h1>Software Vault</h1>
+        <p class="dgs-v2-subtitle">Bins · catalog · kit pull · live from <code>inventory.software</code></p>
+      </div>
+    </header>
+
+    <div id="error-box" class="dgs-v2-error" hidden></div>
+
+    <div class="dgs-v2-metrics" id="stat-row" aria-label="Summary statistics">
+      <div class="dgs-v2-metric">
+        <div class="dgs-v2-metric-label">Bins</div>
+        <div class="dgs-v2-metric-value" id="stat-bins">—</div>
+      </div>
+      <div class="dgs-v2-metric">
+        <div class="dgs-v2-metric-label">Software</div>
+        <div class="dgs-v2-metric-value" id="stat-software">—</div>
+      </div>
+      <div class="dgs-v2-metric dgs-v2-metric--warn">
+        <div class="dgs-v2-metric-label">Unplaced</div>
+        <div class="dgs-v2-metric-value" id="stat-unplaced">—</div>
+      </div>
+      <div class="dgs-v2-metric">
+        <div class="dgs-v2-metric-label">Kits</div>
+        <div class="dgs-v2-metric-value" id="stat-kits">—</div>
+      </div>
+    </div>
+
+    <div class="dgs-v2-scan-bar">
+      <label class="dgs-v2-section-label" for="scan-input">Scan bin</label>
+      <input id="scan-input" type="search" placeholder="BIN:BIN-… or shelf code (01-01-01)" autocomplete="off" />
+      <button id="scan-btn" type="button" class="dgs-v2-btn dgs-v2-btn--primary">Resolve</button>
+      <span id="scan-result" class="dgs-v2-lines-status"></span>
+    </div>
+
+    <nav class="dgs-v2-vault-tabs" aria-label="Vault views">
+      <button type="button" class="dgs-v2-vault-tab active" data-tab="bins">Bins</button>
+      <button type="button" class="dgs-v2-vault-tab" data-tab="software">Software</button>
+      <button type="button" class="dgs-v2-vault-tab" data-tab="kits">Kits</button>
+    </nav>
+
+    <div id="panel-bins" class="dgs-v2-vault-panel" data-panel="bins">
+      <div class="dgs-v2-split">
+        <section class="dgs-v2-list-panel">
+          <div class="dgs-v2-toolbar">
+            <select id="bins-section" aria-label="Section filter">
+              <option value="">All sections</option>
+            </select>
+            <input id="bins-search" type="search" placeholder="Shelf, barcode, label…" autocomplete="off" />
+            <button id="bins-search-btn" type="button" class="dgs-v2-btn dgs-v2-btn--primary">Search</button>
+          </div>
+          <div class="dgs-v2-grid-wrap">
+            <table class="dgs-v2-grid">
+              <thead>
+                <tr>
+                  <th>Shelf</th>
+                  <th>Barcode</th>
+                  <th>Items</th>
+                </tr>
+              </thead>
+              <tbody id="bins-tbody"></tbody>
+            </table>
+          </div>
+          <div class="dgs-v2-list-status" id="bins-status"></div>
+        </section>
+        <aside class="dgs-v2-detail" id="bin-detail">
+          <div class="dgs-v2-detail-body empty" id="bin-detail-body">
+            <p>Select a bin to view contents.</p>
+            <div id="bin-detail-content" hidden>
+              <div class="dgs-v2-section-label">Bin</div>
+              <dl class="dgs-v2-fields" id="bin-fields"></dl>
+              <div class="dgs-v2-section-label">Software in bin</div>
+              <div class="dgs-v2-grid-wrap">
+                <table class="dgs-v2-grid">
+                  <thead>
+                    <tr>
+                      <th>Item</th>
+                      <th>Description</th>
+                      <th>Qty</th>
+                    </tr>
+                  </thead>
+                  <tbody id="bin-software-tbody"></tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </aside>
+      </div>
+    </div>
+
+    <div id="panel-software" class="dgs-v2-vault-panel" data-panel="software" hidden>
+      <div class="dgs-v2-split">
+        <section class="dgs-v2-list-panel">
+          <div class="dgs-v2-toolbar">
+            <input id="software-search" type="search" placeholder="Item, description, supplier part #…" autocomplete="off" />
+            <label class="dgs-v2-lines-status"><input type="checkbox" id="software-unplaced" /> Unplaced only</label>
+            <button id="software-search-btn" type="button" class="dgs-v2-btn dgs-v2-btn--primary">Search</button>
+          </div>
+          <div class="dgs-v2-grid-wrap">
+            <table class="dgs-v2-grid">
+              <thead>
+                <tr>
+                  <th>Item</th>
+                  <th>Description</th>
+                  <th>Shelf</th>
+                  <th>Qty</th>
+                </tr>
+              </thead>
+              <tbody id="software-tbody"></tbody>
+            </table>
+          </div>
+          <div class="dgs-v2-list-status" id="software-status"></div>
+        </section>
+        <aside class="dgs-v2-detail" id="software-detail">
+          <div class="dgs-v2-detail-body empty" id="software-detail-body">
+            <p>Select software to view details.</p>
+            <div id="software-detail-content" hidden>
+              <dl class="dgs-v2-fields" id="software-fields"></dl>
+            </div>
+          </div>
+        </aside>
+      </div>
+    </div>
+
+    <div id="panel-kits" class="dgs-v2-vault-panel" data-panel="kits" hidden>
+      <section class="dgs-v2-list-panel">
+        <div class="dgs-v2-toolbar">
+          <select id="kit-select" aria-label="Kit parent">
+            <option value="">Select kit…</option>
+          </select>
+          <button id="kit-load-btn" type="button" class="dgs-v2-btn dgs-v2-btn--primary">Load pull list</button>
+        </div>
+        <p class="dgs-v2-subtitle" id="kit-descrip"></p>
+        <div class="dgs-v2-grid-wrap">
+          <table class="dgs-v2-grid">
+            <thead>
+              <tr>
+                <th>Component</th>
+                <th>Description</th>
+                <th>Kit qty</th>
+                <th>On hand</th>
+                <th>Bin</th>
+              </tr>
+            </thead>
+            <tbody id="kit-lines-tbody"></tbody>
+          </table>
+        </div>
+        <div class="dgs-v2-list-status" id="kits-status"></div>
+      </section>
+    </div>
+  </div>
+
+  <script src="assets/auth.js"></script>
+  <script src="assets/shell.js"></script>
+  <script src="assets/software-vault.js"></script>
+  <script>DGS.boot("software_vault", () => SoftwareVaultApp.init());</script>
+</body>
+</html>
