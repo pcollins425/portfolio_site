@@ -41,6 +41,8 @@
       "scan-result",
       "btn-open-scan",
       "vault-scan-modal",
+      "vault-scan-wedge-block",
+      "vault-scan-camera-block",
       "vault-scan-close",
       "vault-scan-wedge",
       "vault-scan-status",
@@ -110,6 +112,41 @@
 
   function isMobile() {
     return MOBILE_MQ.matches;
+  }
+
+  function isVaultScanOpen() {
+    return Boolean(els.vault_scan_modal && !els.vault_scan_modal.hidden);
+  }
+
+  function applyVaultScanMode() {
+    const mobile = isMobile();
+    const modal = els.vault_scan_modal;
+    if (modal) {
+      modal.classList.toggle("vault-scan--mobile", mobile);
+      modal.classList.toggle("vault-scan--desktop", !mobile);
+    }
+    if (els.vault_scan_wedge_block) els.vault_scan_wedge_block.hidden = mobile;
+    if (els.vault_scan_camera_block) els.vault_scan_camera_block.hidden = !mobile;
+    if (els.vault_scan_wedge) {
+      els.vault_scan_wedge.readOnly = mobile;
+      if (mobile) els.vault_scan_wedge.blur();
+    }
+    return mobile;
+  }
+
+  async function syncVaultScanSurface() {
+    if (!isVaultScanOpen()) return;
+    const mobile = applyVaultScanMode();
+    if (mobile) {
+      await startVaultScanCamera();
+      return;
+    }
+    await stopVaultScanCamera();
+    setVaultScanStatus("Click the field, then scan with your USB scanner.");
+    if (els.vault_scan_wedge) {
+      els.vault_scan_wedge.value = "";
+      requestAnimationFrame(() => els.vault_scan_wedge.focus());
+    }
   }
 
   function activeDetailEl() {
@@ -445,12 +482,17 @@
     modal.hidden = false;
     modal.setAttribute("aria-hidden", "false");
     document.body.classList.add("vault-scan-open");
-    setVaultScanStatus("Starting camera…");
+    applyVaultScanMode();
+    if (isMobile()) {
+      setVaultScanStatus("Starting camera…");
+      await startVaultScanCamera();
+      return;
+    }
+    setVaultScanStatus("Click the field, then scan with your USB scanner.");
     if (els.vault_scan_wedge) {
       els.vault_scan_wedge.value = "";
-      els.vault_scan_wedge.focus();
+      requestAnimationFrame(() => els.vault_scan_wedge.focus());
     }
-    await startVaultScanCamera();
   }
 
   async function closeVaultScanModal() {
@@ -459,10 +501,14 @@
     if (modal) {
       modal.hidden = true;
       modal.setAttribute("aria-hidden", "true");
+      modal.classList.remove("vault-scan--mobile", "vault-scan--desktop");
     }
     document.body.classList.remove("vault-scan-open");
-    if (els.vault_scan_wedge) els.vault_scan_wedge.value = "";
-    setVaultScanStatus("Open scan to start camera.");
+    if (els.vault_scan_wedge) {
+      els.vault_scan_wedge.value = "";
+      els.vault_scan_wedge.blur();
+    }
+    setVaultScanStatus("Open scan to start.");
     if (els.vault_scan_restart) els.vault_scan_restart.hidden = true;
   }
 
@@ -547,6 +593,7 @@
     MOBILE_MQ.addEventListener("change", () => {
       if (!isMobile()) closeMobileDetail();
       if (window.DGS?.syncMobileTopNav) DGS.syncMobileTopNav("software_vault");
+      syncVaultScanSurface().catch(() => {});
     });
   }
 

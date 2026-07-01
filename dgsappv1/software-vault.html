@@ -196,13 +196,17 @@
         <button type="button" id="vault-scan-close" class="dgs-v2-drawer-close" aria-label="Close scanner">×</button>
       </div>
       <div class="dgs-v2-scan-dialog-body">
-        <label class="dgs-v2-section-label" for="vault-scan-wedge">USB / keyboard scanner</label>
-        <input id="vault-scan-wedge" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Click here, then scan…" />
-        <p class="dgs-v2-lines-status">Most USB scanners type the code and press Enter.</p>
-        <label class="dgs-v2-section-label dgs-v2-scan-camera-label">Phone camera</label>
-        <div id="vault-scan-reader" class="dgs-v2-scan-reader"></div>
-        <p id="vault-scan-status" class="dgs-v2-lines-status">Open scan to start camera.</p>
-        <button type="button" id="vault-scan-restart" class="dgs-v2-btn" hidden>Restart camera</button>
+        <div id="vault-scan-wedge-block" class="dgs-v2-scan-wedge-block">
+          <label class="dgs-v2-section-label" for="vault-scan-wedge">USB / keyboard scanner</label>
+          <input id="vault-scan-wedge" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Click here, then scan…" />
+          <p class="dgs-v2-lines-status">Most USB scanners type the code and press Enter.</p>
+        </div>
+        <div id="vault-scan-camera-block" class="dgs-v2-scan-camera-block">
+          <label class="dgs-v2-section-label dgs-v2-scan-camera-label">Phone camera</label>
+          <div id="vault-scan-reader" class="dgs-v2-scan-reader"></div>
+          <button type="button" id="vault-scan-restart" class="dgs-v2-btn" hidden>Restart camera</button>
+        </div>
+        <p id="vault-scan-status" class="dgs-v2-lines-status">Open scan to start.</p>
       </div>
     </div>
   </div>

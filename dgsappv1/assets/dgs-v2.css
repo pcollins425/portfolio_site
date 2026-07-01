@@ -2103,6 +2103,11 @@ body.dgs-software-vault-v2 .dgs-v2-scan-dialog-body .dgs-v2-btn {
   align-self: flex-start;
 }
 
+body.dgs-software-vault-v2 .vault-scan--desktop .dgs-v2-scan-camera-block,
+body.dgs-software-vault-v2 .vault-scan--mobile .dgs-v2-scan-wedge-block {
+  display: none !important;
+}
+
 body.dgs-software-vault-v2 .dgs-v2-vault-detail-bar {
   display: none;
 }
