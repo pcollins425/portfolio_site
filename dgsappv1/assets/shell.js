@@ -61,6 +61,146 @@
   ];
 
   let dashboardBundlePromise = null;
+  const MOBILE_TOP_NAV_MQ = window.matchMedia("(max-width: 900px)");
+
+  function usesMobileTopNav() {
+    return document.body.classList.contains("dgs-mobile-top-nav");
+  }
+
+  function activePageTitle(activeId) {
+    for (const group of NAV_GROUPS) {
+      for (const item of group.items) {
+        if (item.id === activeId) return item.label;
+      }
+    }
+    return "DGS Application";
+  }
+
+  function closeMobileMenu() {
+    const menu = document.getElementById("dgs-mobile-menu");
+    const btn = document.getElementById("dgs-mobile-menu-btn");
+    if (menu) menu.hidden = true;
+    if (btn) btn.setAttribute("aria-expanded", "false");
+    document.body.classList.remove("dgs-mobile-menu-open");
+  }
+
+  function toggleMobileMenu() {
+    const menu = document.getElementById("dgs-mobile-menu");
+    const btn = document.getElementById("dgs-mobile-menu-btn");
+    if (!menu || !btn) return;
+    const open = menu.hidden;
+    menu.hidden = !open;
+    btn.setAttribute("aria-expanded", open ? "true" : "false");
+    document.body.classList.toggle("dgs-mobile-menu-open", open);
+  }
+
+  function ensureMobileTopNav() {
+    if (document.getElementById("dgs-mobile-topbar")) return;
+    const bar = document.createElement("header");
+    bar.id = "dgs-mobile-topbar";
+    bar.className = "dgs-mobile-topbar";
+    bar.hidden = true;
+    bar.innerHTML = `
+      <div class="dgs-mobile-topbar-row">
+        <button type="button" id="dgs-mobile-menu-btn" class="dgs-mobile-menu-btn" aria-expanded="false" aria-controls="dgs-mobile-menu">
+          <span class="dgs-mobile-menu-icon" aria-hidden="true">☰</span>
+          <span class="dgs-mobile-menu-label">Menu</span>
+        </button>
+        <div class="dgs-mobile-topbar-brand">
+          <span class="dgs-mobile-topbar-eyebrow">DGS Application</span>
+          <span class="dgs-mobile-topbar-title" id="dgs-mobile-page-title"></span>
+        </div>
+      </div>
+      <div id="dgs-mobile-menu" class="dgs-mobile-menu" hidden></div>`;
+    const sidebar = document.getElementById("dgs-sidebar");
+    if (sidebar?.parentNode) {
+      sidebar.parentNode.insertBefore(bar, sidebar.nextSibling);
+    } else {
+      document.body.insertBefore(bar, document.body.firstChild);
+    }
+  }
+
+  function renderMobileTopNav(activeId) {
+    const menu = document.getElementById("dgs-mobile-menu");
+    const title = document.getElementById("dgs-mobile-page-title");
+    if (!menu) return;
+    if (title) title.textContent = activePageTitle(activeId);
+
+    menu.innerHTML = NAV_GROUPS.map(
+      (group) => `
+        <section class="dgs-mobile-menu-group">
+          <div class="dgs-mobile-menu-group-label">${group.label}</div>
+          <nav class="dgs-mobile-menu-links" aria-label="${group.label}">
+            ${group.items
+              .map(
+                (item) =>
+                  `<a href="${withApi(item.href)}" class="dgs-mobile-menu-link${item.id === activeId ? " active" : ""}">${item.label}</a>`
+              )
+              .join("")}
+          </nav>
+        </section>`
+    ).join("");
+
+    const account = document.getElementById("sidebar-account");
+    if (account && !account.hidden) {
+      menu.insertAdjacentHTML(
+        "beforeend",
+        `<section class="dgs-mobile-menu-group dgs-mobile-menu-account">
+          <div class="dgs-mobile-menu-group-label">Account</div>
+          <div class="dgs-mobile-menu-account-row">
+            <span class="dgs-mobile-menu-user" id="dgs-mobile-user-label"></span>
+            <button type="button" id="dgs-mobile-sign-out" class="dgs-mobile-signout">Sign out</button>
+          </div>
+        </section>`
+      );
+      const userLabel = document.getElementById("user-label");
+      const mobileUser = document.getElementById("dgs-mobile-user-label");
+      if (userLabel && mobileUser) mobileUser.textContent = userLabel.textContent;
+      const mobileSignOut = document.getElementById("dgs-mobile-sign-out");
+      const signOut = document.getElementById("btn-sign-out");
+      if (mobileSignOut && signOut) {
+        mobileSignOut.onclick = () => signOut.click();
+      }
+    }
+  }
+
+  function syncMobileTopNav(activeId) {
+    if (!usesMobileTopNav()) return;
+    ensureMobileTopNav();
+    const bar = document.getElementById("dgs-mobile-topbar");
+    if (!bar) return;
+    if (!MOBILE_TOP_NAV_MQ.matches) {
+      bar.hidden = true;
+      document.body.classList.remove("dgs-mobile-top-nav-active", "dgs-mobile-menu-open");
+      closeMobileMenu();
+      return;
+    }
+    bar.hidden = false;
+    document.body.classList.add("dgs-mobile-top-nav-active");
+    renderMobileTopNav(activeId);
+  }
+
+  function wireMobileTopNav(activeId) {
+    if (!usesMobileTopNav() || document.body.dataset.mobileTopNavWired) return;
+    document.body.dataset.mobileTopNavWired = "1";
+
+    document.addEventListener("click", (e) => {
+      if (e.target.closest("#dgs-mobile-menu-btn")) {
+        e.preventDefault();
+        toggleMobileMenu();
+        return;
+      }
+      const menu = document.getElementById("dgs-mobile-menu");
+      if (!menu || menu.hidden) return;
+      if (menu.contains(e.target)) {
+        closeMobileMenu();
+        return;
+      }
+      if (!e.target.closest(".dgs-mobile-topbar")) closeMobileMenu();
+    });
+
+    MOBILE_TOP_NAV_MQ.addEventListener("change", () => syncMobileTopNav(activeId));
+  }
 
   function apiBase() {
     return window.DGSAuth ? DGSAuth.apiBase() : (params.get("api") || "https://api.collinsmediallc.com").replace(/\/$/, "");
@@ -297,10 +437,16 @@
 
   async function boot(activeId, onReady) {
     if (window.DGSAuth && !(await DGSAuth.ensureAuth())) return;
-    document.body.classList.toggle("dgs-rail-collapsed", isRailCollapsed());
+    if (usesMobileTopNav()) {
+      wireMobileTopNav(activeId);
+      syncMobileTopNav(activeId);
+    } else {
+      document.body.classList.toggle("dgs-rail-collapsed", isRailCollapsed());
+    }
     renderAppSidebar(activeId);
     wireRailToggle(activeId);
     if (window.DGSAuth) DGSAuth.renderAccount();
+    if (usesMobileTopNav()) syncMobileTopNav(activeId);
     if (typeof onReady === "function") onReady();
   }
 
@@ -308,6 +454,7 @@
     apiBase,
     withApi,
     renderAppSidebar,
+    syncMobileTopNav,
     boot,
     initDashboardPage,
     setDashboardRoute,

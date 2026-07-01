@@ -2097,17 +2097,9 @@ body.dgs-software-vault-v2 .dgs-v2-kit-pull-missing td {
 
 @media (max-width: 900px) {
   body.dgs-software-vault-v2.dgs-app {
-    flex-direction: row;
+    flex-direction: column;
     height: 100dvh;
     overflow: hidden;
-  }
-
-  body.dgs-software-vault-v2.dgs-rail-collapsed .dgs-sidebar {
-    width: var(--sidebar-w-collapsed);
-    height: 100dvh;
-    position: sticky;
-    top: 0;
-    flex-shrink: 0;
   }
 
   body.dgs-software-vault-v2 .dgs-main {

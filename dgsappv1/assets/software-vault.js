@@ -132,14 +132,6 @@
     });
   }
 
-  function prepareMobileShell() {
-    if (!isMobile()) return;
-    localStorage.setItem("dgs-rail-collapsed", "1");
-    document.body.classList.add("dgs-rail-collapsed");
-    const btn = document.getElementById("dgs-rail-toggle");
-    if (btn) btn.setAttribute("aria-expanded", "false");
-  }
-
   function setTab(tab) {
     closeMobileDetail();
     state.tab = tab;
@@ -423,13 +415,12 @@
     }
     MOBILE_MQ.addEventListener("change", () => {
       if (!isMobile()) closeMobileDetail();
-      else prepareMobileShell();
+      if (window.DGS?.syncMobileTopNav) DGS.syncMobileTopNav("software_vault");
     });
   }
 
   async function init() {
     cacheEls();
-    prepareMobileShell();
     wireEvents();
     setTab("bins");
     try {
