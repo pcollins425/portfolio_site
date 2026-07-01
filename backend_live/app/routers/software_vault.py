@@ -178,7 +178,7 @@ def list_bins(
                         FROM inventory.software AS s
                         WHERE s.bin_id = b.uuid
                         FOR XML PATH(''), TYPE
-                    ).value('nvarchar(max)', 'NVARCHAR(MAX)'), 1, 2, N'')
+                    ).value('.', 'NVARCHAR(MAX)'), 1, 2, N'')
                 ) AS software_descrips
             FROM inventory.storage_bin AS b
             WHERE {where_sql}
