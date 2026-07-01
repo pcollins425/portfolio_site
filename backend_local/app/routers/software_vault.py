@@ -104,6 +104,80 @@ def _software_row(r: dict, *, include_meta: bool = False) -> dict:
     return out
 
 
+def _normalize_section(section: str) -> str:
+    value = (section or "").strip()
+    if not value:
+        raise HTTPException(status_code=400, detail="section required")
+    if len(value) > 20:
+        raise HTTPException(status_code=400, detail="section too long")
+    return value
+
+
+def _slot_coord(value: int | str, *, field: str) -> str:
+    try:
+        number = int(value)
+    except (TypeError, ValueError) as exc:
+        raise HTTPException(status_code=400, detail=f"invalid {field}") from exc
+    if number < 1 or number > 99:
+        raise HTTPException(status_code=400, detail=f"{field} must be between 1 and 99")
+    return f"{number:02d}"
+
+
+def _section_row(r: dict) -> dict:
+    return {
+        "section": _json_value(r.get("section")),
+        "row_count": int(r.get("row_count") or 0),
+        "column_count": int(r.get("column_count") or 0),
+        "label": _json_value(r.get("label")),
+    }
+
+
+def _bin_lookup_sql() -> str:
+    return """
+        SELECT
+            b.uuid,
+            b.reference_key,
+            b.barcode,
+            b.section,
+            b.[row],
+            b.[column],
+            b.shelf_code,
+            b.label,
+            b.is_active,
+            (SELECT COUNT(*) FROM inventory.software AS s WHERE s.bin_id = b.uuid) AS software_count,
+            (SELECT COALESCE(SUM(s.qty_on_hand), 0) FROM inventory.software AS s WHERE s.bin_id = b.uuid) AS total_qty
+        FROM inventory.storage_bin AS b
+    """
+
+
+def _fetch_bin_by_uuid(bin_uuid: str) -> dict:
+    rows = _field_query(
+        f"{_bin_lookup_sql()} WHERE b.uuid = %s",
+        (bin_uuid,),
+    )
+    if not rows:
+        raise HTTPException(status_code=404, detail="bin not found")
+    return _bin_row(rows[0])
+
+
+def _assert_slot_available(section: str, row: str, column: str, *, exclude_uuid: str | None = None) -> None:
+    params: list[Any] = [section, row, column]
+    sql = """
+        SELECT TOP 1 uuid
+        FROM inventory.storage_bin
+        WHERE is_active = 1
+          AND section = %s
+          AND [row] = %s
+          AND [column] = %s
+    """
+    if exclude_uuid:
+        sql += " AND uuid <> %s"
+        params.append(exclude_uuid)
+    rows = _field_query(sql, tuple(params))
+    if rows:
+        raise HTTPException(status_code=409, detail="slot already occupied")
+
+
 @router.get("/summary")
 def vault_summary():
     try:
@@ -430,6 +504,267 @@ def update_software_placement(item: str, body: PlacementBody):
     if not n:
         raise HTTPException(status_code=404, detail="software not found")
     return get_software(key)
+
+
+class CreateSectionBody(BaseModel):
+    section: str = Field(..., min_length=1, max_length=20)
+    rows: int = Field(..., ge=1, le=99)
+    columns: int = Field(..., ge=1, le=99)
+    label: str | None = Field(None, max_length=100)
+
+
+class AddSectionRowsBody(BaseModel):
+    rows: int = Field(1, ge=1, le=50)
+
+
+class CreateBinsBody(BaseModel):
+    count: int = Field(1, ge=1, le=50)
+
+
+class BinSlotBody(BaseModel):
+    section: str | None = Field(None, max_length=20)
+    row: int | None = Field(None, ge=1, le=99)
+    column: int | None = Field(None, ge=1, le=99)
+
+
+@router.get("/layout")
+def get_vault_layout():
+    try:
+        section_rows = _field_query(
+            """
+            SELECT section, row_count, column_count, label
+            FROM inventory.storage_bin_section
+            ORDER BY section
+            """
+        )
+        inferred = _field_query(
+            """
+            SELECT
+                b.section,
+                MAX(TRY_CAST(b.[row] AS int)) AS row_count,
+                MAX(TRY_CAST(b.[column] AS int)) AS column_count
+            FROM inventory.storage_bin AS b
+            WHERE b.is_active = 1
+              AND b.section IS NOT NULL
+              AND LTRIM(RTRIM(b.section)) <> N''
+              AND b.[row] IS NOT NULL
+              AND b.[column] IS NOT NULL
+            GROUP BY b.section
+            """
+        )
+        bins = _field_query(
+            f"""
+            {_bin_lookup_sql()}
+            WHERE b.is_active = 1
+            ORDER BY b.section, b.[row], b.[column], b.reference_key
+            """
+        )
+        unslotted = _field_query(
+            f"""
+            {_bin_lookup_sql()}
+            WHERE b.is_active = 1
+              AND (
+                b.section IS NULL OR LTRIM(RTRIM(b.section)) = N''
+                OR b.[row] IS NULL OR LTRIM(RTRIM(b.[row])) = N''
+                OR b.[column] IS NULL OR LTRIM(RTRIM(b.[column])) = N''
+              )
+            ORDER BY b.reference_key
+            """
+        )
+    except Exception as exc:
+        raise HTTPException(status_code=503, detail=f"database error: {exc}") from exc
+
+    sections: dict[str, dict] = {}
+    for row in section_rows:
+        item = _section_row(row)
+        sections[item["section"]] = item
+
+    for row in inferred:
+        section = _json_value(row.get("section"))
+        if not section:
+            continue
+        inferred_rows = int(row.get("row_count") or 1)
+        inferred_cols = int(row.get("column_count") or 1)
+        if section in sections:
+            sections[section]["row_count"] = max(sections[section]["row_count"], inferred_rows)
+            sections[section]["column_count"] = max(sections[section]["column_count"], inferred_cols)
+        else:
+            sections[section] = {
+                "section": section,
+                "row_count": inferred_rows,
+                "column_count": inferred_cols,
+                "label": section,
+            }
+
+    bins_by_section: dict[str, list[dict]] = {}
+    for row in bins:
+        if not row.get("section"):
+            continue
+        section = _json_value(row.get("section"))
+        bins_by_section.setdefault(section, []).append(_bin_row(row))
+
+    layout_sections = []
+    for section in sorted(sections.keys()):
+        meta = sections[section]
+        row_count = int(meta["row_count"] or 1)
+        col_count = int(meta["column_count"] or 1)
+        placed = {
+            (b.get("row"), b.get("column")): b
+            for b in bins_by_section.get(section, [])
+            if b.get("row") and b.get("column")
+        }
+        cells = []
+        for row_num in range(1, row_count + 1):
+            row_key = _slot_coord(row_num, field="row")
+            for col_num in range(1, col_count + 1):
+                col_key = _slot_coord(col_num, field="column")
+                cells.append(
+                    {
+                        "row": row_key,
+                        "column": col_key,
+                        "shelf_code": f"{section}-{row_key}-{col_key}",
+                        "bin": placed.get((row_key, col_key)),
+                    }
+                )
+        layout_sections.append(
+            {
+                **meta,
+                "row_count": row_count,
+                "column_count": col_count,
+                "cells": cells,
+            }
+        )
+
+    return {
+        "sections": layout_sections,
+        "unslotted_bins": [_bin_row(r) for r in unslotted],
+    }
+
+
+@router.post("/layout/sections")
+def create_vault_section(body: CreateSectionBody):
+    section = _normalize_section(body.section)
+    try:
+        existing = _field_query(
+            "SELECT 1 AS ok FROM inventory.storage_bin_section WHERE section = %s",
+            (section,),
+        )
+        if existing:
+            raise HTTPException(status_code=409, detail="section already exists")
+        _field_execute(
+            """
+            INSERT INTO inventory.storage_bin_section (section, row_count, column_count, label)
+            VALUES (%s, %s, %s, %s)
+            """,
+            (section, body.rows, body.columns, (body.label or "").strip() or section),
+        )
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=503, detail=f"database error: {exc}") from exc
+    return get_vault_layout()
+
+
+@router.post("/layout/sections/{section}/add-rows")
+def add_vault_section_rows(section: str, body: AddSectionRowsBody):
+    key = _normalize_section(section)
+    try:
+        rows = _field_query(
+            "SELECT section, row_count, column_count, label FROM inventory.storage_bin_section WHERE section = %s",
+            (key,),
+        )
+        if not rows:
+            raise HTTPException(status_code=404, detail="section not found")
+        new_count = int(rows[0]["row_count"]) + body.rows
+        if new_count > 99:
+            raise HTTPException(status_code=400, detail="section cannot exceed 99 rows")
+        _field_execute(
+            """
+            UPDATE inventory.storage_bin_section
+            SET row_count = %s, updated_at = SYSUTCDATETIME()
+            WHERE section = %s
+            """,
+            (new_count, key),
+        )
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=503, detail=f"database error: {exc}") from exc
+    return get_vault_layout()
+
+
+@router.post("/bins")
+def create_bins(body: CreateBinsBody):
+    created = []
+    try:
+        for _ in range(body.count):
+            _field_execute(
+                """
+                INSERT INTO inventory.storage_bin (label)
+                VALUES (NULL)
+                """
+            )
+            row = _field_query(
+                f"""
+                {_bin_lookup_sql()}
+                WHERE b.index_key = (SELECT MAX(index_key) FROM inventory.storage_bin)
+                """
+            )[0]
+            created.append(_bin_row(row))
+    except Exception as exc:
+        raise HTTPException(status_code=503, detail=f"database error: {exc}") from exc
+    return {"items": created, "count": len(created)}
+
+
+@router.patch("/bins/{bin_uuid}/slot")
+def update_bin_slot(bin_uuid: str, body: BinSlotBody):
+    section_raw = (body.section or "").strip()
+    if not section_raw:
+        try:
+            n = _field_execute(
+                """
+                UPDATE inventory.storage_bin
+                SET section = NULL, [row] = NULL, [column] = NULL, updated_at = SYSUTCDATETIME()
+                WHERE uuid = %s AND is_active = 1
+                """,
+                (bin_uuid,),
+            )
+        except Exception as exc:
+            raise HTTPException(status_code=503, detail=f"database error: {exc}") from exc
+        if not n:
+            raise HTTPException(status_code=404, detail="bin not found")
+        return {"bin": _fetch_bin_by_uuid(bin_uuid)}
+
+    if body.row is None or body.column is None:
+        raise HTTPException(status_code=400, detail="row and column required when placing a bin")
+    section = _normalize_section(section_raw)
+    row = _slot_coord(body.row, field="row")
+    column = _slot_coord(body.column, field="column")
+    _assert_slot_available(section, row, column, exclude_uuid=bin_uuid)
+
+    try:
+        layout = _field_query(
+            "SELECT row_count, column_count FROM inventory.storage_bin_section WHERE section = %s",
+            (section,),
+        )
+        if layout:
+            if int(body.row) > int(layout[0]["row_count"]) or int(body.column) > int(layout[0]["column_count"]):
+                raise HTTPException(status_code=400, detail="slot outside section grid")
+        n = _field_execute(
+            """
+            UPDATE inventory.storage_bin
+            SET section = %s, [row] = %s, [column] = %s, label = %s, updated_at = SYSUTCDATETIME()
+            WHERE uuid = %s AND is_active = 1
+            """,
+            (section, row, column, f"{section}-{row}-{column}", bin_uuid),
+        )
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=503, detail=f"database error: {exc}") from exc
+    if not n:
+        raise HTTPException(status_code=404, detail="bin not found")
+    return {"bin": _fetch_bin_by_uuid(bin_uuid)}
 
 
 @router.get("/kits")

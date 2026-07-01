@@ -63,6 +63,7 @@
 
     <nav class="dgs-v2-vault-tabs" aria-label="Vault views">
       <button type="button" class="dgs-v2-vault-tab active" data-tab="bins">Bins</button>
+      <button type="button" class="dgs-v2-vault-tab dgs-v2-col--desktop" data-tab="layout">Layout</button>
       <button type="button" class="dgs-v2-vault-tab" data-tab="software">Software</button>
       <button type="button" class="dgs-v2-vault-tab" data-tab="kits">Kits</button>
     </nav>
@@ -118,6 +119,29 @@
           </div>
         </aside>
       </div>
+    </div>
+
+    <div id="panel-layout" class="dgs-v2-vault-panel dgs-v2-col--desktop" data-panel="layout" hidden>
+      <section class="dgs-v2-list-panel dgs-v2-layout-panel">
+        <div class="dgs-v2-toolbar dgs-v2-layout-toolbar">
+          <select id="layout-section-select" aria-label="Vault section"></select>
+          <button id="layout-new-section-btn" type="button" class="dgs-v2-btn">New section</button>
+          <button id="layout-add-rows-btn" type="button" class="dgs-v2-btn">Add rows</button>
+          <button id="layout-create-bins-btn" type="button" class="dgs-v2-btn">Create bins</button>
+          <button id="layout-unslot-btn" type="button" class="dgs-v2-btn" hidden>Unslot bin</button>
+          <button id="layout-clear-move-btn" type="button" class="dgs-v2-btn" hidden>Cancel move</button>
+        </div>
+        <p id="layout-move-hint" class="dgs-v2-lines-status dgs-v2-layout-move-hint" hidden></p>
+        <p class="dgs-v2-lines-status dgs-v2-layout-help">
+          Click a bin to pick it up, then click an empty slot to place it. Shelf codes are location labels; the physical bin keeps its barcode.
+        </p>
+        <div id="layout-grid" class="dgs-v2-layout-grid" role="grid" aria-label="Section location grid"></div>
+        <div class="dgs-v2-layout-unslotted">
+          <div class="dgs-v2-section-label">Unslotted physical bins</div>
+          <div id="layout-unslotted-list" class="dgs-v2-layout-unslotted-list"></div>
+        </div>
+        <div class="dgs-v2-list-status" id="layout-status"></div>
+      </section>
     </div>
 
     <div id="panel-software" class="dgs-v2-vault-panel" data-panel="software" hidden>
@@ -186,6 +210,63 @@
     </div>
   </div>
 
+  <div class="dgs-v2-layout-dialog" id="layout-section-dialog" hidden>
+    <div class="dgs-v2-layout-dialog-card" role="dialog" aria-labelledby="layout-section-dialog-title">
+      <h2 id="layout-section-dialog-title" class="dgs-v2-section-label">New section</h2>
+      <p class="dgs-v2-lines-status">Define the grid size for this vault section (e.g. section <code>03</code> with 4 rows × 6 columns).</p>
+      <label class="dgs-v2-layout-field">
+        <span>Section ID</span>
+        <input id="layout-section-name" type="text" maxlength="20" placeholder="03" autocomplete="off" />
+      </label>
+      <label class="dgs-v2-layout-field">
+        <span>Rows</span>
+        <input id="layout-section-rows" type="number" min="1" max="99" value="4" />
+      </label>
+      <label class="dgs-v2-layout-field">
+        <span>Columns</span>
+        <input id="layout-section-cols" type="number" min="1" max="99" value="6" />
+      </label>
+      <label class="dgs-v2-layout-field">
+        <span>Label (optional)</span>
+        <input id="layout-section-label" type="text" maxlength="100" placeholder="Section 3" autocomplete="off" />
+      </label>
+      <div class="dgs-v2-layout-dialog-actions">
+        <button id="layout-section-cancel" type="button" class="dgs-v2-btn">Cancel</button>
+        <button id="layout-section-save" type="button" class="dgs-v2-btn dgs-v2-btn--primary">Create section</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="dgs-v2-layout-dialog" id="layout-add-rows-dialog" hidden>
+    <div class="dgs-v2-layout-dialog-card" role="dialog" aria-labelledby="layout-add-rows-dialog-title">
+      <h2 id="layout-add-rows-dialog-title" class="dgs-v2-section-label">Add rows</h2>
+      <p class="dgs-v2-lines-status">Extend the selected section downward so existing bins keep their coordinates.</p>
+      <label class="dgs-v2-layout-field">
+        <span>Rows to add</span>
+        <input id="layout-add-rows-count" type="number" min="1" max="50" value="1" />
+      </label>
+      <div class="dgs-v2-layout-dialog-actions">
+        <button id="layout-add-rows-cancel" type="button" class="dgs-v2-btn">Cancel</button>
+        <button id="layout-add-rows-save" type="button" class="dgs-v2-btn dgs-v2-btn--primary">Add rows</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="dgs-v2-layout-dialog" id="layout-create-bins-dialog" hidden>
+    <div class="dgs-v2-layout-dialog-card" role="dialog" aria-labelledby="layout-create-bins-dialog-title">
+      <h2 id="layout-create-bins-dialog-title" class="dgs-v2-section-label">Create physical bins</h2>
+      <p class="dgs-v2-lines-status">Creates unslotted bins with stable barcodes. Place them on the grid afterward.</p>
+      <label class="dgs-v2-layout-field">
+        <span>Count</span>
+        <input id="layout-create-bins-count" type="number" min="1" max="50" value="1" />
+      </label>
+      <div class="dgs-v2-layout-dialog-actions">
+        <button id="layout-create-bins-cancel" type="button" class="dgs-v2-btn">Cancel</button>
+        <button id="layout-create-bins-save" type="button" class="dgs-v2-btn dgs-v2-btn--primary">Create</button>
+      </div>
+    </div>
+  </div>
+
   <div class="scan-modal dgs-v2-scan-modal" id="vault-scan-modal" hidden aria-hidden="true">
     <div class="dgs-v2-scan-dialog" role="dialog" aria-labelledby="vault-scan-title">
       <div class="dgs-v2-scan-dialog-head">
@@ -213,6 +294,7 @@
 
   <script src="assets/auth.js"></script>
   <script src="assets/shell.js"></script>
+  <script src="assets/software-vault-layout.js"></script>
   <script src="assets/software-vault.js"></script>
   <script>DGS.boot("software_vault", () => SoftwareVaultApp.init());</script>
 </body>

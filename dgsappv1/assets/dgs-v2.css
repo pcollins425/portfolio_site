@@ -2158,6 +2158,156 @@ body.dgs-software-vault-v2 .dgs-v2-kit-pull-missing td {
   color: #f0a060;
 }
 
+body.dgs-software-vault-v2 .dgs-v2-layout-panel {
+  gap: 12px;
+}
+
+body.dgs-software-vault-v2 .dgs-v2-layout-toolbar {
+  flex-wrap: wrap;
+}
+
+body.dgs-software-vault-v2 .dgs-v2-layout-help {
+  margin: 0;
+}
+
+body.dgs-software-vault-v2 .dgs-v2-layout-move-hint {
+  margin: 0;
+  color: var(--dgs-v2-accent);
+}
+
+body.dgs-software-vault-v2 .dgs-v2-layout-grid {
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+  background: var(--dgs-v2-card);
+  border: 1px solid var(--dgs-v2-border);
+  border-radius: 12px;
+  overflow: auto;
+  max-height: min(52vh, 560px);
+}
+
+body.dgs-software-vault-v2 .dgs-v2-layout-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 4px;
+  min-height: 76px;
+  padding: 8px;
+  border: 1px solid var(--dgs-v2-border);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--dgs-v2-bg) 70%, transparent);
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+body.dgs-software-vault-v2 .dgs-v2-layout-cell--occupied {
+  background: color-mix(in srgb, var(--dgs-v2-accent) 8%, var(--dgs-v2-card));
+}
+
+body.dgs-software-vault-v2 .dgs-v2-layout-cell--selected {
+  border-color: var(--dgs-v2-accent);
+  box-shadow: 0 0 0 1px var(--dgs-v2-accent);
+}
+
+body.dgs-software-vault-v2 .dgs-v2-layout-cell--move-target {
+  border-style: dashed;
+  border-color: color-mix(in srgb, var(--dgs-v2-accent) 55%, var(--dgs-v2-border));
+}
+
+body.dgs-software-vault-v2 .dgs-v2-layout-cell-shelf {
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--dgs-v2-muted);
+}
+
+body.dgs-software-vault-v2 .dgs-v2-layout-cell-bin {
+  font-weight: 600;
+  font-size: 13px;
+}
+
+body.dgs-software-vault-v2 .dgs-v2-layout-cell-qty,
+body.dgs-software-vault-v2 .dgs-v2-layout-cell-empty {
+  font-size: 12px;
+  color: var(--dgs-v2-muted);
+}
+
+body.dgs-software-vault-v2 .dgs-v2-layout-unslotted {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+body.dgs-software-vault-v2 .dgs-v2-layout-unslotted-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+body.dgs-software-vault-v2 .dgs-v2-layout-unslotted-chip {
+  border: 1px solid var(--dgs-v2-border);
+  border-radius: 999px;
+  padding: 6px 12px;
+  background: var(--dgs-v2-card);
+  color: inherit;
+  cursor: pointer;
+  font-size: 13px;
+}
+
+body.dgs-software-vault-v2 .dgs-v2-layout-unslotted-chip--active {
+  border-color: var(--dgs-v2-accent);
+  background: color-mix(in srgb, var(--dgs-v2-accent) 12%, var(--dgs-v2-card));
+}
+
+body.dgs-software-vault-v2 .dgs-v2-layout-dialog {
+  position: fixed;
+  inset: 0;
+  z-index: 1200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(0, 0, 0, 0.55);
+}
+
+body.dgs-software-vault-v2 .dgs-v2-layout-dialog[hidden] {
+  display: none;
+}
+
+body.dgs-software-vault-v2 .dgs-v2-layout-dialog-card {
+  width: min(420px, 100%);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 20px;
+  border-radius: 12px;
+  border: 1px solid var(--dgs-v2-border);
+  background: var(--dgs-v2-card);
+}
+
+body.dgs-software-vault-v2 .dgs-v2-layout-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 13px;
+}
+
+body.dgs-software-vault-v2 .dgs-v2-layout-field input {
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--dgs-v2-border);
+  background: var(--dgs-v2-bg);
+  color: inherit;
+}
+
+body.dgs-software-vault-v2 .dgs-v2-layout-dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding-top: 4px;
+}
+
 @media (max-width: 900px) {
   body.dgs-software-vault-v2.dgs-app {
     flex-direction: column;

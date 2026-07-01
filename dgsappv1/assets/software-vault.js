@@ -185,6 +185,9 @@
     document.querySelectorAll(".dgs-v2-vault-panel").forEach((panel) => {
       panel.hidden = panel.dataset.panel !== tab;
     });
+    if (tab === "layout" && window.SoftwareVaultLayout) {
+      SoftwareVaultLayout.refresh().catch((e) => showError(String(e.message || e)));
+    }
   }
 
   function renderSummary() {
@@ -603,6 +606,15 @@
     setTab("bins");
     try {
       await refreshAll();
+      if (window.SoftwareVaultLayout) {
+        await SoftwareVaultLayout.init({
+          fetchJson,
+          showError,
+          esc,
+          isMobile,
+          onBinsChanged: loadBins,
+        });
+      }
     } catch (e) {
       showError(String(e.message || e));
     }
