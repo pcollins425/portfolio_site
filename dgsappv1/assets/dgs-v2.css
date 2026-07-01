@@ -2121,6 +2121,10 @@ body.dgs-software-vault-v2 .dgs-v2-kit-pull-missing td {
     gap: 8px;
   }
 
+  body.dgs-software-vault-v2 .dgs-v2-page-header {
+    display: none;
+  }
+
   body.dgs-software-vault-v2 .dgs-v2-page-header h1 {
     font-size: 22px;
     line-height: 1.2;
