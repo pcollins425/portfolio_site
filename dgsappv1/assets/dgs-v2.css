@@ -24,7 +24,8 @@ body.dgs-vendors-v2.dgs-app,
 body.dgs-casinos-v2.dgs-app,
 body.dgs-asset-hub.dgs-app,
 body.dgs-warehouse-v2.dgs-app,
-body.dgs-slot-master-v2.dgs-app {
+body.dgs-slot-master-v2.dgs-app,
+body.dgs-software-vault-v2.dgs-app {
   height: 100vh;
   overflow: hidden;
   color-scheme: dark;
@@ -36,7 +37,8 @@ body.dgs-vendors-v2 .dgs-v2-main,
 body.dgs-casinos-v2 .dgs-v2-main,
 body.dgs-asset-hub .dgs-v2-main,
 body.dgs-warehouse-v2 .dgs-v2-main,
-body.dgs-slot-master-v2 .dgs-v2-main {
+body.dgs-slot-master-v2 .dgs-v2-main,
+body.dgs-software-vault-v2 .dgs-v2-main {
   display: flex;
   flex-direction: column;
   padding: 24px 28px 20px;
@@ -1975,6 +1977,11 @@ body.dgs-casinos-v2 .dgs-v2-detail-body {
 }
 
 /* Software Vault */
+body.dgs-software-vault-v2.dgs-app {
+  background: var(--dgs-v2-bg);
+  color: var(--dgs-v2-text);
+}
+
 body.dgs-software-vault-v2 .dgs-v2-vault-tabs {
   display: flex;
   flex-wrap: wrap;
