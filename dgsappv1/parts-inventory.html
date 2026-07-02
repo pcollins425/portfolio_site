@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Parts — DGS Application</title>
+  <link rel="stylesheet" href="assets/dgs.css" />
+  <link rel="stylesheet" href="assets/dgs-v2.css" />
+</head>
+<body class="dgs-app dgs-parts-inventory-v2">
+  <aside class="dgs-sidebar" id="dgs-sidebar">
+    <div class="dgs-sidebar-brand">
+      <div class="dgs-brand-text">
+        <span class="dgs-brand-eyebrow">Dynamic Gaming Solutions</span>
+        <span class="dgs-brand-title">DGS Application</span>
+      </div>
+      <button type="button" id="dgs-rail-toggle" class="dgs-rail-toggle" aria-expanded="true" title="Collapse navigation">◧</button>
+    </div>
+    <nav class="dgs-sidebar-nav" id="dgs-app-nav" aria-label="Application"></nav>
+    <div class="dgs-sidebar-account" id="sidebar-account" hidden>
+      <span class="dgs-sidebar-user" id="user-label"></span>
+      <button type="button" id="btn-sign-out" class="dgs-sidebar-signout">Sign out</button>
+    </div>
+  </aside>
+
+  <div id="dgs-nav-flyout" class="dgs-nav-flyout" hidden></div>
+
+  <div class="dgs-main dgs-v2-main">
+    <header class="dgs-v2-page-header">
+      <div>
+        <p class="dgs-v2-eyebrow">Inventory · parts catalog &amp; stock</p>
+        <h1>Parts</h1>
+        <p class="dgs-v2-subtitle">Live from <code>inventory.inventory</code> + <code>stock_balance</code></p>
+      </div>
+    </header>
+
+    <div id="error-box" class="dgs-v2-error" hidden></div>
+
+    <div class="dgs-v2-metrics" id="stat-row" aria-label="Summary statistics">
+      <div class="dgs-v2-metric">
+        <div class="dgs-v2-metric-label">Catalog items</div>
+        <div class="dgs-v2-metric-value" id="stat-total">—</div>
+      </div>
+      <div class="dgs-v2-metric">
+        <div class="dgs-v2-metric-label">Families</div>
+        <div class="dgs-v2-metric-value" id="stat-families">—</div>
+      </div>
+      <div class="dgs-v2-metric">
+        <div class="dgs-v2-metric-label">With on hand</div>
+        <div class="dgs-v2-metric-value" id="stat-onhand">—</div>
+      </div>
+      <div class="dgs-v2-metric">
+        <div class="dgs-v2-metric-label">Stock buckets</div>
+        <div class="dgs-v2-metric-value" id="stat-balance">—</div>
+      </div>
+    </div>
+
+    <div class="dgs-v2-split">
+      <section class="dgs-v2-list-panel">
+        <div class="dgs-v2-toolbar">
+          <select id="family-filter" aria-label="Family filter">
+            <option value="">All families</option>
+          </select>
+          <input id="search-input" type="search" placeholder="Item, description, mfr part no., bin…" autocomplete="off" />
+          <button id="search-btn" type="button" class="dgs-v2-btn dgs-v2-btn--primary">Search</button>
+          <button id="clear-search" type="button" class="dgs-v2-btn">Clear</button>
+        </div>
+        <div class="dgs-v2-grid-wrap">
+          <table class="dgs-v2-grid" id="parts-table">
+            <thead>
+              <tr>
+                <th>Item</th>
+                <th>Description</th>
+                <th class="dgs-v2-col--desktop">Family</th>
+                <th class="dgs-v2-bin-qty">On hand</th>
+                <th class="dgs-v2-col--desktop">Bin</th>
+              </tr>
+            </thead>
+            <tbody id="parts-tbody"></tbody>
+          </table>
+        </div>
+        <div class="dgs-v2-list-status" id="list-status"></div>
+        <div class="dgs-v2-toolbar dgs-v2-toolbar--pager">
+          <button id="page-prev" type="button" class="dgs-v2-btn">Prev</button>
+          <button id="page-next" type="button" class="dgs-v2-btn">Next</button>
+        </div>
+      </section>
+
+      <aside class="dgs-v2-detail" id="detail-panel">
+        <div class="dgs-v2-detail-body empty" id="detail-body">
+          <p id="detail-empty-msg">Select a part to view catalog fields and stock buckets.</p>
+          <div id="detail-content" hidden>
+            <div class="dgs-v2-section-label">Part</div>
+            <div class="dgs-v2-part-actions" id="part-actions"></div>
+            <dl class="dgs-v2-fields" id="detail-fields"></dl>
+            <div class="dgs-v2-section-label">Stock balances</div>
+            <div class="dgs-v2-grid-wrap">
+              <table class="dgs-v2-grid" id="balances-table">
+                <thead>
+                  <tr>
+                    <th>Bucket</th>
+                    <th>Condition</th>
+                    <th class="dgs-v2-bin-qty">Qty</th>
+                  </tr>
+                </thead>
+                <tbody id="balances-tbody"></tbody>
+              </table>
+            </div>
+            <p class="dgs-v2-lines-status" id="balances-status"></p>
+          </div>
+        </div>
+      </aside>
+    </div>
+  </div>
+
+  <script src="assets/auth.js"></script>
+  <script src="assets/shell.js"></script>
+  <script src="assets/parts-inventory.js"></script>
+  <script>DGS.boot("parts_inventory", () => PartsInventoryApp.init());</script>
+</body>
+</html>
