@@ -1,13 +1,12 @@
 from __future__ import annotations
 
-import json
-from collections.abc import Iterator
 from typing import Any
 
-from app.assistant import config, sessions
+from app.assistant import config, runs, sessions
 
 
 def health() -> dict[str, Any]:
+    runs.clear_stale_active_runs()
     key = config.cursor_api_key()
     sdk_error = config.sdk_import_error()
     try:
@@ -42,10 +41,6 @@ def health() -> dict[str, Any]:
         if sdk_error:
             out["cursor_sdk_error"] = sdk_error
         return out
-
-
-def _sse(event: dict[str, Any]) -> str:
-    return f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
 
 
 def _prompt_with_history(session_id: str, prompt: str) -> str:
@@ -95,97 +90,206 @@ def _open_agent(api_key: str, session_id: str, agent_id: str | None):
     return agent_ctx, None, True
 
 
-def stream_message(session_id: str, content: str) -> Iterator[str]:
-    prompt = content.strip()
-    if not prompt:
-        yield _sse({"type": "error", "message": "Message cannot be empty"})
-        return
+def _tool_label(name: str, status: str) -> str:
+    clean = (name or "tool").replace("_", " ").strip()
+    if status == "running":
+        return f"Using {clean}…"
+    if status == "error":
+        return f"{clean} failed"
+    return f"Finished {clean}"
 
-    try:
-        sessions.append_message(session_id, "user", prompt)
-    except KeyError:
-        yield _sse({"type": "error", "message": "Session not found"})
-        return
+
+def _events_from_sdk_message(message: Any) -> list[dict[str, Any]]:
+    events: list[dict[str, Any]] = []
+    msg_type = getattr(message, "type", None)
+
+    if msg_type == "thinking":
+        text = (getattr(message, "text", None) or "").strip()
+        events.append(
+            {
+                "type": "thinking",
+                "text": text or "Thinking…",
+            }
+        )
+        return events
+
+    if msg_type == "tool_call":
+        name = getattr(message, "name", "tool") or "tool"
+        status = getattr(message, "status", "running") or "running"
+        events.append(
+            {
+                "type": "activity",
+                "activity": "tool",
+                "name": name,
+                "status": status,
+                "label": _tool_label(name, status),
+            }
+        )
+        return events
+
+    if msg_type == "status":
+        label = (getattr(message, "message", None) or "").strip()
+        if not label:
+            label = (getattr(message, "status", None) or "Working").replace("_", " ")
+        events.append(
+            {
+                "type": "activity",
+                "activity": "status",
+                "label": label,
+            }
+        )
+        return events
+
+    if msg_type == "assistant":
+        content = getattr(message, "message", None)
+        blocks = getattr(content, "content", None) if content else None
+        for block in blocks or []:
+            if getattr(block, "type", None) != "text":
+                continue
+            text = getattr(block, "text", None)
+            if text:
+                events.append({"type": "text", "text": text})
+        return events
+
+    return events
+
+
+def _run_agent_once(
+    rec: runs.RunRecord,
+    prompt: str,
+    *,
+    force_recreate: bool = False,
+) -> str:
+    from cursor_sdk import CursorAgentError
 
     api_key = config.cursor_api_key()
     if not api_key:
-        yield _sse(
-            {
-                "type": "error",
-                "message": "CURSOR_API_KEY is not configured on the API server",
-            }
-        )
-        yield _sse({"type": "status", "status": "error"})
-        return
-
-    if not config.sdk_installed():
-        yield _sse(
-            {
-                "type": "error",
-                "message": "cursor-sdk is not installed (pip install cursor-sdk)",
-            }
-        )
-        yield _sse({"type": "status", "status": "error"})
-        return
-
-    yield _sse({"type": "status", "status": "running"})
-
-    from cursor_sdk import CursorAgentError
+        raise CursorAgentError("CURSOR_API_KEY is not configured on the API server")
 
     assistant_chunks: list[str] = []
-    stored_agent_id = sessions.get_agent_id(session_id)
+    stored_agent_id = None if force_recreate else sessions.get_agent_id(rec.session_id)
     effective_prompt = prompt
+    if force_recreate:
+        sessions.clear_agent_id(rec.session_id)
+        effective_prompt = _prompt_with_history(rec.session_id, prompt)
+        rec.publish(
+            {
+                "type": "activity",
+                "activity": "status",
+                "label": "Reconnecting agent…",
+            }
+        )
+
+    agent_ctx, resume_agent_id, recreated = _open_agent(
+        api_key, rec.session_id, stored_agent_id
+    )
+    if recreated and stored_agent_id and not force_recreate:
+        effective_prompt = _prompt_with_history(rec.session_id, prompt)
+
+    with agent_ctx as agent:
+        if resume_agent_id is None:
+            sessions.set_agent_id(rec.session_id, agent.agent_id)
+
+        run = agent.send(effective_prompt)
+        for message in run.messages():
+            for event in _events_from_sdk_message(message):
+                if event.get("type") == "text":
+                    assistant_chunks.append(str(event.get("text") or ""))
+                rec.publish(event)
+
+        result = run.wait()
+        if result.status == "error":
+            raise CursorAgentError(f"Run failed ({result.id})")
+
+    return "".join(assistant_chunks).strip()
+
+
+def execute_run(rec: runs.RunRecord, prompt: str) -> None:
+    """Background worker — keeps running even if the SSE client disconnects."""
+    from cursor_sdk import CursorAgentError
+    from cursor_sdk.errors import AgentBusyError, InternalServerError
+
+    stored_agent_id = sessions.get_agent_id(rec.session_id)
+    retried = False
 
     try:
-        agent_ctx, resume_agent_id, recreated = _open_agent(
-            api_key, session_id, stored_agent_id
-        )
-        if recreated and stored_agent_id:
-            effective_prompt = _prompt_with_history(session_id, prompt)
-
-        with agent_ctx as agent:
-            if resume_agent_id is None:
-                sessions.set_agent_id(session_id, agent.agent_id)
-
-            run = agent.send(effective_prompt)
-            for message in run.messages():
-                if message.type != "assistant":
+        while True:
+            try:
+                full_reply = _run_agent_once(rec, prompt, force_recreate=retried)
+                if full_reply:
+                    sessions.append_message(rec.session_id, "assistant", full_reply)
+                runs.finish_run(rec, "finished")
+                return
+            except (InternalServerError, AgentBusyError) as err:
+                if not retried and stored_agent_id:
+                    retried = True
+                    stored_agent_id = None
+                    rec.publish(
+                        {
+                            "type": "activity",
+                            "activity": "status",
+                            "label": "Recovering session…",
+                        }
+                    )
                     continue
-                for block in message.message.content:
-                    if block.type != "text" or not block.text:
-                        continue
-                    assistant_chunks.append(block.text)
-                    yield _sse({"type": "text", "text": block.text})
-
-            result = run.wait()
-            if result.status == "error":
-                yield _sse(
+                raise err
+            except CursorAgentError as err:
+                if not retried and stored_agent_id:
+                    retried = True
+                    stored_agent_id = None
+                    rec.publish(
+                        {
+                            "type": "activity",
+                            "activity": "status",
+                            "label": "Recovering session…",
+                        }
+                    )
+                    continue
+                rec.publish(
                     {
                         "type": "error",
-                        "message": f"Run failed ({result.id})",
-                        "run_id": result.id,
+                        "message": err.message,
+                        "retryable": err.is_retryable,
                     }
                 )
-                yield _sse({"type": "status", "status": "error"})
+                runs.finish_run(rec, "error")
                 return
-
     except CursorAgentError as err:
-        yield _sse(
+        rec.publish(
             {
                 "type": "error",
                 "message": err.message,
                 "retryable": err.is_retryable,
             }
         )
-        yield _sse({"type": "status", "status": "error"})
-        return
+        runs.finish_run(rec, "error")
     except Exception as err:
-        yield _sse({"type": "error", "message": str(err)})
-        yield _sse({"type": "status", "status": "error"})
-        return
+        rec.publish({"type": "error", "message": str(err)})
+        runs.finish_run(rec, "error")
 
-    full_reply = "".join(assistant_chunks).strip()
-    if full_reply:
-        sessions.append_message(session_id, "assistant", full_reply)
 
-    yield _sse({"type": "status", "status": "finished"})
+def begin_message(session_id: str, content: str) -> runs.RunRecord:
+    """Validate, persist the user turn, and start (or attach to) a background run."""
+    prompt = content.strip()
+    if not prompt:
+        raise ValueError("Message cannot be empty")
+
+    existing = runs.get_active_run(session_id)
+    if existing:
+        return existing
+
+    sessions.append_message(session_id, "user", prompt)
+
+    api_key = config.cursor_api_key()
+    if not api_key:
+        raise RuntimeError("CURSOR_API_KEY is not configured on the API server")
+    if not config.sdk_installed():
+        raise RuntimeError("cursor-sdk is not installed (pip install cursor-sdk)")
+
+    rec = runs.start_run(session_id, prompt)
+    if rec is None:
+        existing = runs.get_active_run(session_id)
+        if existing:
+            return existing
+        raise RuntimeError("Could not start assistant run")
+    return rec

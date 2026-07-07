@@ -45,6 +45,7 @@ def _write_all(rows: list[dict[str, Any]]) -> None:
 
 
 def _public(row: dict[str, Any]) -> dict[str, Any]:
+    active = row.get("active_run")
     return {
         "id": row["id"],
         "title": row.get("title") or "New conversation",
@@ -52,6 +53,7 @@ def _public(row: dict[str, Any]) -> dict[str, Any]:
         "created_at": row.get("created_at"),
         "updated_at": row.get("updated_at"),
         "messages": list(row.get("messages") or []),
+        "active_run": dict(active) if isinstance(active, dict) else None,
     }
 
 
@@ -137,3 +139,33 @@ def get_agent_id(session_id: str) -> str | None:
                 aid = row.get("agent_id")
                 return str(aid) if aid else None
     return None
+
+
+def set_active_run(session_id: str, run_id: str, status: str) -> None:
+    with _lock:
+        rows = _read_all()
+        for row in rows:
+            if row.get("id") != session_id:
+                continue
+            row["active_run"] = {
+                "run_id": run_id,
+                "status": status,
+                "updated_at": _now_iso(),
+            }
+            row["updated_at"] = _now_iso()
+            _write_all(rows)
+            return
+    raise KeyError(session_id)
+
+
+def clear_active_run(session_id: str) -> None:
+    with _lock:
+        rows = _read_all()
+        for row in rows:
+            if row.get("id") != session_id:
+                continue
+            row["active_run"] = None
+            row["updated_at"] = _now_iso()
+            _write_all(rows)
+            return
+    raise KeyError(session_id)

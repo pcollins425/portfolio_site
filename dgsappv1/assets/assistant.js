@@ -3,6 +3,7 @@
 
   const params = new URLSearchParams(window.location.search);
   const API_BASE = (params.get("api") || "https://api.collinsmediallc.com").replace(/\/$/, "");
+  const SESSION_STORAGE_KEY = "dgs_assistant_session_id";
 
   const state = {
     health: null,
@@ -12,10 +13,12 @@
     fileTree: null,
     secrets: [],
     secretsDraft: [],
-    sending: false,
+    streaming: false,
     sessionFilter: "",
     fileFilter: "",
     expandedDirs: new Set(),
+    streamAbort: null,
+    pollTimer: null,
   };
 
   const els = {
@@ -67,6 +70,37 @@
     return state.sessions.find((s) => s.id === state.activeSessionId) || null;
   }
 
+  function sessionIsRunning(session) {
+    return Boolean(session && session.active_run && session.active_run.status === "running");
+  }
+
+  function persistActiveSessionId(sessionId) {
+    if (sessionId) localStorage.setItem(SESSION_STORAGE_KEY, sessionId);
+    else localStorage.removeItem(SESSION_STORAGE_KEY);
+  }
+
+  function stopPolling() {
+    if (state.pollTimer) {
+      clearInterval(state.pollTimer);
+      state.pollTimer = null;
+    }
+  }
+
+  function setStreaming(active) {
+    state.streaming = active;
+    if (els.btnSend) els.btnSend.disabled = active;
+    if (els.chatInput) els.chatInput.disabled = active;
+    renderChatHeader();
+    renderSessions();
+  }
+
+  function abortStream() {
+    if (state.streamAbort) {
+      state.streamAbort.abort();
+      state.streamAbort = null;
+    }
+  }
+
   function renderSessions() {
     if (!els.sessionList) return;
     const q = state.sessionFilter.trim().toLowerCase();
@@ -78,18 +112,25 @@
     }
     for (const s of rows) {
       const btn = document.createElement("button");
+      const running = sessionIsRunning(s) || (state.streaming && s.id === state.activeSessionId);
       btn.type = "button";
-      btn.className = "assistant-session-item" + (s.id === state.activeSessionId ? " is-active" : "");
+      btn.className =
+        "assistant-session-item" +
+        (s.id === state.activeSessionId ? " is-active" : "") +
+        (running ? " is-running" : "");
       const title = document.createElement("span");
       title.className = "assistant-session-item__title";
       title.textContent = s.title || "New conversation";
       const meta = document.createElement("span");
       meta.className = "assistant-session-item__meta";
       const n = (s.messages || []).length;
-      meta.textContent = `${n} message${n === 1 ? "" : "s"}`;
+      meta.textContent = running ? "Working…" : `${n} message${n === 1 ? "" : "s"}`;
       btn.appendChild(title);
       btn.appendChild(meta);
-      btn.addEventListener("click", () => selectSession(s.id));
+      btn.addEventListener("click", () => {
+        if (state.streaming && s.id !== state.activeSessionId) return;
+        selectSession(s.id).catch((e) => showError(e.message));
+      });
       els.sessionList.appendChild(btn);
     }
   }
@@ -176,9 +217,240 @@
     }
     els.chatTitle.textContent = s.title || "Conversation";
     const parts = [];
-    if (s.agent_id) parts.push("Agent linked");
+    if (state.streaming || sessionIsRunning(s)) parts.push("Processing");
+    else if (s.agent_id) parts.push("Agent linked");
     if (state.health && !state.health.cursor_api_key_configured) parts.push("API key missing");
     els.chatMeta.textContent = parts.length ? parts.join(" · ") : "Ready";
+  }
+
+  function createActivityNode(label, thinkingText) {
+    const div = document.createElement("div");
+    div.className = "assistant-message assistant-message--activity";
+    div.dataset.activity = "1";
+
+    const labelRow = document.createElement("div");
+    labelRow.className = "assistant-message__label assistant-activity__label";
+    const pulse = document.createElement("span");
+    pulse.className = "assistant-activity__pulse";
+    pulse.setAttribute("aria-hidden", "true");
+    const labelEl = document.createElement("span");
+    labelEl.className = "assistant-activity__text";
+    labelEl.textContent = label || "Working…";
+    labelRow.appendChild(pulse);
+    labelRow.appendChild(labelEl);
+    div.appendChild(labelRow);
+
+    if (thinkingText) {
+      const detail = document.createElement("div");
+      detail.className = "assistant-activity__detail";
+      detail.textContent = thinkingText;
+      div.appendChild(detail);
+    }
+    return div;
+  }
+
+  function updateActivityNode(node, label, thinkingText) {
+    if (!node) return;
+    const labelEl = node.querySelector(".assistant-activity__text");
+    if (labelEl && label) labelEl.textContent = label;
+    let detail = node.querySelector(".assistant-activity__detail");
+    if (thinkingText) {
+      if (!detail) {
+        detail = document.createElement("div");
+        detail.className = "assistant-activity__detail";
+        node.appendChild(detail);
+      }
+      detail.textContent = thinkingText;
+    } else if (detail) {
+      detail.remove();
+    }
+  }
+
+  function removeActivityNode(ctx) {
+    if (ctx.activityNode && ctx.activityNode.parentNode) {
+      ctx.activityNode.parentNode.removeChild(ctx.activityNode);
+    }
+    ctx.activityNode = null;
+  }
+
+  function ensureAssistantNode(ctx) {
+    removeActivityNode(ctx);
+    if (ctx.assistantNode) return ctx.assistantNode;
+    const assistantNode = document.createElement("div");
+    assistantNode.className = "assistant-message assistant-message--assistant";
+    const label = document.createElement("div");
+    label.className = "assistant-message__label";
+    label.textContent = "Assistant";
+    assistantNode.appendChild(label);
+    const body = document.createElement("div");
+    body.className = "assistant-message__body";
+    body.dataset.stream = "1";
+    assistantNode.appendChild(body);
+    els.chatMessages.appendChild(assistantNode);
+    ctx.assistantNode = assistantNode;
+    return assistantNode;
+  }
+
+  function handleStreamEvent(event, ctx) {
+    if (event.type === "thinking") {
+      const label = "Thinking…";
+      const detail = event.text && event.text !== "Thinking…" ? event.text : "";
+      if (!ctx.activityNode) {
+        ctx.activityNode = createActivityNode(label, detail);
+        els.chatMessages.appendChild(ctx.activityNode);
+      } else {
+        updateActivityNode(ctx.activityNode, label, detail);
+      }
+      els.chatMessages.scrollTop = els.chatMessages.scrollHeight;
+      return;
+    }
+
+    if (event.type === "activity") {
+      const label = event.label || "Working…";
+      if (!ctx.activityNode) {
+        ctx.activityNode = createActivityNode(label, "");
+        els.chatMessages.appendChild(ctx.activityNode);
+      } else {
+        updateActivityNode(ctx.activityNode, label, "");
+      }
+      els.chatMessages.scrollTop = els.chatMessages.scrollHeight;
+      return;
+    }
+
+    if (event.type === "text") {
+      ctx.assistantText += event.text || "";
+      const assistantNode = ensureAssistantNode(ctx);
+      const streamBody = assistantNode.querySelector(".assistant-message__body");
+      setMessageBody(streamBody, "assistant", ctx.assistantText);
+      els.chatMessages.scrollTop = els.chatMessages.scrollHeight;
+      return;
+    }
+
+    if (event.type === "error") {
+      showError(event.message || "Agent error");
+      return;
+    }
+
+    if (event.type === "run") {
+      const s = activeSession();
+      if (s) {
+        s.active_run = { run_id: event.run_id, status: event.status || "running" };
+        renderSessions();
+        renderChatHeader();
+      }
+    }
+  }
+
+  async function consumeEventStream(url, options, ctx) {
+    const res = await fetch(url, Object.assign({ headers: authHeaders() }, options || {}));
+    if (!res.ok) throw new Error(await res.text());
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+    let finished = false;
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const parts = buffer.split("\n\n");
+      buffer = parts.pop() || "";
+      for (const part of parts) {
+        const line = part.split("\n").find((l) => l.startsWith("data: "));
+        if (!line) continue;
+        const event = JSON.parse(line.slice(6));
+        handleStreamEvent(event, ctx);
+        if (event.type === "status" && (event.status === "finished" || event.status === "error")) {
+          finished = event.status === "finished";
+        }
+      }
+    }
+    return finished;
+  }
+
+  async function refreshActiveSession() {
+    if (!state.activeSessionId) return;
+    const data = await fetchJson(`/api/assistant/sessions/${encodeURIComponent(state.activeSessionId)}`);
+    state.messages = data.messages || [];
+    const idx = state.sessions.findIndex((s) => s.id === state.activeSessionId);
+    if (idx >= 0) state.sessions[idx] = data;
+    renderSessions();
+    renderMessages();
+    renderChatHeader();
+  }
+
+  function startSessionPoll() {
+    stopPolling();
+    let attempts = 0;
+    state.pollTimer = setInterval(async () => {
+      attempts += 1;
+      try {
+        const before = state.messages.length;
+        await refreshActiveSession();
+        const s = activeSession();
+        const running = sessionIsRunning(s);
+        const gained = state.messages.length > before;
+        const last = state.messages[state.messages.length - 1];
+        if (!running && (gained || (last && last.role === "assistant"))) {
+          stopPolling();
+          return;
+        }
+        if (attempts >= 30) stopPolling();
+      } catch (_err) {
+        if (attempts >= 30) stopPolling();
+      }
+    }, 2000);
+  }
+
+  async function attachRunStream(url, options) {
+    abortStream();
+    const controller = new AbortController();
+    state.streamAbort = controller;
+    setStreaming(true);
+    showError("");
+
+    const ctx = {
+      assistantText: "",
+      assistantNode: null,
+      activityNode: null,
+    };
+
+    try {
+      const finished = await consumeEventStream(
+        url,
+        Object.assign({}, options || {}, { signal: controller.signal }),
+        ctx
+      );
+      removeActivityNode(ctx);
+      await loadSessions();
+      await refreshActiveSession();
+      if (!finished && !ctx.assistantText) startSessionPoll();
+    } catch (err) {
+      if (err.name === "AbortError") return;
+      removeActivityNode(ctx);
+      // Run may still be going in the background — poll for the saved reply.
+      startSessionPoll();
+      if (!String(err.message || err).includes("404")) {
+        showError(String(err.message || err));
+      }
+    } finally {
+      if (state.streamAbort === controller) state.streamAbort = null;
+      setStreaming(false);
+    }
+  }
+
+  async function reconnectActiveRun() {
+    if (!state.activeSessionId || state.streaming) return;
+    const s = activeSession();
+    if (!sessionIsRunning(s)) {
+      // Last message user-only with no active flag — run may have finished while away.
+      const last = state.messages[state.messages.length - 1];
+      if (last && last.role === "user") startSessionPoll();
+      return;
+    }
+    await attachRunStream(
+      `${API_BASE}/api/assistant/sessions/${encodeURIComponent(state.activeSessionId)}/run/stream`
+    );
   }
 
   function fileEntryIconClass(name, type, expanded) {
@@ -348,17 +620,23 @@
   }
 
   async function selectSession(sessionId) {
+    if (state.streaming && sessionId !== state.activeSessionId) return;
+    stopPolling();
+    abortStream();
     const data = await fetchJson(`/api/assistant/sessions/${encodeURIComponent(sessionId)}`);
     state.activeSessionId = sessionId;
     state.messages = data.messages || [];
+    persistActiveSessionId(sessionId);
     const idx = state.sessions.findIndex((s) => s.id === sessionId);
     if (idx >= 0) state.sessions[idx] = data;
     renderSessions();
     renderMessages();
     renderChatHeader();
+    await reconnectActiveRun();
   }
 
   async function createSession() {
+    if (state.streaming) return;
     const data = await fetchJson("/api/assistant/sessions", {
       method: "POST",
       headers: authHeaders({ "Content-Type": "application/json" }),
@@ -415,89 +693,40 @@
   }
 
   async function sendMessage() {
-    if (state.sending) return;
+    if (state.streaming) return;
     const text = (els.chatInput.value || "").trim();
     if (!text) return;
     if (!state.activeSessionId) await createSession();
 
+    if (sessionIsRunning(activeSession())) {
+      els.chatInput.value = text;
+      await reconnectActiveRun();
+      return;
+    }
+
     state.messages.push({ role: "user", content: text });
     els.chatInput.value = "";
     renderMessages();
-    state.sending = true;
-    els.btnSend.disabled = true;
     showError("");
 
-    let assistantText = "";
-    let assistantNode = null;
-
-    try {
-      const res = await fetch(
-        `${API_BASE}/api/assistant/sessions/${encodeURIComponent(state.activeSessionId)}/messages`,
-        {
-          method: "POST",
-          headers: authHeaders({ "Content-Type": "application/json" }),
-          body: JSON.stringify({ content: text }),
-        }
-      );
-      if (!res.ok) throw new Error(await res.text());
-      const reader = res.body.getReader();
-      const decoder = new TextDecoder();
-      let buffer = "";
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        buffer += decoder.decode(value, { stream: true });
-        const parts = buffer.split("\n\n");
-        buffer = parts.pop() || "";
-        for (const part of parts) {
-          const line = part.split("\n").find((l) => l.startsWith("data: "));
-          if (!line) continue;
-          const event = JSON.parse(line.slice(6));
-          if (event.type === "text") {
-            assistantText += event.text || "";
-            if (!assistantNode) {
-              assistantNode = document.createElement("div");
-              assistantNode.className = "assistant-message assistant-message--assistant";
-              const label = document.createElement("div");
-              label.className = "assistant-message__label";
-              label.textContent = "Assistant";
-              assistantNode.appendChild(label);
-              const body = document.createElement("div");
-              body.className = "assistant-message__body";
-              body.dataset.stream = "1";
-              assistantNode.appendChild(body);
-              els.chatMessages.appendChild(assistantNode);
-            }
-            const streamBody = assistantNode.querySelector(".assistant-message__body");
-            setMessageBody(streamBody, "assistant", assistantText);
-            els.chatMessages.scrollTop = els.chatMessages.scrollHeight;
-          } else if (event.type === "error") {
-            showError(event.message || "Agent error");
-          }
-        }
+    const sessionId = state.activeSessionId;
+    await attachRunStream(
+      `${API_BASE}/api/assistant/sessions/${encodeURIComponent(sessionId)}/messages`,
+      {
+        method: "POST",
+        headers: authHeaders({ "Content-Type": "application/json" }),
+        body: JSON.stringify({ content: text }),
       }
-
-      if (assistantText) {
-        state.messages.push({ role: "assistant", content: assistantText });
-      }
-      await loadSessions();
-      if (state.activeSessionId) await selectSession(state.activeSessionId);
-    } catch (err) {
-      showError(String(err.message || err));
-    } finally {
-      state.sending = false;
-      els.btnSend.disabled = false;
-    }
+    );
   }
 
   function wireEvents() {
     els.btnNewSession.addEventListener("click", () => createSession().catch((e) => showError(e.message)));
-    els.btnSend.addEventListener("click", () => sendMessage());
+    els.btnSend.addEventListener("click", () => sendMessage().catch((e) => showError(e.message)));
     els.chatInput.addEventListener("keydown", (e) => {
       if (e.key === "Enter" && !e.shiftKey) {
         e.preventDefault();
-        sendMessage();
+        sendMessage().catch((err) => showError(err.message));
       }
     });
     els.sessionSearch.addEventListener("input", () => {
@@ -521,7 +750,11 @@
       await loadHealth();
       await loadSessions();
       renderChatHeader();
-      if (state.sessions.length) await selectSession(state.sessions[0].id);
+      const savedId = localStorage.getItem(SESSION_STORAGE_KEY);
+      const initial =
+        (savedId && state.sessions.some((s) => s.id === savedId) && savedId) ||
+        (state.sessions[0] && state.sessions[0].id);
+      if (initial) await selectSession(initial);
     } catch (err) {
       showError(String(err.message || err));
     }
