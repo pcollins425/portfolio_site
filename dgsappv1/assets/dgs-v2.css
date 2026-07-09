@@ -26,7 +26,8 @@ body.dgs-asset-hub.dgs-app,
 body.dgs-warehouse-v2.dgs-app,
 body.dgs-slot-master-v2.dgs-app,
 body.dgs-software-vault-v2.dgs-app,
-body.dgs-parts-inventory-v2.dgs-app {
+body.dgs-parts-inventory-v2.dgs-app,
+body.dgs-projects-v2.dgs-app {
   height: 100vh;
   overflow: hidden;
   color-scheme: dark;
@@ -40,7 +41,8 @@ body.dgs-asset-hub .dgs-v2-main,
 body.dgs-warehouse-v2 .dgs-v2-main,
 body.dgs-slot-master-v2 .dgs-v2-main,
 body.dgs-software-vault-v2 .dgs-v2-main,
-body.dgs-parts-inventory-v2 .dgs-v2-main {
+body.dgs-parts-inventory-v2 .dgs-v2-main,
+body.dgs-projects-v2 .dgs-v2-main {
   display: flex;
   flex-direction: column;
   padding: 24px 28px 20px;
@@ -2490,3 +2492,501 @@ body.dgs-software-vault-v2 .dgs-v2-layout-dialog-actions {
     display: none;
   }
 }
+
+/* ===================== Projects module ===================== */
+
+.dgs-v2-view-toggle {
+  display: inline-flex;
+  gap: 4px;
+  padding: 4px;
+  background: var(--dgs-v2-card);
+  border: 1px solid var(--dgs-v2-border);
+  border-radius: 12px;
+  align-self: flex-start;
+}
+
+.dgs-v2-view-toggle button {
+  padding: 8px 18px;
+  border: none;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--dgs-v2-text-muted);
+  font-size: 13px;
+  font-family: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.dgs-v2-view-toggle button:hover {
+  color: var(--dgs-v2-text);
+}
+
+.dgs-v2-view-toggle button.active {
+  background: var(--dgs-v2-accent-bg);
+  color: var(--dgs-v2-accent);
+}
+
+.dgs-prj-view {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+  position: relative;
+}
+
+.dgs-prj-view[hidden] {
+  display: none;
+}
+
+/* --- Calendar --- */
+
+.dgs-prj-cal-split {
+  flex: 1;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(300px, 360px);
+  gap: 14px;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.dgs-prj-cal-panel {
+  display: flex;
+  flex-direction: column;
+  background: var(--dgs-v2-card);
+  border: 1px solid var(--dgs-v2-border);
+  border-radius: 16px;
+  overflow: hidden;
+  min-height: 0;
+}
+
+.dgs-prj-cal-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--dgs-v2-border);
+  background: var(--dgs-v2-card-head);
+}
+
+.dgs-prj-cal-nav {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.dgs-prj-cal-nav .dgs-v2-btn {
+  padding: 6px 12px;
+}
+
+.dgs-prj-cal-title {
+  min-width: 170px;
+  text-align: center;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--dgs-v2-heading);
+}
+
+.dgs-prj-cal-weekdays {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  border-bottom: 1px solid var(--dgs-v2-border-soft);
+  background: var(--dgs-v2-card-head);
+}
+
+.dgs-prj-cal-weekdays span {
+  padding: 8px 10px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--dgs-v2-text-muted);
+}
+
+.dgs-prj-cal-grid {
+  flex: 1;
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  grid-auto-rows: minmax(84px, 1fr);
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.dgs-prj-cal-day {
+  border-right: 1px solid var(--dgs-v2-border-soft);
+  border-bottom: 1px solid var(--dgs-v2-border-soft);
+  padding: 6px 8px;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  transition: background 0.12s ease;
+}
+
+.dgs-prj-cal-day:hover {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.dgs-prj-cal-day.is-other {
+  cursor: default;
+  background: rgba(0, 0, 0, 0.16);
+}
+
+.dgs-prj-cal-day.is-other .dgs-prj-cal-day-num {
+  color: var(--dgs-v2-text-dim);
+  opacity: 0.5;
+}
+
+.dgs-prj-cal-day.is-today .dgs-prj-cal-day-num {
+  background: var(--dgs-v2-accent);
+  color: var(--dgs-v2-bg);
+}
+
+.dgs-prj-cal-day.is-selected {
+  background: var(--dgs-v2-accent-bg);
+  box-shadow: inset 0 0 0 1px var(--dgs-v2-accent-border);
+}
+
+.dgs-prj-cal-day-num {
+  width: 22px;
+  height: 22px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--dgs-v2-text);
+  flex-shrink: 0;
+}
+
+.dgs-prj-cal-day-items {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.dgs-prj-cal-chip {
+  font-size: 10px;
+  line-height: 1.3;
+  padding: 2px 6px;
+  border-radius: 5px;
+  background: rgba(110, 181, 255, 0.12);
+  border: 1px solid rgba(110, 181, 255, 0.16);
+  color: #b9d9ff;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.dgs-prj-cal-chip.has-details {
+  background: rgba(34, 197, 94, 0.12);
+  border-color: rgba(34, 197, 94, 0.22);
+  color: #a7f3c4;
+}
+
+.dgs-prj-cal-more {
+  font-size: 10px;
+  color: var(--dgs-v2-text-dim);
+  padding-left: 2px;
+}
+
+.dgs-prj-cal-list {
+  display: flex;
+  flex-direction: column;
+  background: var(--dgs-v2-card);
+  border: 1px solid var(--dgs-v2-border);
+  border-radius: 16px;
+  overflow: hidden;
+  min-height: 0;
+}
+
+.dgs-prj-cal-list-range {
+  padding: 10px 16px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--dgs-v2-heading);
+  border-bottom: 1px solid var(--dgs-v2-border-soft);
+}
+
+.dgs-prj-cal-list-body {
+  flex: 1;
+  overflow-y: auto;
+  min-height: 0;
+}
+
+.dgs-prj-cal-empty {
+  padding: 24px 16px;
+  font-size: 13px;
+  color: var(--dgs-v2-text-dim);
+  text-align: center;
+}
+
+.dgs-prj-cal-item {
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--dgs-v2-border-soft);
+  cursor: pointer;
+  transition: background 0.12s ease;
+}
+
+.dgs-prj-cal-item:hover {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.dgs-prj-cal-item.is-missing-casino {
+  border-left: 3px solid rgba(239, 68, 68, 0.55);
+}
+
+.dgs-prj-cal-item-top {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.dgs-prj-cal-item-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--dgs-v2-heading);
+}
+
+.dgs-prj-cal-item-desc {
+  margin-top: 2px;
+  font-size: 12px;
+  color: var(--dgs-v2-text);
+}
+
+.dgs-prj-cal-item-meta {
+  margin-top: 3px;
+  font-size: 11px;
+  color: var(--dgs-v2-text-dim);
+}
+
+.dgs-prj-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: rgba(34, 197, 94, 0.14);
+  border: 1px solid rgba(34, 197, 94, 0.28);
+  color: #86efac;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+/* --- Calendar drawer (dark restyle of dgs.css drawer) --- */
+
+.dgs-prj-drawer {
+  background: var(--dgs-v2-card);
+  border-left: 1px solid var(--dgs-v2-border);
+  width: min(420px, 92vw);
+}
+
+.dgs-prj-drawer.open {
+  transform: translateX(0);
+}
+
+.dgs-prj-drawer .detail-header {
+  background: var(--dgs-v2-card-head);
+  border-bottom: 1px solid var(--dgs-v2-border);
+}
+
+.dgs-prj-drawer .detail-header h2 {
+  color: var(--dgs-v2-heading);
+}
+
+.dgs-prj-drawer .icon-btn {
+  background: transparent;
+  border-color: var(--dgs-v2-border);
+  color: var(--dgs-v2-text-muted);
+}
+
+.dgs-prj-drawer .detail-body {
+  gap: 10px;
+}
+
+.dgs-prj-drawer-cta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--dgs-v2-border-soft);
+  margin-bottom: 4px;
+  flex-wrap: wrap;
+}
+
+.dgs-prj-drawer-item {
+  display: grid;
+  grid-template-columns: 110px 1fr;
+  gap: 10px;
+  align-items: baseline;
+}
+
+.dgs-prj-drawer-item .detail-label {
+  margin: 0;
+}
+
+.dgs-prj-drawer-value {
+  font-size: 13px;
+  color: var(--dgs-v2-text);
+  overflow-wrap: anywhere;
+}
+
+#cal-detail-backdrop:not([hidden]) {
+  opacity: 1;
+  pointer-events: auto;
+  background: rgba(2, 6, 16, 0.55);
+}
+
+/* --- Catalog --- */
+
+.dgs-prj-cat-split {
+  position: relative;
+}
+
+.dgs-prj-fields {
+  grid-template-columns: 120px 1fr;
+}
+
+.dgs-prj-action-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  border: 1px solid var(--dgs-v2-border-soft);
+  border-radius: 10px;
+  margin-bottom: 6px;
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.dgs-prj-action-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--dgs-v2-text);
+}
+
+.dgs-prj-action-count {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--dgs-v2-accent);
+  font-variant-numeric: tabular-nums;
+}
+
+.dgs-prj-printout-btn {
+  margin-top: 4px;
+  align-self: flex-start;
+}
+
+.dgs-prj-printout-btn:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+/* --- Printout overlay --- */
+
+.dgs-prj-printout {
+  position: absolute;
+  inset: 0;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  background: var(--dgs-v2-bg);
+  border: 1px solid var(--dgs-v2-border);
+  border-radius: 16px;
+  overflow: hidden;
+}
+
+.dgs-prj-printout[hidden] {
+  display: none;
+}
+
+.dgs-prj-printout-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--dgs-v2-border);
+  background: var(--dgs-v2-card-head);
+}
+
+.dgs-prj-printout-head h2 {
+  margin: 2px 0 4px;
+  font-size: 17px;
+  color: var(--dgs-v2-heading);
+}
+
+.dgs-prj-printout-head .icon-btn {
+  background: transparent;
+  border-color: var(--dgs-v2-border);
+  color: var(--dgs-v2-text-muted);
+}
+
+.dgs-prj-printout-scroll {
+  flex: 1;
+  overflow: auto;
+  min-height: 0;
+}
+
+.dgs-prj-printout-table {
+  border-collapse: collapse;
+  font-size: 12px;
+  min-width: 100%;
+}
+
+.dgs-prj-printout-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  padding: 8px 12px;
+  background: var(--dgs-v2-card-head);
+  border-bottom: 1px solid var(--dgs-v2-border);
+  font-size: 10px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--dgs-v2-text-muted);
+  font-weight: 600;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.dgs-prj-printout-table tbody td {
+  padding: 7px 12px;
+  border-bottom: 1px solid var(--dgs-v2-border-soft);
+  color: var(--dgs-v2-text);
+  white-space: nowrap;
+  max-width: 260px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.dgs-prj-printout-table tbody tr:hover td {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+/* --- Responsive --- */
+
+@media (max-width: 1100px) {
+  .dgs-prj-cal-split,
+  .dgs-prj-cat-split,
+  .dgs-prj-em-split {
+    grid-template-columns: minmax(0, 1fr);
+    overflow-y: auto;
+  }
+
+  .dgs-prj-cal-panel {
+    min-height: 420px;
+  }
+
+  .dgs-prj-cal-list {
+    min-height: 300px;
+  }
+}
+

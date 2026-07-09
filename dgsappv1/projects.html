@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Projects — DGS Application</title>
+  <link rel="stylesheet" href="assets/dgs.css" />
+  <link rel="stylesheet" href="assets/dgs-v2.css" />
+</head>
+<body class="dgs-app dgs-projects-v2">
+  <aside class="dgs-sidebar" id="dgs-sidebar">
+    <div class="dgs-sidebar-brand">
+      <div class="dgs-brand-text">
+        <span class="dgs-brand-eyebrow">Dynamic Gaming Solutions</span>
+        <span class="dgs-brand-title">DGS Application</span>
+      </div>
+      <button type="button" id="dgs-rail-toggle" class="dgs-rail-toggle" aria-expanded="true" title="Collapse navigation">◧</button>
+    </div>
+    <nav class="dgs-sidebar-nav" id="dgs-app-nav" aria-label="Application"></nav>
+    <div class="dgs-sidebar-account" id="sidebar-account" hidden>
+      <span class="dgs-sidebar-user" id="user-label"></span>
+      <button type="button" id="btn-sign-out" class="dgs-sidebar-signout">Sign out</button>
+    </div>
+  </aside>
+
+  <div id="dgs-nav-flyout" class="dgs-nav-flyout" hidden></div>
+
+  <div class="dgs-main dgs-v2-main">
+    <header class="dgs-v2-page-header">
+      <div>
+        <p class="dgs-v2-eyebrow">Operations</p>
+        <h1>Projects</h1>
+        <p class="dgs-v2-subtitle" id="page-subtitle">projects.ims schedule · projects.project_catalog details</p>
+      </div>
+      <nav class="dgs-v2-view-toggle" id="view-toggle" aria-label="Projects views">
+        <button type="button" data-view="calendar" class="active">Calendar</button>
+        <button type="button" data-view="catalog">Catalog</button>
+        <button type="button" data-view="emaint">eMaint</button>
+      </nav>
+    </header>
+
+    <div id="error-box" class="dgs-v2-error" hidden></div>
+
+    <!-- ============ Calendar view ============ -->
+    <section id="view-calendar" class="dgs-prj-view">
+      <div class="dgs-prj-cal-split">
+        <div class="dgs-prj-cal-panel">
+          <div class="dgs-prj-cal-toolbar">
+            <div class="dgs-prj-cal-nav">
+              <button type="button" id="cal-prev-year" class="dgs-v2-btn" title="Previous year">«</button>
+              <button type="button" id="cal-prev-month" class="dgs-v2-btn" title="Previous month">‹</button>
+              <span class="dgs-prj-cal-title" id="cal-month-year">—</span>
+              <button type="button" id="cal-next-month" class="dgs-v2-btn" title="Next month">›</button>
+              <button type="button" id="cal-next-year" class="dgs-v2-btn" title="Next year">»</button>
+            </div>
+            <button type="button" id="cal-today" class="dgs-v2-btn">Today</button>
+          </div>
+          <div class="dgs-prj-cal-weekdays">
+            <span>Sun</span><span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span>
+          </div>
+          <div class="dgs-prj-cal-grid" id="cal-grid"></div>
+        </div>
+
+        <aside class="dgs-prj-cal-list">
+          <div class="dgs-v2-toolbar">
+            <input type="search" id="cal-search" placeholder="Search projects…" autocomplete="off" />
+            <button type="button" id="cal-clear-day" class="dgs-v2-btn" hidden>All month</button>
+          </div>
+          <div class="dgs-prj-cal-list-range" id="cal-list-range"></div>
+          <div class="dgs-prj-cal-list-body" id="cal-list-body"></div>
+        </aside>
+      </div>
+    </section>
+
+    <!-- ============ Catalog view ============ -->
+    <section id="view-catalog" class="dgs-prj-view" hidden>
+      <div class="dgs-v2-split dgs-prj-cat-split">
+        <section class="dgs-v2-list-panel">
+          <div class="dgs-v2-toolbar">
+            <input type="search" id="cat-search" placeholder="Search project, IMS #, casino, status…" autocomplete="off" />
+            <button type="button" id="cat-search-btn" class="dgs-v2-btn dgs-v2-btn--primary">Search</button>
+            <button type="button" id="cat-prev" class="dgs-v2-btn">Prev</button>
+            <button type="button" id="cat-next" class="dgs-v2-btn">Next</button>
+          </div>
+          <div class="dgs-v2-grid-wrap">
+            <table class="dgs-v2-grid">
+              <thead>
+                <tr>
+                  <th>Project</th>
+                  <th>IMS #</th>
+                  <th>Casino</th>
+                  <th>Status</th>
+                  <th>Lines</th>
+                  <th>Start</th>
+                </tr>
+              </thead>
+              <tbody id="cat-tbody"></tbody>
+            </table>
+          </div>
+          <div class="dgs-v2-list-status" id="cat-list-status"></div>
+        </section>
+
+        <aside class="dgs-v2-detail">
+          <div class="dgs-v2-image-card dgs-v2-text-hero">
+            <div class="dgs-v2-text-hero-body">
+              <div class="dgs-v2-text-hero-state" id="cat-hero-state">Project</div>
+              <div class="dgs-v2-text-hero-title" id="cat-hero-title">—</div>
+              <div class="dgs-v2-text-hero-meta" id="cat-hero-meta">Choose a project from the list</div>
+            </div>
+          </div>
+          <div class="dgs-v2-detail-body empty" id="cat-detail-body">
+            <p id="cat-detail-empty">Select a project to see details.</p>
+            <div id="cat-detail-content" hidden>
+              <div class="dgs-v2-section-label">Header</div>
+              <dl class="dgs-v2-fields dgs-prj-fields" id="cat-fields"></dl>
+              <div class="dgs-v2-section-label">Machine lines</div>
+              <div id="cat-actions"></div>
+              <button type="button" id="cat-open-printout" class="dgs-v2-btn dgs-v2-btn--primary dgs-prj-printout-btn">
+                View printout
+              </button>
+            </div>
+          </div>
+        </aside>
+      </div>
+
+      <!-- Printout overlay -->
+      <div class="dgs-prj-printout" id="printout-overlay" hidden>
+        <div class="dgs-prj-printout-head">
+          <div>
+            <p class="dgs-v2-section-label">Commission printout</p>
+            <h2 id="printout-title">—</h2>
+            <p class="dgs-v2-subtitle" id="printout-meta"></p>
+          </div>
+          <button type="button" id="printout-close" class="icon-btn" aria-label="Close printout">×</button>
+        </div>
+        <div class="dgs-prj-printout-scroll">
+          <table class="dgs-prj-printout-table" id="printout-table"></table>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ eMaint view ============ -->
+    <section id="view-emaint" class="dgs-prj-view" hidden>
+      <div class="dgs-v2-split dgs-prj-em-split">
+        <section class="dgs-v2-list-panel">
+          <div class="dgs-v2-toolbar">
+            <input type="search" id="em-search" placeholder="Search eMaint projects…" autocomplete="off" />
+            <button type="button" id="em-search-btn" class="dgs-v2-btn dgs-v2-btn--primary">Search</button>
+            <button type="button" id="em-prev" class="dgs-v2-btn">Prev</button>
+            <button type="button" id="em-next" class="dgs-v2-btn">Next</button>
+          </div>
+          <div class="dgs-v2-grid-wrap">
+            <table class="dgs-v2-grid">
+              <thead id="em-thead"></thead>
+              <tbody id="em-tbody"></tbody>
+            </table>
+          </div>
+          <div class="dgs-v2-list-status" id="em-list-status"></div>
+        </section>
+
+        <aside class="dgs-v2-detail">
+          <div class="dgs-v2-detail-body empty" id="em-detail-body">
+            <p id="em-detail-empty">Select a row to see the eMaint record.</p>
+            <div id="em-detail-content" hidden>
+              <div class="dgs-v2-section-label">eMaint PROJECT record</div>
+              <dl class="dgs-v2-fields dgs-prj-fields" id="em-fields"></dl>
+            </div>
+          </div>
+        </aside>
+      </div>
+    </section>
+  </div>
+
+  <!-- Calendar project drawer -->
+  <div class="detail-backdrop" id="cal-detail-backdrop" hidden></div>
+  <aside class="detail-drawer dgs-prj-drawer" id="cal-detail-drawer" aria-hidden="true">
+    <div class="detail-header">
+      <div>
+        <p class="detail-label">IMS project</p>
+        <h2 id="cal-detail-title">Project</h2>
+      </div>
+      <button id="cal-detail-close" type="button" class="icon-btn" aria-label="Close details">×</button>
+    </div>
+    <div class="detail-body" id="cal-detail-body"></div>
+  </aside>
+
+  <script src="assets/auth.js"></script>
+  <script src="assets/shell.js"></script>
+  <script src="assets/projects.js"></script>
+  <script>DGS.boot("projects", () => DGSProjects.init());</script>
+</body>
+</html>
