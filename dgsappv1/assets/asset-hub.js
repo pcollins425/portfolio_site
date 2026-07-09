@@ -268,20 +268,24 @@
     els.captionMeta.textContent = [a.serial_number, a.cabinet_name].filter(Boolean).join(" · ") || "—";
 
     const logoPath = a.vendor_logo_media_path;
+    const cabPath = a.cabinet_image_media_path;
+
+    const [logoUrl, cabUrl] = await Promise.all([
+      logoPath ? loadMediaUrl(logoPath) : Promise.resolve(null),
+      cabPath ? loadMediaUrl(cabPath) : Promise.resolve(null),
+    ]);
+
     if (logoPath) {
-      const url = await loadMediaUrl(logoPath);
-      els.vendorLogo.innerHTML = url
-        ? `<img src="${url}" alt="${esc(vendorLabel)} logo" />`
+      els.vendorLogo.innerHTML = logoUrl
+        ? `<img src="${logoUrl}" alt="${esc(vendorLabel)} logo" />`
         : placeholderBox(logoPath.split("/").pop());
     } else {
       els.vendorLogo.innerHTML = placeholderBox(vendorLabel);
     }
 
-    const cabPath = a.cabinet_image_media_path;
     if (cabPath) {
-      const url = await loadMediaUrl(cabPath);
-      els.cabinetWrap.innerHTML = url
-        ? `<img src="${url}" alt="${esc(cabLabel)}" title="${esc(cabLabel)}" />`
+      els.cabinetWrap.innerHTML = cabUrl
+        ? `<img src="${cabUrl}" alt="${esc(cabLabel)}" title="${esc(cabLabel)}" />`
         : placeholderBox(cabLabel);
     } else {
       els.cabinetWrap.innerHTML = placeholderBox(cabLabel);
@@ -298,7 +302,7 @@
     els.hubSubtitle.textContent = `asset-hub.html?id=${state.assetId}`;
 
     renderTiles(state.hub);
-    await renderMedia(state.hub.asset);
+    void renderMedia(state.hub.asset).catch(() => {});
   }
 
   async function init() {

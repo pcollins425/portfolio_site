@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 import re
+from functools import lru_cache
 from pathlib import Path, PurePosixPath
 
 from app import mssql
@@ -49,6 +50,7 @@ def normalize_relative_path(raw: str) -> str:
     return PurePosixPath(*parts).as_posix()
 
 
+@lru_cache(maxsize=2048)
 def is_registered_media_path(rel_path: str) -> bool:
     row = mssql.query(
         """

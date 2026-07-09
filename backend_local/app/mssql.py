@@ -73,3 +73,23 @@ def execute(
         return cursor.rowcount
     finally:
         conn.close()
+
+
+def query_many(
+    statements: list[tuple[str, tuple | None]],
+    *,
+    database: str | None = None,
+    profile: DbProfile = "dashboard",
+    load_env: bool = True,
+) -> list[list[dict]]:
+    """Run multiple SELECTs on one connection (one connect/disconnect round-trip)."""
+    conn = get_connection(database=database, profile=profile, load_env=load_env)
+    try:
+        cursor = conn.cursor(as_dict=True)
+        results: list[list[dict]] = []
+        for sql, params in statements:
+            cursor.execute(sql, params)
+            results.append(cursor.fetchall())
+        return results
+    finally:
+        conn.close()

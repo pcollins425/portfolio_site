@@ -162,6 +162,25 @@ def list_assets(
     }
 
 
+def _field_query_many(statements: list[tuple[str, tuple | None]]):
+    return mssql.query_many(
+        statements,
+        database=_catalog(),
+        profile="field",
+        load_env=False,
+    )
+
+
+def _sm_zbl(row: dict) -> str | None:
+    parts = [
+        _json_value(row.get("zone")),
+        _json_value(row.get("bank")),
+        _json_value(row.get("location")),
+    ]
+    joined = " · ".join(x for x in parts if x)
+    return joined or None
+
+
 @router.get("/hub/{asset_id}")
 def asset_hub(asset_id: str):
     """Reference hub payload keyed by inventory.assets.reference_key."""
@@ -169,33 +188,124 @@ def asset_hub(asset_id: str):
     if not aid:
         raise HTTPException(status_code=400, detail="asset_id is required")
 
+    asset_sql = """
+        SELECT
+            a.reference_key,
+            a.serial_number,
+            a.vendor_id,
+            a.cabinet_id,
+            a.cabinet_type,
+            a.class,
+            a.machine_type,
+            a.machine_cost,
+            a.date_received,
+            a.agreement_order,
+            a.agreement_date,
+            a.sales_order,
+            a.update_by,
+            v.vendor_name,
+            v.logo_media_path AS vendor_logo_media_path,
+            cab.cabinet_name,
+            cab.image_media_path AS cabinet_image_media_path
+        FROM inventory.assets AS a
+        LEFT JOIN vendors.vendors AS v ON v.reference_key = a.vendor_id
+        LEFT JOIN vendors.cabinets AS cab ON cab.reference_key = a.cabinet_id
+        WHERE a.reference_key = %s
+    """
+    compinfo_sql = """
+        SELECT
+            ci.compid,
+            ci.serial_no,
+            ci.property,
+            ci.status,
+            ci.comp_desc,
+            ci.manufac,
+            ci.model_no,
+            wh.property AS wh_property,
+            wh.status AS wh_status,
+            wh.compid AS wh_compid
+        FROM (SELECT %s AS asset_id) AS x
+        OUTER APPLY (
+            SELECT TOP 1
+                ci2.compid,
+                ci2.serial_no,
+                ci2.property,
+                ci2.status,
+                ci2.comp_desc,
+                ci2.manufac,
+                ci2.model_no
+            FROM inventory.compinfo_landing AS ci2
+            WHERE ci2.asset_id = x.asset_id
+            ORDER BY ci2.compid DESC
+        ) AS ci
+        OUTER APPLY (
+            SELECT TOP 1
+                ci3.property,
+                ci3.status,
+                ci3.compid
+            FROM inventory.compinfo_landing AS ci3
+            WHERE ci3.asset_id = x.asset_id
+              AND LOWER(LTRIM(RTRIM(ISNULL(ci3.property, N'')))) LIKE N'%warehouse%'
+            ORDER BY ci3.compid DESC
+        ) AS wh
+    """
+    contract_sql = """
+        SELECT TOP 1
+            c.reference_key AS contract_reference_key,
+            c.agreement_id,
+            cl.reference_key AS line_reference_key,
+            cl.asset_description,
+            cl.quantity,
+            cl.machine_cost AS line_machine_cost
+        FROM inventory.contract_line_serial AS s
+        INNER JOIN inventory.contract_line AS cl ON cl.reference_key = s.contract_line_id
+        INNER JOIN inventory.contract AS c ON c.reference_key = cl.contract_id
+        WHERE s.asset_id = %s
+        ORDER BY c.agreement_date DESC, cl.reference_key
+    """
+    slot_master_sql = """
+        SELECT
+            (SELECT COUNT(*)
+             FROM inventory.slot_master_migration AS smc
+             WHERE smc.asset_id = %s) AS history_count,
+            sm.reference_key,
+            sm.is_active,
+            sm.casino_id,
+            c.casino_name,
+            th.theme_name,
+            sm.zone,
+            sm.bank,
+            sm.location,
+            sm.date_instl,
+            sm.rmvl_date
+        FROM (SELECT 1 AS _) AS d
+        OUTER APPLY (
+            SELECT TOP 1
+                sm2.reference_key,
+                sm2.is_active,
+                sm2.casino_id,
+                sm2.theme_id,
+                sm2.zone,
+                sm2.bank,
+                sm2.location,
+                sm2.date_instl,
+                sm2.rmvl_date
+            FROM inventory.slot_master_migration AS sm2
+            WHERE sm2.asset_id = %s AND sm2.is_active = 1
+            ORDER BY sm2.index_key DESC
+        ) AS sm
+        LEFT JOIN clients.casinos AS c ON c.reference_key = sm.casino_id
+        LEFT JOIN vendors.themes AS th ON th.reference_key = sm.theme_id
+    """
+
     try:
-        asset_rows = _field_query(
-            """
-            SELECT
-                a.reference_key,
-                a.serial_number,
-                a.vendor_id,
-                a.cabinet_id,
-                a.cabinet_type,
-                a.class,
-                a.machine_type,
-                a.machine_cost,
-                a.date_received,
-                a.agreement_order,
-                a.agreement_date,
-                a.sales_order,
-                a.update_by,
-                v.vendor_name,
-                v.logo_media_path AS vendor_logo_media_path,
-                cab.cabinet_name,
-                cab.image_media_path AS cabinet_image_media_path
-            FROM inventory.assets AS a
-            LEFT JOIN vendors.vendors AS v ON v.reference_key = a.vendor_id
-            LEFT JOIN vendors.cabinets AS cab ON cab.reference_key = a.cabinet_id
-            WHERE a.reference_key = %s
-            """,
-            (aid,),
+        asset_rows, compinfo_rows, contract_rows, sm_rows = _field_query_many(
+            [
+                (asset_sql, (aid,)),
+                (compinfo_sql, (aid,)),
+                (contract_sql, (aid,)),
+                (slot_master_sql, (aid, aid)),
+            ]
         )
     except Exception as exc:
         raise HTTPException(status_code=503, detail=f"database error: {exc}") from exc
@@ -224,79 +334,8 @@ def asset_hub(asset_id: str):
         "cabinet_image_media_path": _json_value(r.get("cabinet_image_media_path")),
     }
 
-    try:
-        compinfo_rows = _field_query(
-            """
-            SELECT TOP 1
-                ci.compid,
-                ci.serial_no,
-                ci.property,
-                ci.status,
-                ci.comp_desc,
-                ci.manufac,
-                ci.model_no
-            FROM inventory.compinfo_landing AS ci
-            WHERE ci.asset_id = %s
-            ORDER BY ci.compid DESC
-            """,
-            (aid,),
-        )
-        contract_rows = _field_query(
-            """
-            SELECT TOP 1
-                c.reference_key AS contract_reference_key,
-                c.agreement_id,
-                cl.reference_key AS line_reference_key,
-                cl.asset_description,
-                cl.quantity,
-                cl.machine_cost AS line_machine_cost
-            FROM inventory.contract_line_serial AS s
-            INNER JOIN inventory.contract_line AS cl ON cl.reference_key = s.contract_line_id
-            INNER JOIN inventory.contract AS c ON c.reference_key = cl.contract_id
-            WHERE s.asset_id = %s
-            ORDER BY c.agreement_date DESC, cl.reference_key
-            """,
-            (aid,),
-        )
-        sm_rows = _field_query(
-            """
-            SELECT
-                sm.reference_key,
-                sm.is_active,
-                sm.casino_id,
-                c.casino_name,
-                th.theme_name,
-                sm.zone,
-                sm.bank,
-                sm.location,
-                sm.date_instl,
-                sm.rmvl_date
-            FROM inventory.slot_master_migration AS sm
-            LEFT JOIN clients.casinos AS c ON c.reference_key = sm.casino_id
-            LEFT JOIN vendors.themes AS th ON th.reference_key = sm.theme_id
-            WHERE sm.asset_id = %s
-            ORDER BY sm.index_key DESC
-            """,
-            (aid,),
-        )
-        warehouse_rows = _field_query(
-            """
-            SELECT TOP 1
-                ci.property,
-                ci.status,
-                ci.compid
-            FROM inventory.compinfo_landing AS ci
-            WHERE ci.asset_id = %s
-              AND LOWER(LTRIM(RTRIM(ISNULL(ci.property, N'')))) LIKE N'%warehouse%'
-            ORDER BY ci.compid DESC
-            """,
-            (aid,),
-        )
-    except Exception as exc:
-        raise HTTPException(status_code=503, detail=f"database error: {exc}") from exc
-
     compinfo = None
-    if compinfo_rows:
+    if compinfo_rows and compinfo_rows[0].get("compid") is not None:
         c = compinfo_rows[0]
         compinfo = {
             "compid": _json_value(c.get("compid")),
@@ -320,40 +359,32 @@ def asset_hub(asset_id: str):
             "line_machine_cost": _json_value(c.get("line_machine_cost")),
         }
 
-    sm_items = []
     active = None
-    for row in sm_rows:
-        item = {
-            "reference_key": _json_value(row.get("reference_key")),
-            "is_active": bool(row.get("is_active")),
-            "casino_id": _json_value(row.get("casino_id")),
-            "casino_name": _json_value(row.get("casino_name")),
-            "theme_name": _json_value(row.get("theme_name")),
-            "zbl": " · ".join(
-                x
-                for x in (
-                    _json_value(row.get("zone")),
-                    _json_value(row.get("bank")),
-                    _json_value(row.get("location")),
-                )
-                if x
-            )
-            or None,
-            "date_instl": _json_value(row.get("date_instl")),
-            "rmvl_date": _json_value(row.get("rmvl_date")),
-        }
-        sm_items.append(item)
-        if item["is_active"] and active is None:
-            active = item
+    history_count = 0
+    if sm_rows:
+        sm_row = sm_rows[0]
+        history_count = int(sm_row.get("history_count") or 0)
+        if sm_row.get("reference_key") is not None:
+            active = {
+                "reference_key": _json_value(sm_row.get("reference_key")),
+                "is_active": bool(sm_row.get("is_active")),
+                "casino_id": _json_value(sm_row.get("casino_id")),
+                "casino_name": _json_value(sm_row.get("casino_name")),
+                "theme_name": _json_value(sm_row.get("theme_name")),
+                "zbl": _sm_zbl(sm_row),
+                "date_instl": _json_value(sm_row.get("date_instl")),
+                "rmvl_date": _json_value(sm_row.get("rmvl_date")),
+            }
 
     warehouse = None
-    if warehouse_rows:
-        w = warehouse_rows[0]
-        warehouse = {
-            "property": _json_value(w.get("property")),
-            "status": _json_value(w.get("status")),
-            "compid": _json_value(w.get("compid")),
-        }
+    if compinfo_rows:
+        w = compinfo_rows[0]
+        if w.get("wh_compid") is not None:
+            warehouse = {
+                "property": _json_value(w.get("wh_property")),
+                "status": _json_value(w.get("wh_status")),
+                "compid": _json_value(w.get("wh_compid")),
+            }
 
     return {
         "asset_id": aid,
@@ -362,8 +393,8 @@ def asset_hub(asset_id: str):
         "contract": contract,
         "slot_master": {
             "active": active,
-            "history_count": len(sm_items),
-            "prior_count": max(0, len(sm_items) - (1 if active else 0)),
+            "history_count": history_count,
+            "prior_count": max(0, history_count - (1 if active else 0)),
         },
         "warehouse": warehouse,
     }
