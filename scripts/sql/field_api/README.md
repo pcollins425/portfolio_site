@@ -27,7 +27,7 @@ python3 scripts/run_sql_file.py scripts/sql/field_api/grant_contract_field_api.s
 python3 scripts/run_sql_file.py scripts/sql/field_api/grant_projects_module_field_api.sql --database dgs_application_db
 ```
 
-Grants **`sold_details`**, **`project_sold_printout`**, and **`project_printout`** (plus catalog/details/status/action_types).
+Grants **`sold_details`**, **`project_sold_printout`**, and **`project_printout`** to **`dgs_field_api`** and **`dashboard_perf_ro`** (field profile falls back to `MSSQL_USER` when `MSSQL_FIELD_*` unset).
 
 **Slot Master (2026-06-09):** after **`inventory.slot_master_migration`** exists:
 
