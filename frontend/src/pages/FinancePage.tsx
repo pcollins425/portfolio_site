@@ -18,9 +18,11 @@ import { fmtUsd } from "../data/mockData";
 
 type MonthlyRow = {
   month: string;
-  expected_serials: number;
+  expected_entries: number;
   invoiced_entries: number;
-  invoiced_serials: number;
+  invoiced_keys: number;
+  uninvoiced_keys: number;
+  unexpected_keys: number;
   commission: number;
   casinos_expected: number;
   casinos_reported: number;
@@ -29,9 +31,11 @@ type MonthlyRow = {
 
 type CasinoRow = {
   casino: string;
-  expected_serials: number;
+  expected_entries: number;
   invoiced_entries: number;
-  invoiced_serials: number;
+  invoiced_keys: number;
+  uninvoiced_keys: number;
+  unexpected_keys: number;
   gap: number;
   commission: number;
   last_report: string | null;
@@ -44,8 +48,8 @@ type OverviewPayload = {
   to: string;
   months: string[];
   kpis: MonthlyRow & {
-    live_assets_mom: number;
-    live_assets_yoy: number;
+    expected_entries_mom: number;
+    expected_entries_yoy: number;
     commission_mom: number;
     commission_yoy: number;
     mom_month: string;
@@ -140,7 +144,7 @@ export default function FinancePage() {
   const chartData = (data?.monthly ?? []).map((m) => ({
     month: m.month,
     commission: m.commission,
-    expected: m.expected_serials,
+    expected: m.expected_entries,
     entries: m.invoiced_entries,
   }));
 
@@ -154,7 +158,7 @@ export default function FinancePage() {
               ? `Overview unavailable (${err}). Check API connectivity.`
               : loading
                 ? "Loading billing coverage…"
-                : `Processing months ${data?.from ?? "—"} → ${data?.to ?? "—"} · invoiced = MR entries (convert splits count twice) · expected = distinct serials on floor (interim until migration dating).`}
+                : `Processing months ${data?.from ?? "—"} → ${data?.to ?? "—"} · compare MR slot_master_id vs migration reference_key (SMM-*) active during each month.`}
           </p>
         </div>
         <div className={`flex items-center gap-2 text-sm ${t.code}`}>
@@ -181,15 +185,15 @@ export default function FinancePage() {
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <Kpi
             label={`Invoiced vs expected (${k.month})`}
-            value={`${k.invoiced_entries.toLocaleString()} / ${k.expected_serials.toLocaleString()}`}
-            sub={`${k.invoiced_serials.toLocaleString()} distinct serials billed`}
-            positive={k.invoiced_serials >= k.expected_serials}
+            value={`${k.invoiced_entries.toLocaleString()} / ${k.expected_entries.toLocaleString()}`}
+            sub={`${k.uninvoiced_keys} uninvoiced · ${k.unexpected_keys} unexpected keys`}
+            positive={k.uninvoiced_keys === 0}
           />
           <Kpi
-            label="Live assets on floor"
-            value={k.expected_serials.toLocaleString()}
-            sub={`MoM ${fmtPct(k.live_assets_mom)} · YoY ${fmtPct(k.live_assets_yoy)}`}
-            positive={k.live_assets_mom >= 0}
+            label="Expected entries (SMM)"
+            value={k.expected_entries.toLocaleString()}
+            sub={`MoM ${fmtPct(k.expected_entries_mom)} · YoY ${fmtPct(k.expected_entries_yoy)}`}
+            positive={k.expected_entries_mom >= 0}
           />
           <Kpi
             label={`Commission (${k.month})`}
@@ -226,7 +230,7 @@ export default function FinancePage() {
         </div>
 
         <div className={t.panel}>
-          <p className={t.panelLabel}>Expected serials vs invoiced entries</p>
+          <p className={t.panelLabel}>Expected vs invoiced entries (SMM keys)</p>
           <div className="mt-4 h-72">
             <ResponsiveContainer width="100%" height="100%">
               <LineChart data={chartData}>
@@ -237,7 +241,7 @@ export default function FinancePage() {
                   contentStyle={{ backgroundColor: t.chart.tooltipBg, borderColor: t.chart.tooltipBorder }}
                 />
                 <Legend />
-                <Line type="monotone" dataKey="expected" name="Expected serials" stroke={t.chart.theoWin} strokeWidth={2} dot={false} />
+                <Line type="monotone" dataKey="expected" name="Expected entries" stroke={t.chart.theoWin} strokeWidth={2} dot={false} />
                 <Line type="monotone" dataKey="entries" name="Invoiced entries" stroke={t.chart.actualWin} strokeWidth={2} dot={false} />
               </LineChart>
             </ResponsiveContainer>
@@ -250,9 +254,10 @@ export default function FinancePage() {
           <thead className={t.tableHead}>
             <tr>
               <th className="px-4 py-3 font-medium">Casino</th>
-              <th className="px-4 py-3 font-medium">Expected serials</th>
-              <th className="px-4 py-3 font-medium">Invoiced entries</th>
-              <th className="px-4 py-3 font-medium">Invoiced serials</th>
+              <th className="px-4 py-3 font-medium">Expected</th>
+              <th className="px-4 py-3 font-medium">Invoiced</th>
+              <th className="px-4 py-3 font-medium">Uninvoiced</th>
+              <th className="px-4 py-3 font-medium">Unexpected</th>
               <th className="px-4 py-3 font-medium">Gap</th>
               <th className="px-4 py-3 font-medium">Last report</th>
               <th className="px-4 py-3 font-medium">Missing in range</th>
@@ -260,15 +265,21 @@ export default function FinancePage() {
           </thead>
           <tbody className={t.tableRow}>
             {(data?.casinos ?? []).map((r) => (
-              <tr key={r.casino} className={r.missing_months.length > 0 ? t.tableRowBad : ""}>
+              <tr
+                key={r.casino}
+                className={r.uninvoiced_keys > 0 || r.missing_months.length > 0 ? t.tableRowBad : ""}
+              >
                 <td className={t.tableCellName}>{r.casino}</td>
-                <td className={t.tableCell}>{r.expected_serials.toLocaleString()}</td>
+                <td className={t.tableCell}>{r.expected_entries.toLocaleString()}</td>
                 <td className={t.tableCell}>{r.invoiced_entries.toLocaleString()}</td>
-                <td className={t.tableCellMuted}>{r.invoiced_serials.toLocaleString()}</td>
+                <td className={`px-4 py-3 font-mono ${r.uninvoiced_keys ? t.tableCellBad : t.tableCellMuted}`}>
+                  {r.uninvoiced_keys}
+                </td>
+                <td className={`px-4 py-3 font-mono ${r.unexpected_keys ? t.tableCellBad : t.tableCellMuted}`}>
+                  {r.unexpected_keys}
+                </td>
                 <td
-                  className={`px-4 py-3 font-mono ${
-                    r.gap >= 0 ? t.tableCellGood : t.tableCellBad
-                  }`}
+                  className={`px-4 py-3 font-mono ${r.gap === 0 ? t.tableCellMuted : r.gap > 0 ? t.tableCellGood : t.tableCellBad}`}
                 >
                   {r.gap >= 0 ? "+" : ""}
                   {r.gap}

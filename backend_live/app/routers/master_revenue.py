@@ -291,11 +291,11 @@ def finance_overview(
     from_month: str = Query(..., alias="from", description="Processing month range start (YYYY-MM)"),
     to_month: str = Query(..., alias="to", description="Processing month range end (YYYY-MM)"),
 ):
-    """Billing coverage: expected serials on floor vs invoiced MR entries, commission, missing reports.
+    """Billing coverage: expected migration rows vs invoiced MR entries by SMM key.
 
-    Grain note: invoiced counts are MR *entries* (convert splits = 2 rows per serial);
-    expected counts are *distinct serials* active during the processing month (interim
-    until migration dating supports entry-grain expectations).
+    Comparison grain: ``mr.slot_master_id`` (invoiced) vs ``smm.reference_key`` (expected),
+    for migration rows active during each processing month. Convert splits naturally show
+    as multiple keys (pre/post conversion rows).
     """
     f = _month_prefix(from_month)
     t = _month_prefix(to_month)
@@ -314,13 +314,21 @@ def finance_overview(
     window_start = _month_bounds(ext_months[0])[0]
     window_end = _month_bounds(ext_months[-1])[1]
 
-    # --- MR side (dashboard profile): invoiced entries/serials + commission + last report ---
-    mr_sql = f"""
+    mr_keys_sql = f"""
+SELECT
+    RTRIM([Casino]) AS casino,
+    CONVERT(date, TRY_CONVERT(datetime, [date])) AS d,
+    LTRIM(RTRIM([slot_master_id])) AS smm_key
+FROM {_MV} AS mr
+WHERE TRY_CONVERT(datetime, [date]) IS NOT NULL
+  AND CONVERT(date, TRY_CONVERT(datetime, [date])) BETWEEN %s AND %s
+  AND NULLIF(LTRIM(RTRIM([slot_master_id])), N'') IS NOT NULL
+"""
+    mr_commission_sql = f"""
 SELECT
     RTRIM([Casino]) AS casino,
     CONVERT(date, TRY_CONVERT(datetime, [date])) AS d,
     COUNT(*) AS entries,
-    COUNT(DISTINCT [Serial_number]) AS serials,
     SUM(ISNULL([Commission], 0)) AS commission
 FROM {_MV} AS mr
 WHERE TRY_CONVERT(datetime, [date]) IS NOT NULL
@@ -333,64 +341,74 @@ FROM {_MV} AS mr
 WHERE TRY_CONVERT(datetime, [date]) IS NOT NULL
 GROUP BY RTRIM([Casino])
 """
-    mr_rows, last_rows = _revenue_query_many(
-        [
-            (mr_sql, (window_start, window_end)),
-            (last_report_sql, None),
-        ]
-    )
 
-    # --- Floor side (field profile): distinct serials active during each month ---
     values_rows = ", ".join(["(%s, %s)"] * len(ext_months))
     expected_params: list = []
     for ym in ext_months:
         ms, me = _month_bounds(ym)
         expected_params.extend([ms, me])
-    expected_sql = f"""
+    expected_keys_sql = f"""
 SELECT
     c.casino_short AS casino,
     m.ms AS month_start,
-    COUNT(DISTINCT sm.asset_id) AS expected_serials
+    sm.reference_key AS smm_key
 FROM (VALUES {values_rows}) AS m(ms, me)
 JOIN inventory.slot_master_migration AS sm
     ON (sm.date_instl IS NULL OR CONVERT(date, sm.date_instl) <= CONVERT(date, m.me))
    AND (sm.rmvl_date IS NULL OR CONVERT(date, sm.rmvl_date) >= CONVERT(date, m.ms))
 JOIN clients.casinos AS c ON c.reference_key = sm.casino_id
 WHERE sm.casino_id <> %s
-GROUP BY c.casino_short, m.ms
 """
-    expected_rows = mssql.query(
-        expected_sql,
+
+    mr_key_rows, mr_comm_rows, last_rows = _revenue_query_many(
+        [
+            (mr_keys_sql, (window_start, window_end)),
+            (mr_commission_sql, (window_start, window_end)),
+            (last_report_sql, None),
+        ]
+    )
+    expected_key_rows = mssql.query(
+        expected_keys_sql,
         params=tuple(expected_params) + (_SOLD_CASINO_ID,),
         database=_revenue_catalog(),
         profile="field",
         load_env=False,
     )
 
-    # --- Aggregate in Python, keyed (casino, YYYY-MM) ---
     def _ym(v) -> str | None:
         d = _as_date(v)
         return d.isoformat()[:7] if d else None
 
-    mr_by_key: dict[tuple[str, str], dict] = {}
-    for r in mr_rows:
+    # Per (casino, month): expected / invoiced SMM key sets + invoiced entry count
+    expected_sets: dict[tuple[str, str], set[str]] = {}
+    invoiced_sets: dict[tuple[str, str], set[str]] = {}
+    invoiced_entries: dict[tuple[str, str], int] = {}
+    commission_by_key: dict[tuple[str, str], float] = {}
+
+    for r in expected_key_rows:
+        ym = _ym(r.get("month_start"))
+        casino = str(r.get("casino") or "").strip()
+        key = str(r.get("smm_key") or "").strip()
+        if not ym or not casino or not key:
+            continue
+        expected_sets.setdefault((casino, ym), set()).add(key)
+
+    for r in mr_key_rows:
+        ym = _ym(r.get("d"))
+        casino = str(r.get("casino") or "").strip()
+        key = str(r.get("smm_key") or "").strip()
+        if not ym or not casino or not key:
+            continue
+        cm_key = (casino, ym)
+        invoiced_sets.setdefault(cm_key, set()).add(key)
+        invoiced_entries[cm_key] = invoiced_entries.get(cm_key, 0) + 1
+
+    for r in mr_comm_rows:
         ym = _ym(r.get("d"))
         casino = str(r.get("casino") or "").strip()
         if not ym or not casino:
             continue
-        key = (casino, ym)
-        agg = mr_by_key.setdefault(key, {"entries": 0, "serials": 0, "commission": 0.0})
-        agg["entries"] += int(r.get("entries") or 0)
-        agg["serials"] += int(r.get("serials") or 0)
-        agg["commission"] += float(r.get("commission") or 0)
-
-    expected_by_key: dict[tuple[str, str], int] = {}
-    for r in expected_rows:
-        ym = _ym(r.get("month_start"))
-        casino = str(r.get("casino") or "").strip()
-        if not ym or not casino:
-            continue
-        expected_by_key[(casino, ym)] = int(r.get("expected_serials") or 0)
+        commission_by_key[(casino, ym)] = float(r.get("commission") or 0)
 
     last_report: dict[str, str] = {}
     for r in last_rows:
@@ -400,21 +418,42 @@ GROUP BY c.casino_short, m.ms
             last_report[casino] = d.isoformat()
 
     all_casinos = sorted(
-        {c for (c, ym) in mr_by_key if ym in months} | {c for (c, ym) in expected_by_key if ym in months}
+        {c for (c, ym) in expected_sets if ym in months}
+        | {c for (c, ym) in invoiced_sets if ym in months}
     )
 
     def month_totals(ym: str) -> dict:
-        expected = sum(v for (c, m), v in expected_by_key.items() if m == ym)
-        entries = sum(v["entries"] for (c, m), v in mr_by_key.items() if m == ym)
-        serials = sum(v["serials"] for (c, m), v in mr_by_key.items() if m == ym)
-        commission = sum(v["commission"] for (c, m), v in mr_by_key.items() if m == ym)
-        exp_casinos = {c for (c, m), v in expected_by_key.items() if m == ym and v > 0}
-        rep_casinos = {c for (c, m), v in mr_by_key.items() if m == ym and v["entries"] > 0}
+        exp_keys: set[str] = set()
+        inv_keys: set[str] = set()
+        entries = 0
+        commission = 0.0
+        exp_casinos: set[str] = set()
+        rep_casinos: set[str] = set()
+
+        for (casino, m), keys in expected_sets.items():
+            if m != ym:
+                continue
+            exp_keys |= keys
+            if keys:
+                exp_casinos.add(casino)
+        for (casino, m), keys in invoiced_sets.items():
+            if m != ym:
+                continue
+            inv_keys |= keys
+            entries += invoiced_entries.get((casino, m), 0)
+            if keys:
+                rep_casinos.add(casino)
+        for (casino, m), cm in commission_by_key.items():
+            if m == ym:
+                commission += cm
+
         return {
             "month": ym,
-            "expected_serials": expected,
+            "expected_entries": len(exp_keys),
             "invoiced_entries": entries,
-            "invoiced_serials": serials,
+            "invoiced_keys": len(inv_keys),
+            "uninvoiced_keys": len(exp_keys - inv_keys),
+            "unexpected_keys": len(inv_keys - exp_keys),
             "commission": commission,
             "casinos_expected": len(exp_casinos),
             "casinos_reported": len(rep_casinos),
@@ -431,8 +470,8 @@ GROUP BY c.casino_short, m.ms
 
     kpis = {
         **focus,
-        "live_assets_mom": pct(focus["expected_serials"], mom["expected_serials"]),
-        "live_assets_yoy": pct(focus["expected_serials"], yoy["expected_serials"]),
+        "expected_entries_mom": pct(focus["expected_entries"], mom["expected_entries"]),
+        "expected_entries_yoy": pct(focus["expected_entries"], yoy["expected_entries"]),
         "commission_mom": pct(focus["commission"], mom["commission"]),
         "commission_yoy": pct(focus["commission"], yoy["commission"]),
         "mom_month": mom_ym,
@@ -441,27 +480,30 @@ GROUP BY c.casino_short, m.ms
 
     casinos_out = []
     for casino in all_casinos:
-        exp_focus = expected_by_key.get((casino, t), 0)
-        mr_focus = mr_by_key.get((casino, t), {"entries": 0, "serials": 0, "commission": 0.0})
-        missing = [
+        exp_set = expected_sets.get((casino, t), set())
+        inv_set = invoiced_sets.get((casino, t), set())
+        entries = invoiced_entries.get((casino, t), 0)
+        missing_months = [
             ym
             for ym in months
-            if expected_by_key.get((casino, ym), 0) > 0
-            and mr_by_key.get((casino, ym), {}).get("entries", 0) == 0
+            if expected_sets.get((casino, ym), set())
+            and not invoiced_sets.get((casino, ym), set())
         ]
         casinos_out.append(
             {
                 "casino": casino,
-                "expected_serials": exp_focus,
-                "invoiced_entries": mr_focus["entries"],
-                "invoiced_serials": mr_focus["serials"],
-                "gap": mr_focus["entries"] - exp_focus,
-                "commission": mr_focus["commission"],
+                "expected_entries": len(exp_set),
+                "invoiced_entries": entries,
+                "invoiced_keys": len(inv_set),
+                "uninvoiced_keys": len(exp_set - inv_set),
+                "unexpected_keys": len(inv_set - exp_set),
+                "gap": entries - len(exp_set),
+                "commission": commission_by_key.get((casino, t), 0.0),
                 "last_report": last_report.get(casino),
-                "missing_months": missing,
+                "missing_months": missing_months,
             }
         )
-    casinos_out.sort(key=lambda r: (-len(r["missing_months"]), r["casino"]))
+    casinos_out.sort(key=lambda r: (-r["uninvoiced_keys"], -len(r["missing_months"]), r["casino"]))
 
     return {
         "source": "live",
