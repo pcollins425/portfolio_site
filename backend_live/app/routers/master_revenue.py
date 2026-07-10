@@ -309,8 +309,9 @@ def finance_overview(
 
     - **Invoiced** = MR row count where ``slot_master_id`` is populated (one entry per MR line).
     - **Expected** = ``slot_master_migration`` rows active during the processing month
-      (``date_instl`` / ``rmvl_date`` window), compared on ``slot_master_id`` ↔ ``reference_key``.
-      Convert predecessors close via another row's ``lastconver`` at the same asset + casino
+      (``golive001`` with ``date_instl`` fallback / ``rmvl_date`` window), compared on
+      ``slot_master_id`` ↔ ``reference_key``. Billing starts at go-live when set; otherwise
+      install date. Convert predecessors close via another row's ``lastconver``
       (no ``rmvl_date`` on theme change); immediate successor only for successive converts.
     """
     f = _month_prefix(from_month)
@@ -373,16 +374,17 @@ SELECT
     sm.reference_key AS smm_key
 FROM (VALUES {values_rows}) AS m(ms, me)
 JOIN inventory.slot_master_migration AS sm
-    ON (sm.date_instl IS NULL OR CONVERT(date, sm.date_instl) <= CONVERT(date, m.me))
+    ON COALESCE(sm.golive001, sm.date_instl) IS NOT NULL
+   AND CONVERT(date, COALESCE(sm.golive001, sm.date_instl)) <= CONVERT(date, m.me)
    AND (sm.rmvl_date IS NULL OR CONVERT(date, sm.rmvl_date) >= CONVERT(date, m.ms))
 JOIN clients.casinos AS c ON c.reference_key = sm.casino_id
 WHERE sm.casino_id <> %s
   /* Convert close-out: another row's lastconver (not rmvl_date) ends this theme row.
-     Immediate successor = earliest lastconver after this row's floor start at same
-     asset + casino; no other lastconver between. If that convert is before this
+     Floor start = COALESCE(lastconver, golive001, date_instl). Immediate successor = earliest
+     lastconver after floor start at same asset + casino. If that convert is before this
      processing month, this row is not expected; convert month still counts. */
   AND NOT (
-    COALESCE(sm.lastconver, sm.date_instl) IS NOT NULL
+    COALESCE(sm.lastconver, sm.golive001, sm.date_instl) IS NOT NULL
     AND EXISTS (
       SELECT 1
       FROM inventory.slot_master_migration AS succ
@@ -390,7 +392,7 @@ WHERE sm.casino_id <> %s
         AND succ.casino_id = sm.casino_id
         AND succ.reference_key <> sm.reference_key
         AND succ.lastconver IS NOT NULL
-        AND CONVERT(date, succ.lastconver) > CONVERT(date, COALESCE(sm.lastconver, sm.date_instl))
+        AND CONVERT(date, succ.lastconver) > CONVERT(date, COALESCE(sm.lastconver, sm.golive001, sm.date_instl))
         AND CONVERT(date, succ.lastconver) < CONVERT(date, m.ms)
         AND NOT EXISTS (
           SELECT 1
@@ -400,7 +402,7 @@ WHERE sm.casino_id <> %s
             AND mid.reference_key <> sm.reference_key
             AND mid.reference_key <> succ.reference_key
             AND mid.lastconver IS NOT NULL
-            AND CONVERT(date, mid.lastconver) > CONVERT(date, COALESCE(sm.lastconver, sm.date_instl))
+            AND CONVERT(date, mid.lastconver) > CONVERT(date, COALESCE(sm.lastconver, sm.golive001, sm.date_instl))
             AND CONVERT(date, mid.lastconver) < CONVERT(date, succ.lastconver)
         )
     )

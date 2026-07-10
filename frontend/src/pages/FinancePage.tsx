@@ -158,7 +158,7 @@ export default function FinancePage() {
               ? `Overview unavailable (${err}). Check API connectivity.`
               : loading
                 ? "Loading billing coverage…"
-                : `Processing months ${data?.from ?? "—"} → ${data?.to ?? "—"} · expected = SMM rows active in month · invoiced = MR entries with slot_master_id.`}
+                : `Processing months ${data?.from ?? "—"} → ${data?.to ?? "—"} · expected = SMM rows live (golive001, else install) in month · invoiced = MR entries with slot_master_id.`}
           </p>
         </div>
         <div className={`flex items-center gap-2 text-sm ${t.code}`}>
