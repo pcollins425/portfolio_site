@@ -5,7 +5,7 @@ from __future__ import annotations
 import os
 from datetime import date, datetime
 
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException, Query
 
 from app import mssql
 
@@ -22,6 +22,14 @@ def _revenue_query(sql: str, params=None):
     return mssql.query(sql, params=params, database=_revenue_catalog(), load_env=False)
 
 
+def _revenue_query_many(statements: list[tuple[str, tuple | None]]):
+    return mssql.query_many(
+        statements,
+        database=_revenue_catalog(),
+        load_env=False,
+    )
+
+
 def _as_date(v) -> date | None:
     if v is None:
         return None
@@ -30,6 +38,52 @@ def _as_date(v) -> date | None:
     if isinstance(v, date):
         return v
     return None
+
+
+def _distinct_periods(limit: int) -> list[date]:
+    lim = max(1, min(int(limit), 120))
+    rows = _revenue_query(
+        f"""
+SELECT DISTINCT TOP ({lim})
+    CONVERT(date, TRY_CONVERT(datetime, [date])) AS d
+FROM {_MV} AS mr
+WHERE TRY_CONVERT(datetime, [date]) IS NOT NULL
+ORDER BY CONVERT(date, TRY_CONVERT(datetime, [date])) DESC
+"""
+    )
+    out: list[date] = []
+    for r in rows:
+        d = _as_date(r.get("d"))
+        if d is not None:
+            out.append(d)
+    return out
+
+
+def _month_prefix(month: str | None) -> str | None:
+    if not month:
+        return None
+    raw = month.strip()
+    if len(raw) < 7:
+        raise HTTPException(status_code=400, detail="month must be YYYY-MM or YYYY-MM-DD")
+    return raw[:7]
+
+
+def _resolve_target_period(month: str | None, periods: list[date]) -> tuple[date, date]:
+    if not periods:
+        raise HTTPException(status_code=404, detail="No dated rows in revenue façade view")
+
+    prefix = _month_prefix(month)
+    if prefix:
+        for d in periods:
+            if d.isoformat()[:7] == prefix:
+                idx = periods.index(d)
+                prev = periods[idx + 1] if idx + 1 < len(periods) else d
+                return d, prev
+        raise HTTPException(status_code=404, detail=f"No data for month {prefix}")
+
+    latest = periods[0]
+    prev = periods[1] if len(periods) > 1 else periods[0]
+    return latest, prev
 
 
 @router.get("/health")
@@ -53,77 +107,68 @@ def health():
     }
 
 
-def _distinct_periods(limit: int) -> list[date]:
-    lim = max(1, min(int(limit), 120))
-    rows = _revenue_query(
-        f"""
-SELECT DISTINCT TOP ({lim})
-    CONVERT(date, TRY_CONVERT(datetime, [date])) AS d
-FROM {_MV} AS mr
-WHERE TRY_CONVERT(datetime, [date]) IS NOT NULL
-ORDER BY CONVERT(date, TRY_CONVERT(datetime, [date])) DESC
-"""
-    )
-    out: list[date] = []
-    for r in rows:
-        d = _as_date(r.get("d"))
-        if d is not None:
-            out.append(d)
-    return out
+@router.get("/periods")
+def periods(limit: int = Query(36, ge=1, le=120)):
+    rows = _distinct_periods(limit)
+    return {"source": "live", "periods": [d.isoformat() for d in rows]}
 
 
 @router.get("/executive")
-def executive():
-    periods = _distinct_periods(2)
-    if not periods:
-        return {"source": "live", "error": "No dated rows in revenue façade view"}
+def executive(month: str | None = Query(None, description="YYYY-MM or YYYY-MM-DD month-end slice")):
+    period_rows = _distinct_periods(24)
+    try:
+        latest_d, prev_d = _resolve_target_period(month, period_rows)
+    except HTTPException as exc:
+        if exc.status_code == 404:
+            return {"source": "live", "error": str(exc.detail)}
+        raise
 
-    latest_d = periods[0]
-    prev_d = periods[1] if len(periods) > 1 else periods[0]
-
-    def sums(d: date):
-        r = _revenue_query(
-            f"""
+    sum_sql = f"""
 SELECT
     SUM(ISNULL([Coin_in], 0)) AS coin_in,
     SUM(ISNULL([Actual_win], 0)) AS actual_win,
     SUM(ISNULL([Commission], 0)) AS commission
 FROM {_MV} AS mr
 WHERE CONVERT(date, TRY_CONVERT(datetime, [date])) = %s
-""",
-            (d,),
-        )[0]
-        return {
-            "coin_in": float(r["coin_in"] or 0),
-            "actual_win": float(r["actual_win"] or 0),
-            "commission": float(r["commission"] or 0),
-        }
-
-    cur, prior = sums(latest_d), sums(prev_d)
-
-    def pct(a: float, b: float) -> float:
-        return (a - b) / b if b else 0.0
-
-    bars = _revenue_query(
-        f"""
+"""
+    bars_sql = f"""
 SELECT
-    [Casino] AS casino,
+    RTRIM([Casino]) AS casino,
     SUM(ISNULL([Commission], 0)) AS commission,
     SUM(ISNULL([Actual_win], 0)) AS actual_win
 FROM {_MV} AS mr
 WHERE CONVERT(date, TRY_CONVERT(datetime, [date])) = %s
-GROUP BY [Casino]
+GROUP BY RTRIM([Casino])
 ORDER BY SUM(ISNULL([Commission], 0)) DESC
-""",
-        (latest_d,),
+"""
+
+    (_, cur_rows, prior_rows, bar_rows) = _revenue_query_many(
+        [
+            (sum_sql, (latest_d,)),
+            (sum_sql, (prev_d,)),
+            (bars_sql, (latest_d,)),
+        ]
     )
 
+    cur = {
+        "coin_in": float(cur_rows[0]["coin_in"] or 0),
+        "actual_win": float(cur_rows[0]["actual_win"] or 0),
+        "commission": float(cur_rows[0]["commission"] or 0),
+    }
+    prior = {
+        "coin_in": float(prior_rows[0]["coin_in"] or 0),
+        "actual_win": float(prior_rows[0]["actual_win"] or 0),
+        "commission": float(prior_rows[0]["commission"] or 0),
+    }
+
+    def pct(a: float, b: float) -> float:
+        return (a - b) / b if b else 0.0
+
     bar_out = []
-    for b in bars:
-        c = str(b["casino"] or "")
+    for b in bar_rows:
         bar_out.append(
             {
-                "casino": c.split(" ", 2)[0] if c else "?",
+                "casino": str(b["casino"] or "").strip() or "?",
                 "commission": float(b["commission"] or 0),
                 "actual_win": float(b["actual_win"] or 0),
             }
@@ -175,38 +220,41 @@ def analyst_sanity():
 
 
 @router.get("/finance/casinos-latest")
-def finance_casinos_latest():
-    periods = _distinct_periods(1)
-    if not periods:
-        return {"source": "live", "casinos": []}
-    d = periods[0]
+def finance_casinos_latest(month: str | None = Query(None, description="YYYY-MM or YYYY-MM-DD month-end slice")):
+    periods = _distinct_periods(24)
+    try:
+        latest_d, _ = _resolve_target_period(month, periods)
+    except HTTPException as exc:
+        if exc.status_code == 404:
+            return {"source": "live", "casinos": []}
+        raise
+
     rows = _revenue_query(
         f"""
 SELECT
-    MIN([Casino]) AS casino,
+    RTRIM([Casino]) AS casino,
     AVG(CAST(ISNULL([ADW], 0) AS float)) AS avg_adw,
     AVG(CAST(ISNULL([HouseWPU], 0) AS float)) AS house_wpu
 FROM {_MV} AS mr
 WHERE CONVERT(date, TRY_CONVERT(datetime, [date])) = %s
-GROUP BY [Casino]
-ORDER BY MIN([Casino])
+GROUP BY RTRIM([Casino])
+ORDER BY RTRIM([Casino])
 """,
-        (d,),
+        (latest_d,),
     )
     casinos = []
     for r in rows:
         avg_adw = float(r["avg_adw"] or 0)
         hw = float(r["house_wpu"] or 0)
-        nm = str(r["casino"] or "")
         casinos.append(
             {
-                "casino": nm.split(" ", 1)[0] if nm else "?",
+                "casino": str(r["casino"] or "").strip() or "?",
                 "avgAdw": round(avg_adw),
                 "houseWpu": round(hw),
                 "delta": round(avg_adw - hw),
             }
         )
-    return {"source": "live", "as_of": d.isoformat(), "casinos": casinos}
+    return {"source": "live", "as_of": latest_d.isoformat(), "casinos": casinos}
 
 
 @router.get("/finance/commission-intensity")
@@ -234,25 +282,29 @@ ORDER BY d DESC
 
 
 @router.get("/performance/themes-top")
-def performance_themes_top():
-    periods = _distinct_periods(1)
-    if not periods:
-        return {"source": "live", "themes": []}
-    d = periods[0]
+def performance_themes_top(month: str | None = Query(None, description="YYYY-MM or YYYY-MM-DD month-end slice")):
+    periods = _distinct_periods(24)
+    try:
+        latest_d, _ = _resolve_target_period(month, periods)
+    except HTTPException as exc:
+        if exc.status_code == 404:
+            return {"source": "live", "themes": []}
+        raise
+
     rows = _revenue_query(
         f"""
 SELECT
     [Theme] AS theme,
     [Cabinet] AS cabinet,
-    [Casino] AS casino,
+    RTRIM([Casino]) AS casino,
     SUM(ISNULL([Coin_in], 0)) AS coin_in,
     AVG(CAST(ISNULL([WIN_Index], 0) AS float)) AS win_index
 FROM {_MV} AS mr
 WHERE CONVERT(date, TRY_CONVERT(datetime, [date])) = %s
   AND NULLIF(LTRIM(RTRIM([Theme])), N'') IS NOT NULL
-GROUP BY [Theme], [Cabinet], [Casino]
+GROUP BY [Theme], [Cabinet], RTRIM([Casino])
 """,
-        (d,),
+        (latest_d,),
     )
     enriched = sorted(
         [
@@ -260,7 +312,7 @@ GROUP BY [Theme], [Cabinet], [Casino]
                 float(r["win_index"] or 0),
                 {
                     "label": str(r["theme"] or "?")[:22],
-                    "subtitle": f"{str(r['casino'] or '').split(' ', 1)[0]} · {str(r['cabinet'] or '')}",
+                    "subtitle": f"{str(r['casino'] or '').strip()} · {str(r['cabinet'] or '')}",
                     "winIndex": round(float(r["win_index"] or 0), 1),
                     "coinIn": float(r["coin_in"] or 0),
                 },
@@ -270,4 +322,4 @@ GROUP BY [Theme], [Cabinet], [Casino]
         key=lambda x: x[0],
         reverse=True,
     )[:40]
-    return {"source": "live", "as_of": d.isoformat(), "themes": [x[1] for x in enriched]}
+    return {"source": "live", "as_of": latest_d.isoformat(), "themes": [x[1] for x in enriched]}

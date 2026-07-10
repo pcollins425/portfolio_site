@@ -5,8 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Dashboard — DGS Application</title>
   <link rel="stylesheet" href="assets/dgs.css" />
+  <link rel="stylesheet" href="assets/dgs-v2.css" />
 </head>
-<body class="dgs-app">
+<body class="dgs-app dgs-dashboard-v2">
   <aside class="dgs-sidebar" id="dgs-sidebar">
     <div class="dgs-sidebar-brand">
       <div class="dgs-brand-text">
@@ -24,19 +25,20 @@
 
   <div id="dgs-nav-flyout" class="dgs-nav-flyout" hidden></div>
 
-  <div class="dgs-main">
-    <header class="page-header">
-      <p class="page-eyebrow">Master Revenue</p>
-      <h1>Dashboards</h1>
-      <p class="subtitle">Performance and finance views · <code>dashboard.vw_performance_report</code></p>
+  <div class="dgs-main dgs-v2-main dgs-dashboard-v2-main">
+    <header class="dgs-v2-page-header">
+      <div>
+        <p class="dgs-v2-eyebrow">Master Revenue</p>
+        <h1>Dashboards</h1>
+        <p class="dgs-v2-subtitle">Performance and finance views · <code>dashboard.vw_performance_report</code></p>
+      </div>
+      <nav class="dgs-v2-view-toggle" id="dgs-dashboard-nav" aria-label="Dashboard views"></nav>
     </header>
 
-    <nav class="dgs-subnav" id="dgs-dashboard-nav" aria-label="Dashboard views"></nav>
-
-    <section class="dgs-panel dgs-dashboard-mount" id="dashboard-root" aria-live="polite">
-      <p class="status" style="border: none; padding: 1rem;">Loading dashboards…</p>
+    <section class="dgs-dashboard-mount" id="dashboard-root" aria-live="polite">
+      <p class="dgs-v2-loading">Loading dashboards…</p>
     </section>
-    <p class="status" id="dashboard-hint" hidden>
+    <p class="dgs-v2-dev-hint" id="dashboard-hint" hidden>
       Local dev: run <code>npm run dev:dgsapp</code> in <code>frontend/</code> (port 5174) plus
       <code>scripts/run-backend-local.sh</code>. Production: <code>npm run build:dgsapp</code>.
     </p>

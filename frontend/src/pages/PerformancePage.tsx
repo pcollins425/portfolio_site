@@ -10,6 +10,7 @@ import {
   YAxis,
 } from "recharts";
 import { fetchJson } from "../api/client";
+import { useDashboardMonth, withMonthQuery } from "../dgs/MonthContext";
 import { useDashboardTheme } from "../dgs/ThemeContext";
 import { fmtUsd } from "../data/mockData";
 
@@ -31,18 +32,19 @@ function palette(v: number, hi: number, lo: number): string {
 
 export default function PerformancePage() {
   const t = useDashboardTheme();
+  const { month } = useDashboardMonth();
   const [rows, setRows] = useState<ThemeRow[]>([]);
   const [asOf, setAsOf] = useState<string>("");
   const [err, setErr] = useState<string | null>(null);
 
   useEffect(() => {
-    fetchJson<PerfPayload>("/api/performance/themes-top")
+    fetchJson<PerfPayload>(withMonthQuery("/api/performance/themes-top", month))
       .then((d) => {
         setRows((d.themes ?? []).slice(0, 15));
         setAsOf(d.as_of ?? "");
       })
       .catch((e: Error) => setErr(e.message));
-  }, []);
+  }, [month]);
 
   const hi = rows.length ? Math.max(...rows.map((r) => r.winIndex)) : 1;
   const lo = rows.length ? Math.min(...rows.map((r) => r.winIndex)) : 0;

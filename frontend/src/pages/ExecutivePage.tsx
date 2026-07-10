@@ -9,6 +9,7 @@ import {
   YAxis,
 } from "recharts";
 import { fetchJson } from "../api/client";
+import { useDashboardMonth, withMonthQuery } from "../dgs/MonthContext";
 import { useDashboardTheme } from "../dgs/ThemeContext";
 import { fmtUsd } from "../data/mockData";
 
@@ -58,6 +59,7 @@ function Kpi({
 
 export default function ExecutivePage() {
   const t = useDashboardTheme();
+  const { month } = useDashboardMonth();
   const [data, setData] = useState<ExecutivePayload | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -65,7 +67,7 @@ export default function ExecutivePage() {
   useEffect(() => {
     let dead = false;
     setLoading(true);
-    fetchJson<ExecutivePayload>("/api/executive")
+    fetchJson<ExecutivePayload>(withMonthQuery("/api/executive", month))
       .then((d) => {
         if (!dead) {
           setData(d);
@@ -81,7 +83,7 @@ export default function ExecutivePage() {
     return () => {
       dead = true;
     };
-  }, []);
+  }, [month]);
 
   const bars =
     normalizeBars(data?.bars) ||
@@ -138,7 +140,7 @@ export default function ExecutivePage() {
                 <BarChart data={bars} layout="vertical" margin={{ left: 16 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke={t.chart.grid} horizontal={false} />
                   <XAxis type="number" stroke={t.chart.axis} tickFormatter={(v) => `${Math.round(v / 1000)}k`} />
-                  <YAxis type="category" dataKey="casino" stroke={t.chart.axis} width={96} tick={{ fontSize: 11 }} />
+                  <YAxis type="category" dataKey="casino" stroke={t.chart.axis} width={140} tick={{ fontSize: 11 }} />
                   <Tooltip
                     contentStyle={{ backgroundColor: t.chart.tooltipBg, borderColor: t.chart.tooltipBorder }}
                     formatter={(value: number, name: string) =>

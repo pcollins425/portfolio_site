@@ -391,18 +391,20 @@
   function renderDashboardSubnav(activeRoute) {
     const nav = document.getElementById("dgs-dashboard-nav");
     if (!nav) return;
+    const v2 = document.body.classList.contains("dgs-dashboard-v2");
     nav.innerHTML = "";
     for (const item of DASHBOARD_NAV) {
-      const a = document.createElement("a");
-      a.href = "#";
-      a.textContent = item.label;
-      a.dataset.route = item.route;
-      if (item.route === activeRoute) a.classList.add("active");
-      a.addEventListener("click", (e) => {
+      const el = document.createElement(v2 ? "button" : "a");
+      if (!v2) el.href = "#";
+      el.type = v2 ? "button" : undefined;
+      el.textContent = item.label;
+      el.dataset.route = item.route;
+      if (item.route === activeRoute) el.classList.add("active");
+      el.addEventListener("click", (e) => {
         e.preventDefault();
         setDashboardRoute(item.route);
       });
-      nav.appendChild(a);
+      nav.appendChild(el);
     }
   }
 

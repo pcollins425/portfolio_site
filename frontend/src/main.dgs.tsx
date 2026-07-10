@@ -11,7 +11,7 @@ if (!rootEl) {
 
 ReactDOM.createRoot(rootEl).render(
   <React.StrictMode>
-    <DashboardThemeProvider mode="dgs">
+    <DashboardThemeProvider mode="v2">
       <DashboardApp />
     </DashboardThemeProvider>
   </React.StrictMode>,

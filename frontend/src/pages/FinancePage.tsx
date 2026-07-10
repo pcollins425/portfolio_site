@@ -13,6 +13,7 @@ import {
   ZAxis,
 } from "recharts";
 import { fetchJson } from "../api/client";
+import { useDashboardMonth, withMonthQuery } from "../dgs/MonthContext";
 import { useDashboardTheme } from "../dgs/ThemeContext";
 
 type CasinoRow = {
@@ -28,6 +29,7 @@ type RatioPayload = { ratios: RatioRow[] };
 
 export default function FinancePage() {
   const t = useDashboardTheme();
+  const { month } = useDashboardMonth();
   const [scatter, setScatter] = useState<CasinoRow[]>([]);
   const [ratios, setRatios] = useState<RatioRow[]>([]);
   const [asOf, setAsOf] = useState<string>("");
@@ -35,7 +37,7 @@ export default function FinancePage() {
 
   useEffect(() => {
     Promise.all([
-      fetchJson<CasinosPayload>("/api/finance/casinos-latest"),
+      fetchJson<CasinosPayload>(withMonthQuery("/api/finance/casinos-latest", month)),
       fetchJson<RatioPayload>("/api/finance/commission-intensity"),
     ])
       .then(([c, r]) => {
@@ -48,7 +50,7 @@ export default function FinancePage() {
         setRatios(clean);
       })
       .catch((e: Error) => setErr(e.message));
-  }, []);
+  }, [month]);
 
   return (
     <div className="space-y-8">
@@ -122,7 +124,7 @@ export default function FinancePage() {
           </thead>
           <tbody className={t.tableRow}>
             {scatter.map((r) => (
-              <tr key={r.casino + r.avgAdw} className={r.delta < 0 ? "bg-[#fef2f2]" : ""}>
+              <tr key={r.casino + r.avgAdw} className={r.delta < 0 ? t.tableRowBad : ""}>
                 <td className={t.tableCellName}>{r.casino}</td>
                 <td className={t.tableCell}>${r.avgAdw}</td>
                 <td className={t.tableCellMuted}>${r.houseWpu}</td>

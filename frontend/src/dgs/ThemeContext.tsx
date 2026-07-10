@@ -1,16 +1,16 @@
 import { createContext, useContext, type ReactNode } from "react";
-import { dgsTheme, legacyTheme, type ThemeClasses } from "./theme";
+import { dgsTheme, dgsV2Theme, legacyTheme, type ThemeClasses } from "./theme";
 
-const ThemeContext = createContext<ThemeClasses>(legacyTheme);
+const ThemeContext = createContext<ThemeClasses>(dgsV2Theme);
 
 export function DashboardThemeProvider({
   mode,
   children,
 }: {
-  mode: "dgs" | "legacy";
+  mode: "dgs" | "legacy" | "v2";
   children: ReactNode;
 }) {
-  const value = mode === "dgs" ? dgsTheme : legacyTheme;
+  const value = mode === "v2" ? dgsV2Theme : mode === "dgs" ? dgsTheme : legacyTheme;
   return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;
 }
 

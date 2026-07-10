@@ -1,6 +1,6 @@
 /** Visual tokens for dashboards embedded in dgsappv1 (matches assets/dgs.css). */
 
-export type DashboardTheme = "dgs" | "legacy";
+export type DashboardTheme = "dgs" | "legacy" | "v2";
 
 export type ChartTheme = {
   grid: string;
@@ -33,6 +33,7 @@ export type ThemeClasses = {
   tableCellName: string;
   tableCellBad: string;
   tableCellGood: string;
+  tableRowBad: string;
   calloutGreen: string;
   calloutAmber: string;
   calloutSky: string;
@@ -62,6 +63,7 @@ export const legacyTheme: ThemeClasses = {
   tableCellName: "px-4 py-3 font-medium text-white",
   tableCellBad: "text-rose-400",
   tableCellGood: "text-emerald-400",
+  tableRowBad: "bg-rose-500/10",
   calloutGreen: "rounded-xl border border-emerald-500/25 bg-emerald-500/5 p-4",
   calloutAmber: "rounded-xl border border-amber-500/25 bg-amber-500/5 p-4",
   calloutSky: "rounded-xl border border-sky-500/25 bg-sky-500/5 p-4",
@@ -106,6 +108,7 @@ export const dgsTheme: ThemeClasses = {
   tableCellName: "px-4 py-3 font-medium text-[#1e293b]",
   tableCellBad: "text-[#dc2626]",
   tableCellGood: "text-[#15803d]",
+  tableRowBad: "bg-[#fef2f2]",
   calloutGreen: "rounded-2xl border border-[#bbf7d0] bg-[#f0fdf4] p-4",
   calloutAmber: "rounded-2xl border border-[#fde68a] bg-[#fffbeb] p-4",
   calloutSky: "rounded-2xl border border-[#bae6fd] bg-[#f0f9ff] p-4",
@@ -128,6 +131,48 @@ export const dgsTheme: ThemeClasses = {
   },
 };
 
+export const dgsV2Theme: ThemeClasses = {
+  pageTitle: "text-lg font-semibold text-[#f3f5f9]",
+  pageSub: "mt-1 text-sm text-[#8b96a8]",
+  panel: "rounded-xl border border-white/10 bg-[#1a1f2a] p-4",
+  panelLabel: "text-xs font-medium uppercase tracking-wide text-[#8b96a8]",
+  kpi: "rounded-xl border border-white/10 bg-[#1a1f2a] p-5",
+  kpiLabel: "text-xs font-medium uppercase tracking-wide text-[#8b96a8]",
+  kpiValue: "mt-2 text-2xl font-semibold tracking-tight text-[#f3f5f9]",
+  kpiSub: "mt-1 text-sm text-[#8b96a8]",
+  kpiSubPositive: "mt-1 text-sm text-emerald-400/90",
+  tableWrap: "overflow-hidden rounded-xl border border-white/10 bg-[#1a1f2a]",
+  tableHead: "border-b border-white/10 bg-[#141922] text-xs uppercase tracking-wide text-[#8b96a8]",
+  tableRow: "divide-y divide-white/10",
+  tableCell: "px-4 py-3 font-mono text-[#c5cdd9]",
+  tableCellMuted: "px-4 py-3 font-mono text-[#8b96a8]",
+  tableCellName: "px-4 py-3 font-medium text-[#f3f5f9]",
+  tableCellBad: "text-rose-400",
+  tableCellGood: "text-emerald-400",
+  tableRowBad: "bg-rose-500/10",
+  calloutGreen: "rounded-xl border border-emerald-500/25 bg-emerald-500/5 p-4",
+  calloutAmber: "rounded-xl border border-amber-500/25 bg-amber-500/5 p-4",
+  calloutSky: "rounded-xl border border-sky-500/25 bg-sky-500/5 p-4",
+  calloutTitleGreen: "text-xs font-semibold uppercase tracking-wide text-emerald-300",
+  calloutTitleAmber: "text-xs font-semibold uppercase tracking-wide text-amber-200",
+  calloutTitleSky: "text-xs font-semibold uppercase tracking-wide text-sky-200",
+  calloutBody: "mt-2 text-sm text-[#c5cdd9]",
+  code: "text-[#8b96a8]",
+  chart: {
+    grid: "rgba(255,255,255,0.08)",
+    axis: "#8b96a8",
+    tooltipBg: "#141922",
+    tooltipBorder: "rgba(255,255,255,0.12)",
+    commission: "#6eb5ff",
+    actualWin: "#6eb5ff",
+    theoWin: "#a78bfa",
+    variance: "#fbbf24",
+    scatter: "#6eb5ff",
+    ratio: "#e8734a",
+  },
+};
+
 export function themeFor(mode: DashboardTheme): ThemeClasses {
+  if (mode === "v2") return dgsV2Theme;
   return mode === "dgs" ? dgsTheme : legacyTheme;
 }
