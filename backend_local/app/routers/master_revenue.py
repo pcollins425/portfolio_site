@@ -142,7 +142,7 @@ GROUP BY RTRIM([Casino])
 ORDER BY SUM(ISNULL([Commission], 0)) DESC
 """
 
-    (_, cur_rows, prior_rows, bar_rows) = _revenue_query_many(
+    (cur_rows, prior_rows, bar_rows) = _revenue_query_many(
         [
             (sum_sql, (latest_d,)),
             (sum_sql, (prev_d,)),
