@@ -37,7 +37,21 @@ def _as_date(v) -> date | None:
         return v.date()
     if isinstance(v, date):
         return v
+    if isinstance(v, str):
+        raw = v.strip()
+        if not raw:
+            return None
+        for fmt in ("%Y-%m-%dT%H:%M:%S", "%Y-%m-%d %H:%M:%S", "%Y-%m-%d", "%m/%d/%Y"):
+            try:
+                return datetime.strptime(raw[:19], fmt).date()
+            except ValueError:
+                continue
     return None
+
+
+def _ym_label(v) -> str | None:
+    d = _as_date(v)
+    return d.isoformat()[:7] if d else None
 
 
 def _distinct_periods(limit: int) -> list[date]:
@@ -293,9 +307,9 @@ def finance_overview(
 ):
     """Billing coverage: expected migration rows vs invoiced MR entries by SMM key.
 
-    Comparison grain: ``mr.slot_master_id`` (invoiced) vs ``smm.reference_key`` (expected),
-    for migration rows active during each processing month. Convert splits naturally show
-    as multiple keys (pre/post conversion rows).
+    - **Invoiced** = MR row count where ``slot_master_id`` is populated (one entry per MR line).
+    - **Expected** = ``slot_master_migration`` rows active during the processing month
+      (``date_instl`` / ``rmvl_date`` window), compared on ``slot_master_id`` ↔ ``reference_key``.
     """
     f = _month_prefix(from_month)
     t = _month_prefix(to_month)
@@ -316,13 +330,16 @@ def finance_overview(
 
     mr_keys_sql = f"""
 SELECT
-    RTRIM([Casino]) AS casino,
-    CONVERT(date, TRY_CONVERT(datetime, [date])) AS d,
-    LTRIM(RTRIM([slot_master_id])) AS smm_key
+    COALESCE(NULLIF(RTRIM(c.casino_short), N''), RTRIM(mr.[Casino])) AS casino,
+    CONVERT(date, TRY_CONVERT(datetime, mr.[date])) AS d,
+    LTRIM(RTRIM(mr.[slot_master_id])) AS smm_key
 FROM {_MV} AS mr
-WHERE TRY_CONVERT(datetime, [date]) IS NOT NULL
-  AND CONVERT(date, TRY_CONVERT(datetime, [date])) BETWEEN %s AND %s
-  AND NULLIF(LTRIM(RTRIM([slot_master_id])), N'') IS NOT NULL
+LEFT JOIN inventory.slot_master_migration AS sm
+    ON sm.reference_key = LTRIM(RTRIM(mr.[slot_master_id]))
+LEFT JOIN clients.casinos AS c ON c.reference_key = sm.casino_id
+WHERE TRY_CONVERT(datetime, mr.[date]) IS NOT NULL
+  AND CONVERT(date, TRY_CONVERT(datetime, mr.[date])) BETWEEN %s AND %s
+  AND NULLIF(LTRIM(RTRIM(mr.[slot_master_id])), N'') IS NOT NULL
 """
     mr_commission_sql = f"""
 SELECT
@@ -349,7 +366,7 @@ GROUP BY RTRIM([Casino])
         expected_params.extend([ms, me])
     expected_keys_sql = f"""
 SELECT
-    c.casino_short AS casino,
+    COALESCE(NULLIF(RTRIM(c.casino_short), N''), RTRIM(c.casino_name)) AS casino,
     m.ms AS month_start,
     sm.reference_key AS smm_key
 FROM (VALUES {values_rows}) AS m(ms, me)
@@ -360,12 +377,19 @@ JOIN clients.casinos AS c ON c.reference_key = sm.casino_id
 WHERE sm.casino_id <> %s
 """
 
-    mr_key_rows, mr_comm_rows, last_rows = _revenue_query_many(
+    mr_comm_rows, last_rows = _revenue_query_many(
         [
-            (mr_keys_sql, (window_start, window_end)),
             (mr_commission_sql, (window_start, window_end)),
             (last_report_sql, None),
         ]
+    )
+    # MR + migration join requires field profile (cross-object grants).
+    mr_key_rows = mssql.query(
+        mr_keys_sql,
+        params=(window_start, window_end),
+        database=_revenue_catalog(),
+        profile="field",
+        load_env=False,
     )
     expected_key_rows = mssql.query(
         expected_keys_sql,
@@ -376,11 +400,11 @@ WHERE sm.casino_id <> %s
     )
 
     def _ym(v) -> str | None:
-        d = _as_date(v)
-        return d.isoformat()[:7] if d else None
+        return _ym_label(v)
 
-    # Per (casino, month): expected / invoiced SMM key sets + invoiced entry count
+    # Per (casino, month): expected / invoiced SMM key sets + row counts
     expected_sets: dict[tuple[str, str], set[str]] = {}
+    expected_counts: dict[tuple[str, str], int] = {}
     invoiced_sets: dict[tuple[str, str], set[str]] = {}
     invoiced_entries: dict[tuple[str, str], int] = {}
     commission_by_key: dict[tuple[str, str], float] = {}
@@ -391,7 +415,9 @@ WHERE sm.casino_id <> %s
         key = str(r.get("smm_key") or "").strip()
         if not ym or not casino or not key:
             continue
-        expected_sets.setdefault((casino, ym), set()).add(key)
+        cm_key = (casino, ym)
+        expected_sets.setdefault(cm_key, set()).add(key)
+        expected_counts[cm_key] = expected_counts.get(cm_key, 0) + 1
 
     for r in mr_key_rows:
         ym = _ym(r.get("d"))
@@ -425,6 +451,7 @@ WHERE sm.casino_id <> %s
     def month_totals(ym: str) -> dict:
         exp_keys: set[str] = set()
         inv_keys: set[str] = set()
+        expected = 0
         entries = 0
         commission = 0.0
         exp_casinos: set[str] = set()
@@ -434,6 +461,7 @@ WHERE sm.casino_id <> %s
             if m != ym:
                 continue
             exp_keys |= keys
+            expected += expected_counts.get((casino, m), len(keys))
             if keys:
                 exp_casinos.add(casino)
         for (casino, m), keys in invoiced_sets.items():
@@ -449,7 +477,7 @@ WHERE sm.casino_id <> %s
 
         return {
             "month": ym,
-            "expected_entries": len(exp_keys),
+            "expected_entries": expected,
             "invoiced_entries": entries,
             "invoiced_keys": len(inv_keys),
             "uninvoiced_keys": len(exp_keys - inv_keys),
@@ -482,6 +510,7 @@ WHERE sm.casino_id <> %s
     for casino in all_casinos:
         exp_set = expected_sets.get((casino, t), set())
         inv_set = invoiced_sets.get((casino, t), set())
+        expected = expected_counts.get((casino, t), len(exp_set))
         entries = invoiced_entries.get((casino, t), 0)
         missing_months = [
             ym
@@ -492,12 +521,12 @@ WHERE sm.casino_id <> %s
         casinos_out.append(
             {
                 "casino": casino,
-                "expected_entries": len(exp_set),
+                "expected_entries": expected,
                 "invoiced_entries": entries,
                 "invoiced_keys": len(inv_set),
                 "uninvoiced_keys": len(exp_set - inv_set),
                 "unexpected_keys": len(inv_set - exp_set),
-                "gap": entries - len(exp_set),
+                "gap": entries - expected,
                 "commission": commission_by_key.get((casino, t), 0.0),
                 "last_report": last_report.get(casino),
                 "missing_months": missing_months,

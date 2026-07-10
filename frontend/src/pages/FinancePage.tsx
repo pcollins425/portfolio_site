@@ -158,7 +158,7 @@ export default function FinancePage() {
               ? `Overview unavailable (${err}). Check API connectivity.`
               : loading
                 ? "Loading billing coverage…"
-                : `Processing months ${data?.from ?? "—"} → ${data?.to ?? "—"} · compare MR slot_master_id vs migration reference_key (SMM-*) active during each month.`}
+                : `Processing months ${data?.from ?? "—"} → ${data?.to ?? "—"} · expected = SMM rows active in month · invoiced = MR entries with slot_master_id.`}
           </p>
         </div>
         <div className={`flex items-center gap-2 text-sm ${t.code}`}>
@@ -184,10 +184,10 @@ export default function FinancePage() {
       {k && (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <Kpi
-            label={`Invoiced vs expected (${k.month})`}
-            value={`${k.invoiced_entries.toLocaleString()} / ${k.expected_entries.toLocaleString()}`}
-            sub={`${k.uninvoiced_keys} uninvoiced · ${k.unexpected_keys} unexpected keys`}
-            positive={k.uninvoiced_keys === 0}
+            label={`Expected vs invoiced (${k.month})`}
+            value={`${k.expected_entries.toLocaleString()} / ${k.invoiced_entries.toLocaleString()}`}
+            sub={`${k.uninvoiced_keys} uninvoiced · ${k.unexpected_keys} unexpected SMM keys`}
+            positive={k.invoiced_entries >= k.expected_entries && k.uninvoiced_keys === 0}
           />
           <Kpi
             label="Expected entries (SMM)"
