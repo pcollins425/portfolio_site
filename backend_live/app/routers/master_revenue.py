@@ -310,6 +310,8 @@ def finance_overview(
     - **Invoiced** = MR row count where ``slot_master_id`` is populated (one entry per MR line).
     - **Expected** = ``slot_master_migration`` rows active during the processing month
       (``date_instl`` / ``rmvl_date`` window), compared on ``slot_master_id`` ↔ ``reference_key``.
+      Convert predecessors close via another row's ``lastconver`` at the same asset + casino
+      (no ``rmvl_date`` on theme change); immediate successor only for successive converts.
     """
     f = _month_prefix(from_month)
     t = _month_prefix(to_month)
@@ -375,6 +377,34 @@ JOIN inventory.slot_master_migration AS sm
    AND (sm.rmvl_date IS NULL OR CONVERT(date, sm.rmvl_date) >= CONVERT(date, m.ms))
 JOIN clients.casinos AS c ON c.reference_key = sm.casino_id
 WHERE sm.casino_id <> %s
+  /* Convert close-out: another row's lastconver (not rmvl_date) ends this theme row.
+     Immediate successor = earliest lastconver after this row's floor start at same
+     asset + casino; no other lastconver between. If that convert is before this
+     processing month, this row is not expected; convert month still counts. */
+  AND NOT (
+    COALESCE(sm.lastconver, sm.date_instl) IS NOT NULL
+    AND EXISTS (
+      SELECT 1
+      FROM inventory.slot_master_migration AS succ
+      WHERE succ.asset_id = sm.asset_id
+        AND succ.casino_id = sm.casino_id
+        AND succ.reference_key <> sm.reference_key
+        AND succ.lastconver IS NOT NULL
+        AND CONVERT(date, succ.lastconver) > CONVERT(date, COALESCE(sm.lastconver, sm.date_instl))
+        AND CONVERT(date, succ.lastconver) < CONVERT(date, m.ms)
+        AND NOT EXISTS (
+          SELECT 1
+          FROM inventory.slot_master_migration AS mid
+          WHERE mid.asset_id = sm.asset_id
+            AND mid.casino_id = sm.casino_id
+            AND mid.reference_key <> sm.reference_key
+            AND mid.reference_key <> succ.reference_key
+            AND mid.lastconver IS NOT NULL
+            AND CONVERT(date, mid.lastconver) > CONVERT(date, COALESCE(sm.lastconver, sm.date_instl))
+            AND CONVERT(date, mid.lastconver) < CONVERT(date, succ.lastconver)
+        )
+    )
+  )
 """
 
     mr_comm_rows, last_rows = _revenue_query_many(
