@@ -21,6 +21,14 @@ python3 scripts/run_sql_file.py scripts/sql/field_api/grant_contract_field_api.s
 
 (No password/login change — same **`dgs_field_api`** principal; only object permissions were missing.)
 
+**Projects printout (2026-07-10):** after **`projects.project_printout`** is recreated (sold printout migration), re-grant — DROP/CREATE drops existing SELECT grants:
+
+```bash
+python3 scripts/run_sql_file.py scripts/sql/field_api/grant_projects_module_field_api.sql --database dgs_application_db
+```
+
+Grants **`sold_details`**, **`project_sold_printout`**, and **`project_printout`** (plus catalog/details/status/action_types).
+
 **Slot Master (2026-06-09):** after **`inventory.slot_master_migration`** exists:
 
 ```bash
