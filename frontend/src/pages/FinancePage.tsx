@@ -1,111 +1,244 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
+  Bar,
+  BarChart,
   CartesianGrid,
   Legend,
   Line,
   LineChart,
   ResponsiveContainer,
-  Scatter,
-  ScatterChart,
   Tooltip,
   XAxis,
   YAxis,
-  ZAxis,
 } from "recharts";
 import { fetchJson } from "../api/client";
-import { useDashboardMonth, withMonthQuery } from "../dgs/MonthContext";
+import { useDashboardMonth } from "../dgs/MonthContext";
 import { useDashboardTheme } from "../dgs/ThemeContext";
+import { fmtUsd } from "../data/mockData";
+
+type MonthlyRow = {
+  month: string;
+  expected_serials: number;
+  invoiced_entries: number;
+  invoiced_serials: number;
+  commission: number;
+  casinos_expected: number;
+  casinos_reported: number;
+  casinos_missing: number;
+};
 
 type CasinoRow = {
   casino: string;
-  avgAdw: number;
-  houseWpu: number;
-  delta: number;
+  expected_serials: number;
+  invoiced_entries: number;
+  invoiced_serials: number;
+  gap: number;
+  commission: number;
+  last_report: string | null;
+  missing_months: string[];
 };
 
-type CasinosPayload = { casinos: CasinoRow[]; as_of?: string };
-type RatioRow = { month: string; ratio: number | null };
-type RatioPayload = { ratios: RatioRow[] };
+type OverviewPayload = {
+  source: string;
+  from: string;
+  to: string;
+  months: string[];
+  kpis: MonthlyRow & {
+    live_assets_mom: number;
+    live_assets_yoy: number;
+    commission_mom: number;
+    commission_yoy: number;
+    mom_month: string;
+    yoy_month: string;
+  };
+  monthly: MonthlyRow[];
+  casinos: CasinoRow[];
+};
+
+const SELECT_CLS =
+  "rounded-lg border border-white/10 bg-[#141922] px-2.5 py-1.5 text-sm text-[#f3f5f9] outline-none focus:border-[#6eb5ff]/40";
+
+function fmtPct(v: number): string {
+  return `${v >= 0 ? "+" : ""}${(v * 100).toFixed(1)}%`;
+}
+
+function Kpi({
+  label,
+  value,
+  sub,
+  positive,
+}: {
+  label: string;
+  value: string;
+  sub?: string;
+  positive?: boolean;
+}) {
+  const t = useDashboardTheme();
+  return (
+    <div className={t.kpi}>
+      <p className={t.kpiLabel}>{label}</p>
+      <p className={t.kpiValue}>{value}</p>
+      {sub != null && <p className={positive === false ? t.kpiSub : t.kpiSubPositive}>{sub}</p>}
+    </div>
+  );
+}
 
 export default function FinancePage() {
   const t = useDashboardTheme();
-  const { month } = useDashboardMonth();
-  const [scatter, setScatter] = useState<CasinoRow[]>([]);
-  const [ratios, setRatios] = useState<RatioRow[]>([]);
-  const [asOf, setAsOf] = useState<string>("");
+  const { periods } = useDashboardMonth();
+  const monthOptions = useMemo(
+    () => Array.from(new Set(periods.map((p) => p.slice(0, 7)))),
+    [periods],
+  );
+
+  const [fromM, setFromM] = useState("");
+  const [toM, setToM] = useState("");
+  const [data, setData] = useState<OverviewPayload | null>(null);
   const [err, setErr] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    Promise.all([
-      fetchJson<CasinosPayload>(withMonthQuery("/api/finance/casinos-latest", month)),
-      fetchJson<RatioPayload>("/api/finance/commission-intensity"),
-    ])
-      .then(([c, r]) => {
-        setScatter(c.casinos ?? []);
-        setAsOf(c.as_of ?? "");
-        const clean = (r.ratios ?? []).filter((x) => typeof x.ratio === "number") as Array<{
-          month: string;
-          ratio: number;
-        }>;
-        setRatios(clean);
+    if (!monthOptions.length || toM) return;
+    setToM(monthOptions[0]);
+    setFromM(monthOptions[Math.min(5, monthOptions.length - 1)]);
+  }, [monthOptions, toM]);
+
+  useEffect(() => {
+    if (!fromM || !toM) return;
+    let dead = false;
+    setLoading(true);
+    fetchJson<OverviewPayload>(
+      `/api/finance/overview?from=${encodeURIComponent(fromM)}&to=${encodeURIComponent(toM)}`,
+    )
+      .then((d) => {
+        if (!dead) {
+          setData(d);
+          setErr(null);
+        }
       })
-      .catch((e: Error) => setErr(e.message));
-  }, [month]);
+      .catch((e: Error) => {
+        if (!dead) setErr(e.message);
+      })
+      .finally(() => {
+        if (!dead) setLoading(false);
+      });
+    return () => {
+      dead = true;
+    };
+  }, [fromM, toM]);
+
+  const setFrom = (v: string) => {
+    setFromM(v);
+    if (v > toM) setToM(v);
+  };
+  const setTo = (v: string) => {
+    setToM(v);
+    if (v < fromM) setFromM(v);
+  };
+
+  const k = data?.kpis;
+  const chartData = (data?.monthly ?? []).map((m) => ({
+    month: m.month,
+    commission: m.commission,
+    expected: m.expected_serials,
+    entries: m.invoiced_entries,
+  }));
 
   return (
     <div className="space-y-8">
-      <section>
-        <h2 className={t.pageTitle}>Economics & viability</h2>
-        <p className={t.pageSub}>
-          {err
-            ? `Live slice unavailable (${err}). Check API connectivity.`
-            : `Average daily actual vs house benchmark. Commission÷actual (${asOf.replace(/T.+/, "") || "latest month"} slice).`}
-        </p>
+      <section className="flex flex-wrap items-end justify-between gap-4">
+        <div>
+          <h2 className={t.pageTitle}>Billing coverage</h2>
+          <p className={t.pageSub}>
+            {err
+              ? `Overview unavailable (${err}). Check API connectivity.`
+              : loading
+                ? "Loading billing coverage…"
+                : `Processing months ${data?.from ?? "—"} → ${data?.to ?? "—"} · invoiced = MR entries (convert splits count twice) · expected = distinct serials on floor (interim until migration dating).`}
+          </p>
+        </div>
+        <div className={`flex items-center gap-2 text-sm ${t.code}`}>
+          <span className="font-medium">From</span>
+          <select value={fromM} onChange={(e) => setFrom(e.target.value)} className={SELECT_CLS}>
+            {monthOptions.map((m) => (
+              <option key={m} value={m}>
+                {m}
+              </option>
+            ))}
+          </select>
+          <span className="font-medium">To</span>
+          <select value={toM} onChange={(e) => setTo(e.target.value)} className={SELECT_CLS}>
+            {monthOptions.map((m) => (
+              <option key={m} value={m}>
+                {m}
+              </option>
+            ))}
+          </select>
+        </div>
       </section>
+
+      {k && (
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <Kpi
+            label={`Invoiced vs expected (${k.month})`}
+            value={`${k.invoiced_entries.toLocaleString()} / ${k.expected_serials.toLocaleString()}`}
+            sub={`${k.invoiced_serials.toLocaleString()} distinct serials billed`}
+            positive={k.invoiced_serials >= k.expected_serials}
+          />
+          <Kpi
+            label="Live assets on floor"
+            value={k.expected_serials.toLocaleString()}
+            sub={`MoM ${fmtPct(k.live_assets_mom)} · YoY ${fmtPct(k.live_assets_yoy)}`}
+            positive={k.live_assets_mom >= 0}
+          />
+          <Kpi
+            label={`Commission (${k.month})`}
+            value={fmtUsd(k.commission)}
+            sub={`MoM ${fmtPct(k.commission_mom)} · YoY ${fmtPct(k.commission_yoy)}`}
+            positive={k.commission_mom >= 0}
+          />
+          <Kpi
+            label="Casinos missing report"
+            value={`${k.casinos_missing}`}
+            sub={`${k.casinos_reported} of ${k.casinos_expected} expected reported`}
+            positive={k.casinos_missing === 0}
+          />
+        </div>
+      )}
 
       <div className="grid gap-6 lg:grid-cols-2">
         <div className={t.panel}>
-          <p className={t.panelLabel}>ADW vs house benchmark ({asOf.slice(0, 10) || "—"})</p>
-          <div className="mt-4 h-80">
+          <p className={t.panelLabel}>Commission by month</p>
+          <div className="mt-4 h-72">
             <ResponsiveContainer width="100%" height="100%">
-              <ScatterChart margin={{ top: 16 }}>
+              <BarChart data={chartData}>
                 <CartesianGrid strokeDasharray="3 3" stroke={t.chart.grid} />
-                <XAxis type="number" dataKey="houseWpu" name="House benchmark" stroke={t.chart.axis} domain={["dataMin - 10", "dataMax + 10"]} />
-                <YAxis type="number" dataKey="avgAdw" name="Avg ADW" stroke={t.chart.axis} />
-                <ZAxis range={[80, 80]} />
+                <XAxis dataKey="month" stroke={t.chart.axis} tick={{ fontSize: 11 }} />
+                <YAxis stroke={t.chart.axis} tickFormatter={(v) => `${Math.round(v / 1000)}k`} />
                 <Tooltip
-                  cursor={{ strokeDasharray: "3 3" }}
                   contentStyle={{ backgroundColor: t.chart.tooltipBg, borderColor: t.chart.tooltipBorder }}
-                  formatter={(value: unknown, name: string) =>
-                    [typeof value === "number" ? Math.round(value) : String(value), name]
-                  }
-                  labelFormatter={(_, payload) =>
-                    payload?.length ? String((payload[0] as { payload?: { casino?: string } }).payload?.casino ?? "") : ""
-                  }
+                  formatter={(value: number) => [fmtUsd(value), "Commission"]}
                 />
-                <Scatter name="Casinos" data={scatter} fill={t.chart.scatter} shape="circle" />
-              </ScatterChart>
+                <Bar dataKey="commission" fill={t.chart.commission} radius={[4, 4, 0, 0]} />
+              </BarChart>
             </ResponsiveContainer>
           </div>
-          <p className={`mt-2 text-xs ${t.code}`}>
-            Interpret with commission profile mix — aggregates are AVG(ADW)/AVG(HouseWPU) by casino row grain.
-          </p>
         </div>
 
         <div className={t.panel}>
-          <p className={t.panelLabel}>Commission ÷ actual win (national)</p>
-          <div className="mt-4 h-80">
+          <p className={t.panelLabel}>Expected serials vs invoiced entries</p>
+          <div className="mt-4 h-72">
             <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={ratios}>
+              <LineChart data={chartData}>
                 <CartesianGrid strokeDasharray="3 3" stroke={t.chart.grid} />
-                <XAxis dataKey="month" stroke={t.chart.axis} tick={{ fontSize: 10 }} angle={-30} textAnchor="end" height={52} />
-                <YAxis stroke={t.chart.axis} domain={[0, "auto"]} tickFormatter={(v) => `${(v * 100).toFixed(0)}¢/$`} />
+                <XAxis dataKey="month" stroke={t.chart.axis} tick={{ fontSize: 11 }} />
+                <YAxis stroke={t.chart.axis} />
                 <Tooltip
                   contentStyle={{ backgroundColor: t.chart.tooltipBg, borderColor: t.chart.tooltipBorder }}
-                  formatter={(value: number) => [`${(value * 100).toFixed(1)}¢ per $ actual`, "Ratio"]}
                 />
                 <Legend />
-                <Line type="stepAfter" dataKey="ratio" name="Commission intensity" stroke={t.chart.ratio} strokeWidth={2} dot />
+                <Line type="monotone" dataKey="expected" name="Expected serials" stroke={t.chart.theoWin} strokeWidth={2} dot={false} />
+                <Line type="monotone" dataKey="entries" name="Invoiced entries" stroke={t.chart.actualWin} strokeWidth={2} dot={false} />
               </LineChart>
             </ResponsiveContainer>
           </div>
@@ -117,20 +250,37 @@ export default function FinancePage() {
           <thead className={t.tableHead}>
             <tr>
               <th className="px-4 py-3 font-medium">Casino</th>
-              <th className="px-4 py-3 font-medium">Avg ADW</th>
-              <th className="px-4 py-3 font-medium">House benchmark</th>
+              <th className="px-4 py-3 font-medium">Expected serials</th>
+              <th className="px-4 py-3 font-medium">Invoiced entries</th>
+              <th className="px-4 py-3 font-medium">Invoiced serials</th>
               <th className="px-4 py-3 font-medium">Gap</th>
+              <th className="px-4 py-3 font-medium">Last report</th>
+              <th className="px-4 py-3 font-medium">Missing in range</th>
             </tr>
           </thead>
           <tbody className={t.tableRow}>
-            {scatter.map((r) => (
-              <tr key={r.casino + r.avgAdw} className={r.delta < 0 ? t.tableRowBad : ""}>
+            {(data?.casinos ?? []).map((r) => (
+              <tr key={r.casino} className={r.missing_months.length > 0 ? t.tableRowBad : ""}>
                 <td className={t.tableCellName}>{r.casino}</td>
-                <td className={t.tableCell}>${r.avgAdw}</td>
-                <td className={t.tableCellMuted}>${r.houseWpu}</td>
-                <td className={`px-4 py-3 font-mono ${r.delta >= 0 ? t.tableCellGood : t.tableCellBad}`}>
-                  {r.delta >= 0 ? "+" : ""}
-                  {r.delta}
+                <td className={t.tableCell}>{r.expected_serials.toLocaleString()}</td>
+                <td className={t.tableCell}>{r.invoiced_entries.toLocaleString()}</td>
+                <td className={t.tableCellMuted}>{r.invoiced_serials.toLocaleString()}</td>
+                <td
+                  className={`px-4 py-3 font-mono ${
+                    r.gap >= 0 ? t.tableCellGood : t.tableCellBad
+                  }`}
+                >
+                  {r.gap >= 0 ? "+" : ""}
+                  {r.gap}
+                </td>
+                <td className={t.tableCellMuted}>{r.last_report ?? "—"}</td>
+                <td
+                  className={`px-4 py-3 font-mono ${
+                    r.missing_months.length ? t.tableCellBad : t.tableCellMuted
+                  }`}
+                  title={r.missing_months.join(", ") || undefined}
+                >
+                  {r.missing_months.length ? `${r.missing_months.length} (${r.missing_months.join(", ")})` : "0"}
                 </td>
               </tr>
             ))}
