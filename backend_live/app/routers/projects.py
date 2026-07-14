@@ -177,6 +177,7 @@ def projects_calendar(
                 states.state,
                 pc.reference_key AS catalog_reference_key,
                 pc.project_name AS catalog_project_name,
+                pc.notes AS catalog_notes,
                 (
                     SELECT COUNT(*)
                     FROM projects.project_details pd
@@ -220,6 +221,7 @@ def projects_calendar(
                         "reference_key": catalog_key,
                         "project_name": _json_value(r.get("catalog_project_name")),
                         "line_count": int(r.get("catalog_line_count") or 0),
+                        "notes": _json_value(r.get("catalog_notes")),
                     }
                     if catalog_key
                     else None

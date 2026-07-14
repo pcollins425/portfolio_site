@@ -2890,6 +2890,19 @@ body.dgs-software-vault-v2 .dgs-v2-layout-dialog-actions {
   grid-template-columns: 120px 1fr;
 }
 
+.dgs-prj-notation {
+  padding: 12px 14px;
+  border: 1px solid var(--dgs-v2-border-soft);
+  border-radius: 10px;
+  margin-bottom: 12px;
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--dgs-v2-text);
+  font-size: 13px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
 .dgs-prj-action-row {
   display: flex;
   align-items: center;

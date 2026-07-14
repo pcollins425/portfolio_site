@@ -48,7 +48,7 @@
     "cal-detail-drawer", "cal-detail-backdrop", "cal-detail-body", "cal-detail-title", "cal-detail-close",
     "cat-search", "cat-search-btn", "cat-prev", "cat-next", "cat-tbody", "cat-list-status",
     "cat-hero-state", "cat-hero-title", "cat-hero-meta",
-    "cat-detail-body", "cat-detail-empty", "cat-detail-content", "cat-fields", "cat-actions",
+    "cat-detail-body", "cat-detail-empty", "cat-detail-content", "cat-fields", "cat-notation-wrap", "cat-notation", "cat-actions",
     "cat-open-printout", "printout-overlay", "printout-title", "printout-meta", "printout-close", "printout-table",
     "em-search", "em-search-btn", "em-prev", "em-next", "em-thead", "em-tbody", "em-list-status",
     "em-detail-body", "em-detail-empty", "em-detail-content", "em-fields",
@@ -424,6 +424,13 @@
       </div>`;
   }
 
+  function catalogOpenLabel(catalog) {
+    if (!catalog) return "Open in Catalog";
+    const n = catalog.line_count || 0;
+    if (n === 0) return "Open notation";
+    return `Open in Catalog (${n} line${n === 1 ? "" : "s"})`;
+  }
+
   function openCalDrawer(p) {
     els["cal-detail-title"].textContent =
       [p.property, p.project_no].filter(Boolean).join(" ") || "Project";
@@ -435,9 +442,13 @@
         <div class="dgs-prj-drawer-cta">
           <span class="dgs-prj-badge">Details Available</span>
           <button type="button" class="dgs-v2-btn dgs-v2-btn--primary" data-open-catalog="${esc(ref)}">
-            Open in Catalog (${p.matching_catalog.line_count} lines)
+            ${esc(catalogOpenLabel(p.matching_catalog))}
           </button>
         </div>`;
+      if (p.matching_catalog.notes) {
+        html += `<div class="dgs-v2-section-label">Catalog notation</div>`;
+        html += `<div class="dgs-prj-notation">${esc(p.matching_catalog.notes)}</div>`;
+      }
     }
     html += `<div class="dgs-v2-section-label">Basic information</div>`;
     html += drawerField("Project number", p.project_no);
@@ -546,6 +557,7 @@
     els["cat-detail-empty"].hidden = false;
     els["cat-detail-empty"].textContent = "Loading project…";
     els["cat-detail-content"].hidden = true;
+    els["cat-notation-wrap"].hidden = true;
     els["cat-hero-state"].textContent = "Project";
     els["cat-hero-title"].textContent = referenceKey;
     els["cat-hero-meta"].textContent = "Loading…";
@@ -576,8 +588,16 @@
         catField("Assisting", d.ims_assistant_techs),
         catField("Created by", d.created_by),
         catField("Description", d.description || d.ims_description),
-        catField("Notes", d.notes),
       ].join("");
+
+      const notation = (d.notes || "").trim();
+      if (notation) {
+        els["cat-notation"].textContent = notation;
+        els["cat-notation-wrap"].hidden = false;
+      } else {
+        els["cat-notation"].textContent = "";
+        els["cat-notation-wrap"].hidden = true;
+      }
 
       els["cat-actions"].innerHTML = (d.actions || [])
         .map(
