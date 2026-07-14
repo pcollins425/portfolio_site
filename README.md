@@ -52,6 +52,8 @@ If your build log shows **`Read … files from the assets directory /opt/buildho
 
 **Automatic deploy:** The **`[build]`** section in **`wrangler.toml`** runs **`bash scripts/build_pages_publish.sh`** before every **`wrangler deploy`**, so **`pages_publish/`** exists without a separate Cloudflare **build command**. Set **`VITE_API_BASE_URL`** in the Workers / Git environment for the Wrangler run so **`npm run build`** bakes **`https://api...`** into JS (the shell script defaults to **`https://api.collinsmediallc.com`** if unset).
 
+**Workers Git deploy command:** use **`npm ci && npm run deploy`** (or **`npm install && npm run deploy`**). Do **not** commit **`node_modules/`** — Linux CI loses execute bits on **`node_modules/.bin/wrangler`** and **`npx wrangler deploy`** fails with **Permission denied**. Root **`package.json`** pins **`wrangler`**; CI installs fresh binaries.
+
 1. **`[assets]`** **`directory = "./pages_publish"`** — only uploads that folder.
 
 2. **Optional dashboard build command:** **`bash scripts/build_pages_publish.sh`** is redundant when **`[build]`** is present, but harmless.

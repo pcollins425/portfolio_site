@@ -1,0 +1,11 @@
+{
+  "name": "portfolio-site",
+  "private": true,
+  "scripts": {
+    "build:pages": "bash scripts/build_pages_publish.sh",
+    "deploy": "wrangler deploy"
+  },
+  "devDependencies": {
+    "wrangler": "^3.114.0"
+  }
+}

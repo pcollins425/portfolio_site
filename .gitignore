@@ -4,6 +4,7 @@
 # Frontend
 frontend/node_modules/
 frontend/dist/
+node_modules/
 dgsappv1/dashboard/assets/
 dgsappv1/dashboard/index.html
 pages_publish/
