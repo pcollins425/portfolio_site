@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>FSR Review — DGS Application</title>
+  <link rel="stylesheet" href="assets/dgs.css" />
+  <link rel="stylesheet" href="assets/dgs-v2.css" />
+  <style>
+    .fsr-issue { border: 1px solid rgba(255,255,255,.12); border-radius: 10px; padding: 16px 18px; margin: 0 0 16px; background: rgba(0,0,0,.2); }
+    .fsr-issue h2 { margin: 0 0 6px; font-size: 1.05rem; }
+    .fsr-issue .meta { color: #9aa3b2; font-size: .85rem; margin-bottom: 12px; }
+    .fsr-row { display: grid; gap: 8px; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); margin: 0 0 10px; padding: 10px; border-radius: 8px; background: rgba(255,255,255,.03); }
+    .fsr-row label { display: flex; flex-direction: column; gap: 4px; font-size: .8rem; color: #9aa3b2; }
+    .fsr-row input, .fsr-row select, .fsr-issue textarea {
+      background: #12161e; color: #e8ecf2; border: 1px solid rgba(255,255,255,.15);
+      border-radius: 6px; padding: 8px 10px; font: inherit;
+    }
+    .fsr-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+    .fsr-actions .dgs-v2-btn-primary { background: #1967d2; color: #fff; border: 0; }
+    .fsr-status { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: .75rem; background: rgba(255,255,255,.08); }
+    .fsr-status.open { background: rgba(250, 180, 40, .2); color: #f0c14b; }
+    .fsr-status.confirmed { background: rgba(46, 160, 67, .2); color: #3dd68c; }
+    .fsr-status.revoked { background: rgba(140,140,140,.25); color: #b0b0b0; }
+    .fsr-status.clarify { background: rgba(88, 140, 255, .2); color: #8ab4ff; }
+    .fsr-empty { color: #9aa3b2; padding: 24px 0; }
+  </style>
+</head>
+<body class="dgs-app dgs-projects-v2">
+  <aside class="dgs-sidebar" id="dgs-sidebar">
+    <div class="dgs-sidebar-brand">
+      <div class="dgs-brand-text">
+        <span class="dgs-brand-eyebrow">Dynamic Gaming Solutions</span>
+        <span class="dgs-brand-title">DGS Application</span>
+      </div>
+      <button type="button" id="dgs-rail-toggle" class="dgs-rail-toggle" aria-expanded="true" title="Collapse navigation">◧</button>
+    </div>
+    <nav class="dgs-sidebar-nav" id="dgs-app-nav" aria-label="Application"></nav>
+    <div class="dgs-sidebar-account" id="sidebar-account" hidden>
+      <span class="dgs-sidebar-user" id="user-label"></span>
+      <button type="button" id="btn-sign-out" class="dgs-sidebar-signout">Sign out</button>
+    </div>
+  </aside>
+
+  <div id="dgs-nav-flyout" class="dgs-nav-flyout" hidden></div>
+
+  <div class="dgs-main dgs-v2-main">
+    <header class="dgs-v2-page-header">
+      <div>
+        <p class="dgs-v2-eyebrow">Operations</p>
+        <h1 id="page-title">FSR Review</h1>
+        <p class="dgs-v2-subtitle" id="page-subtitle">Confirm, revoke, or clarify missing worksheet fields</p>
+      </div>
+    </header>
+
+    <div id="error-box" class="dgs-v2-error" hidden></div>
+    <div id="case-meta" class="dgs-v2-subtitle" style="margin-bottom:16px"></div>
+    <div id="issues-root"></div>
+  </div>
+
+  <script src="assets/auth.js"></script>
+  <script src="assets/shell.js"></script>
+  <script src="assets/fsr-review.js"></script>
+  <script>
+    DGS.boot({ page: "fsr_review" }).then(() => {
+      if (window.DGSFsrReview) DGSFsrReview.init();
+    });
+  </script>
+</body>
+</html>
