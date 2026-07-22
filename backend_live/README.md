@@ -90,7 +90,7 @@ Expect **`media_mode": "smb"`**, **`ok": true`**.
 
 The **`/api/assistant/*`** routes and **`dgsappv1/assistant.html`** UI are already in this repo. In Docker, the API container needs two things beyond a normal deploy:
 
-1. **Mount the workspace** — default **`../cursor-assistant`** (sibling folder). Override with **`ASSISTANT_WORKSPACE_HOST`** in **`backend_live/.env`** and run compose with **`--env-file backend_live/.env`** (or use **`scripts/deploy-backend-docker.sh`**, which does this automatically).
+1. **Mount the workspace** — default **`../cursor_assistant`** (sibling folder). On Slot Server the clone is often **`cursor-assistant`** — set **`ASSISTANT_WORKSPACE_HOST`** in **`backend_live/.env`** and run compose with **`--env-file backend_live/.env`** (or use **`scripts/deploy-backend-docker.sh`**, which does this automatically). FSR review **Apply** uses the same mount (`FSR_APPLY_ROOT=/workspace`); the checkout must include **`scripts/fsr_intake`**. Live apply also needs **`FSR_APPLY_LIVE=1`**.
 2. **`CURSOR_API_KEY`** in **`backend_live/.env`** — user or team service-account key from [Cursor Dashboard → Integrations](https://cursor.com/dashboard/integrations).
 
 ### One-time setup (SQL server)

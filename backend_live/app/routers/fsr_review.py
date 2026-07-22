@@ -142,19 +142,33 @@ def _case_apply_eligible(case: dict[str, Any], issues: list[dict[str, Any]]) -> 
 
 
 def _resolve_apply_root() -> str:
-    root = (os.environ.get("FSR_APPLY_ROOT") or "").strip()
-    if root and Path(root).is_dir():
-        return root
-    # Walk parents looking for a sibling/checkout named cursor_assistant
-    # (path depth differs: local WSL vs Docker /app/app/routers/...).
+    """Locate cursor_assistant checkout with scripts/fsr_intake.
+
+    Docker compose mounts the host clone at **/workspace** (ASSISTANT_WORKSPACE).
+    Prefer explicit FSR_APPLY_ROOT, then that mount, then sibling discovery.
+    """
+    candidates: list[str] = []
+    for key in ("FSR_APPLY_ROOT", "ASSISTANT_WORKSPACE"):
+        val = (os.environ.get(key) or "").strip()
+        if val:
+            candidates.append(val)
+    candidates.append("/workspace")
+
     here = Path(__file__).resolve()
     for parent in here.parents:
-        candidate = parent / "cursor_assistant"
-        if candidate.is_dir() and (candidate / "scripts" / "fsr_intake").is_dir():
-            return str(candidate)
-    alt = Path("/mnt/c/users/Paul Collins/cursor_assistant")
-    if alt.is_dir() and (alt / "scripts" / "fsr_intake").is_dir():
-        return str(alt)
+        candidates.append(str(parent / "cursor_assistant"))
+        candidates.append(str(parent / "cursor-assistant"))
+
+    candidates.append("/mnt/c/users/Paul Collins/cursor_assistant")
+
+    seen: set[str] = set()
+    for raw in candidates:
+        if not raw or raw in seen:
+            continue
+        seen.add(raw)
+        path = Path(raw)
+        if path.is_dir() and (path / "scripts" / "fsr_intake").is_dir():
+            return str(path)
     return ""
 
 
@@ -169,8 +183,9 @@ def _run_apply_subprocess(case_id: str, *, dry_run: bool, actor: str) -> dict[st
             status_code=503,
             detail=(
                 "FSR apply tooling not available in this API container. "
-                "Set FSR_APPLY_ROOT to a cursor_assistant checkout that includes "
-                "scripts/fsr_intake, or run locally: "
+                "Mount the cursor_assistant (or cursor-assistant) checkout at /workspace "
+                "via ASSISTANT_WORKSPACE_HOST in backend_live/.env, set FSR_APPLY_ROOT=/workspace, "
+                "recreate the container, or run locally: "
                 + cli
             ),
         )
@@ -181,7 +196,7 @@ def _run_apply_subprocess(case_id: str, *, dry_run: bool, actor: str) -> dict[st
     ):
         raise HTTPException(
             status_code=403,
-            detail="Live apply disabled — set FSR_APPLY_LIVE=1 to enable",
+            detail="Live apply disabled — set FSR_APPLY_LIVE=1 in backend_live/.env and recreate the container",
         )
 
     cmd = [
@@ -199,12 +214,17 @@ def _run_apply_subprocess(case_id: str, *, dry_run: bool, actor: str) -> dict[st
     else:
         cmd.append("--apply")
 
+    env = os.environ.copy()
+    # Ensure scripts.* imports resolve from the mounted checkout.
+    prev = (env.get("PYTHONPATH") or "").strip()
+    env["PYTHONPATH"] = root if not prev else f"{root}{os.pathsep}{prev}"
+
     proc = subprocess.run(
         cmd,
         cwd=root,
         capture_output=True,
         text=True,
-        env=os.environ.copy(),
+        env=env,
         timeout=int(os.environ.get("FSR_APPLY_TIMEOUT_SEC") or "600"),
     )
     stdout = (proc.stdout or "").strip()
@@ -224,9 +244,10 @@ def _run_apply_subprocess(case_id: str, *, dry_run: bool, actor: str) -> dict[st
                 "stderr": stderr[-2000:],
                 "stdout": stdout[-2000:],
                 "result": parsed,
+                "apply_root": root,
             },
         )
-    return parsed or {"ok": True, "raw_stdout": stdout[-2000:]}
+    return parsed or {"ok": True, "raw_stdout": stdout[-2000:], "apply_root": root}
 
 
 @router.get("/permissions")
