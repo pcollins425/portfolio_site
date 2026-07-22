@@ -145,11 +145,15 @@ def _resolve_apply_root() -> str:
     root = (os.environ.get("FSR_APPLY_ROOT") or "").strip()
     if root and Path(root).is_dir():
         return root
-    guess = Path(__file__).resolve().parents[4] / "cursor_assistant"
-    if guess.is_dir():
-        return str(guess)
+    # Walk parents looking for a sibling/checkout named cursor_assistant
+    # (path depth differs: local WSL vs Docker /app/app/routers/...).
+    here = Path(__file__).resolve()
+    for parent in here.parents:
+        candidate = parent / "cursor_assistant"
+        if candidate.is_dir() and (candidate / "scripts" / "fsr_intake").is_dir():
+            return str(candidate)
     alt = Path("/mnt/c/users/Paul Collins/cursor_assistant")
-    if alt.is_dir():
+    if alt.is_dir() and (alt / "scripts" / "fsr_intake").is_dir():
         return str(alt)
     return ""
 
@@ -157,9 +161,18 @@ def _resolve_apply_root() -> str:
 def _run_apply_subprocess(case_id: str, *, dry_run: bool, actor: str) -> dict[str, Any]:
     root = _resolve_apply_root()
     if not root:
+        cli = (
+            f"python3 -m scripts.fsr_intake.apply_from_review --case-id {case_id} "
+            + ("--dry-run" if dry_run else "--apply")
+        )
         raise HTTPException(
             status_code=503,
-            detail="FSR_APPLY_ROOT not configured (path to cursor_assistant)",
+            detail=(
+                "FSR apply tooling not available in this API container. "
+                "Set FSR_APPLY_ROOT to a cursor_assistant checkout that includes "
+                "scripts/fsr_intake, or run locally: "
+                + cli
+            ),
         )
     if not dry_run and (os.environ.get("FSR_APPLY_LIVE") or "").strip().lower() not in (
         "1",
