@@ -1,5 +1,5 @@
 /*
-  Seed dgs_fsr_review write access for Paul + Barry (human gate owners).
+  Seed dgs_fsr_review write access for Paul, Barry, and Matt (human gate owners).
 */
 USE [dgs_application_db];
 GO
@@ -22,9 +22,10 @@ WHERE er.[active] = 1
   AND (
         LOWER(er.[email]) IN (
             N'paulc@dynamicgamingsolutions.com',
-            N'barryd@dynamicgamingsolutions.com'
+            N'barryd@dynamicgamingsolutions.com',
+            N'matthewh@dynamicgamingsolutions.com'
         )
-        OR er.[reference_key] IN (N'EMP-000040', N'EMP-000068')
+        OR er.[reference_key] IN (N'EMP-000040', N'EMP-000068', N'EMP-000100')
       );
 GO
 
