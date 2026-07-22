@@ -141,12 +141,7 @@ def _case_apply_eligible(case: dict[str, Any], issues: list[dict[str, Any]]) -> 
     return False, "no confirmed asset_numbers / footer_settings with values"
 
 
-def _resolve_apply_root() -> str:
-    """Locate cursor_assistant checkout with scripts/fsr_intake.
-
-    Docker compose mounts the host clone at **/workspace** (ASSISTANT_WORKSPACE).
-    Prefer explicit FSR_APPLY_ROOT, then that mount, then sibling discovery.
-    """
+def _apply_root_candidates() -> list[str]:
     candidates: list[str] = []
     for key in ("FSR_APPLY_ROOT", "ASSISTANT_WORKSPACE"):
         val = (os.environ.get(key) or "").strip()
@@ -160,9 +155,17 @@ def _resolve_apply_root() -> str:
         candidates.append(str(parent / "cursor-assistant"))
 
     candidates.append("/mnt/c/users/Paul Collins/cursor_assistant")
+    return candidates
 
+
+def _resolve_apply_root() -> str:
+    """Locate cursor_assistant checkout with scripts/fsr_intake.
+
+    Docker compose mounts the host clone at **/workspace** (ASSISTANT_WORKSPACE).
+    Prefer explicit FSR_APPLY_ROOT, then that mount, then sibling discovery.
+    """
     seen: set[str] = set()
-    for raw in candidates:
+    for raw in _apply_root_candidates():
         if not raw or raw in seen:
             continue
         seen.add(raw)
@@ -170,6 +173,31 @@ def _resolve_apply_root() -> str:
         if path.is_dir() and (path / "scripts" / "fsr_intake").is_dir():
             return str(path)
     return ""
+
+
+def _apply_root_diagnostics() -> dict[str, Any]:
+    """Explain why apply tooling is missing (wrong/empty /workspace mount is common)."""
+    workspace = Path("/workspace")
+    top: list[str] = []
+    if workspace.is_dir():
+        try:
+            top = sorted(p.name for p in workspace.iterdir())[:30]
+        except OSError as exc:
+            top = [f"<listdir error: {exc}>"]
+    return {
+        "FSR_APPLY_ROOT": (os.environ.get("FSR_APPLY_ROOT") or "").strip() or None,
+        "ASSISTANT_WORKSPACE": (os.environ.get("ASSISTANT_WORKSPACE") or "").strip() or None,
+        "workspace_exists": workspace.is_dir(),
+        "workspace_top": top,
+        "workspace_has_scripts": (workspace / "scripts").is_dir(),
+        "workspace_has_fsr_intake": (workspace / "scripts" / "fsr_intake").is_dir(),
+        "hint": (
+            "On DGS Slot Server set backend_live/.env: "
+            "ASSISTANT_WORKSPACE_HOST=C:/Users/DGS Slot Server/cursor-assistant "
+            "then recreate with: docker compose --env-file backend_live/.env up -d --force-recreate. "
+            "Host must contain scripts/fsr_intake (git pull + expand sparse-checkout if needed)."
+        ),
+    }
 
 
 def _run_apply_subprocess(case_id: str, *, dry_run: bool, actor: str) -> dict[str, Any]:
@@ -181,13 +209,14 @@ def _run_apply_subprocess(case_id: str, *, dry_run: bool, actor: str) -> dict[st
         )
         raise HTTPException(
             status_code=503,
-            detail=(
-                "FSR apply tooling not available in this API container. "
-                "Mount the cursor_assistant (or cursor-assistant) checkout at /workspace "
-                "via ASSISTANT_WORKSPACE_HOST in backend_live/.env, set FSR_APPLY_ROOT=/workspace, "
-                "recreate the container, or run locally: "
-                + cli
-            ),
+            detail={
+                "message": (
+                    "FSR apply tooling not available in this API container. "
+                    "Mount cursor-assistant at /workspace via ASSISTANT_WORKSPACE_HOST, "
+                    "or run locally: " + cli
+                ),
+                "diagnostics": _apply_root_diagnostics(),
+            },
         )
     if not dry_run and (os.environ.get("FSR_APPLY_LIVE") or "").strip().lower() not in (
         "1",

@@ -2,6 +2,15 @@
 # Start API — SMB media mode needs no NAS mount; WSL/container modes handled in entrypoint.
 set -euo pipefail
 
+if [ -d /workspace/scripts/fsr_intake ]; then
+  echo "docker-entrypoint: FSR apply tooling present at /workspace/scripts/fsr_intake"
+else
+  echo "docker-entrypoint: WARNING — /workspace/scripts/fsr_intake missing (FSR Apply will 503)."
+  echo "docker-entrypoint: On Slot Server set ASSISTANT_WORKSPACE_HOST=C:/Users/DGS Slot Server/cursor-assistant"
+  echo "docker-entrypoint: then: docker compose --env-file backend_live/.env up -d --force-recreate"
+  ls -la /workspace 2>/dev/null | head -20 || echo "docker-entrypoint: /workspace is empty or unmounted"
+fi
+
 mode="$(printf '%s' "${NAS_MEDIA_MODE:-}" | tr -d '\r\n' | tr '[:upper:]' '[:lower:]')"
 if [ "$mode" = "smb" ]; then
   echo "docker-entrypoint: NAS_MEDIA_MODE=smb — reading media over SMB (no mount)"

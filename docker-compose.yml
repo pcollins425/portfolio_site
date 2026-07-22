@@ -1,8 +1,8 @@
 # **`backend_live`** behind Cloudflare Tunnel (or local smoke test).
 #
 # Prerequisite: **`backend_live/.env`** from **`.env.example`** (ignored by Git).
-# Assistant workspace mount defaults to **`../cursor_assistant`** (sibling folder).
-# On DGS Slot Server the clone is often **`cursor-assistant`** — set **`ASSISTANT_WORKSPACE_HOST`**.
+# Assistant workspace mount defaults to **`../cursor-assistant`** (DGS Slot Server sibling).
+# Paul's machine often uses **`cursor_assistant`** — set **`ASSISTANT_WORKSPACE_HOST`**.
 # Optional override: **`ASSISTANT_WORKSPACE_HOST`** in **`backend_live/.env`** when using
 # **`docker compose --env-file backend_live/.env`** or **`scripts/deploy-backend-docker.sh`**.
 #
@@ -27,7 +27,7 @@ services:
       - "127.0.0.1:9001:9001"
     env_file:
       - ./backend_live/.env
-    # Assistant: host clone → /workspace (default: sibling ../cursor_assistant)
+    # Assistant: host clone → /workspace (default: sibling ../cursor-assistant)
     # Optional ASSISTANT_WORKSPACE_HOST in backend_live/.env — use:
     #   docker compose --env-file backend_live/.env up -d --build
     environment:
@@ -36,8 +36,8 @@ services:
       # FSR review Apply uses the same mounted checkout (override in .env if needed).
       FSR_APPLY_ROOT: ${FSR_APPLY_ROOT:-/workspace}
     volumes:
-      # Host folder name may be cursor_assistant or cursor-assistant — set ASSISTANT_WORKSPACE_HOST.
-      - ${ASSISTANT_WORKSPACE_HOST:-../cursor_assistant}:/workspace:rw
+      # Slot Server: C:/Users/DGS Slot Server/cursor-assistant — set ASSISTANT_WORKSPACE_HOST.
+      - ${ASSISTANT_WORKSPACE_HOST:-../cursor-assistant}:/workspace:rw
       - assistant_sessions:/app/data/assistant_sessions
       # NAS via WSL bind (NAS_MEDIA_WSL_BIND) or local mirror (MEDIA_ROOT_HOST). See mount_nas_media_wsl.cmd.
       - ${NAS_MEDIA_WSL_BIND:-${MEDIA_ROOT_HOST:-../portfolio_media/tableau-images}}:/media/tableau-images:ro
