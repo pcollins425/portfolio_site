@@ -54,9 +54,21 @@ BEGIN
         EXEC sp_executesql @sql;
     END;
 
+    IF OBJECT_ID(N'projects.note_details', N'U') IS NOT NULL
+    BEGIN
+        SET @sql = N'GRANT SELECT ON OBJECT::[projects].[note_details] TO [' + @q + N'];';
+        EXEC sp_executesql @sql;
+    END;
+
     IF OBJECT_ID(N'projects.project_sold_printout', N'V') IS NOT NULL
     BEGIN
         SET @sql = N'GRANT SELECT ON OBJECT::[projects].[project_sold_printout] TO [' + @q + N'];';
+        EXEC sp_executesql @sql;
+    END;
+
+    IF OBJECT_ID(N'projects.project_note_printout', N'V') IS NOT NULL
+    BEGIN
+        SET @sql = N'GRANT SELECT ON OBJECT::[projects].[project_note_printout] TO [' + @q + N'];';
         EXEC sp_executesql @sql;
     END;
 

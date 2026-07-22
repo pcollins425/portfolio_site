@@ -7,6 +7,24 @@
   <link rel="stylesheet" href="assets/dgs.css" />
   <link rel="stylesheet" href="assets/dgs-v2.css" />
   <style>
+    /* Document-style page: scroll the main pane (projects-v2 locks overflow). */
+    body.dgs-fsr-review.dgs-app {
+      height: 100vh;
+      overflow: hidden;
+      color-scheme: dark;
+    }
+    body.dgs-fsr-review .dgs-v2-main {
+      display: flex;
+      flex-direction: column;
+      padding: 24px 28px 32px;
+      gap: 18px;
+      background: var(--dgs-v2-bg, #0e1117);
+      color: var(--dgs-v2-text, #c5cdd9);
+      flex: 1;
+      min-height: 0;
+      overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
+    }
     .fsr-issue { border: 1px solid rgba(255,255,255,.12); border-radius: 10px; padding: 16px 18px; margin: 0 0 16px; background: rgba(0,0,0,.2); }
     .fsr-issue h2 { margin: 0 0 6px; font-size: 1.05rem; }
     .fsr-issue .meta { color: #9aa3b2; font-size: .85rem; margin-bottom: 12px; }
@@ -26,7 +44,7 @@
     .fsr-empty { color: #9aa3b2; padding: 24px 0; }
   </style>
 </head>
-<body class="dgs-app dgs-projects-v2">
+<body class="dgs-app dgs-fsr-review">
   <aside class="dgs-sidebar" id="dgs-sidebar">
     <div class="dgs-sidebar-brand">
       <div class="dgs-brand-text">

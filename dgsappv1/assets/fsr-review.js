@@ -88,6 +88,18 @@
         note: note ? note.value.trim() : "",
       };
     }
+    if (type === "install_peripherals") {
+      const ba = issueEl.querySelector('input[name="ba_bv"]');
+      const printer = issueEl.querySelector('input[name="printer"]');
+      const cashbox = issueEl.querySelector('input[name="cashbox"]');
+      const note = issueEl.querySelector('textarea[name="periph_note"]');
+      return {
+        ba_bv: ba ? ba.value.trim() : "",
+        printer: printer ? printer.value.trim() : "",
+        cashbox: cashbox ? cashbox.value.trim() : "",
+        note: note ? note.value.trim() : "",
+      };
+    }
     const note = issueEl.querySelector("textarea");
     return { note: note ? note.value.trim() : "" };
   }
@@ -150,6 +162,19 @@
   function renderDayPages(issue) {
     const days = (issue.payload && issue.payload.days) || [];
     const opts = (issue.payload && issue.payload.options) || [];
+    const expected = issue.payload && issue.payload.expected_day_count;
+    const span =
+      issue.payload && (issue.payload.start_date || issue.payload.end_date)
+        ? `<p class="meta">Expected days: ${esc(expected ?? "—")} (${esc(
+            issue.payload.start_date || "?"
+          )} → ${esc(issue.payload.end_date || "?")}; ${esc(
+            issue.payload.expected_day_source || ""
+          )})</p>`
+        : expected
+          ? `<p class="meta">Expected days: ${esc(expected)} (${esc(
+              issue.payload.expected_day_source || ""
+            )})</p>`
+          : "";
     const list = days
       .map(
         (d) =>
@@ -159,13 +184,44 @@
     const options = opts
       .map((o) => `<option value="${esc(o.id)}">${esc(o.label)}</option>`)
       .join("");
-    return `<ul>${list || "<li>No day sheet details</li>"}</ul>
+    return `${span}<ul>${list || "<li>No day sheet details</li>"}</ul>
       <label style="display:flex;flex-direction:column;gap:4px;color:#9aa3b2;font-size:.8rem;margin-top:8px">
         Disposition
         <select name="day_disposition">${options}</select>
       </label>
       <label style="display:flex;flex-direction:column;gap:4px;color:#9aa3b2;font-size:.8rem;margin-top:8px">
         Note <textarea name="day_note" rows="2" placeholder="Optional"></textarea>
+      </label>`;
+  }
+
+  function renderInstallPeripherals(issue) {
+    const installs = (issue.payload && issue.payload.installs) || [];
+    const missing = (issue.payload && issue.payload.missing) || [];
+    const list = installs
+      .map(
+        (r) =>
+          `<li>${esc(r.serial || "—")}${r.theme ? ` — ${esc(r.theme)}` : ""}${
+            r.asset_no ? ` (asset ${esc(r.asset_no)})` : ""
+          }</li>`
+      )
+      .join("");
+    const needBv = missing.includes("ba_bv");
+    const needPrinter = missing.includes("printer");
+    return `<p class="meta">Missing: ${esc(missing.join(", ") || "BA/BV, Printer")}</p>
+      <ul>${list || "<li>No install rows</li>"}</ul>
+      <div class="fsr-row">
+        <label>BA/BV
+          <input name="ba_bv" placeholder="${needBv ? "Required" : "Optional"}" />
+        </label>
+        <label>Printer
+          <input name="printer" placeholder="${needPrinter ? "Required" : "Optional"}" />
+        </label>
+        <label>Cashbox
+          <input name="cashbox" placeholder="Optional" />
+        </label>
+      </div>
+      <label style="display:flex;flex-direction:column;gap:4px;color:#9aa3b2;font-size:.8rem;margin-top:8px">
+        Note <textarea name="periph_note" rows="2" placeholder="Optional"></textarea>
       </label>`;
   }
 
@@ -179,6 +235,8 @@
         return renderEmailExtras(issue);
       case "day_pages":
         return renderDayPages(issue);
+      case "install_peripherals":
+        return renderInstallPeripherals(issue);
       default:
         return `<pre style="white-space:pre-wrap;font-size:.85rem">${esc(
           JSON.stringify(issue.payload || {}, null, 2)
