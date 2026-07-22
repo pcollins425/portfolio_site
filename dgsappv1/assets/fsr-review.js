@@ -320,6 +320,78 @@
     return el;
   }
 
+  function renderApplyBar(data) {
+    const bar = document.getElementById("apply-bar");
+    if (!bar) return;
+    const eligible = !!data.apply_eligible;
+    const applyStatus = data.apply_status || "none";
+    const log = data.apply_log || null;
+    let logHtml = "";
+    if (log) {
+      const sample = log.asset_sample ? JSON.stringify(log.asset_sample) : "";
+      const unmapped = (log.unmapped_settings || []).length;
+      logHtml = `<div class="fsr-apply-log">Last apply: ${esc(log.phase || applyStatus)}
+csv: ${esc(log.csv_path || "—")}
+assets: ${esc(sample || "—")}
+unmapped settings: ${esc(String(unmapped))}</div>`;
+    }
+    if (!eligible && applyStatus === "none" && !log) {
+      bar.hidden = true;
+      bar.innerHTML = "";
+      return;
+    }
+    bar.hidden = false;
+    const reason = data.apply_eligible_reason || "";
+    bar.innerHTML = `
+      <div><strong>Floor apply</strong>
+        <span class="meta"> — status ${esc(applyStatus)}${eligible ? "" : ` (${esc(reason)})`}</span>
+      </div>
+      <p class="meta" style="margin:6px 0 0">Writes confirmed assets/settings via eMaint CSV overlay (does not edit the worksheet file).</p>
+      <div class="fsr-actions">
+        <button type="button" class="dgs-v2-btn dgs-v2-btn-primary" data-act="dry-run" ${eligible ? "" : "disabled"}>Dry run</button>
+        <button type="button" class="dgs-v2-btn" data-act="live-apply" ${eligible ? "" : "disabled"}>Apply live…</button>
+      </div>
+      ${logHtml}
+    `;
+    const dryBtn = bar.querySelector('[data-act="dry-run"]');
+    const liveBtn = bar.querySelector('[data-act="live-apply"]');
+    if (dryBtn && eligible) {
+      dryBtn.addEventListener("click", async () => {
+        try {
+          showError("");
+          dryBtn.disabled = true;
+          await api(`/api/fsr-review/cases/${data.case_id}/apply`, {
+            method: "POST",
+            body: JSON.stringify({ dry_run: true }),
+          });
+          await loadCase();
+        } catch (err) {
+          showError(err.message || String(err));
+          dryBtn.disabled = false;
+        }
+      });
+    }
+    if (liveBtn && eligible) {
+      liveBtn.addEventListener("click", async () => {
+        if (!window.confirm("Apply live to eMaint / SMM / projects? This writes production data.")) {
+          return;
+        }
+        try {
+          showError("");
+          liveBtn.disabled = true;
+          await api(`/api/fsr-review/cases/${data.case_id}/apply`, {
+            method: "POST",
+            body: JSON.stringify({ dry_run: false }),
+          });
+          await loadCase();
+        } catch (err) {
+          showError(err.message || String(err));
+          liveBtn.disabled = false;
+        }
+      });
+    }
+  }
+
   async function loadCase() {
     const caseId = params.get("case");
     const root = document.getElementById("issues-root");
@@ -333,10 +405,12 @@
     title.textContent = `FSR Review — Project ${data.project_number || "—"}`;
     meta.innerHTML = `
       Status: <strong>${esc(data.status)}</strong>
+      · Apply: <strong>${esc(data.apply_status || "none")}</strong>
       · From: ${esc(data.gmail_from || "—")}
       · ${esc(data.subject || "")}
       · Workbook: ${esc(data.workbook_name || "—")}
     `;
+    renderApplyBar(data);
     root.innerHTML = "";
     (data.issues || []).forEach((issue) => root.appendChild(renderIssue(issue)));
     if (!(data.issues || []).length) {

@@ -1,11 +1,14 @@
-"""FSR review case API — quiet-email deep link target for Confirm/Revoke/Clarify."""
+"""FSR review case API — quiet-email deep link target for Confirm/Revoke/Clarify/Apply."""
 
 from __future__ import annotations
 
 import json
 import os
+import subprocess
+import sys
 from datetime import date, datetime
 from decimal import Decimal
+from pathlib import Path
 from typing import Annotated, Any
 from uuid import UUID
 
@@ -17,6 +20,8 @@ from app import mssql
 from app.auth_deps import require_demo_user
 
 router = APIRouter(prefix="/api/fsr-review", tags=["fsr-review"])
+
+APPLYABLE_TYPES = frozenset({"asset_numbers", "footer_settings"})
 
 
 def _db() -> str:
@@ -79,14 +84,6 @@ def _actor(user: dict[str, Any] | None) -> str:
     return str(user.get("email") or user.get("name") or user.get("employee_id") or "unknown")
 
 
-class ConfirmBody(BaseModel):
-    form_values: dict[str, Any] = Field(default_factory=dict)
-
-
-class ClarifyBody(BaseModel):
-    note: str = Field(min_length=1, max_length=4000)
-
-
 def _maybe_close_case(case_id: str) -> None:
     open_left = _query(
         """
@@ -106,6 +103,117 @@ def _maybe_close_case(case_id: str) -> None:
         """,
         (case_id,),
     )
+
+
+class ConfirmBody(BaseModel):
+    form_values: dict[str, Any] = Field(default_factory=dict)
+
+
+class ClarifyBody(BaseModel):
+    note: str = Field(min_length=1, max_length=4000)
+
+
+class ApplyBody(BaseModel):
+    dry_run: bool = True
+
+
+def _case_apply_eligible(case: dict[str, Any], issues: list[dict[str, Any]]) -> tuple[bool, str]:
+    if str(case.get("status") or "").lower() != "closed":
+        return False, f"case status is {case.get('status')!r} (need closed)"
+    apply_status = str(case.get("apply_status") or "none").lower()
+    if apply_status in ("applied", "running"):
+        return False, f"apply_status is {apply_status!r}"
+    for issue in issues:
+        if str(issue.get("status") or "").lower() != "confirmed":
+            continue
+        if str(issue.get("issue_type") or "") not in APPLYABLE_TYPES:
+            continue
+        form = issue.get("form_values") or {}
+        if not isinstance(form, dict):
+            continue
+        for row in form.get("rows") or []:
+            if not isinstance(row, dict):
+                continue
+            if str(row.get("asset") or "").strip():
+                return True, "ok"
+            if row.get("extras"):
+                return True, "ok"
+    return False, "no confirmed asset_numbers / footer_settings with values"
+
+
+def _resolve_apply_root() -> str:
+    root = (os.environ.get("FSR_APPLY_ROOT") or "").strip()
+    if root and Path(root).is_dir():
+        return root
+    guess = Path(__file__).resolve().parents[4] / "cursor_assistant"
+    if guess.is_dir():
+        return str(guess)
+    alt = Path("/mnt/c/users/Paul Collins/cursor_assistant")
+    if alt.is_dir():
+        return str(alt)
+    return ""
+
+
+def _run_apply_subprocess(case_id: str, *, dry_run: bool, actor: str) -> dict[str, Any]:
+    root = _resolve_apply_root()
+    if not root:
+        raise HTTPException(
+            status_code=503,
+            detail="FSR_APPLY_ROOT not configured (path to cursor_assistant)",
+        )
+    if not dry_run and (os.environ.get("FSR_APPLY_LIVE") or "").strip().lower() not in (
+        "1",
+        "true",
+        "yes",
+    ):
+        raise HTTPException(
+            status_code=403,
+            detail="Live apply disabled — set FSR_APPLY_LIVE=1 to enable",
+        )
+
+    cmd = [
+        sys.executable,
+        "-m",
+        "scripts.fsr_intake.apply_from_review",
+        "--case-id",
+        case_id,
+        "--applied-by",
+        actor,
+        "--json",
+    ]
+    if dry_run:
+        cmd.append("--dry-run")
+    else:
+        cmd.append("--apply")
+
+    proc = subprocess.run(
+        cmd,
+        cwd=root,
+        capture_output=True,
+        text=True,
+        env=os.environ.copy(),
+        timeout=int(os.environ.get("FSR_APPLY_TIMEOUT_SEC") or "600"),
+    )
+    stdout = (proc.stdout or "").strip()
+    stderr = (proc.stderr or "").strip()
+    parsed: dict[str, Any] | None = None
+    if stdout:
+        try:
+            parsed = json.loads(stdout)
+        except json.JSONDecodeError:
+            parsed = None
+    if proc.returncode != 0:
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "message": "apply_from_review failed",
+                "returncode": proc.returncode,
+                "stderr": stderr[-2000:],
+                "stdout": stdout[-2000:],
+                "result": parsed,
+            },
+        )
+    return parsed or {"ok": True, "raw_stdout": stdout[-2000:]}
 
 
 @router.get("/permissions")
@@ -128,7 +236,8 @@ def get_case(
     rows = _query(
         """
         SELECT case_id, project_number, ims_reference_key, gmail_message_id, thread_id,
-               subject, gmail_from, workbook_name, status, created_at, closed_at
+               subject, gmail_from, workbook_name, status, created_at, closed_at,
+               apply_status, applied_at, applied_by, apply_overlay_json, apply_log_json
         FROM projects.fsr_review_case
         WHERE case_id = %s
         """,
@@ -137,6 +246,10 @@ def get_case(
     if not rows:
         raise HTTPException(status_code=404, detail="Case not found")
     case = {k: _json_value(v) for k, v in dict(rows[0]).items()}
+    case["apply_overlay"] = _parse_json(case.pop("apply_overlay_json", None))
+    case["apply_log"] = _parse_json(case.pop("apply_log_json", None))
+    if case.get("apply_status") is None:
+        case["apply_status"] = "none"
     issues_raw = _query(
         """
         SELECT issue_id, case_id, issue_type, title, status, payload_json,
@@ -154,7 +267,34 @@ def get_case(
         item["form_values"] = _parse_json(item.pop("form_values_json", None))
         issues.append(item)
     case["issues"] = issues
+    eligible, reason = _case_apply_eligible(case, issues)
+    case["apply_eligible"] = eligible
+    case["apply_eligible_reason"] = reason
     return case
+
+
+@router.post("/cases/{case_id}/apply")
+def apply_case(
+    case_id: str,
+    body: ApplyBody,
+    user: Annotated[dict[str, Any] | None, Depends(require_demo_user)] = None,
+):
+    _assert_write(user)
+    case = get_case(case_id, user=user)
+    if not case.get("apply_eligible"):
+        raise HTTPException(
+            status_code=409,
+            detail=case.get("apply_eligible_reason") or "Case not eligible to apply",
+        )
+    actor = _actor(user)
+    result = _run_apply_subprocess(case_id, dry_run=body.dry_run, actor=actor)
+    refreshed = get_case(case_id, user=user)
+    return {
+        "ok": True,
+        "dry_run": body.dry_run,
+        "result": result,
+        "case": refreshed,
+    }
 
 
 @router.post("/issues/{issue_id}/confirm")
