@@ -328,11 +328,11 @@
 
   async function pollApplyStatus(caseId, { onTick, generation } = {}) {
     const terminal = new Set(["applied", "failed", "none"]);
-    for (let i = 0; i < 180; i += 1) {
+    for (let i = 0; i < 120; i += 1) {
       if (generation != null && generation !== applyPollGeneration) {
         return null;
       }
-      await sleep(2000);
+      await sleep(3000);
       const data = await api(`/api/fsr-review/cases/${caseId}`);
       const st = String(data.apply_status || "none").toLowerCase();
       if (typeof onTick === "function") onTick(data);
@@ -371,7 +371,10 @@ unmapped settings: ${esc(String(unmapped))}${err}</div>`;
       ? `<p class="meta" style="margin:6px 0 0;color:#f0c14b">Apply live is gated — set <code>FSR_APPLY_LIVE=1</code> in backend_live/.env and recreate the API container.</p>`
       : "";
     const runningNote = applyStatus === "running"
-      ? `<p class="meta" style="margin:6px 0 0">Live apply in progress… this page will refresh when it finishes.</p>`
+      ? `<p class="meta" style="margin:6px 0 0">Live apply in progress… polling every few seconds.</p>`
+      : "";
+    const failedNote = applyStatus === "failed"
+      ? `<p class="meta" style="margin:6px 0 0;color:#f0c14b">Last live apply failed — fix the error below, then retry Apply live.</p>`
       : "";
     bar.innerHTML = `
       <div><strong>Floor apply</strong>
@@ -380,6 +383,7 @@ unmapped settings: ${esc(String(unmapped))}${err}</div>`;
       <p class="meta" style="margin:6px 0 0">Writes confirmed assets/settings via eMaint CSV overlay (does not edit the worksheet file).</p>
       ${liveBlocked}
       ${runningNote}
+      ${failedNote}
       <div class="fsr-actions">
         <button type="button" class="dgs-v2-btn dgs-v2-btn-primary" data-act="dry-run" ${eligible ? "" : "disabled"}>Dry run</button>
         <button type="button" class="dgs-v2-btn" data-act="live-apply" ${eligible && liveEnabled ? "" : "disabled"}>Apply live…</button>
