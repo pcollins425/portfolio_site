@@ -35,6 +35,8 @@ services:
       ASSISTANT_SESSIONS_FILE: /app/data/assistant_sessions/assistant_sessions.json
       # FSR review Apply uses the same mounted checkout (override in .env if needed).
       FSR_APPLY_ROOT: ${FSR_APPLY_ROOT:-/workspace}
+      # Live Apply writes eMaint/SMM/projects — must be explicitly enabled in .env
+      FSR_APPLY_LIVE: ${FSR_APPLY_LIVE:-0}
     volumes:
       # Slot Server: C:/Users/DGS Slot Server/cursor-assistant — set ASSISTANT_WORKSPACE_HOST.
       - ${ASSISTANT_WORKSPACE_HOST:-../cursor-assistant}:/workspace:rw

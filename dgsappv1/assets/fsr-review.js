@@ -320,20 +320,45 @@
     return el;
   }
 
+  let applyPollGeneration = 0;
+
+  function sleep(ms) {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+  }
+
+  async function pollApplyStatus(caseId, { onTick, generation } = {}) {
+    const terminal = new Set(["applied", "failed", "none"]);
+    for (let i = 0; i < 180; i += 1) {
+      if (generation != null && generation !== applyPollGeneration) {
+        return null;
+      }
+      await sleep(2000);
+      const data = await api(`/api/fsr-review/cases/${caseId}`);
+      const st = String(data.apply_status || "none").toLowerCase();
+      if (typeof onTick === "function") onTick(data);
+      if (terminal.has(st)) {
+        return data;
+      }
+    }
+    throw new Error("Live apply still running after several minutes — refresh this page later");
+  }
+
   function renderApplyBar(data) {
     const bar = document.getElementById("apply-bar");
     if (!bar) return;
     const eligible = !!data.apply_eligible;
+    const liveEnabled = !!data.live_apply_enabled;
     const applyStatus = data.apply_status || "none";
     const log = data.apply_log || null;
     let logHtml = "";
     if (log) {
       const sample = log.asset_sample ? JSON.stringify(log.asset_sample) : "";
       const unmapped = (log.unmapped_settings || []).length;
+      const err = log.error ? `\nerror: ${esc(typeof log.error === "string" ? log.error : JSON.stringify(log.error))}` : "";
       logHtml = `<div class="fsr-apply-log">Last apply: ${esc(log.phase || applyStatus)}
 csv: ${esc(log.csv_path || "—")}
 assets: ${esc(sample || "—")}
-unmapped settings: ${esc(String(unmapped))}</div>`;
+unmapped settings: ${esc(String(unmapped))}${err}</div>`;
     }
     if (!eligible && applyStatus === "none" && !log) {
       bar.hidden = true;
@@ -342,14 +367,22 @@ unmapped settings: ${esc(String(unmapped))}</div>`;
     }
     bar.hidden = false;
     const reason = data.apply_eligible_reason || "";
+    const liveBlocked = eligible && !liveEnabled
+      ? `<p class="meta" style="margin:6px 0 0;color:#f0c14b">Apply live is gated — set <code>FSR_APPLY_LIVE=1</code> in backend_live/.env and recreate the API container.</p>`
+      : "";
+    const runningNote = applyStatus === "running"
+      ? `<p class="meta" style="margin:6px 0 0">Live apply in progress… this page will refresh when it finishes.</p>`
+      : "";
     bar.innerHTML = `
       <div><strong>Floor apply</strong>
         <span class="meta"> — status ${esc(applyStatus)}${eligible ? "" : ` (${esc(reason)})`}</span>
       </div>
       <p class="meta" style="margin:6px 0 0">Writes confirmed assets/settings via eMaint CSV overlay (does not edit the worksheet file).</p>
+      ${liveBlocked}
+      ${runningNote}
       <div class="fsr-actions">
         <button type="button" class="dgs-v2-btn dgs-v2-btn-primary" data-act="dry-run" ${eligible ? "" : "disabled"}>Dry run</button>
-        <button type="button" class="dgs-v2-btn" data-act="live-apply" ${eligible ? "" : "disabled"}>Apply live…</button>
+        <button type="button" class="dgs-v2-btn" data-act="live-apply" ${eligible && liveEnabled ? "" : "disabled"}>Apply live…</button>
       </div>
       ${logHtml}
     `;
@@ -371,7 +404,7 @@ unmapped settings: ${esc(String(unmapped))}</div>`;
         }
       });
     }
-    if (liveBtn && eligible) {
+    if (liveBtn && eligible && liveEnabled) {
       liveBtn.addEventListener("click", async () => {
         if (!window.confirm("Apply live to eMaint / SMM / projects? This writes production data.")) {
           return;
@@ -379,16 +412,41 @@ unmapped settings: ${esc(String(unmapped))}</div>`;
         try {
           showError("");
           liveBtn.disabled = true;
-          await api(`/api/fsr-review/cases/${data.case_id}/apply`, {
+          if (dryBtn) dryBtn.disabled = true;
+          const res = await api(`/api/fsr-review/cases/${data.case_id}/apply`, {
             method: "POST",
             body: JSON.stringify({ dry_run: false }),
           });
+          if (res.accepted || String(res.apply_status || "").toLowerCase() === "running") {
+            const gen = ++applyPollGeneration;
+            await pollApplyStatus(data.case_id, {
+              generation: gen,
+              onTick: (c) => {
+                const phase = (c.apply_log && c.apply_log.phase) || c.apply_status || "running";
+                bar.querySelector(".fsr-apply-progress")?.remove();
+                const note = document.createElement("p");
+                note.className = "meta fsr-apply-progress";
+                note.style.margin = "6px 0 0";
+                note.textContent = `Live apply: ${phase}…`;
+                bar.appendChild(note);
+              },
+            });
+          }
           await loadCase();
         } catch (err) {
           showError(err.message || String(err));
-          liveBtn.disabled = false;
+          await loadCase();
         }
       });
+    }
+
+    if (applyStatus === "running") {
+      const gen = ++applyPollGeneration;
+      pollApplyStatus(data.case_id, { generation: gen })
+        .then((c) => {
+          if (c && gen === applyPollGeneration) loadCase();
+        })
+        .catch((err) => showError(err.message || String(err)));
     }
   }
 

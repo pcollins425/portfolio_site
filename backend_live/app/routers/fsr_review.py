@@ -6,6 +6,7 @@ import json
 import os
 import subprocess
 import sys
+import threading
 from datetime import date, datetime
 from decimal import Decimal
 from pathlib import Path
@@ -22,6 +23,8 @@ from app.auth_deps import require_demo_user
 router = APIRouter(prefix="/api/fsr-review", tags=["fsr-review"])
 
 APPLYABLE_TYPES = frozenset({"asset_numbers", "footer_settings"})
+_APPLY_LOCK = threading.Lock()
+_APPLY_THREADS: dict[str, threading.Thread] = {}
 
 
 def _db() -> str:
@@ -200,6 +203,59 @@ def _apply_root_diagnostics() -> dict[str, Any]:
     }
 
 
+def _live_apply_enabled() -> bool:
+    return (os.environ.get("FSR_APPLY_LIVE") or "").strip().lower() in (
+        "1",
+        "true",
+        "yes",
+    )
+
+
+def _mark_apply_running(case_id: str, actor: str) -> None:
+    _execute(
+        """
+        UPDATE projects.fsr_review_case
+        SET apply_status = N'running',
+            applied_by = %s,
+            apply_log_json = %s
+        WHERE case_id = %s
+        """,
+        (
+            actor,
+            json.dumps(
+                {"phase": "queued", "dry_run": False, "steps": []},
+                ensure_ascii=True,
+            ),
+            case_id,
+        ),
+    )
+
+
+def _mark_apply_failed(case_id: str, actor: str, detail: Any) -> None:
+    _execute(
+        """
+        UPDATE projects.fsr_review_case
+        SET apply_status = N'failed',
+            applied_by = %s,
+            apply_log_json = %s
+        WHERE case_id = %s
+        """,
+        (
+            actor,
+            json.dumps(
+                {
+                    "phase": "failed",
+                    "dry_run": False,
+                    "error": detail,
+                },
+                ensure_ascii=True,
+                default=str,
+            ),
+            case_id,
+        ),
+    )
+
+
 def _run_apply_subprocess(case_id: str, *, dry_run: bool, actor: str) -> dict[str, Any]:
     root = _resolve_apply_root()
     if not root:
@@ -218,11 +274,7 @@ def _run_apply_subprocess(case_id: str, *, dry_run: bool, actor: str) -> dict[st
                 "diagnostics": _apply_root_diagnostics(),
             },
         )
-    if not dry_run and (os.environ.get("FSR_APPLY_LIVE") or "").strip().lower() not in (
-        "1",
-        "true",
-        "yes",
-    ):
+    if not dry_run and not _live_apply_enabled():
         raise HTTPException(
             status_code=403,
             detail="Live apply disabled — set FSR_APPLY_LIVE=1 in backend_live/.env and recreate the container",
@@ -279,6 +331,33 @@ def _run_apply_subprocess(case_id: str, *, dry_run: bool, actor: str) -> dict[st
     return parsed or {"ok": True, "raw_stdout": stdout[-2000:], "apply_root": root}
 
 
+def _start_live_apply_background(case_id: str, actor: str) -> None:
+    """Run live apply off the request thread so Cloudflare/proxy timeouts don't kill it."""
+
+    def _worker() -> None:
+        try:
+            _run_apply_subprocess(case_id, dry_run=False, actor=actor)
+        except HTTPException as exc:
+            _mark_apply_failed(case_id, actor, exc.detail)
+        except Exception as exc:  # noqa: BLE001 — surface any background failure
+            _mark_apply_failed(case_id, actor, str(exc))
+        finally:
+            with _APPLY_LOCK:
+                _APPLY_THREADS.pop(case_id, None)
+
+    with _APPLY_LOCK:
+        existing = _APPLY_THREADS.get(case_id)
+        if existing and existing.is_alive():
+            return
+        thread = threading.Thread(
+            target=_worker,
+            name=f"fsr-apply-{case_id[:8]}",
+            daemon=True,
+        )
+        _APPLY_THREADS[case_id] = thread
+        thread.start()
+
+
 @router.get("/permissions")
 def fsr_review_permissions(
     user: Annotated[dict[str, Any] | None, Depends(require_demo_user)] = None,
@@ -333,6 +412,7 @@ def get_case(
     eligible, reason = _case_apply_eligible(case, issues)
     case["apply_eligible"] = eligible
     case["apply_eligible_reason"] = reason
+    case["live_apply_enabled"] = _live_apply_enabled()
     return case
 
 
@@ -350,12 +430,38 @@ def apply_case(
             detail=case.get("apply_eligible_reason") or "Case not eligible to apply",
         )
     actor = _actor(user)
-    result = _run_apply_subprocess(case_id, dry_run=body.dry_run, actor=actor)
+
+    # Dry-run stays synchronous (usually seconds). Live apply is backgrounded so
+    # Cloudflare / reverse-proxy idle timeouts don't abort eMaint → SMM → projects.
+    if body.dry_run:
+        result = _run_apply_subprocess(case_id, dry_run=True, actor=actor)
+        refreshed = get_case(case_id, user=user)
+        return {
+            "ok": True,
+            "dry_run": True,
+            "accepted": False,
+            "result": result,
+            "case": refreshed,
+        }
+
+    if not _live_apply_enabled():
+        raise HTTPException(
+            status_code=403,
+            detail="Live apply disabled — set FSR_APPLY_LIVE=1 in backend_live/.env and recreate the container",
+        )
+    if not _resolve_apply_root():
+        # Surface the same diagnostics as the sync path before queueing.
+        _run_apply_subprocess(case_id, dry_run=False, actor=actor)
+
+    _mark_apply_running(case_id, actor)
+    _start_live_apply_background(case_id, actor)
     refreshed = get_case(case_id, user=user)
     return {
         "ok": True,
-        "dry_run": body.dry_run,
-        "result": result,
+        "dry_run": False,
+        "accepted": True,
+        "apply_status": "running",
+        "message": "Live apply started — poll this case until apply_status is applied or failed",
         "case": refreshed,
     }
 
