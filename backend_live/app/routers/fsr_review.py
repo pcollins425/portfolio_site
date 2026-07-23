@@ -256,6 +256,32 @@ def _mark_apply_failed(case_id: str, actor: str, detail: Any) -> None:
     )
 
 
+def _apply_thread_alive(case_id: str) -> bool:
+    with _APPLY_LOCK:
+        thread = _APPLY_THREADS.get(case_id)
+        return bool(thread and thread.is_alive())
+
+
+def _reclaim_orphaned_running(case_id: str, case: dict[str, Any]) -> dict[str, Any]:
+    """If apply_status=running but this process has no worker, mark failed.
+
+    Container recreate / crash leaves rows stuck in running and the UI polls forever.
+    """
+    if str(case.get("apply_status") or "").lower() != "running":
+        return case
+    if _apply_thread_alive(case_id):
+        return case
+    actor = str(case.get("applied_by") or "system")
+    detail = (
+        "Apply interrupted — no active worker in this API process "
+        "(container restart or crash). Safe to retry Apply live."
+    )
+    _mark_apply_failed(case_id, actor, detail)
+    case["apply_status"] = "failed"
+    case["apply_log"] = {"phase": "failed", "dry_run": False, "error": detail}
+    return case
+
+
 def _run_apply_subprocess(case_id: str, *, dry_run: bool, actor: str) -> dict[str, Any]:
     root = _resolve_apply_root()
     if not root:
@@ -392,6 +418,7 @@ def get_case(
     case["apply_log"] = _parse_json(case.pop("apply_log_json", None))
     if case.get("apply_status") is None:
         case["apply_status"] = "none"
+    case = _reclaim_orphaned_running(case_id, case)
     issues_raw = _query(
         """
         SELECT issue_id, case_id, issue_type, title, status, payload_json,
