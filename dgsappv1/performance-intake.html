@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Performance Intake Confirm — DGS Application</title>
+  <link rel="stylesheet" href="assets/dgs.css" />
+  <link rel="stylesheet" href="assets/dgs-v2.css" />
+  <style>
+    body.dgs-perf-intake.dgs-app { height: 100vh; overflow: hidden; color-scheme: dark; }
+    body.dgs-perf-intake .dgs-v2-main {
+      display: flex; flex-direction: column; padding: 24px 28px 32px; gap: 18px;
+      background: var(--dgs-v2-bg, #0e1117); color: var(--dgs-v2-text, #c5cdd9);
+      flex: 1; min-height: 0; overflow-y: auto;
+    }
+    .perf-card {
+      border: 1px solid rgba(255,255,255,.12); border-radius: 10px; padding: 16px 18px;
+      background: rgba(0,0,0,.2); max-width: 640px;
+    }
+    .perf-card label { display: flex; flex-direction: column; gap: 4px; font-size: .85rem; color: #9aa3b2; margin: 0 0 12px; }
+    .perf-card input, .perf-card select, .perf-card textarea {
+      background: #12161e; color: #e8ecf2; border: 1px solid rgba(255,255,255,.15);
+      border-radius: 6px; padding: 8px 10px; font: inherit;
+    }
+    .perf-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+    .perf-actions .dgs-v2-btn-primary { background: #1967d2; color: #fff; border: 0; padding: 8px 14px; border-radius: 6px; cursor: pointer; }
+    .perf-actions button { padding: 8px 14px; border-radius: 6px; cursor: pointer; }
+    .perf-status { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: .75rem; background: rgba(255,255,255,.08); }
+    .perf-status.open { background: rgba(250, 180, 40, .2); color: #f0c14b; }
+    .perf-status.confirmed { background: rgba(46, 160, 67, .2); color: #3dd68c; }
+    .perf-status.revoked { background: rgba(140,140,140,.25); color: #b0b0b0; }
+    .perf-meta { color: #9aa3b2; font-size: .9rem; margin: 0 0 12px; }
+  </style>
+</head>
+<body class="dgs-app dgs-perf-intake">
+  <aside class="dgs-sidebar" id="dgs-sidebar">
+    <div class="dgs-sidebar-brand">
+      <div class="dgs-brand-text">
+        <span class="dgs-brand-eyebrow">Dynamic Gaming Solutions</span>
+        <span class="dgs-brand-title">DGS Application</span>
+      </div>
+      <button type="button" id="dgs-rail-toggle" class="dgs-rail-toggle" aria-expanded="true" title="Collapse navigation">◧</button>
+    </div>
+    <nav class="dgs-sidebar-nav" id="dgs-app-nav" aria-label="Application"></nav>
+    <div class="dgs-sidebar-account" id="sidebar-account" hidden>
+      <span class="dgs-sidebar-user" id="user-label"></span>
+      <button type="button" id="btn-sign-out" class="dgs-sidebar-signout">Sign out</button>
+    </div>
+  </aside>
+  <div id="dgs-nav-flyout" class="dgs-nav-flyout" hidden></div>
+
+  <div class="dgs-main dgs-v2-main">
+    <header class="dgs-v2-page-header">
+      <div>
+        <p class="dgs-v2-eyebrow">Operations</p>
+        <h1>Performance Intake</h1>
+        <p class="dgs-v2-subtitle">Confirm casino and reporting period (email link only — not in nav)</p>
+      </div>
+    </header>
+    <div id="error-box" class="dgs-v2-error" hidden></div>
+    <div id="root"></div>
+  </div>
+
+  <script src="assets/auth.js"></script>
+  <script src="assets/shell.js"></script>
+  <script src="assets/performance-intake.js"></script>
+  <script>
+    DGS.boot({ page: "home" }).then(() => {
+      if (window.DGSPerfIntake) DGSPerfIntake.init();
+    });
+  </script>
+</body>
+</html>
