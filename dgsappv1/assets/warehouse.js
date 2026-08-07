@@ -87,6 +87,16 @@
     return String(property || "").replace(/\s+Warehouse$/i, "").trim() || property;
   }
 
+  function columnDisplayName(propertyOrCol) {
+    if (propertyOrCol && typeof propertyOrCol === "object") {
+      if (propertyOrCol.label) return propertyOrCol.label;
+      return shortWarehouseName(propertyOrCol.property);
+    }
+    const col = state.pivot?.columns?.find((c) => c.property === propertyOrCol);
+    if (col?.label) return col.label;
+    return shortWarehouseName(propertyOrCol);
+  }
+
   function assetHubHref(assetId) {
     return (window.DGSAssetNav && DGSAssetNav.hubHref(assetId)) || "";
   }
@@ -101,7 +111,7 @@
         return `
         <button type="button" class="dgs-v2-wh-summary-card${active ? " active" : ""}" data-property="${esc(col.property)}">
           <span class="dgs-v2-wh-summary-card__count">${fmtNum(col.total)}</span>
-          <span class="dgs-v2-wh-summary-card__label">${esc(col.property)}</span>
+          <span class="dgs-v2-wh-summary-card__label">${esc(columnDisplayName(col))}</span>
         </button>`;
       })
       .join("");
@@ -153,7 +163,7 @@
         const highlight = state.highlightProperty === col.property ? " pivot-col-highlight" : "";
         return `
         <th class="pivot-col-header${highlight}" data-property="${esc(col.property)}" scope="col">
-          <span class="pivot-col-name">${esc(shortWarehouseName(col.property))}</span>
+          <span class="pivot-col-name">${esc(columnDisplayName(col))}</span>
           <span class="pivot-col-total">${fmtNum(col.total)}</span>
         </th>`;
       })
@@ -329,7 +339,7 @@
       manufacturer: dataset.manufacturer,
       cabinet: dataset.cabinet,
       property: prop,
-      title: `${label} × ${shortWarehouseName(prop)}`,
+      title: `${label} × ${columnDisplayName(prop)}`,
       subtitle: "Row = cabinet · column = warehouse",
     });
   }
@@ -355,7 +365,7 @@
     openDrill("column", {
       filter: { property },
       property,
-      title: property,
+      title: columnDisplayName(property),
       subtitle: "All serials in this warehouse",
     });
   }

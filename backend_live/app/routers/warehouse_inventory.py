@@ -18,8 +18,29 @@ from app import mssql
 
 router = APIRouter(prefix="/api/warehouse-inventory", tags=["warehouse-inventory"])
 
+# Locked column order (live count order as of 2026-08-07) with To Be Refurbished
+# wedged between OKC and Western. Unknown properties append alphabetically.
+_WAREHOUSE_COLUMN_ORDER = (
+    "OKC Warehouse",
+    "To Be Refurbished",
+    "Western Warehouse",
+    "California Warehouse",
+    "Minnesota Warehouse",
+    "Spokane Warehouse",
+    "Bismarck Warehouse",
+    "Omaha Warehouse",
+)
+
+# Short UI / Excel labels; API `property` stays the eMaint PROPERTY value.
+_PROPERTY_LABELS = {
+    "To Be Refurbished": "To Be Refurb",
+}
+
 _WHERE_WAREHOUSE = """
-    LOWER(LTRIM(RTRIM(ISNULL(property, N'')))) LIKE N'%warehouse%'
+    (
+        LOWER(LTRIM(RTRIM(ISNULL(property, N'')))) LIKE N'%warehouse%'
+        OR LTRIM(RTRIM(ISNULL(property, N''))) = N'To Be Refurbished'
+    )
 """
 
 
@@ -63,6 +84,27 @@ def _cabinet_label(manufacturer: str | None, cabinet: str | None) -> str:
     return m or c or "—"
 
 
+def _column_label(property_name: str) -> str:
+    return _PROPERTY_LABELS.get(property_name, property_name)
+
+
+def _order_warehouse_columns(warehouses: list[dict]) -> list[dict]:
+    """Apply static column order; attach display `label` for each property."""
+    by_prop = {w["property"]: dict(w) for w in warehouses}
+    ordered: list[dict] = []
+    for name in _WAREHOUSE_COLUMN_ORDER:
+        row = by_prop.pop(name, None)
+        if row is None:
+            continue
+        row["label"] = _column_label(name)
+        ordered.append(row)
+    for name in sorted(by_prop.keys(), key=lambda s: s.casefold()):
+        row = by_prop[name]
+        row["label"] = _column_label(name)
+        ordered.append(row)
+    return ordered
+
+
 def _fetch_warehouse_totals() -> list[dict]:
     rows = _field_query(
         f"""
@@ -70,10 +112,10 @@ def _fetch_warehouse_totals() -> list[dict]:
         FROM inventory.compinfo_landing
         WHERE {_WHERE_WAREHOUSE}
         GROUP BY LTRIM(RTRIM(property))
-        ORDER BY COUNT(*) DESC, LTRIM(RTRIM(property))
         """
     )
-    return [{"property": r["property"], "total": int(r["total"])} for r in rows]
+    warehouses = [{"property": r["property"], "total": int(r["total"])} for r in rows]
+    return _order_warehouse_columns(warehouses)
 
 
 def _sort_key(value: str | None) -> str:
@@ -170,7 +212,7 @@ def _pivot_workbook(data: dict) -> bytes:
     ws.merge_cells(f"A2:{last_letter}2")
 
     header_row = 4
-    headers = ["Manufacturer", "Cabinet"] + [col["property"] for col in columns] + ["Total"]
+    headers = ["Manufacturer", "Cabinet"] + [col.get("label") or col["property"] for col in columns] + ["Total"]
     for col_idx, label in enumerate(headers, start=1):
         cell = ws.cell(row=header_row, column=col_idx, value=label)
         cell.font = header_font
@@ -243,7 +285,7 @@ def _pivot_workbook(data: dict) -> bytes:
 
     widths = {"A": 22, "B": 28}
     for col_idx, col in enumerate(columns, start=3):
-        widths[get_column_letter(col_idx)] = max(12, min(18, len(col["property"]) + 2))
+        widths[get_column_letter(col_idx)] = max(12, min(18, len(col.get("label") or col["property"]) + 2))
     widths[last_letter] = 10
     for letter, width in widths.items():
         ws.column_dimensions[letter].width = width
