@@ -206,7 +206,14 @@ INNER JOIN month_mach AS prev
  AND DATEDIFF(month, prev.ym, cur.ym) = 1
 WHERE cur.ym >= %s
   AND cur.ym < %s
-  AND prev.coin / NULLIF(prev.dof, 0) > 0
+  AND prev.coin / NULLIF(prev.dof, 0) >= {COIN_DAY_FLOOR}
+  AND (
+        (
+          cur.coin / NULLIF(cur.dof, 0) >= {RATIO_CUTOFF} * (prev.coin / NULLIF(prev.dof, 0))
+          AND cur.coin / NULLIF(cur.dof, 0) >= {COIN_DAY_FLOOR}
+        )
+     OR cur.coin / NULLIF(cur.dof, 0) <= (prev.coin / NULLIF(prev.dof, 0)) / {RATIO_CUTOFF}
+  )
 """
 
 SHORT_SQL = f"""
@@ -276,7 +283,11 @@ INNER JOIN full_m AS p
   ON p.casino = s.casino
  AND p.serial = s.serial
  AND DATEDIFF(month, p.ym, s.ym) = 1
-WHERE p.coin / NULLIF(p.dof, 0) > 0
+WHERE p.coin / NULLIF(p.dof, 0) >= {COIN_DAY_FLOOR}
+  AND (
+        s.coin_day >= {RATIO_CUTOFF} * (p.coin / NULLIF(p.dof, 0))
+     OR s.coin_day <= (p.coin / NULLIF(p.dof, 0)) / {RATIO_CUTOFF}
+  )
 """
 
 ZERO_SQL = f"""
@@ -344,12 +355,64 @@ def _ratio_row(
 
 
 _SUMMARY_TTL_SEC = 60.0
+_SCAN_TTL_SEC = 900.0
 _summary_cache: dict[str, Any] = {"key": None, "at": 0.0, "data": None}
+_scan_cache: dict[str, Any] = {"cur_start": None, "cur_end": None, "at": 0.0, "flags": None}
 
 
 def _invalidate_summary() -> None:
     _summary_cache["key"] = None
     _summary_cache["data"] = None
+
+
+def _ym_date(ym: str) -> date | None:
+    raw = (ym or "").strip()[:7]
+    if len(raw) < 7:
+        return None
+    try:
+        return _month_start(raw)
+    except HTTPException:
+        return None
+
+
+def _remember_scan(cur_start: date, cur_end: date, flags: list[dict[str, Any]]) -> None:
+    existing = _scan_cache.get("flags")
+    cs, ce = _scan_cache.get("cur_start"), _scan_cache.get("cur_end")
+    if existing is not None and cs is not None and ce is not None:
+        if cur_start >= cs and cur_end <= ce:
+            return
+    _scan_cache["cur_start"] = cur_start
+    _scan_cache["cur_end"] = cur_end
+    _scan_cache["at"] = time.monotonic()
+    _scan_cache["flags"] = flags
+
+
+def _filter_cached_flags(cur_start: date, cur_end: date) -> list[dict[str, Any]] | None:
+    flags = _scan_cache.get("flags")
+    cs, ce = _scan_cache.get("cur_start"), _scan_cache.get("cur_end")
+    if flags is None or cs is None or ce is None:
+        return None
+    if time.monotonic() - float(_scan_cache.get("at") or 0) >= _SCAN_TTL_SEC:
+        return None
+    if cur_start < cs or cur_end > ce:
+        return None
+    out: list[dict[str, Any]] = []
+    for flag in flags:
+        ym = _ym_date(str(flag.get("ym") or ""))
+        if ym is None:
+            continue
+        if cur_start <= ym < cur_end:
+            out.append(flag)
+    return out
+
+
+def _flag_rows_cached(data_start: date, data_end: date, cur_start: date, cur_end: date) -> list[dict[str, Any]]:
+    hit = _filter_cached_flags(cur_start, cur_end)
+    if hit is not None:
+        return hit
+    flags = _flag_rows(data_start, data_end, cur_start, cur_end)
+    _remember_scan(cur_start, cur_end, flags)
+    return flags
 
 
 def _flag_rows(data_start: date, data_end: date, cur_start: date, cur_end: date) -> list[dict[str, Any]]:
@@ -420,7 +483,7 @@ def _flag_rows(data_start: date, data_end: date, cur_start: date, cur_end: date)
 
 def _scan_month(target: date) -> list[dict[str, Any]]:
     nxt = _add_months(target, 1)
-    return _flag_rows(_prev_month_start(target), nxt, target, nxt)
+    return _flag_rows_cached(_prev_month_start(target), nxt, target, nxt)
 
 
 def _merge_resolution(flag: dict[str, Any], stored: dict[str, Any] | None) -> dict[str, Any]:
@@ -476,7 +539,7 @@ def queue_summary(*, through: str, months: int | None = None) -> dict[str, Any]:
     if _summary_cache.get("key") == key and _summary_cache.get("data") and now - float(_summary_cache.get("at") or 0) < _SUMMARY_TTL_SEC:
         return _summary_cache["data"]
 
-    live = _flag_rows(_prev_month_start(start_m), end, start_m, end)
+    live = _flag_rows_cached(_prev_month_start(start_m), end, start_m, end)
     store = _load_store()
     saved = store["flags"]
     by_month: dict[str, dict[str, int]] = defaultdict(lambda: {"open": 0, "high": 0, "low": 0})

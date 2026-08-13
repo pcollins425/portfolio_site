@@ -112,10 +112,7 @@ function NeedsLookRail({
                 <button
                   key={y.year}
                   type="button"
-                  onClick={() => {
-                    setPickedYear(y.year);
-                    if (focus.slice(0, 4) !== y.year && y.months[0]) onMonth(y.months[0].month);
-                  }}
+                  onClick={() => setPickedYear(y.year)}
                   className={`${CHIP} ${on ? CHIP_ON : CHIP_OFF}`}
                 >
                   {y.year}
@@ -243,12 +240,12 @@ export default function AnalystPage({
 
   useEffect(() => {
     if (summary) return;
-    const through = periods[0]?.slice(0, 7) || focus;
+    const through = periods[0]?.slice(0, 7);
     if (!through) return;
     fetchJson<AnalystSummary>(`/api/analyst/summary?through=${encodeURIComponent(through)}`)
       .then(setOwnSummary)
       .catch(() => setOwnSummary(null));
-  }, [summary, periods, focus]);
+  }, [summary, periods]);
 
   const selected = useMemo(
     () => data?.flags.find((f) => f.id === selectedId) ?? null,
