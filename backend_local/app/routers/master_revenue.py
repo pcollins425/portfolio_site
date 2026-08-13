@@ -230,7 +230,8 @@ ORDER BY d DESC
 
 @router.get("/analyst/sanity")
 def analyst_sanity():
-    return {"source": "live", "flags": []}
+    """Deprecated placeholder — use GET /api/analyst/queue."""
+    return {"source": "live", "flags": [], "deprecated": True, "use": "/api/analyst/queue"}
 
 
 @router.get("/finance/casinos-latest")

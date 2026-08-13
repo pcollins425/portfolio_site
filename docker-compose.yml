@@ -33,6 +33,7 @@ services:
     environment:
       ASSISTANT_WORKSPACE: /workspace
       ASSISTANT_SESSIONS_FILE: /app/data/assistant_sessions/assistant_sessions.json
+      ANALYST_QUEUE_STORE: /app/data/assistant_sessions/analyst_queue.json
       # FSR review Apply uses the same mounted checkout (override in .env if needed).
       FSR_APPLY_ROOT: ${FSR_APPLY_ROOT:-/workspace}
       # Live Apply writes eMaint/SMM/projects — must be explicitly enabled in .env
