@@ -18,6 +18,18 @@ class ResolveBody(BaseModel):
     note: str
 
 
+@router.get("/summary")
+def analyst_summary(
+    through: str | None = Query(None, description="YYYY-MM latest month to include"),
+    months: int = Query(12, ge=1, le=24),
+    user: Annotated[dict[str, Any] | None, Depends(require_demo_user)] = None,
+):
+    q.assert_paul(user)
+    if not through or len(through.strip()) < 7:
+        raise HTTPException(status_code=400, detail="through=YYYY-MM required")
+    return q.queue_summary(through=through.strip()[:7], months=months)
+
+
 @router.get("/queue")
 def analyst_queue(
     month: str | None = Query(None, description="YYYY-MM focus month"),

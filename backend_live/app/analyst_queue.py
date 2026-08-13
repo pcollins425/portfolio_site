@@ -8,6 +8,8 @@ from __future__ import annotations
 import json
 import os
 import re
+import time
+from collections import defaultdict
 from datetime import date, datetime
 from pathlib import Path
 from typing import Any
@@ -141,9 +143,14 @@ def _month_start(ym: str) -> date:
 
 
 def _prev_month_start(d: date) -> date:
-    if d.month == 1:
-        return date(d.year - 1, 12, 1)
-    return date(d.year, d.month - 1, 1)
+    return _add_months(d, -1)
+
+
+def _add_months(d: date, n: int) -> date:
+    m = d.month - 1 + n
+    y = d.year + m // 12
+    m = m % 12 + 1
+    return date(y, m, 1)
 
 
 def _ym(d: date) -> str:
@@ -197,7 +204,8 @@ INNER JOIN month_mach AS prev
   ON prev.casino = cur.casino
  AND prev.serial = cur.serial
  AND DATEDIFF(month, prev.ym, cur.ym) = 1
-WHERE cur.ym = %s
+WHERE cur.ym >= %s
+  AND cur.ym < %s
   AND prev.coin / NULLIF(prev.dof, 0) > 0
 """
 
@@ -244,7 +252,8 @@ short_r AS (
         win / NULLIF(dof, 0) AS win_day
     FROM base
     WHERE dof <= {SHORT_DOF}
-      AND DATEFROMPARTS(YEAR(d), MONTH(d), 1) = %s
+      AND DATEFROMPARTS(YEAR(d), MONTH(d), 1) >= %s
+      AND DATEFROMPARTS(YEAR(d), MONTH(d), 1) < %s
 )
 SELECT
     s.casino,
@@ -334,12 +343,19 @@ def _ratio_row(
     }
 
 
-def _scan_month(target: date) -> list[dict[str, Any]]:
-    prev = _prev_month_start(target)
-    window_end = date(target.year + (1 if target.month == 12 else 0), 1 if target.month == 12 else target.month + 1, 1)
+_SUMMARY_TTL_SEC = 60.0
+_summary_cache: dict[str, Any] = {"key": None, "at": 0.0, "data": None}
+
+
+def _invalidate_summary() -> None:
+    _summary_cache["key"] = None
+    _summary_cache["data"] = None
+
+
+def _flag_rows(data_start: date, data_end: date, cur_start: date, cur_end: date) -> list[dict[str, Any]]:
     flags: list[dict[str, Any]] = []
 
-    for row in _query(FULL_SQL, (prev, window_end, target)):
+    for row in _query(FULL_SQL, (data_start, data_end, cur_start, cur_end)):
         prev_day = _f(row.get("prev_coin_day"))
         cur_day = _f(row.get("coin_day"))
         if prev_day < COIN_DAY_FLOOR:
@@ -352,7 +368,7 @@ def _scan_month(target: date) -> list[dict[str, Any]]:
         elif ratio <= (1.0 / RATIO_CUTOFF):
             flags.append(_ratio_row(rule="coin_low", side="low", row=row))
 
-    for row in _query(SHORT_SQL, (prev, window_end, target)):
+    for row in _query(SHORT_SQL, (data_start, data_end, cur_start, cur_end)):
         prev_day = _f(row.get("prev_coin_day"))
         cur_day = _f(row.get("coin_day"))
         if prev_day < COIN_DAY_FLOOR or prev_day <= 0:
@@ -364,10 +380,10 @@ def _scan_month(target: date) -> list[dict[str, Any]]:
         elif ratio <= (1.0 / RATIO_CUTOFF):
             flags.append(_ratio_row(rule="short_low", side="low", row=row, extra=extra))
 
-    for row in _query(ZERO_SQL, (target, window_end)):
+    for row in _query(ZERO_SQL, (cur_start, cur_end)):
         casino = str(row.get("casino") or "").strip() or "?"
         serial = str(row.get("serial") or "").strip() or "?"
-        ym = str(row.get("ym") or _ym(target)).strip()[:7]
+        ym = str(row.get("ym") or "").strip()[:7]
         theme = str(row.get("theme") or "").strip()
         flags.append(
             {
@@ -402,6 +418,11 @@ def _scan_month(target: date) -> list[dict[str, Any]]:
     return flags
 
 
+def _scan_month(target: date) -> list[dict[str, Any]]:
+    nxt = _add_months(target, 1)
+    return _flag_rows(_prev_month_start(target), nxt, target, nxt)
+
+
 def _merge_resolution(flag: dict[str, Any], stored: dict[str, Any] | None) -> dict[str, Any]:
     if not stored:
         return flag
@@ -412,6 +433,56 @@ def _merge_resolution(flag: dict[str, Any], stored: dict[str, Any] | None) -> di
     out["resolved_at"] = stored.get("resolved_at")
     out["resolved_by"] = stored.get("resolved_by")
     return out
+
+
+def queue_summary(*, through: str, months: int = 12) -> dict[str, Any]:
+    n = max(1, min(int(months), 24))
+    end_m = _month_start(through)
+    start_m = _add_months(end_m, 1 - n)
+    end = _add_months(end_m, 1)
+    key = f"{_ym(start_m)}:{_ym(end_m)}:{n}"
+    now = time.monotonic()
+    if _summary_cache.get("key") == key and _summary_cache.get("data") and now - float(_summary_cache.get("at") or 0) < _SUMMARY_TTL_SEC:
+        return _summary_cache["data"]
+
+    live = _flag_rows(_prev_month_start(start_m), end, start_m, end)
+    store = _load_store()
+    saved = store["flags"]
+    by_month: dict[str, dict[str, int]] = defaultdict(lambda: {"open": 0, "high": 0, "low": 0})
+    for flag in live:
+        merged = _merge_resolution(flag, saved.get(flag["id"]))
+        if (merged.get("status") or "open") != "open":
+            continue
+        ym = str(merged.get("ym") or "")[:7]
+        if not ym:
+            continue
+        by_month[ym]["open"] += 1
+        if merged.get("side") == "high":
+            by_month[ym]["high"] += 1
+        else:
+            by_month[ym]["low"] += 1
+
+    rail = []
+    cursor = end_m
+    for _ in range(n):
+        ym = _ym(cursor)
+        counts = by_month.get(ym) or {"open": 0, "high": 0, "low": 0}
+        if counts["open"] > 0:
+            rail.append({"month": ym, **counts})
+        cursor = _add_months(cursor, -1)
+
+    payload = {
+        "source": "live",
+        "through": _ym(end_m),
+        "months_scanned": n,
+        "months_with_open": len(rail),
+        "total_open": sum(r["open"] for r in rail),
+        "months": rail,
+    }
+    _summary_cache["key"] = key
+    _summary_cache["at"] = now
+    _summary_cache["data"] = payload
+    return payload
 
 
 def queue_for_month(month: str, *, status: str = "open") -> dict[str, Any]:
@@ -470,4 +541,5 @@ def resolve_flag(
         "resolved_by": who,
     }
     _save_store(store)
+    _invalidate_summary()
     return store["flags"][fid]

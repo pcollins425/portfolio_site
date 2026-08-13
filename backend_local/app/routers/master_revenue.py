@@ -250,6 +250,26 @@ def analyst_ping():
     return {"ok": True, "queue": "/api/analyst/queue"}
 
 
+@router.get("/analyst/summary")
+def analyst_summary(
+    through: str | None = Query(None, description="YYYY-MM latest month to include"),
+    months: int = Query(12, ge=1, le=24),
+    user: Annotated[dict[str, Any] | None, Depends(require_demo_user)] = None,
+):
+    aq.assert_paul(user)
+    if not through or len(through.strip()) < 7:
+        periods = _distinct_periods(1)
+        if not periods:
+            raise HTTPException(status_code=404, detail="No dated rows in revenue façade view")
+        through = periods[0].isoformat()[:7]
+    try:
+        return aq.queue_summary(through=through.strip()[:7], months=months)
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"analyst summary failed: {exc}") from exc
+
+
 @router.get("/analyst/queue")
 def analyst_queue(
     month: str | None = Query(None, description="YYYY-MM focus month"),

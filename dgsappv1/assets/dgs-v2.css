@@ -2541,6 +2541,9 @@ body.dgs-software-vault-v2 .dgs-v2-layout-dialog-actions {
 }
 
 .dgs-v2-view-toggle button {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
   padding: 8px 18px;
   border: none;
   border-radius: 9px;
@@ -2560,6 +2563,18 @@ body.dgs-software-vault-v2 .dgs-v2-layout-dialog-actions {
 .dgs-v2-view-toggle button.active {
   background: var(--dgs-v2-accent-bg);
   color: var(--dgs-v2-accent);
+}
+
+.dgs-analyst-badge {
+  min-width: 1.25rem;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: rgba(251, 191, 36, 0.18);
+  color: #fbbf24;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.4;
+  font-variant-numeric: tabular-nums;
 }
 
 .dgs-prj-view {

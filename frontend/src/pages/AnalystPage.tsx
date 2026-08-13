@@ -25,6 +25,20 @@ type FlagRow = {
   note?: string | null;
 };
 
+export type AnalystMonthCount = {
+  month: string;
+  open: number;
+  high: number;
+  low: number;
+};
+
+export type AnalystSummary = {
+  through: string;
+  months_with_open: number;
+  total_open: number;
+  months: AnalystMonthCount[];
+};
+
 type QueuePayload = {
   source: string;
   month: string;
@@ -60,9 +74,15 @@ function fmtDay(v: number | null | undefined): string {
   return fmtUsd(v);
 }
 
-export default function AnalystPage() {
+export default function AnalystPage({
+  summary = null,
+  onResolved = () => {},
+}: {
+  summary?: AnalystSummary | null;
+  onResolved?: () => void;
+}) {
   const t = useDashboardTheme();
-  const { month, periods } = useDashboardMonth();
+  const { month, periods, setMonth } = useDashboardMonth();
   const focus = month || periods[0]?.slice(0, 7) || "";
   const [statusFilter, setStatusFilter] = useState<"open" | "all">("open");
   const [data, setData] = useState<QueuePayload | null>(null);
@@ -72,6 +92,8 @@ export default function AnalystPage() {
   const [note, setNote] = useState("");
   const [saving, setSaving] = useState(false);
   const [saveErr, setSaveErr] = useState<string | null>(null);
+  const [ownSummary, setOwnSummary] = useState<AnalystSummary | null>(null);
+  const rail = summary ?? ownSummary;
 
   const reload = (ym: string, filter: "open" | "all") => {
     setLoading(true);
@@ -96,6 +118,15 @@ export default function AnalystPage() {
     reload(focus, statusFilter);
   }, [focus, statusFilter]);
 
+  useEffect(() => {
+    if (summary) return;
+    const through = periods[0]?.slice(0, 7) || focus;
+    if (!through) return;
+    fetchJson<AnalystSummary>(`/api/analyst/summary?through=${encodeURIComponent(through)}&months=12`)
+      .then(setOwnSummary)
+      .catch(() => setOwnSummary(null));
+  }, [summary, periods, focus]);
+
   const selected = useMemo(
     () => data?.flags.find((f) => f.id === selectedId) ?? null,
     [data, selectedId],
@@ -113,6 +144,15 @@ export default function AnalystPage() {
     try {
       await postJson("/api/analyst/queue/resolve", { id: selected.id, status, note });
       setNote("");
+      onResolved();
+      if (!summary) {
+        const through = periods[0]?.slice(0, 7) || focus;
+        if (through) {
+          fetchJson<AnalystSummary>(`/api/analyst/summary?through=${encodeURIComponent(through)}&months=12`)
+            .then(setOwnSummary)
+            .catch(() => setOwnSummary(null));
+        }
+      }
       reload(focus, statusFilter);
     } catch (e) {
       setSaveErr(e instanceof Error ? e.message : String(e));
@@ -152,6 +192,30 @@ export default function AnalystPage() {
           </select>
         </label>
       </section>
+
+      {!forbidden && (rail?.months?.length || 0) > 0 && (
+        <div className="flex flex-wrap items-center gap-2">
+          <span className={`text-xs font-medium uppercase tracking-wide ${t.code}`}>Needs a look</span>
+          {rail!.months.map((m) => {
+            const active = m.month === focus;
+            return (
+              <button
+                key={m.month}
+                type="button"
+                onClick={() => setMonth(m.month)}
+                className={`rounded-lg border px-2.5 py-1.5 text-sm font-mono ${
+                  active
+                    ? "border-[#6eb5ff]/40 bg-[#6eb5ff]/15 text-[#f3f5f9]"
+                    : "border-white/10 bg-[#141922] text-[#c5cdd9] hover:border-white/20"
+                }`}
+              >
+                {m.month}
+                <span className={active ? "ml-2 text-[#6eb5ff]" : "ml-2 text-amber-300"}>{m.open}</span>
+              </button>
+            );
+          })}
+        </div>
+      )}
 
       {!forbidden && data && (
         <div className="grid gap-4 sm:grid-cols-3">

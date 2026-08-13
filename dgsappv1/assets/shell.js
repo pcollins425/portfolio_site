@@ -63,6 +63,8 @@
     { route: "/performance", label: "Performance" },
   ];
 
+  let analystOpenMonths = 0;
+
   let dashboardBundlePromise = null;
   const MOBILE_TOP_NAV_MQ = window.matchMedia("(max-width: 900px)");
 
@@ -405,8 +407,24 @@
         e.preventDefault();
         setDashboardRoute(item.route);
       });
+      if (item.route === "/analyst" && analystOpenMonths > 0) {
+        const badge = document.createElement("span");
+        badge.className = "dgs-analyst-badge";
+        badge.textContent = String(analystOpenMonths);
+        badge.title = `${analystOpenMonths} month${analystOpenMonths === 1 ? "" : "s"} with open intake flags`;
+        el.appendChild(badge);
+      }
       nav.appendChild(el);
     }
+  }
+
+  function setAnalystOpenMonths(n) {
+    const next = Math.max(0, Number(n) || 0);
+    if (next === analystOpenMonths) return;
+    analystOpenMonths = next;
+    const nav = document.getElementById("dgs-dashboard-nav");
+    const active = nav?.querySelector(".active")?.getAttribute("data-route") || "/executive";
+    renderDashboardSubnav(active);
   }
 
   function setDashboardRoute(route) {
@@ -436,6 +454,9 @@
       (params.get("view") ||
         window.location.hash.replace(/^#\/?/, "") ||
         "executive");
+    window.addEventListener("dgs-analyst-open-months", (e) => {
+      setAnalystOpenMonths(e.detail);
+    });
     renderDashboardSubnav(initial);
     setDashboardRoute(initial);
   }

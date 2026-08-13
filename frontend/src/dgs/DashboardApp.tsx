@@ -1,6 +1,6 @@
-import { useEffect, useState } from "react";
-import { apiUrl } from "../api/client";
-import AnalystPage from "../pages/AnalystPage";
+import { useCallback, useEffect, useState } from "react";
+import { apiUrl, fetchJson } from "../api/client";
+import AnalystPage, { type AnalystSummary } from "../pages/AnalystPage";
 import ExecutivePage from "../pages/ExecutivePage";
 import FinancePage from "../pages/FinancePage";
 import PerformancePage from "../pages/PerformancePage";
@@ -36,10 +36,14 @@ type Health = {
 
 type PeriodsPayload = { periods?: string[] };
 
-function routePage(route: DashboardRoute) {
+function routePage(
+  route: DashboardRoute,
+  summary: AnalystSummary | null,
+  onResolved: () => void,
+) {
   switch (route) {
     case "/analyst":
-      return <AnalystPage />;
+      return <AnalystPage summary={summary} onResolved={onResolved} />;
     case "/finance":
       return <FinancePage />;
     case "/performance":
@@ -88,6 +92,7 @@ export default function DashboardApp() {
   const [month, setMonthState] = useState(readInitialMonth);
   const [periods, setPeriods] = useState<string[]>([]);
   const [health, setHealth] = useState<Health | null>(null);
+  const [summary, setSummary] = useState<AnalystSummary | null>(null);
 
   const setMonth = (next: string) => {
     setMonthState(next);
@@ -117,6 +122,26 @@ export default function DashboardApp() {
       .catch(() => setPeriods([]));
   }, []);
 
+  const refreshSummary = useCallback((through: string) => {
+    if (!through) return;
+    fetchJson<AnalystSummary>(`/api/analyst/summary?through=${encodeURIComponent(through)}&months=12`)
+      .then((d) => {
+        setSummary(d);
+        window.dispatchEvent(
+          new CustomEvent("dgs-analyst-open-months", { detail: d.months_with_open }),
+        );
+      })
+      .catch(() => {
+        setSummary(null);
+        window.dispatchEvent(new CustomEvent("dgs-analyst-open-months", { detail: 0 }));
+      });
+  }, []);
+
+  useEffect(() => {
+    const through = periods[0]?.slice(0, 7) || "";
+    if (through) refreshSummary(through);
+  }, [periods, refreshSummary]);
+
   useEffect(() => {
     const onRoute = (e: Event) => {
       const detail = (e as CustomEvent<string>).detail;
@@ -145,9 +170,13 @@ export default function DashboardApp() {
           ) : (
             <div className={`text-xs ${t.code}`}>Connecting…</div>
           )}
-          <MonthSelector month={month} periods={periods} onChange={setMonth} />
+          {route !== "/analyst" ? (
+            <MonthSelector month={month} periods={periods} onChange={setMonth} />
+          ) : null}
         </div>
-        <div className="dgs-dashboard-panel">{routePage(route)}</div>
+        <div className="dgs-dashboard-panel">
+          {routePage(route, summary, () => refreshSummary(periods[0]?.slice(0, 7) || ""))}
+        </div>
       </div>
     </DashboardMonthProvider>
   );
