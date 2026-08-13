@@ -32,12 +32,135 @@ export type AnalystMonthCount = {
   low: number;
 };
 
-export type AnalystSummary = {
-  through: string;
+export type AnalystYearCount = {
+  year: string;
+  open: number;
   months_with_open: number;
-  total_open: number;
   months: AnalystMonthCount[];
 };
+
+export type AnalystSummary = {
+  through: string;
+  from_month?: string;
+  months_with_open: number;
+  years_with_open?: number;
+  total_open: number;
+  years?: AnalystYearCount[];
+  months: AnalystMonthCount[];
+};
+
+const MONTH_SHORT = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+function monthShort(ym: string): string {
+  const m = Number(ym.slice(5, 7));
+  return MONTH_SHORT[m - 1] || ym;
+}
+
+function groupYears(months: AnalystMonthCount[]): AnalystYearCount[] {
+  const years: AnalystYearCount[] = [];
+  const byYear = new Map<string, AnalystYearCount>();
+  for (const row of months) {
+    const year = row.month.slice(0, 4);
+    let bucket = byYear.get(year);
+    if (!bucket) {
+      bucket = { year, open: 0, months_with_open: 0, months: [] };
+      byYear.set(year, bucket);
+      years.push(bucket);
+    }
+    bucket.open += row.open;
+    bucket.months_with_open += 1;
+    bucket.months.push(row);
+  }
+  return years;
+}
+
+const CHIP =
+  "rounded-lg border px-2.5 py-1.5 text-sm font-mono";
+const CHIP_ON = "border-[#6eb5ff]/40 bg-[#6eb5ff]/15 text-[#f3f5f9]";
+const CHIP_OFF = "border-white/10 bg-[#141922] text-[#c5cdd9] hover:border-white/20";
+
+function NeedsLookRail({
+  summary,
+  focus,
+  onMonth,
+}: {
+  summary: AnalystSummary;
+  focus: string;
+  onMonth: (ym: string) => void;
+}) {
+  const t = useDashboardTheme();
+  const years = summary.years?.length ? summary.years : groupYears(summary.months || []);
+  const [pickedYear, setPickedYear] = useState<string | null>(null);
+  const showYears = years.length > 1;
+  const activeYear =
+    pickedYear ||
+    (focus && years.some((y) => y.year === focus.slice(0, 4)) ? focus.slice(0, 4) : null) ||
+    years[0]?.year ||
+    null;
+  const monthChips = showYears ? years.find((y) => y.year === activeYear)?.months ?? [] : summary.months || [];
+
+  if (!years.length) return null;
+
+  return (
+    <div className="space-y-2">
+      <div className="flex flex-wrap items-center gap-2">
+        <span className={`text-xs font-medium uppercase tracking-wide ${t.code}`}>Needs a look</span>
+        {showYears
+          ? years.map((y) => {
+              const on = y.year === activeYear;
+              return (
+                <button
+                  key={y.year}
+                  type="button"
+                  onClick={() => {
+                    setPickedYear(y.year);
+                    if (focus.slice(0, 4) !== y.year && y.months[0]) onMonth(y.months[0].month);
+                  }}
+                  className={`${CHIP} ${on ? CHIP_ON : CHIP_OFF}`}
+                >
+                  {y.year}
+                  <span className={on ? "ml-2 text-[#6eb5ff]" : "ml-2 text-amber-300"}>
+                    {y.months_with_open}
+                  </span>
+                </button>
+              );
+            })
+          : monthChips.map((m) => {
+              const on = m.month === focus;
+              return (
+                <button
+                  key={m.month}
+                  type="button"
+                  onClick={() => onMonth(m.month)}
+                  className={`${CHIP} ${on ? CHIP_ON : CHIP_OFF}`}
+                >
+                  {m.month}
+                  <span className={on ? "ml-2 text-[#6eb5ff]" : "ml-2 text-amber-300"}>{m.open}</span>
+                </button>
+              );
+            })}
+      </div>
+      {showYears && monthChips.length > 0 ? (
+        <div className="flex flex-wrap items-center gap-2">
+          {monthChips.map((m) => {
+            const on = m.month === focus;
+            return (
+              <button
+                key={m.month}
+                type="button"
+                onClick={() => onMonth(m.month)}
+                className={`${CHIP} ${on ? CHIP_ON : CHIP_OFF}`}
+              >
+                {monthShort(m.month)}
+                <span className={on ? "ml-2 text-[#6eb5ff]" : "ml-2 text-amber-300"}>{m.open}</span>
+              </button>
+            );
+          })}
+        </div>
+      ) : null}
+    </div>
+  );
+}
 
 type QueuePayload = {
   source: string;
@@ -122,7 +245,7 @@ export default function AnalystPage({
     if (summary) return;
     const through = periods[0]?.slice(0, 7) || focus;
     if (!through) return;
-    fetchJson<AnalystSummary>(`/api/analyst/summary?through=${encodeURIComponent(through)}&months=12`)
+    fetchJson<AnalystSummary>(`/api/analyst/summary?through=${encodeURIComponent(through)}`)
       .then(setOwnSummary)
       .catch(() => setOwnSummary(null));
   }, [summary, periods, focus]);
@@ -148,7 +271,7 @@ export default function AnalystPage({
       if (!summary) {
         const through = periods[0]?.slice(0, 7) || focus;
         if (through) {
-          fetchJson<AnalystSummary>(`/api/analyst/summary?through=${encodeURIComponent(through)}&months=12`)
+          fetchJson<AnalystSummary>(`/api/analyst/summary?through=${encodeURIComponent(through)}`)
             .then(setOwnSummary)
             .catch(() => setOwnSummary(null));
         }
@@ -193,28 +316,8 @@ export default function AnalystPage({
         </label>
       </section>
 
-      {!forbidden && (rail?.months?.length || 0) > 0 && (
-        <div className="flex flex-wrap items-center gap-2">
-          <span className={`text-xs font-medium uppercase tracking-wide ${t.code}`}>Needs a look</span>
-          {rail!.months.map((m) => {
-            const active = m.month === focus;
-            return (
-              <button
-                key={m.month}
-                type="button"
-                onClick={() => setMonth(m.month)}
-                className={`rounded-lg border px-2.5 py-1.5 text-sm font-mono ${
-                  active
-                    ? "border-[#6eb5ff]/40 bg-[#6eb5ff]/15 text-[#f3f5f9]"
-                    : "border-white/10 bg-[#141922] text-[#c5cdd9] hover:border-white/20"
-                }`}
-              >
-                {m.month}
-                <span className={active ? "ml-2 text-[#6eb5ff]" : "ml-2 text-amber-300"}>{m.open}</span>
-              </button>
-            );
-          })}
-        </div>
+      {!forbidden && rail && (rail.months?.length || 0) > 0 && (
+        <NeedsLookRail summary={rail} focus={focus} onMonth={setMonth} />
       )}
 
       {!forbidden && data && (

@@ -21,7 +21,7 @@ class ResolveBody(BaseModel):
 @router.get("/summary")
 def analyst_summary(
     through: str | None = Query(None, description="YYYY-MM latest month to include"),
-    months: int = Query(12, ge=1, le=24),
+    months: int | None = Query(None, ge=1, le=120, description="Omit to scan all façade months"),
     user: Annotated[dict[str, Any] | None, Depends(require_demo_user)] = None,
 ):
     q.assert_paul(user)

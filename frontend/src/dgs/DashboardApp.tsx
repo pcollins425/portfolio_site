@@ -124,7 +124,7 @@ export default function DashboardApp() {
 
   const refreshSummary = useCallback((through: string) => {
     if (!through) return;
-    fetchJson<AnalystSummary>(`/api/analyst/summary?through=${encodeURIComponent(through)}&months=12`)
+    fetchJson<AnalystSummary>(`/api/analyst/summary?through=${encodeURIComponent(through)}`)
       .then((d) => {
         setSummary(d);
         window.dispatchEvent(

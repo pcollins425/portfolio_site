@@ -435,9 +435,40 @@ def _merge_resolution(flag: dict[str, Any], stored: dict[str, Any] | None) -> di
     return out
 
 
-def queue_summary(*, through: str, months: int = 12) -> dict[str, Any]:
-    n = max(1, min(int(months), 24))
+def _months_between(start: date, end: date) -> int:
+    return (end.year - start.year) * 12 + (end.month - start.month) + 1
+
+
+def _earliest_month() -> date | None:
+    rows = _query(
+        f"""
+        SELECT CONVERT(char(7), MIN(DATEFROMPARTS(
+            YEAR(CONVERT(date, TRY_CONVERT(datetime, [date]))),
+            MONTH(CONVERT(date, TRY_CONVERT(datetime, [date]))),
+            1
+        )), 126) AS ym
+        FROM {_MV}
+        WHERE TRY_CONVERT(datetime, [date]) IS NOT NULL
+        """
+    )
+    raw = str((rows[0] or {}).get("ym") or "")[:7] if rows else ""
+    if len(raw) < 7:
+        return None
+    try:
+        return _month_start(raw)
+    except HTTPException:
+        return None
+
+
+def queue_summary(*, through: str, months: int | None = None) -> dict[str, Any]:
     end_m = _month_start(through)
+    if months is None:
+        earliest = _earliest_month() or _add_months(end_m, -11)
+        if earliest > end_m:
+            earliest = end_m
+        n = min(max(1, _months_between(earliest, end_m)), 120)
+    else:
+        n = max(1, min(int(months), 120))
     start_m = _add_months(end_m, 1 - n)
     end = _add_months(end_m, 1)
     key = f"{_ym(start_m)}:{_ym(end_m)}:{n}"
@@ -471,12 +502,28 @@ def queue_summary(*, through: str, months: int = 12) -> dict[str, Any]:
             rail.append({"month": ym, **counts})
         cursor = _add_months(cursor, -1)
 
+    by_year: dict[str, dict[str, Any]] = {}
+    years: list[dict[str, Any]] = []
+    for row in rail:
+        y = row["month"][:4]
+        bucket = by_year.get(y)
+        if bucket is None:
+            bucket = {"year": y, "open": 0, "months_with_open": 0, "months": []}
+            by_year[y] = bucket
+            years.append(bucket)
+        bucket["open"] += row["open"]
+        bucket["months_with_open"] += 1
+        bucket["months"].append(row)
+
     payload = {
         "source": "live",
         "through": _ym(end_m),
+        "from_month": _ym(start_m),
         "months_scanned": n,
         "months_with_open": len(rail),
+        "years_with_open": len(years),
         "total_open": sum(r["open"] for r in rail),
+        "years": years,
         "months": rail,
     }
     _summary_cache["key"] = key
