@@ -27,6 +27,14 @@ app.add_middleware(
 
 app.include_router(master_revenue.router)
 app.include_router(analyst.router)
+
+
+@app.on_event("startup")
+def _log_analyst_routes():
+    paths = sorted(
+        {getattr(r, "path", "") for r in app.routes if "analyst" in getattr(r, "path", "")}
+    )
+    _log.info("analyst routes: %s", paths)
 app.include_router(field.router)
 app.include_router(auth.router)
 app.include_router(emaint_demo.router)
