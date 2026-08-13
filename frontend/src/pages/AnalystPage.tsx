@@ -182,6 +182,79 @@ const RULE_LABEL: Record<string, string> = {
   zero_coin_win: "Coin in $0 with actual win",
 };
 
+type SortKey = "casino" | "serial" | "rule" | "ratio" | "coin_day" | "dof";
+type SortDir = "asc" | "desc";
+
+const SORT_DEFAULT: Record<SortKey, SortDir> = {
+  casino: "asc",
+  serial: "asc",
+  rule: "asc",
+  ratio: "desc",
+  coin_day: "desc",
+  dof: "desc",
+};
+
+function sortFlags(rows: FlagRow[], key: SortKey, dir: SortDir): FlagRow[] {
+  const sign = dir === "asc" ? 1 : -1;
+  return [...rows].sort((a, b) => {
+    if (key === "ratio") {
+      const ar = a.coin_ratio;
+      const br = b.coin_ratio;
+      const aMissing = ar == null || !Number.isFinite(ar);
+      const bMissing = br == null || !Number.isFinite(br);
+      if (aMissing && bMissing) return a.casino.localeCompare(b.casino);
+      if (aMissing) return 1;
+      if (bMissing) return -1;
+      const cmp = Math.abs(ar) - Math.abs(br);
+      if (cmp !== 0) return cmp * sign;
+      return a.casino.localeCompare(b.casino);
+    }
+    if (key === "casino" || key === "serial" || key === "rule") {
+      const av =
+        key === "rule" ? (RULE_LABEL[a.rule] ?? a.rule) : key === "casino" ? a.casino : a.serial;
+      const bv =
+        key === "rule" ? (RULE_LABEL[b.rule] ?? b.rule) : key === "casino" ? b.casino : b.serial;
+      const cmp = av.localeCompare(bv, undefined, { numeric: true, sensitivity: "base" });
+      if (cmp !== 0) return cmp * sign;
+      return a.serial.localeCompare(b.serial, undefined, { numeric: true });
+    }
+    const av = key === "dof" ? a.dof : a.coin_day;
+    const bv = key === "dof" ? b.dof : b.coin_day;
+    if (av !== bv) return (av < bv ? -1 : 1) * sign;
+    return a.casino.localeCompare(b.casino);
+  });
+}
+
+function SortTh({
+  label,
+  col,
+  sortKey,
+  sortDir,
+  onSort,
+}: {
+  label: string;
+  col: SortKey;
+  sortKey: SortKey;
+  sortDir: SortDir;
+  onSort: (col: SortKey) => void;
+}) {
+  const on = sortKey === col;
+  return (
+    <th className="px-4 py-3 font-medium">
+      <button
+        type="button"
+        onClick={() => onSort(col)}
+        className={`inline-flex items-center gap-1 uppercase tracking-wide ${
+          on ? "text-[#f3f5f9]" : "hover:text-[#c5cdd9]"
+        }`}
+      >
+        {label}
+        <span className="font-mono text-[10px] opacity-80">{on ? (sortDir === "asc" ? "↑" : "↓") : "↕"}</span>
+      </button>
+    </th>
+  );
+}
+
 function fmtRatio(v: number | null | undefined): string {
   if (v == null || !Number.isFinite(v)) return "—";
   if (v >= 10) return `${v.toFixed(1)}×`;
@@ -213,7 +286,23 @@ export default function AnalystPage({
   const [saving, setSaving] = useState(false);
   const [saveErr, setSaveErr] = useState<string | null>(null);
   const [ownSummary, setOwnSummary] = useState<AnalystSummary | null>(null);
+  const [sortKey, setSortKey] = useState<SortKey>("ratio");
+  const [sortDir, setSortDir] = useState<SortDir>("desc");
   const rail = summary ?? ownSummary;
+
+  const sortedFlags = useMemo(
+    () => sortFlags(data?.flags ?? [], sortKey, sortDir),
+    [data, sortKey, sortDir],
+  );
+
+  const cycleSort = (col: SortKey) => {
+    if (col === sortKey) {
+      setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+      return;
+    }
+    setSortKey(col);
+    setSortDir(SORT_DEFAULT[col]);
+  };
 
   const reload = (ym: string, filter: "open" | "all") => {
     setLoading(true);
@@ -347,16 +436,16 @@ export default function AnalystPage({
             <table className="w-full text-left text-sm">
               <thead className={t.tableHead}>
                 <tr>
-                  <th className="px-4 py-3 font-medium">Casino</th>
-                  <th className="px-4 py-3 font-medium">Serial</th>
-                  <th className="px-4 py-3 font-medium">Rule</th>
-                  <th className="px-4 py-3 font-medium">Ratio</th>
-                  <th className="px-4 py-3 font-medium">Coin/day</th>
-                  <th className="px-4 py-3 font-medium">DOF</th>
+                  <SortTh label="Casino" col="casino" sortKey={sortKey} sortDir={sortDir} onSort={cycleSort} />
+                  <SortTh label="Serial" col="serial" sortKey={sortKey} sortDir={sortDir} onSort={cycleSort} />
+                  <SortTh label="Rule" col="rule" sortKey={sortKey} sortDir={sortDir} onSort={cycleSort} />
+                  <SortTh label="Ratio" col="ratio" sortKey={sortKey} sortDir={sortDir} onSort={cycleSort} />
+                  <SortTh label="Coin/day" col="coin_day" sortKey={sortKey} sortDir={sortDir} onSort={cycleSort} />
+                  <SortTh label="DOF" col="dof" sortKey={sortKey} sortDir={sortDir} onSort={cycleSort} />
                 </tr>
               </thead>
               <tbody className={t.tableRow}>
-                {(data?.flags ?? []).map((r) => (
+                {sortedFlags.map((r) => (
                   <tr
                     key={r.id}
                     className={`${r.side === "high" || r.rule === "zero_coin_win" ? t.tableRowBad : ""} cursor-pointer ${
