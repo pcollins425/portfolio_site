@@ -247,7 +247,7 @@ class _AnalystResolveBody(BaseModel):
 @router.get("/analyst/ping")
 def analyst_ping():
     """No-auth probe: if this 404s, the image does not have the queue commit."""
-    return {"ok": True, "queue": "/api/analyst/queue"}
+    return {"ok": True, "queue": "/api/analyst/queue", "resolutions": "/api/analyst/resolutions"}
 
 
 @router.get("/analyst/summary")
@@ -285,6 +285,22 @@ def analyst_queue(
         raise
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"analyst queue scan failed: {exc}") from exc
+
+
+@router.get("/analyst/resolutions")
+def analyst_queue_resolutions(
+    month: str | None = Query(None, description="YYYY-MM focus month"),
+    user: Annotated[dict[str, Any] | None, Depends(require_demo_user)] = None,
+):
+    aq.assert_paul(user)
+    if not month or len(month.strip()) < 7:
+        raise HTTPException(status_code=400, detail="month=YYYY-MM required")
+    try:
+        return aq.checked_for_month(month.strip()[:7])
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"analyst resolutions failed: {exc}") from exc
 
 
 @router.post("/analyst/queue/resolve")

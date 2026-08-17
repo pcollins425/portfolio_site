@@ -42,6 +42,17 @@ def analyst_queue(
     return q.queue_for_month(month.strip()[:7], status=status)
 
 
+@router.get("/resolutions")
+def analyst_resolutions(
+    month: str | None = Query(None, description="YYYY-MM focus month"),
+    user: Annotated[dict[str, Any] | None, Depends(require_demo_user)] = None,
+):
+    q.assert_paul(user)
+    if not month or len(month.strip()) < 7:
+        raise HTTPException(status_code=400, detail="month=YYYY-MM required")
+    return q.checked_for_month(month.strip()[:7])
+
+
 @router.post("/queue/resolve")
 def analyst_resolve(
     body: ResolveBody,

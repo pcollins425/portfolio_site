@@ -653,3 +653,83 @@ def resolve_flag(
     _save_store(store)
     _invalidate_summary()
     return store["flags"][fid]
+
+
+def _parse_flag_id(fid: str) -> dict[str, str] | None:
+    parts = (fid or "").split("|")
+    if len(parts) < 4:
+        return None
+    ym = parts[3].strip()[:7]
+    if len(ym) < 7:
+        return None
+    theme = "|".join(parts[4:]).strip()
+    return {
+        "rule": parts[0].strip(),
+        "casino": parts[1].strip(),
+        "serial": parts[2].strip(),
+        "ym": ym,
+        "theme": theme,
+    }
+
+
+def _stub_from_id(fid: str) -> dict[str, Any] | None:
+    parsed = _parse_flag_id(fid)
+    if not parsed:
+        return None
+    rule = parsed["rule"]
+    return {
+        "id": fid,
+        "rule": rule,
+        "side": "high" if rule in {"coin_high", "short_high"} else "low",
+        "casino": parsed["casino"] or "?",
+        "serial": parsed["serial"] or "?",
+        "theme": parsed["theme"] or None,
+        "ym": parsed["ym"],
+        "status": "open",
+        "note": None,
+        "notes": [],
+        "resolved_at": None,
+        "resolved_by": None,
+    }
+
+
+def checked_for_month(month: str) -> dict[str, Any]:
+    """Resolved flags for one month from the JSON store (not the live scan)."""
+    target = _month_start(month)
+    ym = _ym(target)
+    store = _load_store()
+    saved = store["flags"]
+    rows: list[dict[str, Any]] = []
+    ok_n = 0
+    reload_n = 0
+    for fid, rec in saved.items():
+        st = str(rec.get("status") or "open").strip()
+        if st not in _RESOLVE_STATUSES:
+            continue
+        parsed = _parse_flag_id(fid)
+        if not parsed or parsed["ym"] != ym:
+            continue
+        stub = _stub_from_id(fid)
+        if not stub:
+            continue
+        rows.append(_merge_resolution(stub, rec))
+        if st == "confirmed_ok":
+            ok_n += 1
+        else:
+            reload_n += 1
+    rows.sort(key=lambda f: (str(f.get("casino") or ""), str(f.get("serial") or ""), str(f.get("rule") or "")))
+    live = _scan_month(target)
+    open_n = sum(
+        1
+        for flag in live
+        if (_merge_resolution(flag, saved.get(flag["id"])).get("status") or "open") == "open"
+    )
+    return {
+        "source": "store",
+        "month": ym,
+        "count": len(rows),
+        "confirmed_ok": ok_n,
+        "needs_reload": reload_n,
+        "open_count": open_n,
+        "flags": rows,
+    }

@@ -23,6 +23,9 @@ type FlagRow = {
   coin_ratio?: number | null;
   status: string;
   note?: string | null;
+  notes?: { at?: string; by?: string; status?: string; note?: string }[];
+  resolved_at?: string | null;
+  resolved_by?: string | null;
 };
 
 export type AnalystMonthCount = {
@@ -182,6 +185,124 @@ const RULE_LABEL: Record<string, string> = {
   zero_coin_win: "Coin in $0 with actual win",
 };
 
+const CLOSE_LABEL: Record<string, string> = {
+  confirmed_ok: "Confirmed ok",
+  needs_reload: "Needs reload",
+};
+
+type CheckedPayload = {
+  month: string;
+  count: number;
+  confirmed_ok: number;
+  needs_reload: number;
+  open_count?: number;
+  flags: FlagRow[];
+};
+
+function esc(s: string): string {
+  return s
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+function monthLong(ym: string): string {
+  const d = new Date(`${ym}-01T00:00:00`);
+  if (Number.isNaN(d.getTime())) return ym;
+  return d.toLocaleDateString(undefined, { month: "long", year: "numeric" });
+}
+
+function fmtWhen(iso: string | null | undefined): string {
+  if (!iso) return "—";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  return d.toLocaleString(undefined, {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
+
+function checkedPrintHtml(packet: CheckedPayload, openCount: number): string {
+  const title = `Analyst review — ${monthLong(packet.month)}`;
+  const printed = new Date().toLocaleString(undefined, {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+  const rows = packet.flags
+    .map((r) => {
+      const serial = r.theme ? `${esc(r.serial)}<br><span class="muted">${esc(r.theme)}</span>` : esc(r.serial);
+      return `<tr>
+        <td>${esc(r.casino)}</td>
+        <td>${serial}</td>
+        <td>${esc(RULE_LABEL[r.rule] ?? r.rule)}</td>
+        <td>${esc(CLOSE_LABEL[r.status] ?? r.status)}</td>
+        <td class="note">${esc(r.note || "")}</td>
+        <td>${esc(fmtWhen(r.resolved_at))}</td>
+      </tr>`;
+    })
+    .join("");
+  const body =
+    packet.flags.length === 0
+      ? `<p class="empty">Nothing checked yet for ${esc(monthLong(packet.month))}. ${openCount} still open.</p>`
+      : `<table>
+        <thead>
+          <tr>
+            <th>Casino</th>
+            <th>Serial</th>
+            <th>Rule</th>
+            <th>Close</th>
+            <th>Note</th>
+            <th>When</th>
+          </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>`;
+  return `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>${esc(title)} (checked)</title>
+  <style>
+    @page { size: landscape; margin: 12mm; }
+    body { font: 11pt/1.4 -apple-system, "Segoe UI", sans-serif; color: #111; margin: 24px; }
+    h1 { font-size: 18pt; margin: 0 0 4px; }
+    .meta, .counts { color: #333; margin: 0 0 8px; }
+    .counts { margin-bottom: 18px; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { border-bottom: 1px solid #ccc; padding: 7px 8px; text-align: left; vertical-align: top; }
+    th { font-size: 9pt; text-transform: uppercase; letter-spacing: 0.04em; color: #444; }
+    .note { white-space: pre-wrap; }
+    .muted { color: #555; font-size: 9pt; }
+    .empty { margin-top: 20px; }
+  </style>
+</head>
+<body>
+  <h1>${esc(title)}</h1>
+  <p class="meta">Checked flags only · Paul Collins · printed ${esc(printed)}</p>
+  <p class="counts">${packet.confirmed_ok} confirmed ok · ${packet.needs_reload} needs reload · ${openCount} still open</p>
+  ${body}
+</body>
+</html>`;
+}
+
+function openCheckedPrint(html: string): boolean {
+  const w = window.open("", "_blank");
+  if (!w) return false;
+  w.document.open();
+  w.document.write(html);
+  w.document.close();
+  w.focus();
+  w.print();
+  return true;
+}
+
 type SortKey = "casino" | "serial" | "rule" | "ratio" | "coin_day" | "dof";
 type SortDir = "asc" | "desc";
 
@@ -288,6 +409,8 @@ export default function AnalystPage({
   const [ownSummary, setOwnSummary] = useState<AnalystSummary | null>(null);
   const [sortKey, setSortKey] = useState<SortKey>("ratio");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
+  const [printing, setPrinting] = useState(false);
+  const [printErr, setPrintErr] = useState<string | null>(null);
   const rail = summary ?? ownSummary;
 
   const sortedFlags = useMemo(
@@ -372,6 +495,25 @@ export default function AnalystPage({
 
   const forbidden = Boolean(err && (err.startsWith("403") || err.includes("Paul-only")));
 
+  const printChecked = async () => {
+    if (!focus) return;
+    setPrinting(true);
+    setPrintErr(null);
+    try {
+      const packet = await fetchJson<CheckedPayload>(
+        `/api/analyst/resolutions?month=${encodeURIComponent(focus)}`,
+      );
+      const html = checkedPrintHtml(packet, packet.open_count ?? data?.open_count ?? 0);
+      if (!openCheckedPrint(html)) {
+        setPrintErr("Allow pop-ups to print the review sheet.");
+      }
+    } catch (e) {
+      setPrintErr(e instanceof Error ? e.message : String(e));
+    } finally {
+      setPrinting(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       <section className="flex flex-wrap items-end justify-between gap-4">
@@ -389,17 +531,28 @@ export default function AnalystPage({
                     : "Pick a period."}
           </p>
         </div>
-        <label className={`inline-flex items-center gap-2 text-sm ${t.code}`}>
-          <span className="font-medium">Show</span>
-          <select
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value as "open" | "all")}
-            className={SELECT_CLS}
+        <div className="flex flex-wrap items-center gap-3">
+          {printErr && <p className="text-sm text-rose-300">{printErr}</p>}
+          <button
+            type="button"
+            disabled={forbidden || !focus || printing}
+            onClick={() => void printChecked()}
+            className="rounded-lg border border-white/10 bg-[#141922] px-3 py-1.5 text-sm text-[#c5cdd9] hover:border-white/20 disabled:opacity-40"
           >
-            <option value="open">Open</option>
-            <option value="all">Open + resolved</option>
-          </select>
-        </label>
+            {printing ? "Preparing…" : "Print checked"}
+          </button>
+          <label className={`inline-flex items-center gap-2 text-sm ${t.code}`}>
+            <span className="font-medium">Show</span>
+            <select
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value as "open" | "all")}
+              className={SELECT_CLS}
+            >
+              <option value="open">Open</option>
+              <option value="all">Open + resolved</option>
+            </select>
+          </label>
+        </div>
       </section>
 
       {!forbidden && rail && (rail.months?.length || 0) > 0 && (
