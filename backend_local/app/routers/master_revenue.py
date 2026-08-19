@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import re
 from datetime import date, datetime, timedelta
 from typing import Annotated, Any
 
@@ -379,6 +380,27 @@ def _month_span(from_ym: str, to_ym: str) -> list[str]:
 # Sold sentinel casino — never expected to invoice.
 _SOLD_CASINO_ID = "CT-00907"
 
+# Participation reports bill playable terminals only — not ETG centers / signage gear.
+_NON_PLAYABLE_TOKENS = frozenset({"center", "sign", "controller", "server"})
+_NON_PLAYABLE_WORD = re.compile(
+    r"(?<![a-z0-9])(" + "|".join(_NON_PLAYABLE_TOKENS) + r")(?![a-z0-9])",
+    re.IGNORECASE,
+)
+
+
+def _is_non_playable_participation(row: dict[str, Any] | None) -> bool:
+    """True for centers / signs / controllers / servers (not vendor participation lines)."""
+    if not row:
+        return False
+    asset = str(row.get("asset_no") or "").strip().lower()
+    if asset in _NON_PLAYABLE_TOKENS:
+        return True
+    blob = " ".join(
+        str(row.get(k) or "")
+        for k in ("asset_no", "cabinet_name", "theme_name", "serial_number")
+    )
+    return bool(_NON_PLAYABLE_WORD.search(blob))
+
 
 @router.get("/finance/overview")
 def finance_overview(
@@ -390,8 +412,9 @@ def finance_overview(
     - **Invoiced** = MR row count where ``slot_master_id`` is populated (one entry per MR line).
     - **Expected** = ``slot_master_migration`` rows active during the processing month
       (``golive001`` with ``date_instl`` fallback / ``rmvl_date`` window), compared on
-      ``slot_master_id`` ↔ ``reference_key``. Billing starts at go-live when set; otherwise
-      install date. Convert predecessors close via another row's ``lastconver``
+      ``slot_master_id`` ↔ ``reference_key``. Excludes non-playable participation gear
+      (centers, signs, controllers, servers — same rule as MR processor floor compare).
+      Billing starts at go-live when set; otherwise install date. Convert predecessors close via another row's ``lastconver``
       (no ``rmvl_date`` on theme change); earliest successor convert before month start
       excludes the row (convert month still counts).
     """
@@ -452,13 +475,20 @@ GROUP BY RTRIM([Casino])
 SELECT
     COALESCE(NULLIF(RTRIM(c.casino_short), N''), RTRIM(c.casino_name)) AS casino,
     m.ms AS month_start,
-    sm.reference_key AS smm_key
+    sm.reference_key AS smm_key,
+    sm.asset_no,
+    cab.cabinet_name,
+    t.theme_name,
+    a.serial_number
 FROM (VALUES {values_rows}) AS m(ms, me)
 JOIN inventory.slot_master_migration AS sm
     ON COALESCE(sm.golive001, sm.date_instl) IS NOT NULL
    AND CONVERT(date, COALESCE(sm.golive001, sm.date_instl)) <= CONVERT(date, m.me)
    AND (sm.rmvl_date IS NULL OR CONVERT(date, sm.rmvl_date) >= CONVERT(date, m.ms))
 JOIN clients.casinos AS c ON c.reference_key = sm.casino_id
+LEFT JOIN inventory.assets AS a ON a.reference_key = sm.asset_id
+LEFT JOIN vendors.themes AS t ON t.reference_key = sm.theme_id
+LEFT JOIN vendors.cabinets AS cab ON cab.reference_key = a.cabinet_id
 WHERE sm.casino_id <> %s
   /* Convert close-out: earliest successor lastconver after floor start ends this theme row
      before the processing month (convert month still counts). */
@@ -507,6 +537,8 @@ WHERE sm.casino_id <> %s
     commission_by_key: dict[tuple[str, str], float] = {}
 
     for r in expected_key_rows:
+        if _is_non_playable_participation(r):
+            continue
         ym = _ym(r.get("month_start"))
         casino = str(r.get("casino") or "").strip()
         key = str(r.get("smm_key") or "").strip()
