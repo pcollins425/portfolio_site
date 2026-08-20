@@ -417,6 +417,10 @@ def finance_overview(
       Billing starts at go-live when set; otherwise install date. Convert predecessors close via another row's ``lastconver``
       (no ``rmvl_date`` on theme change); earliest successor convert before month start
       excludes the row (convert month still counts).
+      **MOVE supersede:** a Type-2 ``action=MOVE`` twin at the same ``asset_id`` + ``casino_id``
+      replaces the prior identity using ``projects.ims.start_date`` (no fake ``rmvl_date`` /
+      floor-start rewrite). Months before the move keep the prior; on/after the move month
+      only the MOVE row counts (bank move is not a dual-bill convert month).
     """
     f = _month_prefix(from_month)
     t = _month_prefix(to_month)
@@ -501,6 +505,35 @@ WHERE sm.casino_id <> %s
       AND succ.lastconver IS NOT NULL
       AND CONVERT(date, succ.lastconver) > CONVERT(date, COALESCE(sm.lastconver, sm.golive001, sm.date_instl))
       AND CONVERT(date, succ.lastconver) < CONVERT(date, m.ms)
+  )
+  /* MOVE supersede: bank-move Type-2 twin replaces prior via IMS start_date.
+     Prior excluded once move start <= month end; MOVE excluded until then. */
+  AND NOT (
+    UPPER(LTRIM(RTRIM(COALESCE(sm.action, N'')))) <> N'MOVE'
+    AND EXISTS (
+      SELECT 1
+      FROM inventory.slot_master_migration AS mv
+      INNER JOIN projects.ims AS ims ON ims.reference_key = mv.project_id
+      WHERE mv.asset_id = sm.asset_id
+        AND mv.casino_id = sm.casino_id
+        AND mv.reference_key <> sm.reference_key
+        AND UPPER(LTRIM(RTRIM(COALESCE(mv.action, N'')))) = N'MOVE'
+        AND ims.start_date IS NOT NULL
+        AND CONVERT(date, ims.start_date) <= CONVERT(date, m.me)
+    )
+  )
+  AND NOT (
+    UPPER(LTRIM(RTRIM(COALESCE(sm.action, N'')))) = N'MOVE'
+    AND (
+      sm.project_id IS NULL
+      OR NOT EXISTS (
+        SELECT 1
+        FROM projects.ims AS ims
+        WHERE ims.reference_key = sm.project_id
+          AND ims.start_date IS NOT NULL
+          AND CONVERT(date, ims.start_date) <= CONVERT(date, m.me)
+      )
+    )
   )
 """
 
