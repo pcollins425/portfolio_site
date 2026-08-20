@@ -411,12 +411,15 @@ def finance_overview(
 
     - **Invoiced** = MR row count where ``slot_master_id`` is populated (one entry per MR line).
     - **Expected** = ``slot_master_migration`` rows active during the processing month
-      (``golive001`` with ``date_instl`` fallback / ``rmvl_date`` window), compared on
+      (action-aware floor start / ``rmvl_date`` window), compared on
       ``slot_master_id`` ↔ ``reference_key``. Excludes non-playable participation gear
       (centers, signs, controllers, servers — same rule as MR processor floor compare).
-      Billing starts at go-live when set; otherwise install date. Convert predecessors close via another row's ``lastconver``
-      (no ``rmvl_date`` on theme change); earliest successor convert before month start
-      excludes the row (convert month still counts).
+      **Floor start (locked 2026-08-20):** ``date_instl`` / ``golive001`` apply only when the
+      stint is an install-era row (``action`` is INSTALL or blank/legacy). CONVERT and
+      UPGRADE start from ``lastconver`` so inherited cabinet install dates do not pull new
+      theme/software rows into earlier months. Convert predecessors still close via another
+      row's ``lastconver`` (no ``rmvl_date`` on theme change); earliest successor convert
+      before month start excludes the row (convert month still counts).
       **MOVE supersede:** an *active* Type-2 ``action=MOVE`` twin at the same ``asset_id`` +
       ``casino_id`` replaces the prior identity using ``projects.ims.start_date`` (no fake
       ``rmvl_date`` / floor-start rewrite). Inactive historical MOVE rows do not supersede.
@@ -487,8 +490,20 @@ SELECT
     a.serial_number
 FROM (VALUES {values_rows}) AS m(ms, me)
 JOIN inventory.slot_master_migration AS sm
-    ON COALESCE(sm.golive001, sm.date_instl) IS NOT NULL
-   AND CONVERT(date, COALESCE(sm.golive001, sm.date_instl)) <= CONVERT(date, m.me)
+    ON (
+         CASE
+           WHEN UPPER(LTRIM(RTRIM(COALESCE(sm.action, N'')))) IN (N'CONVERT', N'UPGRADE')
+             THEN sm.lastconver
+           ELSE COALESCE(sm.golive001, sm.date_instl)
+         END
+       ) IS NOT NULL
+   AND CONVERT(date,
+         CASE
+           WHEN UPPER(LTRIM(RTRIM(COALESCE(sm.action, N'')))) IN (N'CONVERT', N'UPGRADE')
+             THEN sm.lastconver
+           ELSE COALESCE(sm.golive001, sm.date_instl)
+         END
+       ) <= CONVERT(date, m.me)
    AND (sm.rmvl_date IS NULL OR CONVERT(date, sm.rmvl_date) >= CONVERT(date, m.ms))
 JOIN clients.casinos AS c ON c.reference_key = sm.casino_id
 LEFT JOIN inventory.assets AS a ON a.reference_key = sm.asset_id
