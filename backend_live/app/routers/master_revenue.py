@@ -417,10 +417,11 @@ def finance_overview(
       Billing starts at go-live when set; otherwise install date. Convert predecessors close via another row's ``lastconver``
       (no ``rmvl_date`` on theme change); earliest successor convert before month start
       excludes the row (convert month still counts).
-      **MOVE supersede:** a Type-2 ``action=MOVE`` twin at the same ``asset_id`` + ``casino_id``
-      replaces the prior identity using ``projects.ims.start_date`` (no fake ``rmvl_date`` /
-      floor-start rewrite). Months before the move keep the prior; on/after the move month
-      only the MOVE row counts (bank move is not a dual-bill convert month).
+      **MOVE supersede:** an *active* Type-2 ``action=MOVE`` twin at the same ``asset_id`` +
+      ``casino_id`` replaces the prior identity using ``projects.ims.start_date`` (no fake
+      ``rmvl_date`` / floor-start rewrite). Inactive historical MOVE rows do not supersede.
+      Months before the move keep the prior; on/after the move month only the active MOVE
+      row counts (bank move is not a dual-bill convert month).
     """
     f = _month_prefix(from_month)
     t = _month_prefix(to_month)
@@ -506,8 +507,9 @@ WHERE sm.casino_id <> %s
       AND CONVERT(date, succ.lastconver) > CONVERT(date, COALESCE(sm.lastconver, sm.golive001, sm.date_instl))
       AND CONVERT(date, succ.lastconver) < CONVERT(date, m.ms)
   )
-  /* MOVE supersede: bank-move Type-2 twin replaces prior via IMS start_date.
-     Prior excluded once move start <= month end; MOVE excluded until then. */
+  /* MOVE supersede: active bank-move Type-2 twin replaces prior via IMS start_date.
+     Prior excluded once move start <= month end; MOVE excluded until then.
+     Inactive historical MOVE rows must not supersede later theme/install identities. */
   AND NOT (
     UPPER(LTRIM(RTRIM(COALESCE(sm.action, N'')))) <> N'MOVE'
     AND EXISTS (
@@ -518,6 +520,7 @@ WHERE sm.casino_id <> %s
         AND mv.casino_id = sm.casino_id
         AND mv.reference_key <> sm.reference_key
         AND UPPER(LTRIM(RTRIM(COALESCE(mv.action, N'')))) = N'MOVE'
+        AND mv.is_active = 1
         AND ims.start_date IS NOT NULL
         AND CONVERT(date, ims.start_date) <= CONVERT(date, m.me)
     )
@@ -525,7 +528,8 @@ WHERE sm.casino_id <> %s
   AND NOT (
     UPPER(LTRIM(RTRIM(COALESCE(sm.action, N'')))) = N'MOVE'
     AND (
-      sm.project_id IS NULL
+      sm.is_active <> 1
+      OR sm.project_id IS NULL
       OR NOT EXISTS (
         SELECT 1
         FROM projects.ims AS ims
