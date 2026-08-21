@@ -192,6 +192,7 @@ def recipe_label(commission_id: int | None) -> str | None:
         30: "20% / $85/day cap",
         33: "20% / $55/day max; loss passed",
         34: "greater of 20% or $1, then $50/day cap",
+        35: "20% of (Actual Win − Promo)",
     }
     return labels.get(int(commission_id), f"CID {commission_id}")
 
@@ -201,6 +202,7 @@ def commission_from_id(
     commission_id: int | None,
     *,
     days: int | None = None,
+    promo: float | None = None,
 ) -> float | None:
     if commission_id is None:
         return None
@@ -216,8 +218,10 @@ def commission_from_id(
         return 1.0 if c < 1 else c
     if commission_id == 30 and days is not None and days > 0:
         c = round(float(actual_win) * 0.2, 2)
+        if c < 1:
+            c = 1.0
         cap = int(days) * 85.0
-        return cap if c > cap else c
+        return round(c if c < cap else cap, 2)
     if commission_id == 33 and days is not None and days > 0:
         c = round(float(actual_win) * 0.2, 2)
         cap = int(days) * 55.0
@@ -260,6 +264,10 @@ def commission_from_id(
         return round(45.0 * int(days), 2)
     if commission_id == 10 and days is not None and days > 0:
         return round(float(actual_win) * 0.19 - int(days) * 1.50, 2)
+    # Kickapoo Finley-Cook: 20% of (Actual Win − Promo). Fees in Billed_Fees (COM-000035).
+    if commission_id == 35:
+        p = 0.0 if promo is None else float(promo)
+        return round((float(actual_win) - p) * 0.2, 2)
     if commission_id == 13:
         gross_20 = round(float(actual_win) * 0.2, 2)
         reduction = round(gross_20 * 0.0875, 2)
@@ -294,6 +302,7 @@ def _fetch_mr_range(start: date, end: date) -> list[dict]:
             RTRIM(ISNULL(Theme, '')) AS theme,
             CAST(ISNULL(Days_on_Floor, 0) AS int) AS dof,
             CAST(ISNULL(Actual_win, 0) AS float) AS actual_win,
+            CAST(ISNULL(Promo, 0) AS float) AS promo,
             CAST(ISNULL(Commission, 0) AS float) AS commission_a,
             Commission_ID AS mr_commission_id,
             RTRIM(CAST(slot_master_id AS nvarchar(50))) AS slot_master_id,
@@ -335,6 +344,7 @@ def _classify_row(mr: dict, profile_id: str | None) -> dict[str, Any] | None:
     a = round(_f(mr.get("commission_a")), 2)
     dof = int(mr.get("dof") or 0)
     win = _f(mr.get("actual_win"))
+    promo = _f(mr.get("promo"))
     serial = str(mr.get("serial") or "").strip() or "?"
     casino = str(mr.get("casino") or "").strip() or "?"
     ym = str(mr.get("ym") or "").strip()[:7]
@@ -377,7 +387,9 @@ def _classify_row(mr: dict, profile_id: str | None) -> dict[str, Any] | None:
 
     base["commission_id"] = cid
     base["recipe"] = recipe_label(cid)
-    formula = commission_from_id(win, cid, days=dof if dof > 0 else None)
+    formula = commission_from_id(
+        win, cid, days=dof if dof > 0 else None, promo=promo
+    )
     if formula is None:
         base["kind"] = "unknown"
         base["id"] = _flag_id("unknown", casino, serial, ym, str(profile_id))
@@ -420,6 +432,7 @@ def _scan_flags(start: date, end: date) -> list[dict[str, Any]]:
                 _f(r.get("actual_win")),
                 cid,
                 days=int(r.get("dof") or 0) or None,
+                promo=_f(r.get("promo")),
             )
             if formula is not None:
                 a = round(_f(r.get("commission_a")), 2)
