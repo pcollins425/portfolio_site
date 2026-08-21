@@ -50,6 +50,14 @@ python3 scripts/run_sql_file.py scripts/sql/dashboard_perf_ro/setup_dashboard_pe
 
 **Cross-database:** apply **`grant_dashboard_perf_ro_dgs_slot_master_revenue.sql`** so **`dashboard_perf_ro`** can **`SELECT`** **`[DGS_SLOT].[dbo].[Master_Revenue]`** through the view.
 
+**Commission contract queue (2026-08-21):** also needs **`SELECT`** on **`inventory.slot_master_migration`** (for `commission_profile_id`). Apply:
+
+```bash
+python3 scripts/run_sql_file.py scripts/sql/dashboard_perf_ro/grant_slot_master_migration_dashboard_perf_ro.sql
+```
+
+(Privileged login — not `dashboard_perf_ro` itself.)
+
 ## Verify (SSMS or `sqlcmd`)
 
 Sign in **as `dashboard_perf_ro`** (same server, **`dgs_application_db`**):
