@@ -1,15 +1,27 @@
 import { useCallback, useEffect, useState } from "react";
 import { apiUrl, fetchJson } from "../api/client";
 import AnalystPage, { type AnalystSummary } from "../pages/AnalystPage";
+import CommissionPage, { type CommissionSummary } from "../pages/CommissionPage";
 import ExecutivePage from "../pages/ExecutivePage";
 import FinancePage from "../pages/FinancePage";
 import PerformancePage from "../pages/PerformancePage";
 import { DashboardMonthProvider } from "./MonthContext";
 import { useDashboardTheme } from "./ThemeContext";
 
-export type DashboardRoute = "/executive" | "/analyst" | "/finance" | "/performance";
+export type DashboardRoute =
+  | "/executive"
+  | "/analyst"
+  | "/commission"
+  | "/finance"
+  | "/performance";
 
-const ROUTES: DashboardRoute[] = ["/executive", "/analyst", "/finance", "/performance"];
+const ROUTES: DashboardRoute[] = [
+  "/executive",
+  "/analyst",
+  "/commission",
+  "/finance",
+  "/performance",
+];
 
 function parseRoute(raw: string | null | undefined): DashboardRoute {
   const path = raw?.startsWith("/") ? raw : `/${raw || "executive"}`;
@@ -38,12 +50,18 @@ type PeriodsPayload = { periods?: string[] };
 
 function routePage(
   route: DashboardRoute,
-  summary: AnalystSummary | null,
-  onResolved: () => void,
+  analystSummary: AnalystSummary | null,
+  commissionSummary: CommissionSummary | null,
+  onAnalystResolved: () => void,
+  onCommissionResolved: () => void,
 ) {
   switch (route) {
     case "/analyst":
-      return <AnalystPage summary={summary} onResolved={onResolved} />;
+      return <AnalystPage summary={analystSummary} onResolved={onAnalystResolved} />;
+    case "/commission":
+      return (
+        <CommissionPage summary={commissionSummary} onResolved={onCommissionResolved} />
+      );
     case "/finance":
       return <FinancePage />;
     case "/performance":
@@ -92,7 +110,10 @@ export default function DashboardApp() {
   const [month, setMonthState] = useState(readInitialMonth);
   const [periods, setPeriods] = useState<string[]>([]);
   const [health, setHealth] = useState<Health | null>(null);
-  const [summary, setSummary] = useState<AnalystSummary | null>(null);
+  const [analystSummary, setAnalystSummary] = useState<AnalystSummary | null>(null);
+  const [commissionSummary, setCommissionSummary] = useState<CommissionSummary | null>(
+    null,
+  );
 
   const setMonth = (next: string) => {
     setMonthState(next);
@@ -122,25 +143,45 @@ export default function DashboardApp() {
       .catch(() => setPeriods([]));
   }, []);
 
-  const refreshSummary = useCallback((through: string) => {
+  const refreshAnalystSummary = useCallback((through: string) => {
     if (!through) return;
     fetchJson<AnalystSummary>(`/api/analyst/summary?through=${encodeURIComponent(through)}`)
       .then((d) => {
-        setSummary(d);
+        setAnalystSummary(d);
         window.dispatchEvent(
           new CustomEvent("dgs-analyst-open-months", { detail: d.months_with_open }),
         );
       })
       .catch(() => {
-        setSummary(null);
+        setAnalystSummary(null);
         window.dispatchEvent(new CustomEvent("dgs-analyst-open-months", { detail: 0 }));
+      });
+  }, []);
+
+  const refreshCommissionSummary = useCallback((through: string) => {
+    if (!through) return;
+    fetchJson<CommissionSummary>(
+      `/api/commission-contract/summary?through=${encodeURIComponent(through)}`,
+    )
+      .then((d) => {
+        setCommissionSummary(d);
+        window.dispatchEvent(
+          new CustomEvent("dgs-commission-open-months", { detail: d.months_with_open }),
+        );
+      })
+      .catch(() => {
+        setCommissionSummary(null);
+        window.dispatchEvent(new CustomEvent("dgs-commission-open-months", { detail: 0 }));
       });
   }, []);
 
   useEffect(() => {
     const through = periods[0]?.slice(0, 7) || "";
-    if (through) refreshSummary(through);
-  }, [periods, refreshSummary]);
+    if (through) {
+      refreshAnalystSummary(through);
+      refreshCommissionSummary(through);
+    }
+  }, [periods, refreshAnalystSummary, refreshCommissionSummary]);
 
   useEffect(() => {
     const onRoute = (e: Event) => {
@@ -150,6 +191,8 @@ export default function DashboardApp() {
     window.addEventListener("dgs-dashboard-route", onRoute);
     return () => window.removeEventListener("dgs-dashboard-route", onRoute);
   }, []);
+
+  const hidePeriod = route === "/analyst" || route === "/commission";
 
   return (
     <DashboardMonthProvider month={month} setMonth={setMonth} periods={periods}>
@@ -170,12 +213,18 @@ export default function DashboardApp() {
           ) : (
             <div className={`text-xs ${t.code}`}>Connecting…</div>
           )}
-          {route !== "/analyst" ? (
+          {!hidePeriod ? (
             <MonthSelector month={month} periods={periods} onChange={setMonth} />
           ) : null}
         </div>
         <div className="dgs-dashboard-panel">
-          {routePage(route, summary, () => refreshSummary(periods[0]?.slice(0, 7) || ""))}
+          {routePage(
+            route,
+            analystSummary,
+            commissionSummary,
+            () => refreshAnalystSummary(periods[0]?.slice(0, 7) || ""),
+            () => refreshCommissionSummary(periods[0]?.slice(0, 7) || ""),
+          )}
         </div>
       </div>
     </DashboardMonthProvider>

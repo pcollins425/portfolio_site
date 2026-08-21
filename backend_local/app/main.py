@@ -4,7 +4,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app import settings as app_settings
-from app.routers import analyst, assistant, assets, auth, commerce, contracts, documents, emaint_demo, expenses, field, master_revenue, media, parts_inventory, slot_master, software_vault, warehouse_inventory
+from app.routers import analyst, assistant, assets, auth, commerce, commission_contract, contracts, documents, emaint_demo, expenses, field, master_revenue, media, parts_inventory, slot_master, software_vault, warehouse_inventory
 from app.routers.v1 import health as v1_health
 
 app_settings.load_local_env()
@@ -27,6 +27,7 @@ app.add_middleware(
 
 app.include_router(master_revenue.router)
 app.include_router(analyst.router)
+app.include_router(commission_contract.router)
 
 
 @app.on_event("startup")

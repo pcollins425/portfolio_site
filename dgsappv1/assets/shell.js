@@ -59,11 +59,13 @@
   const DASHBOARD_NAV = [
     { route: "/executive", label: "Executive" },
     { route: "/analyst", label: "Analyst" },
+    { route: "/commission", label: "Commission" },
     { route: "/finance", label: "Finance" },
     { route: "/performance", label: "Performance" },
   ];
 
   let analystOpenMonths = 0;
+  let commissionOpenMonths = 0;
 
   let dashboardBundlePromise = null;
   const MOBILE_TOP_NAV_MQ = window.matchMedia("(max-width: 900px)");
@@ -414,6 +416,13 @@
         badge.title = `${analystOpenMonths} month${analystOpenMonths === 1 ? "" : "s"} with open intake flags`;
         el.appendChild(badge);
       }
+      if (item.route === "/commission" && commissionOpenMonths > 0) {
+        const badge = document.createElement("span");
+        badge.className = "dgs-analyst-badge";
+        badge.textContent = String(commissionOpenMonths);
+        badge.title = `${commissionOpenMonths} month${commissionOpenMonths === 1 ? "" : "s"} with open commission flags`;
+        el.appendChild(badge);
+      }
       nav.appendChild(el);
     }
   }
@@ -422,6 +431,15 @@
     const next = Math.max(0, Number(n) || 0);
     if (next === analystOpenMonths) return;
     analystOpenMonths = next;
+    const nav = document.getElementById("dgs-dashboard-nav");
+    const active = nav?.querySelector(".active")?.getAttribute("data-route") || "/executive";
+    renderDashboardSubnav(active);
+  }
+
+  function setCommissionOpenMonths(n) {
+    const next = Math.max(0, Number(n) || 0);
+    if (next === commissionOpenMonths) return;
+    commissionOpenMonths = next;
     const nav = document.getElementById("dgs-dashboard-nav");
     const active = nav?.querySelector(".active")?.getAttribute("data-route") || "/executive";
     renderDashboardSubnav(active);
@@ -456,6 +474,9 @@
         "executive");
     window.addEventListener("dgs-analyst-open-months", (e) => {
       setAnalystOpenMonths(e.detail);
+    });
+    window.addEventListener("dgs-commission-open-months", (e) => {
+      setCommissionOpenMonths(e.detail);
     });
     renderDashboardSubnav(initial);
     setDashboardRoute(initial);
