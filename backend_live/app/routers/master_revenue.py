@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import os
-import re
 from datetime import date, datetime, timedelta
 from typing import Annotated, Any
 
@@ -380,26 +379,35 @@ def _month_span(from_ym: str, to_ym: str) -> list[str]:
 # Sold sentinel casino — never expected to invoice.
 _SOLD_CASINO_ID = "CT-00907"
 
-# Participation reports bill playable terminals only — not ETG centers / signage gear.
-_NON_PLAYABLE_TOKENS = frozenset({"center", "sign", "controller", "server"})
-_NON_PLAYABLE_WORD = re.compile(
-    r"(?<![a-z0-9])(" + "|".join(_NON_PLAYABLE_TOKENS) + r")(?![a-z0-9])",
-    re.IGNORECASE,
-)
-
-
-def _is_non_playable_participation(row: dict[str, Any] | None) -> bool:
-    """True for centers / signs / controllers / servers (not vendor participation lines)."""
-    if not row:
-        return False
-    asset = str(row.get("asset_no") or "").strip().lower()
-    if asset in _NON_PLAYABLE_TOKENS:
-        return True
-    blob = " ".join(
-        str(row.get(k) or "")
-        for k in ("asset_no", "cabinet_name", "theme_name", "serial_number")
+# Playable-only expected rows — same tokens as MR processor floor compare.
+# Primary: SMM asset_no + inventory.assets cabinet_type / machine_type.
+# Fallback: cabinet name / serial text until asset attrs are stamped on all centers/signs.
+# Theme EXISTS covers rare Sign rows with no asset row attrs (Harrah's OK signage).
+_NON_PLAYABLE_SQL = """
+  AND NOT (
+    LOWER(LTRIM(RTRIM(COALESCE(sm.asset_no, N'')))) IN (N'center', N'sign', N'controller', N'server')
+    OR LOWER(LTRIM(RTRIM(COALESCE(a.cabinet_type, N'')))) IN (N'center', N'sign', N'controller', N'server')
+    OR LOWER(LTRIM(RTRIM(COALESCE(a.machine_type, N'')))) IN (N'center', N'sign', N'controller', N'server')
+    OR CHARINDEX(N'center', LOWER(COALESCE(cab.cabinet_name, N''))) > 0
+    OR CHARINDEX(N'sign', LOWER(COALESCE(cab.cabinet_name, N''))) > 0
+    OR CHARINDEX(N'controller', LOWER(COALESCE(cab.cabinet_name, N''))) > 0
+    OR CHARINDEX(N'server', LOWER(COALESCE(cab.cabinet_name, N''))) > 0
+    OR CHARINDEX(N'center', LOWER(COALESCE(a.serial_number, N''))) > 0
+    OR CHARINDEX(N'sign', LOWER(COALESCE(a.serial_number, N''))) > 0
+    OR CHARINDEX(N'controller', LOWER(COALESCE(a.serial_number, N''))) > 0
+    OR CHARINDEX(N'server', LOWER(COALESCE(a.serial_number, N''))) > 0
+    OR EXISTS (
+      SELECT 1 FROM vendors.themes AS th
+      WHERE th.reference_key = sm.theme_id
+        AND (
+          LOWER(LTRIM(RTRIM(COALESCE(th.theme_name, N'')))) = N'sign'
+          OR CHARINDEX(N'center', LOWER(COALESCE(th.theme_name, N''))) > 0
+          OR CHARINDEX(N'controller', LOWER(COALESCE(th.theme_name, N''))) > 0
+          OR CHARINDEX(N'server', LOWER(COALESCE(th.theme_name, N''))) > 0
+        )
     )
-    return bool(_NON_PLAYABLE_WORD.search(blob))
+  )
+"""
 
 
 @router.get("/finance/overview")
@@ -483,11 +491,7 @@ GROUP BY RTRIM([Casino])
 SELECT
     COALESCE(NULLIF(RTRIM(c.casino_short), N''), RTRIM(c.casino_name)) AS casino,
     m.ms AS month_start,
-    sm.reference_key AS smm_key,
-    sm.asset_no,
-    cab.cabinet_name,
-    t.theme_name,
-    a.serial_number
+    sm.reference_key AS smm_key
 FROM (VALUES {values_rows}) AS m(ms, me)
 JOIN inventory.slot_master_migration AS sm
     ON (
@@ -507,9 +511,9 @@ JOIN inventory.slot_master_migration AS sm
    AND (sm.rmvl_date IS NULL OR CONVERT(date, sm.rmvl_date) >= CONVERT(date, m.ms))
 JOIN clients.casinos AS c ON c.reference_key = sm.casino_id
 LEFT JOIN inventory.assets AS a ON a.reference_key = sm.asset_id
-LEFT JOIN vendors.themes AS t ON t.reference_key = sm.theme_id
 LEFT JOIN vendors.cabinets AS cab ON cab.reference_key = a.cabinet_id
 WHERE sm.casino_id <> %s
+{_NON_PLAYABLE_SQL}
   /* Convert close-out: earliest successor lastconver after floor start ends this theme row
      before the processing month (convert month still counts). */
   AND NOT EXISTS (
@@ -589,8 +593,6 @@ WHERE sm.casino_id <> %s
     commission_by_key: dict[tuple[str, str], float] = {}
 
     for r in expected_key_rows:
-        if _is_non_playable_participation(r):
-            continue
         ym = _ym(r.get("month_start"))
         casino = str(r.get("casino") or "").strip()
         key = str(r.get("smm_key") or "").strip()

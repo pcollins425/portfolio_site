@@ -178,6 +178,7 @@ def recipe_label(commission_id: int | None) -> str | None:
         2: "18% Actual Win",
         4: "20% − $1/day",
         5: "16.45% − $3.50/day",
+        6: "20% − $2.50/day",
         9: "20% − $0.25/day",
         10: "19% − $1.50/day",
         12: "15% Actual Win",
@@ -188,6 +189,7 @@ def recipe_label(commission_id: int | None) -> str | None:
         19: "20% / $60/day max",
         23: "$45/day rent",
         24: "17% / $60/day max",
+        27: "15%; no loss passed",
         29: "greater of 20% or $1, $55/day cap",
         30: "20% / $85/day cap",
         33: "20% / $55/day max; loss passed",
@@ -208,6 +210,9 @@ def commission_from_id(
         return None
     if commission_id == 1:
         return round(float(actual_win) * 0.2, 2)
+    # Indigo Sky: 20% Actual Win − $2.50 × Days_on_Floor (COM-000006)
+    if commission_id == 6 and days is not None and days > 0:
+        return round(float(actual_win) * 0.20 - int(days) * 2.5, 2)
     if commission_id == 12:
         return round(float(actual_win) * 0.15, 2)
     if commission_id == 29 and days is not None and days > 0:
@@ -252,6 +257,10 @@ def commission_from_id(
     # COM-000015: 20%; no loss passed (negative → $0)
     if commission_id == 15:
         c = round(float(actual_win) * 0.2, 2)
+        return 0.0 if c < 0 else c
+    # COM-000027: 15%; no loss passed (negative → $0)
+    if commission_id == 27:
+        c = round(float(actual_win) * 0.15, 2)
         return 0.0 if c < 0 else c
     # COM-000019: 20% with $60/day maximum
     if commission_id == 19 and days is not None and days > 0:

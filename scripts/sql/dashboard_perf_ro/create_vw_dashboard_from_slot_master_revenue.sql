@@ -7,6 +7,14 @@
    or analogous grants later if tightened).
 
   Corrected table name: Master_Revenue (not Master_Revenu).
+
+  SELECT * is convenient and dangerous: after ALTER TABLE on Master_Revenue
+  (DROP/ADD columns), this view's column binding goes stale until refresh.
+  2026-08-13: actual_index rebuild on 08-11 left slot_master_id reading
+  index decimals → Casinos API 8114. After any MR schema change, from
+  dgs_application_db:
+
+      EXEC sp_refreshview N'dashboard.vw_performance_report';
 */
 
 IF NOT EXISTS (SELECT 1 FROM sys.schemas WHERE name = N'dashboard')
