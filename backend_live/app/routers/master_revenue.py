@@ -433,11 +433,10 @@ def finance_overview(
       ``rmvl_date`` / floor-start rewrite). Inactive historical MOVE rows do not supersede.
       Months before the move keep the prior; on/after the move month only the active MOVE
       row counts (bank move is not a dual-bill convert month).
-      **UPGRADE supersede (locked 2026-08-25):** single-bill vs soft prior — *active*
-      ``action=UPGRADE`` twin with ``lastconver <= month_end`` excludes non-UPGRADE prior
-      (MOVE *intent*, not MOVE *active-only entry*). UPGRADE rows enter expected via
-      ``lastconver``→``rmvl`` like CONVERT — ``is_active`` does not gate entry. Do not invent
-      SMM dates to clear gaps; stamp worksheet action (upgrade vs convert) correctly.
+      **UPGRADE supersede (locked 2026-08-25):** single-bill vs soft prior — in-window
+      ``action=UPGRADE`` (``lastconver``→``rmvl``) excludes blank/INSTALL priors only (never
+      CONVERT/MOVE). UPGRADE enters expected like CONVERT. Type-2: soft prior + UPGRADE TO
+      (+ CONVERT if theme changes). No Finance-invented soft-prior ``rmvl``.
     """
     f = _month_prefix(from_month)
     t = _month_prefix(to_month)
@@ -563,13 +562,11 @@ WHERE sm.casino_id <> %s
       )
     )
   )
-  /* UPGRADE supersede: active software-upgrade Type-2 twin replaces prior via lastconver.
-     Same single-bill intent as MOVE (usually no extra invoice / house # change).
-     CONVERT theme changes still dual-bill; only UPGRADE uses this gate.
-     Inactive UPGRADE rows still bill within their lastconver→rmvl window (e.g. Chilocco
-     2828 May upgrade later closed by July CONVERT) — do not require is_active=1. */
+  /* UPGRADE supersede: in-window UPGRADE drops soft priors only (blank/INSTALL — not
+     CONVERT/MOVE/UPGRADE). Single-bill vs prior software stint; convert month still
+     dual-bills UPGRADE + CONVERT TO. */
   AND NOT (
-    UPPER(LTRIM(RTRIM(COALESCE(sm.action, N'')))) <> N'UPGRADE'
+    UPPER(LTRIM(RTRIM(COALESCE(sm.action, N'')))) NOT IN (N'UPGRADE', N'CONVERT', N'MOVE')
     AND EXISTS (
       SELECT 1
       FROM inventory.slot_master_migration AS upg
@@ -577,9 +574,9 @@ WHERE sm.casino_id <> %s
         AND upg.casino_id = sm.casino_id
         AND upg.reference_key <> sm.reference_key
         AND UPPER(LTRIM(RTRIM(COALESCE(upg.action, N'')))) = N'UPGRADE'
-        AND upg.is_active = 1
         AND upg.lastconver IS NOT NULL
         AND CONVERT(date, upg.lastconver) <= CONVERT(date, m.me)
+        AND (upg.rmvl_date IS NULL OR CONVERT(date, upg.rmvl_date) >= CONVERT(date, m.ms))
     )
   )
 """
