@@ -433,12 +433,11 @@ def finance_overview(
       ``rmvl_date`` / floor-start rewrite). Inactive historical MOVE rows do not supersede.
       Months before the move keep the prior; on/after the move month only the active MOVE
       row counts (bank move is not a dual-bill convert month).
-      **UPGRADE supersede (locked 2026-08-25):** same single-bill pattern as MOVE — software
-      upgrades usually keep house # / one MR line. Active ``action=UPGRADE`` twin supersedes
-      the prior via ``lastconver`` (upgrade era start). Only the active UPGRADE counts on/after
-      the upgrade month while it remains the live twin; CONVERT theme changes still dual-bill.
-      Inactive UPGRADE rows remain expected inside ``lastconver``→``rmvl_date`` (Chilocco 2828
-      May upgrade later closed by July CONVERT) — do not drop them solely for ``is_active=0``.
+      **UPGRADE supersede (locked 2026-08-25):** single-bill vs soft prior — *active*
+      ``action=UPGRADE`` twin with ``lastconver <= month_end`` excludes non-UPGRADE prior
+      (MOVE *intent*, not MOVE *active-only entry*). UPGRADE rows enter expected via
+      ``lastconver``→``rmvl`` like CONVERT — ``is_active`` does not gate entry. Do not invent
+      SMM dates to clear gaps; stamp worksheet action (upgrade vs convert) correctly.
     """
     f = _month_prefix(from_month)
     t = _month_prefix(to_month)
