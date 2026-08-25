@@ -436,7 +436,9 @@ def finance_overview(
       **UPGRADE supersede (locked 2026-08-25):** same single-bill pattern as MOVE — software
       upgrades usually keep house # / one MR line. Active ``action=UPGRADE`` twin supersedes
       the prior via ``lastconver`` (upgrade era start). Only the active UPGRADE counts on/after
-      the upgrade month; CONVERT theme changes still dual-bill in the convert month.
+      the upgrade month while it remains the live twin; CONVERT theme changes still dual-bill.
+      Inactive UPGRADE rows remain expected inside ``lastconver``→``rmvl_date`` (Chilocco 2828
+      May upgrade later closed by July CONVERT) — do not drop them solely for ``is_active=0``.
     """
     f = _month_prefix(from_month)
     t = _month_prefix(to_month)
@@ -564,7 +566,9 @@ WHERE sm.casino_id <> %s
   )
   /* UPGRADE supersede: active software-upgrade Type-2 twin replaces prior via lastconver.
      Same single-bill intent as MOVE (usually no extra invoice / house # change).
-     CONVERT theme changes still dual-bill; only UPGRADE uses this gate. */
+     CONVERT theme changes still dual-bill; only UPGRADE uses this gate.
+     Inactive UPGRADE rows still bill within their lastconver→rmvl window (e.g. Chilocco
+     2828 May upgrade later closed by July CONVERT) — do not require is_active=1. */
   AND NOT (
     UPPER(LTRIM(RTRIM(COALESCE(sm.action, N'')))) <> N'UPGRADE'
     AND EXISTS (
@@ -578,10 +582,6 @@ WHERE sm.casino_id <> %s
         AND upg.lastconver IS NOT NULL
         AND CONVERT(date, upg.lastconver) <= CONVERT(date, m.me)
     )
-  )
-  AND NOT (
-    UPPER(LTRIM(RTRIM(COALESCE(sm.action, N'')))) = N'UPGRADE'
-    AND sm.is_active <> 1
   )
 """
 
