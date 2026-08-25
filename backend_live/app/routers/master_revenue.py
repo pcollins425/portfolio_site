@@ -433,6 +433,10 @@ def finance_overview(
       ``rmvl_date`` / floor-start rewrite). Inactive historical MOVE rows do not supersede.
       Months before the move keep the prior; on/after the move month only the active MOVE
       row counts (bank move is not a dual-bill convert month).
+      **UPGRADE supersede (locked 2026-08-25):** same single-bill pattern as MOVE — software
+      upgrades usually keep house # / one MR line. Active ``action=UPGRADE`` twin supersedes
+      the prior via ``lastconver`` (upgrade era start). Only the active UPGRADE counts on/after
+      the upgrade month; CONVERT theme changes still dual-bill in the convert month.
     """
     f = _month_prefix(from_month)
     t = _month_prefix(to_month)
@@ -557,6 +561,27 @@ WHERE sm.casino_id <> %s
           AND CONVERT(date, ims.start_date) <= CONVERT(date, m.me)
       )
     )
+  )
+  /* UPGRADE supersede: active software-upgrade Type-2 twin replaces prior via lastconver.
+     Same single-bill intent as MOVE (usually no extra invoice / house # change).
+     CONVERT theme changes still dual-bill; only UPGRADE uses this gate. */
+  AND NOT (
+    UPPER(LTRIM(RTRIM(COALESCE(sm.action, N'')))) <> N'UPGRADE'
+    AND EXISTS (
+      SELECT 1
+      FROM inventory.slot_master_migration AS upg
+      WHERE upg.asset_id = sm.asset_id
+        AND upg.casino_id = sm.casino_id
+        AND upg.reference_key <> sm.reference_key
+        AND UPPER(LTRIM(RTRIM(COALESCE(upg.action, N'')))) = N'UPGRADE'
+        AND upg.is_active = 1
+        AND upg.lastconver IS NOT NULL
+        AND CONVERT(date, upg.lastconver) <= CONVERT(date, m.me)
+    )
+  )
+  AND NOT (
+    UPPER(LTRIM(RTRIM(COALESCE(sm.action, N'')))) = N'UPGRADE'
+    AND sm.is_active <> 1
   )
 """
 
