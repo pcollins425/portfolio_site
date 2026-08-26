@@ -12,6 +12,7 @@ from pydantic import BaseModel, Field
 from app import analyst_queue as aq
 from app import mssql
 from app.auth_deps import require_demo_user
+from app.commission_rules import parse_rules, reporting_waived
 
 router = APIRouter(prefix="/api", tags=["master-revenue"])
 
@@ -495,7 +496,11 @@ GROUP BY RTRIM([Casino])
 SELECT
     COALESCE(NULLIF(RTRIM(c.casino_short), N''), RTRIM(c.casino_name)) AS casino,
     m.ms AS month_start,
-    sm.reference_key AS smm_key
+    m.me AS month_end,
+    sm.reference_key AS smm_key,
+    sm.date_instl,
+    sm.golive001,
+    cp.commission_rules
 FROM (VALUES {values_rows}) AS m(ms, me)
 JOIN inventory.slot_master_migration AS sm
     ON (
@@ -516,6 +521,7 @@ JOIN inventory.slot_master_migration AS sm
 JOIN clients.casinos AS c ON c.reference_key = sm.casino_id
 LEFT JOIN inventory.assets AS a ON a.reference_key = sm.asset_id
 LEFT JOIN vendors.cabinets AS cab ON cab.reference_key = a.cabinet_id
+LEFT JOIN finance.commission_profile AS cp ON cp.reference_key = sm.commission_profile_id
 WHERE sm.casino_id <> %s
 {_NON_PLAYABLE_SQL}
   /* Convert close-out: earliest successor lastconver after floor start ends this theme row
@@ -609,6 +615,7 @@ WHERE sm.casino_id <> %s
     # Per (casino, month): expected / invoiced SMM key sets + row counts
     expected_sets: dict[tuple[str, str], set[str]] = {}
     expected_counts: dict[tuple[str, str], int] = {}
+    waived_sets: dict[tuple[str, str], set[str]] = {}
     invoiced_sets: dict[tuple[str, str], set[str]] = {}
     invoiced_entries: dict[tuple[str, str], int] = {}
     commission_by_key: dict[tuple[str, str], float] = {}
@@ -622,6 +629,15 @@ WHERE sm.casino_id <> %s
         cm_key = (casino, ym)
         expected_sets.setdefault(cm_key, set()).add(key)
         expected_counts[cm_key] = expected_counts.get(cm_key, 0) + 1
+        month_end = _as_date(r.get("month_end"))
+        if month_end:
+            row = {
+                "date_instl": _as_date(r.get("date_instl")),
+                "golive001": _as_date(r.get("golive001")),
+            }
+            rules = parse_rules(r.get("commission_rules"))
+            if reporting_waived(row, rules, month_end):
+                waived_sets.setdefault(cm_key, set()).add(key)
 
     for r in mr_key_rows:
         ym = _ym(r.get("d"))
@@ -679,17 +695,33 @@ WHERE sm.casino_id <> %s
             if m == ym:
                 commission += cm
 
+        waived_keys: set[str] = set()
+        for (casino, m), keys in waived_sets.items():
+            if m == ym:
+                waived_keys |= keys
+        uninvoiced = exp_keys - inv_keys
+        uninvoiced_actionable = uninvoiced - waived_keys
+        missing_casinos: set[str] = set()
+        for casino in exp_casinos:
+            exp_c = expected_sets.get((casino, ym), set())
+            inv_c = invoiced_sets.get((casino, ym), set())
+            waived_c = waived_sets.get((casino, ym), set())
+            if (exp_c - inv_c) - waived_c:
+                missing_casinos.add(casino)
+
         return {
             "month": ym,
             "expected_entries": expected,
             "invoiced_entries": entries,
             "invoiced_keys": len(inv_keys),
-            "uninvoiced_keys": len(exp_keys - inv_keys),
+            "uninvoiced_keys": len(uninvoiced),
+            "reporting_waived_keys": len(waived_keys & uninvoiced),
+            "uninvoiced_actionable_keys": len(uninvoiced_actionable),
             "unexpected_keys": len(inv_keys - exp_keys),
             "commission": commission,
             "casinos_expected": len(exp_casinos),
             "casinos_reported": len(rep_casinos),
-            "casinos_missing": len(exp_casinos - rep_casinos),
+            "casinos_missing": len(missing_casinos),
         }
 
     monthly = [month_totals(ym) for ym in months]
@@ -716,19 +748,27 @@ WHERE sm.casino_id <> %s
         inv_set = invoiced_sets.get((casino, t), set())
         expected = expected_counts.get((casino, t), len(exp_set))
         entries = invoiced_entries.get((casino, t), 0)
-        missing_months = [
-            ym
-            for ym in months
-            if expected_sets.get((casino, ym), set())
-            and not invoiced_sets.get((casino, ym), set())
-        ]
+        waived_set = waived_sets.get((casino, t), set())
+        uninvoiced = exp_set - inv_set
+        uninvoiced_actionable = uninvoiced - waived_set
+        missing_months = []
+        for ym in months:
+            exp_m = expected_sets.get((casino, ym), set())
+            if not exp_m:
+                continue
+            inv_m = invoiced_sets.get((casino, ym), set())
+            waived_m = waived_sets.get((casino, ym), set())
+            if (exp_m - inv_m) - waived_m:
+                missing_months.append(ym)
         casinos_out.append(
             {
                 "casino": casino,
                 "expected_entries": expected,
                 "invoiced_entries": entries,
                 "invoiced_keys": len(inv_set),
-                "uninvoiced_keys": len(exp_set - inv_set),
+                "uninvoiced_keys": len(uninvoiced),
+                "reporting_waived_keys": len(waived_set & uninvoiced),
+                "uninvoiced_actionable_keys": len(uninvoiced_actionable),
                 "unexpected_keys": len(inv_set - exp_set),
                 "gap": entries - expected,
                 "commission": commission_by_key.get((casino, t), 0.0),
@@ -736,7 +776,9 @@ WHERE sm.casino_id <> %s
                 "missing_months": missing_months,
             }
         )
-    casinos_out.sort(key=lambda r: (-r["uninvoiced_keys"], -len(r["missing_months"]), r["casino"]))
+    casinos_out.sort(
+        key=lambda r: (-r["uninvoiced_actionable_keys"], -len(r["missing_months"]), r["casino"])
+    )
 
     return {
         "source": "live",

@@ -22,6 +22,8 @@ type MonthlyRow = {
   invoiced_entries: number;
   invoiced_keys: number;
   uninvoiced_keys: number;
+  reporting_waived_keys: number;
+  uninvoiced_actionable_keys: number;
   unexpected_keys: number;
   commission: number;
   casinos_expected: number;
@@ -35,6 +37,8 @@ type CasinoRow = {
   invoiced_entries: number;
   invoiced_keys: number;
   uninvoiced_keys: number;
+  reporting_waived_keys: number;
+  uninvoiced_actionable_keys: number;
   unexpected_keys: number;
   gap: number;
   commission: number;
@@ -186,8 +190,8 @@ export default function FinancePage() {
           <Kpi
             label={`Expected vs invoiced (${k.month})`}
             value={`${k.expected_entries.toLocaleString()} / ${k.invoiced_entries.toLocaleString()}`}
-            sub={`${k.uninvoiced_keys} uninvoiced · ${k.unexpected_keys} unexpected SMM keys`}
-            positive={k.invoiced_entries >= k.expected_entries && k.uninvoiced_keys === 0}
+            sub={`${k.uninvoiced_actionable_keys} actionable · ${k.reporting_waived_keys} waived · ${k.unexpected_keys} unexpected`}
+            positive={k.invoiced_entries >= k.expected_entries && k.uninvoiced_actionable_keys === 0}
           />
           <Kpi
             label="Expected entries (SMM)"
@@ -257,6 +261,8 @@ export default function FinancePage() {
               <th className="px-4 py-3 font-medium">Expected</th>
               <th className="px-4 py-3 font-medium">Invoiced</th>
               <th className="px-4 py-3 font-medium">Uninvoiced</th>
+              <th className="px-4 py-3 font-medium">Waived</th>
+              <th className="px-4 py-3 font-medium">Actionable</th>
               <th className="px-4 py-3 font-medium">Unexpected</th>
               <th className="px-4 py-3 font-medium">Gap</th>
               <th className="px-4 py-3 font-medium">Last report</th>
@@ -267,13 +273,19 @@ export default function FinancePage() {
             {(data?.casinos ?? []).map((r) => (
               <tr
                 key={r.casino}
-                className={r.uninvoiced_keys > 0 || r.missing_months.length > 0 ? t.tableRowBad : ""}
+                className={r.uninvoiced_actionable_keys > 0 || r.missing_months.length > 0 ? t.tableRowBad : ""}
               >
                 <td className={t.tableCellName}>{r.casino}</td>
                 <td className={t.tableCell}>{r.expected_entries.toLocaleString()}</td>
                 <td className={t.tableCell}>{r.invoiced_entries.toLocaleString()}</td>
-                <td className={`px-4 py-3 font-mono ${r.uninvoiced_keys ? t.tableCellBad : t.tableCellMuted}`}>
+                <td className={`px-4 py-3 font-mono ${r.uninvoiced_keys ? t.tableCellMuted : t.tableCellMuted}`}>
                   {r.uninvoiced_keys}
+                </td>
+                <td className={`px-4 py-3 font-mono ${r.reporting_waived_keys ? t.tableCellMuted : t.tableCellMuted}`}>
+                  {r.reporting_waived_keys}
+                </td>
+                <td className={`px-4 py-3 font-mono ${r.uninvoiced_actionable_keys ? t.tableCellBad : t.tableCellMuted}`}>
+                  {r.uninvoiced_actionable_keys}
                 </td>
                 <td className={`px-4 py-3 font-mono ${r.unexpected_keys ? t.tableCellBad : t.tableCellMuted}`}>
                   {r.unexpected_keys}
