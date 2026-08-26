@@ -701,13 +701,6 @@ WHERE sm.casino_id <> %s
                 waived_keys |= keys
         uninvoiced = exp_keys - inv_keys
         uninvoiced_actionable = uninvoiced - waived_keys
-        missing_casinos: set[str] = set()
-        for casino in exp_casinos:
-            exp_c = expected_sets.get((casino, ym), set())
-            inv_c = invoiced_sets.get((casino, ym), set())
-            waived_c = waived_sets.get((casino, ym), set())
-            if (exp_c - inv_c) - waived_c:
-                missing_casinos.add(casino)
 
         return {
             "month": ym,
@@ -721,7 +714,7 @@ WHERE sm.casino_id <> %s
             "commission": commission,
             "casinos_expected": len(exp_casinos),
             "casinos_reported": len(rep_casinos),
-            "casinos_missing": len(missing_casinos),
+            "casinos_missing": len(exp_casinos - rep_casinos),
         }
 
     monthly = [month_totals(ym) for ym in months]
@@ -752,15 +745,12 @@ WHERE sm.casino_id <> %s
         uninvoiced = exp_set - inv_set
         uninvoiced_actionable = uninvoiced - waived_set
         waived_uninvoiced = len(waived_set & uninvoiced)
-        missing_months = []
-        for ym in months:
-            exp_m = expected_sets.get((casino, ym), set())
-            if not exp_m:
-                continue
-            inv_m = invoiced_sets.get((casino, ym), set())
-            waived_m = waived_sets.get((casino, ym), set())
-            if (exp_m - inv_m) - waived_m:
-                missing_months.append(ym)
+        missing_months = [
+            ym
+            for ym in months
+            if expected_sets.get((casino, ym), set())
+            and not invoiced_sets.get((casino, ym), set())
+        ]
         casinos_out.append(
             {
                 "casino": casino,

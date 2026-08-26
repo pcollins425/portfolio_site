@@ -273,7 +273,9 @@ export default function FinancePage() {
             {(data?.casinos ?? []).map((r) => (
               <tr
                 key={r.casino}
-                className={r.uninvoiced_actionable_keys > 0 || r.missing_months.length > 0 ? t.tableRowBad : ""}
+                className={
+                  r.uninvoiced_actionable_keys > 0 || r.unexpected_keys > 0 ? t.tableRowBad : ""
+                }
               >
                 <td className={t.tableCellName}>{r.casino}</td>
                 <td className={t.tableCell}>{r.expected_entries.toLocaleString()}</td>
