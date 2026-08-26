@@ -291,7 +291,15 @@ export default function FinancePage() {
                   {r.unexpected_keys}
                 </td>
                 <td
-                  className={`px-4 py-3 font-mono ${r.gap === 0 ? t.tableCellMuted : r.gap > 0 ? t.tableCellGood : t.tableCellBad}`}
+                  className={`px-4 py-3 font-mono ${
+                    r.gap === 0
+                      ? t.tableCellMuted
+                      : r.gap > 0
+                        ? t.tableCellGood
+                        : r.uninvoiced_actionable_keys > 0
+                          ? t.tableCellBad
+                          : t.tableCellMuted
+                  }`}
                 >
                   {r.gap >= 0 ? "+" : ""}
                   {r.gap}
