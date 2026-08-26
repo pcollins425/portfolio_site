@@ -751,7 +751,7 @@ WHERE sm.casino_id <> %s
         waived_set = waived_sets.get((casino, t), set())
         uninvoiced = exp_set - inv_set
         uninvoiced_actionable = uninvoiced - waived_set
-        reporting_waived = len(waived_set & uninvoiced)
+        waived_uninvoiced = len(waived_set & uninvoiced)
         missing_months = []
         for ym in months:
             exp_m = expected_sets.get((casino, ym), set())
