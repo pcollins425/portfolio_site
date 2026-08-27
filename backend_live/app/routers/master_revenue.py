@@ -64,10 +64,10 @@ def _distinct_periods(limit: int) -> list[date]:
     rows = _revenue_query(
         f"""
 SELECT DISTINCT TOP ({lim})
-    CONVERT(date, TRY_CONVERT(datetime, [date])) AS d
+    [date] AS d
 FROM {_MV} AS mr
-WHERE TRY_CONVERT(datetime, [date]) IS NOT NULL
-ORDER BY CONVERT(date, TRY_CONVERT(datetime, [date])) DESC
+WHERE [date] IS NOT NULL
+ORDER BY [date] DESC
 """
     )
     out: list[date] = []
@@ -148,7 +148,7 @@ SELECT
     SUM(ISNULL([Actual_win], 0)) AS actual_win,
     SUM(ISNULL([Commission], 0)) AS commission
 FROM {_MV} AS mr
-WHERE CONVERT(date, TRY_CONVERT(datetime, [date])) = %s
+WHERE [date] = %s
 """
     bars_sql = f"""
 SELECT
@@ -156,7 +156,7 @@ SELECT
     SUM(ISNULL([Commission], 0)) AS commission,
     SUM(ISNULL([Actual_win], 0)) AS actual_win
 FROM {_MV} AS mr
-WHERE CONVERT(date, TRY_CONVERT(datetime, [date])) = %s
+WHERE [date] = %s
 GROUP BY RTRIM([Casino])
 ORDER BY SUM(ISNULL([Commission], 0)) DESC
 """
@@ -212,12 +212,12 @@ def analyst_trends():
     rows = _revenue_query(
         f"""
 SELECT
-    CONVERT(date, TRY_CONVERT(datetime, [date])) AS d,
+    [date] AS d,
     SUM(ISNULL([Actual_win], 0)) AS actual_win,
     SUM(ISNULL([Theo_win], 0)) AS theo_win
 FROM {_MV} AS mr
-WHERE TRY_CONVERT(datetime, [date]) IS NOT NULL
-GROUP BY CONVERT(date, TRY_CONVERT(datetime, [date]))
+WHERE [date] IS NOT NULL
+GROUP BY [date]
 ORDER BY d DESC
 """
     )
@@ -331,7 +331,7 @@ SELECT
     AVG(CAST(ISNULL([ADW], 0) AS float)) AS avg_adw,
     AVG(CAST(ISNULL([HouseWPU], 0) AS float)) AS house_wpu
 FROM {_MV} AS mr
-WHERE CONVERT(date, TRY_CONVERT(datetime, [date])) = %s
+WHERE [date] = %s
 GROUP BY RTRIM([Casino])
 ORDER BY RTRIM([Casino])
 """,
@@ -459,31 +459,31 @@ def finance_overview(
     mr_keys_sql = f"""
 SELECT
     COALESCE(NULLIF(RTRIM(c.casino_short), N''), RTRIM(mr.[Casino])) AS casino,
-    CONVERT(date, TRY_CONVERT(datetime, mr.[date])) AS d,
+    mr.[date] AS d,
     LTRIM(RTRIM(mr.[slot_master_id])) AS smm_key
 FROM {_MV} AS mr
 LEFT JOIN inventory.slot_master_migration AS sm
     ON sm.reference_key = LTRIM(RTRIM(mr.[slot_master_id]))
 LEFT JOIN clients.casinos AS c ON c.reference_key = sm.casino_id
-WHERE TRY_CONVERT(datetime, mr.[date]) IS NOT NULL
-  AND CONVERT(date, TRY_CONVERT(datetime, mr.[date])) BETWEEN %s AND %s
+WHERE mr.[date] IS NOT NULL
+  AND mr.[date] BETWEEN %s AND %s
   AND NULLIF(LTRIM(RTRIM(mr.[slot_master_id])), N'') IS NOT NULL
 """
     mr_commission_sql = f"""
 SELECT
     RTRIM([Casino]) AS casino,
-    CONVERT(date, TRY_CONVERT(datetime, [date])) AS d,
+    [date] AS d,
     COUNT(*) AS entries,
     SUM(ISNULL([Commission], 0)) AS commission
 FROM {_MV} AS mr
-WHERE TRY_CONVERT(datetime, [date]) IS NOT NULL
-  AND CONVERT(date, TRY_CONVERT(datetime, [date])) BETWEEN %s AND %s
-GROUP BY RTRIM([Casino]), CONVERT(date, TRY_CONVERT(datetime, [date]))
+WHERE [date] IS NOT NULL
+  AND [date] BETWEEN %s AND %s
+GROUP BY RTRIM([Casino]), [date]
 """
     last_report_sql = f"""
-SELECT RTRIM([Casino]) AS casino, MAX(CONVERT(date, TRY_CONVERT(datetime, [date]))) AS last_report
+SELECT RTRIM([Casino]) AS casino, MAX([date]) AS last_report
 FROM {_MV} AS mr
-WHERE TRY_CONVERT(datetime, [date]) IS NOT NULL
+WHERE [date] IS NOT NULL
 GROUP BY RTRIM([Casino])
 """
 
@@ -787,12 +787,12 @@ def finance_commission_intensity():
     rows = _revenue_query(
         f"""
 SELECT
-    CONVERT(date, TRY_CONVERT(datetime, [date])) AS d,
+    [date] AS d,
     SUM(ISNULL([Commission], 0)) AS commission,
     SUM(ISNULL([Actual_win], 0)) AS actual_win
 FROM {_MV} AS mr
-WHERE TRY_CONVERT(datetime, [date]) IS NOT NULL
-GROUP BY CONVERT(date, TRY_CONVERT(datetime, [date]))
+WHERE [date] IS NOT NULL
+GROUP BY [date]
 ORDER BY d DESC
 """
     )
@@ -825,7 +825,7 @@ SELECT
     SUM(ISNULL([Coin_in], 0)) AS coin_in,
     AVG(CAST(ISNULL([WIN_Index], 0) AS float)) AS win_index
 FROM {_MV} AS mr
-WHERE CONVERT(date, TRY_CONVERT(datetime, [date])) = %s
+WHERE [date] = %s
   AND NULLIF(LTRIM(RTRIM([Theme])), N'') IS NOT NULL
 GROUP BY [Theme], [Cabinet], RTRIM([Casino])
 """,
