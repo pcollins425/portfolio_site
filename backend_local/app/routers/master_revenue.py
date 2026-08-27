@@ -411,10 +411,187 @@ _NON_PLAYABLE_SQL = """
 """
 
 
+
 @router.get("/finance/overview")
 def finance_overview(
     from_month: str = Query(..., alias="from", description="Processing month range start (YYYY-MM)"),
     to_month: str = Query(..., alias="to", description="Processing month range end (YYYY-MM)"),
+):
+    """Billing coverage from ``finance.billing_coverage`` snapshot (hybrid refresh).
+
+    Live SMM/MR recompute runs offline (MR apply + nightly). Same response shape as before.
+    Set ``FINANCE_OVERVIEW_LIVE=1`` to force the legacy live engine.
+    """
+    if (os.environ.get("FINANCE_OVERVIEW_LIVE") or "").strip().lower() in ("1", "true", "yes"):
+        return _finance_overview_live(from_month, to_month)
+
+    f = _month_prefix(from_month)
+    t = _month_prefix(to_month)
+    if not f or not t:
+        raise HTTPException(status_code=400, detail="from and to are required (YYYY-MM)")
+    if f > t:
+        f, t = t, f
+    months = _month_span(f, t)
+    if len(months) > 36:
+        raise HTTPException(status_code=400, detail="range too wide (max 36 months)")
+
+    mom_ym = _shift_month(t, -1)
+    yoy_ym = _shift_month(t, -12)
+    ext_months = sorted(set(months + [mom_ym, yoy_ym]))
+    window_start = _month_bounds(ext_months[0])[0]
+    window_end = _month_bounds(ext_months[-1])[0]
+
+    rows = mssql.query(
+        """
+SELECT
+    casino_short,
+    processing_month,
+    expected_entries,
+    invoiced_entries,
+    invoiced_keys,
+    uninvoiced_keys,
+    unexpected_keys,
+    reporting_waived_keys,
+    uninvoiced_actionable_keys,
+    commission,
+    last_report,
+    refreshed_at
+FROM finance.billing_coverage
+WHERE processing_month BETWEEN %s AND %s
+""",
+        params=(window_start, window_end),
+        database=_revenue_catalog(),
+        profile="dashboard",
+        load_env=False,
+    )
+
+    by_cm: dict[tuple[str, str], dict] = {}
+    last_report: dict[str, str] = {}
+    refreshed_at = None
+    for r in rows:
+        casino = str(r.get("casino_short") or "").strip()
+        ym = _ym_label(r.get("processing_month"))
+        if not casino or not ym:
+            continue
+        by_cm[(casino, ym)] = r
+        d = _as_date(r.get("last_report"))
+        if casino and d:
+            prev = last_report.get(casino)
+            if not prev or d.isoformat() > prev:
+                last_report[casino] = d.isoformat()
+        ra = r.get("refreshed_at")
+        if ra is not None:
+            refreshed_at = ra
+
+    def month_totals(ym: str) -> dict:
+        expected = 0
+        entries = 0
+        commission = 0.0
+        inv_keys = 0
+        uninvoiced = 0
+        unexpected = 0
+        waived = 0
+        actionable = 0
+        exp_casinos: set[str] = set()
+        rep_casinos: set[str] = set()
+        for (casino, m), row in by_cm.items():
+            if m != ym:
+                continue
+            expected += int(row.get("expected_entries") or 0)
+            entries += int(row.get("invoiced_entries") or 0)
+            commission += float(row.get("commission") or 0)
+            inv_keys += int(row.get("invoiced_keys") or 0)
+            uninvoiced += int(row.get("uninvoiced_keys") or 0)
+            unexpected += int(row.get("unexpected_keys") or 0)
+            waived += int(row.get("reporting_waived_keys") or 0)
+            actionable += int(row.get("uninvoiced_actionable_keys") or 0)
+            if int(row.get("expected_entries") or 0) > 0:
+                exp_casinos.add(casino)
+            if int(row.get("invoiced_keys") or 0) > 0:
+                rep_casinos.add(casino)
+        return {
+            "month": ym,
+            "expected_entries": expected,
+            "invoiced_entries": entries,
+            "invoiced_keys": inv_keys,
+            "uninvoiced_keys": uninvoiced,
+            "reporting_waived_keys": waived,
+            "uninvoiced_actionable_keys": actionable,
+            "unexpected_keys": unexpected,
+            "commission": commission,
+            "casinos_expected": len(exp_casinos),
+            "casinos_reported": len(rep_casinos),
+            "casinos_missing": len(exp_casinos - rep_casinos),
+        }
+
+    monthly = [month_totals(ym) for ym in months]
+    focus = month_totals(t)
+    mom = month_totals(mom_ym)
+    yoy = month_totals(yoy_ym)
+
+    def pct(a: float, b: float) -> float:
+        return (a - b) / b if b else 0.0
+
+    kpis = {
+        **focus,
+        "expected_entries_mom": pct(focus["expected_entries"], mom["expected_entries"]),
+        "expected_entries_yoy": pct(focus["expected_entries"], yoy["expected_entries"]),
+        "commission_mom": pct(focus["commission"], mom["commission"]),
+        "commission_yoy": pct(focus["commission"], yoy["commission"]),
+        "mom_month": mom_ym,
+        "yoy_month": yoy_ym,
+    }
+
+    all_casinos = sorted({c for (c, ym) in by_cm if ym in months})
+    casinos_out = []
+    for casino in all_casinos:
+        row = by_cm.get((casino, t), {})
+        expected = int(row.get("expected_entries") or 0)
+        entries = int(row.get("invoiced_entries") or 0)
+        waived_uninvoiced = int(row.get("reporting_waived_keys") or 0)
+        missing_months = [
+            ym
+            for ym in months
+            if int(by_cm.get((casino, ym), {}).get("expected_entries") or 0) > 0
+            and int(by_cm.get((casino, ym), {}).get("invoiced_keys") or 0) == 0
+        ]
+        casinos_out.append(
+            {
+                "casino": casino,
+                "expected_entries": expected,
+                "invoiced_entries": entries,
+                "invoiced_keys": int(row.get("invoiced_keys") or 0),
+                "uninvoiced_keys": int(row.get("uninvoiced_keys") or 0),
+                "reporting_waived_keys": waived_uninvoiced,
+                "uninvoiced_actionable_keys": int(row.get("uninvoiced_actionable_keys") or 0),
+                "unexpected_keys": int(row.get("unexpected_keys") or 0),
+                "gap": entries - expected + waived_uninvoiced,
+                "commission": float(row.get("commission") or 0),
+                "last_report": last_report.get(casino),
+                "missing_months": missing_months,
+            }
+        )
+    casinos_out.sort(
+        key=lambda r: (-r["uninvoiced_actionable_keys"], -len(r["missing_months"]), r["casino"])
+    )
+
+    return {
+        "source": "snapshot",
+        "from": f,
+        "to": t,
+        "months": months,
+        "kpis": kpis,
+        "monthly": monthly,
+        "casinos": casinos_out,
+        "refreshed_at": refreshed_at.isoformat()
+        if hasattr(refreshed_at, "isoformat")
+        else refreshed_at,
+    }
+
+
+def _finance_overview_live(
+    from_month: str | None,
+    to_month: str | None,
 ):
     """Billing coverage: expected migration rows vs invoiced MR entries by SMM key.
 
