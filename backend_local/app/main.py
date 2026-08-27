@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -16,7 +18,20 @@ _log = logging.getLogger("app.startup")
 _media_mode = (os.environ.get("NAS_MEDIA_MODE") or "").replace("\r", "").strip() or "filesystem"
 _log.info("NAS_MEDIA_MODE=%s", _media_mode)
 
-app = FastAPI(title="Portfolio API (live)", version="0.1.0")
+
+@asynccontextmanager
+async def _lifespan(app: FastAPI):
+    paths = sorted(
+        {getattr(r, "path", "") for r in app.routes if "analyst" in getattr(r, "path", "")}
+    )
+    _log.info("analyst routes: %s", paths)
+    yield
+    from app import mssql
+
+    mssql.close_pools()
+
+
+app = FastAPI(title="Portfolio API (live)", version="0.1.0", lifespan=_lifespan)
 
 app.add_middleware(
     CORSMiddleware,
@@ -28,14 +43,6 @@ app.add_middleware(
 app.include_router(master_revenue.router)
 app.include_router(analyst.router)
 app.include_router(commission_contract.router)
-
-
-@app.on_event("startup")
-def _log_analyst_routes():
-    paths = sorted(
-        {getattr(r, "path", "") for r in app.routes if "analyst" in getattr(r, "path", "")}
-    )
-    _log.info("analyst routes: %s", paths)
 app.include_router(field.router)
 app.include_router(auth.router)
 app.include_router(emaint_demo.router)
