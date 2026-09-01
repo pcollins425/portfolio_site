@@ -312,6 +312,16 @@ def commission_from_id(
         return round(c if c < cap else cap, 2)
     if commission_id == 23 and days is not None and days > 0:
         return round(45.0 * int(days), 2)
+    if commission_id == 20 and days is not None and days > 0:
+        return round(55.0 * int(days), 2)
+    if commission_id == 28 and days is not None and days > 0:
+        return round(50.0 * int(days), 2)
+    if commission_id == 25 and days is not None and days > 0:
+        c = round(float(actual_win) * 0.2, 2)
+        cap = int(days) * 50.0
+        return round(c if c < cap else cap, 2)
+    if commission_id == 38 and days is not None and days > 0:
+        return round(42.5 * int(days), 2)
     if commission_id == 10 and days is not None and days > 0:
         return round(float(actual_win) * 0.19 - int(days) * 1.50, 2)
     # Kickapoo Finley-Cook: 20% of (Actual Win − Promo). Fees in Billed_Fees (COM-000035).
