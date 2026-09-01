@@ -209,6 +209,91 @@ def _rebate_on_participation_from_rules(
     return None
 
 
+def _otoe_as_date(v: Any) -> date | None:
+    if v is None:
+        return None
+    if isinstance(v, datetime):
+        return v.date()
+    if isinstance(v, date):
+        return v
+    if isinstance(v, str):
+        raw = v.strip()
+        if not raw:
+            return None
+        for fmt in ("%Y-%m-%dT%H:%M:%S", "%Y-%m-%d %H:%M:%S", "%Y-%m-%d"):
+            try:
+                return datetime.strptime(raw[:19], fmt).date()
+            except ValueError:
+                continue
+    return None
+
+
+def _month_end_from_ym(month_ym: str | None) -> date | None:
+    if not month_ym:
+        return None
+    ym = month_ym.strip()[:7]
+    try:
+        y, m = map(int, ym.split("-"))
+    except ValueError:
+        return None
+    if m == 12:
+        return date(y, 12, 31)
+    nxt = date(y, m + 1, 1)
+    return nxt.fromordinal(nxt.toordinal() - 1)
+
+
+def _otoe_one_year_before(month_end: date) -> date:
+    try:
+        return month_end.replace(year=month_end.year - 1)
+    except ValueError:
+        return month_end.replace(year=month_end.year - 1, day=28)
+
+
+def _otoe_connection_applies(*, golive001: date | None, month_end: date) -> bool:
+    if golive001 is None:
+        return True
+    return golive001 <= _otoe_one_year_before(month_end)
+
+
+def _otoe_install_fee_applies(
+    *, action: str | None, date_instl: date | None, month_end: date
+) -> bool:
+    if not action or action.strip().upper() != "INSTALL":
+        return False
+    if date_instl is None:
+        return False
+    if month_end.month == 1:
+        return date_instl.year == month_end.year - 1 and date_instl.month == 12
+    return date_instl.year == month_end.year and date_instl.month == month_end.month - 1
+
+
+def _otoe_commission(
+    actual_win: float,
+    *,
+    days: int,
+    golive001: date | None = None,
+    date_instl: date | None = None,
+    action: str | None = None,
+    month_end: date | None = None,
+    month_ym: str | None = None,
+) -> float:
+    bill_end = month_end or _month_end_from_ym(month_ym)
+    golive = _otoe_as_date(golive001)
+    instl = _otoe_as_date(date_instl)
+    base = round(float(actual_win) * 0.20, 2)
+    connection_fee = 0.0
+    if int(days) > 0 and bill_end and _otoe_connection_applies(
+        golive001=golive, month_end=bill_end
+    ):
+        connection_fee = round(int(days) * 2.5, 2)
+    install_fee = 0.0
+    if bill_end and _otoe_install_fee_applies(
+        action=action, date_instl=instl, month_end=bill_end
+    ):
+        install_fee = 80.0
+    return round(base - connection_fee - install_fee, 2)
+
+
 def recipe_label(commission_id: int | None) -> str | None:
     if commission_id is None:
         return None
@@ -251,6 +336,7 @@ def recipe_label(commission_id: int | None) -> str | None:
         36: "20% Actual Win",
         37: "20%; no loss passed",
         38: "$42.50/day rent",
+        39: "Otoe 7 Clans: 20% − tenure $2.50/day − lagged $80 install",
     }
     return labels.get(int(commission_id), f"CID {commission_id}")
 
@@ -263,6 +349,10 @@ def commission_from_id(
     promo: float | None = None,
     commission_rules: str | dict | None = None,
     month_ym: str | None = None,
+    golive001: date | None = None,
+    date_instl: date | None = None,
+    action: str | None = None,
+    month_end: date | None = None,
 ) -> float | None:
     if commission_id is None:
         return None
@@ -387,6 +477,16 @@ def commission_from_id(
         return round(c if c < cap else cap, 2)
     if commission_id == 38 and days is not None and days > 0:
         return round(42.5 * int(days), 2)
+    if commission_id == 39 and days is not None and days > 0:
+        return _otoe_commission(
+            actual_win,
+            days=int(days),
+            golive001=golive001,
+            date_instl=date_instl,
+            action=action,
+            month_ym=month_ym,
+            month_end=month_end,
+        )
     if commission_id == 10 and days is not None and days > 0:
         return round(float(actual_win) * 0.19 - int(days) * 1.50, 2)
     # Kickapoo Finley-Cook: 20% of (Actual Win − Promo). Fees in Billed_Fees (COM-000035).
@@ -462,7 +562,8 @@ def _fetch_profiles(ids: list[str]) -> dict[str, dict[str, object | None]]:
         placeholders = ",".join(["%s"] * len(part))
         rows = _query(
             f"""
-            SELECT m.reference_key, m.commission_profile_id, cp.commission_rules
+            SELECT m.reference_key, m.commission_profile_id, cp.commission_rules,
+                   m.golive001, m.date_instl, m.action
             FROM inventory.slot_master_migration AS m
             LEFT JOIN finance.commission_profile AS cp
               ON cp.reference_key = m.commission_profile_id
@@ -474,6 +575,9 @@ def _fetch_profiles(ids: list[str]) -> dict[str, dict[str, object | None]]:
             out[str(r["reference_key"])] = {
                 "commission_profile_id": r.get("commission_profile_id"),
                 "commission_rules": r.get("commission_rules"),
+                "golive001": r.get("golive001"),
+                "date_instl": r.get("date_instl"),
+                "action": r.get("action"),
             }
     return out
 
@@ -483,6 +587,7 @@ def _classify_row(
     profile_id: str | None,
     *,
     commission_rules: str | dict | None = None,
+    smm: dict[str, Any] | None = None,
 ) -> dict[str, Any] | None:
     a = round(_f(mr.get("commission_a")), 2)
     dof = int(mr.get("dof") or 0)
@@ -537,6 +642,10 @@ def _classify_row(
         promo=promo,
         commission_rules=commission_rules,
         month_ym=ym,
+        golive001=(smm or {}).get("golive001"),
+        date_instl=(smm or {}).get("date_instl"),
+        action=(smm or {}).get("action"),
+        month_end=_month_end_from_ym(ym),
     )
     if formula is None:
         base["kind"] = "unknown"
@@ -589,6 +698,10 @@ def _scan_flags(start: date, end: date) -> list[dict[str, Any]]:
                 promo=_f(r.get("promo")),
                 commission_rules=commission_rules,
                 month_ym=ym,
+                golive001=prof.get("golive001") if prof else None,
+                date_instl=prof.get("date_instl") if prof else None,
+                action=prof.get("action") if prof else None,
+                month_end=_month_end_from_ym(ym),
             )
             if formula is not None:
                 a = round(_f(r.get("commission_a")), 2)
@@ -597,7 +710,7 @@ def _scan_flags(start: date, end: date) -> list[dict[str, Any]]:
                 checked_by[(casino, ym)] += 1
 
         flag = _classify_row(
-            r, profile, commission_rules=commission_rules
+            r, profile, commission_rules=commission_rules, smm=prof
         )
         if flag:
             flags.append(flag)
