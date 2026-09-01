@@ -170,6 +170,45 @@ def commission_id_from_profile(value: object) -> int | None:
         return None
 
 
+def _parse_rules(commission_rules: str | dict | None) -> dict[str, Any]:
+    if isinstance(commission_rules, dict):
+        return commission_rules
+    if not commission_rules:
+        return {}
+    try:
+        return json.loads(commission_rules)
+    except (json.JSONDecodeError, TypeError):
+        return {}
+
+
+def _rebate_on_participation_from_rules(
+    commission_rules: str | dict | None,
+    *,
+    month_ym: str | None = None,
+) -> float | None:
+    rules = _parse_rules(commission_rules)
+    if not rules:
+        return None
+    ym = (month_ym or "").strip()[:7]
+    by_month = rules.get("rebate_by_month") or {}
+    if ym and ym in by_month:
+        try:
+            return float(by_month[ym])
+        except (TypeError, ValueError):
+            pass
+    for key in (
+        "rebate_on_participation_percent",
+        "rebate_on_fee",
+        "rebate_on_participation",
+    ):
+        if key in rules and rules[key] is not None:
+            try:
+                return float(rules[key])
+            except (TypeError, ValueError):
+                continue
+    return None
+
+
 def recipe_label(commission_id: int | None) -> str | None:
     if commission_id is None:
         return None
@@ -205,6 +244,8 @@ def commission_from_id(
     *,
     days: int | None = None,
     promo: float | None = None,
+    commission_rules: str | dict | None = None,
+    month_ym: str | None = None,
 ) -> float | None:
     if commission_id is None:
         return None
@@ -278,8 +319,16 @@ def commission_from_id(
         p = 0.0 if promo is None else float(promo)
         return round((float(actual_win) - p) * 0.2, 2)
     if commission_id == 13:
+        if commission_rules is not None or month_ym:
+            rebate = _rebate_on_participation_from_rules(
+                commission_rules, month_ym=month_ym
+            )
+            if rebate is None:
+                rebate = 0.0875
+        else:
+            rebate = 0.0875
         gross_20 = round(float(actual_win) * 0.2, 2)
-        reduction = round(gross_20 * 0.0875, 2)
+        reduction = round(gross_20 * rebate, 2)
         subtotal = round(gross_20 - reduction, 2)
         tax = round(subtotal * 0.075, 2)
         return round(subtotal + tax, 2)
@@ -330,26 +379,36 @@ def _fetch_mr_range(start: date, end: date) -> list[dict]:
     )
 
 
-def _fetch_profiles(ids: list[str]) -> dict[str, str | None]:
-    out: dict[str, str | None] = {}
+def _fetch_profiles(ids: list[str]) -> dict[str, dict[str, object | None]]:
+    out: dict[str, dict[str, object | None]] = {}
     chunk = 400
     for i in range(0, len(ids), chunk):
         part = ids[i : i + chunk]
         placeholders = ",".join(["%s"] * len(part))
         rows = _query(
             f"""
-            SELECT reference_key, commission_profile_id
-            FROM inventory.slot_master_migration
-            WHERE reference_key IN ({placeholders})
+            SELECT m.reference_key, m.commission_profile_id, cp.commission_rules
+            FROM inventory.slot_master_migration AS m
+            LEFT JOIN finance.commission_profile AS cp
+              ON cp.reference_key = m.commission_profile_id
+            WHERE m.reference_key IN ({placeholders})
             """,
             tuple(part),
         )
         for r in rows:
-            out[str(r["reference_key"])] = r.get("commission_profile_id")
+            out[str(r["reference_key"])] = {
+                "commission_profile_id": r.get("commission_profile_id"),
+                "commission_rules": r.get("commission_rules"),
+            }
     return out
 
 
-def _classify_row(mr: dict, profile_id: str | None) -> dict[str, Any] | None:
+def _classify_row(
+    mr: dict,
+    profile_id: str | None,
+    *,
+    commission_rules: str | dict | None = None,
+) -> dict[str, Any] | None:
     a = round(_f(mr.get("commission_a")), 2)
     dof = int(mr.get("dof") or 0)
     win = _f(mr.get("actual_win"))
@@ -397,7 +456,12 @@ def _classify_row(mr: dict, profile_id: str | None) -> dict[str, Any] | None:
     base["commission_id"] = cid
     base["recipe"] = recipe_label(cid)
     formula = commission_from_id(
-        win, cid, days=dof if dof > 0 else None, promo=promo
+        win,
+        cid,
+        days=dof if dof > 0 else None,
+        promo=promo,
+        commission_rules=commission_rules,
+        month_ym=ym,
     )
     if formula is None:
         base["kind"] = "unknown"
@@ -432,7 +496,13 @@ def _scan_flags(start: date, end: date) -> list[dict[str, Any]]:
 
     for r in mr_rows:
         sid = str(r.get("slot_master_id") or "").strip() or None
-        profile = profiles.get(sid) if sid else None
+        prof = profiles.get(sid) if sid else None
+        profile = (
+            str(prof.get("commission_profile_id") or "").strip() or None
+            if prof
+            else None
+        )
+        commission_rules = prof.get("commission_rules") if prof else None
         cid = commission_id_from_profile(profile)
         ym = str(r.get("ym") or "").strip()[:7]
         casino = str(r.get("casino") or "").strip() or "?"
@@ -442,6 +512,8 @@ def _scan_flags(start: date, end: date) -> list[dict[str, Any]]:
                 cid,
                 days=int(r.get("dof") or 0) or None,
                 promo=_f(r.get("promo")),
+                commission_rules=commission_rules,
+                month_ym=ym,
             )
             if formula is not None:
                 a = round(_f(r.get("commission_a")), 2)
@@ -449,7 +521,9 @@ def _scan_flags(start: date, end: date) -> list[dict[str, Any]]:
                 signed_by[(casino, ym)] += a - b
                 checked_by[(casino, ym)] += 1
 
-        flag = _classify_row(r, profile)
+        flag = _classify_row(
+            r, profile, commission_rules=commission_rules
+        )
         if flag:
             flags.append(flag)
             if flag["kind"] == "delta":
