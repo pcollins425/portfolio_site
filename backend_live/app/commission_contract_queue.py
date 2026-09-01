@@ -215,25 +215,42 @@ def recipe_label(commission_id: int | None) -> str | None:
     labels = {
         1: "20% Actual Win",
         2: "18% Actual Win",
+        3: "18.8% Actual Win",
         4: "20% − $1/day",
         5: "16.45% − $3.50/day",
         6: "20% − $2.50/day",
+        7: "20% − $1.44/day",
+        8: "19% Actual Win",
         9: "20% − $0.25/day",
         10: "19% − $1.50/day",
+        11: "20% of (win − 6% − promo)",
         12: "15% Actual Win",
         13: "20% w/ rebate + 7.5% tax",
         14: "greater of 20% or $1",
         15: "20%; no loss passed",
+        16: "$65/day rent",
         17: "greater of 20% or $35/day",
+        18: "20% / $50/day max; no loss",
         19: "20% / $60/day max",
+        20: "$55/day rent",
+        21: "15% − $2/day",
+        22: "20% / $65/day max",
         23: "$45/day rent",
         24: "17% / $60/day max",
+        25: "20% / $50/day max",
+        26: "20% / $40/day max",
         27: "15%; no loss passed",
+        28: "$50/day rent",
         29: "greater of 20% or $1, $55/day cap",
         30: "20% / $85/day cap",
+        31: "20% clamped $35–$75/day",
+        32: "$60/day rent",
         33: "20% / $55/day max; loss passed",
         34: "greater of 20% or $1, then $50/day cap",
         35: "20% of (Actual Win − Promo)",
+        36: "20% Actual Win",
+        37: "20%; no loss passed",
+        38: "$42.50/day rent",
     }
     return labels.get(int(commission_id), f"CID {commission_id}")
 
@@ -251,6 +268,35 @@ def commission_from_id(
         return None
     if commission_id == 1:
         return round(float(actual_win) * 0.2, 2)
+    if commission_id == 2:
+        return round(float(actual_win) * 0.18, 2)
+    if commission_id == 3:
+        return round(float(actual_win) * 0.188, 2)
+    if commission_id == 8:
+        return round(float(actual_win) * 0.19, 2)
+    if commission_id == 7 and days is not None and days > 0:
+        return round(float(actual_win) * 0.20 - int(days) * 1.44, 2)
+    if commission_id == 11:
+        p = 0.0 if promo is None else float(promo)
+        basis = float(actual_win) - round(float(actual_win) * 0.06, 2) - p
+        return round(basis * 0.2, 2)
+    if commission_id == 18 and days is not None and days > 0:
+        if float(actual_win) < 0:
+            return 0.0
+        c = round(float(actual_win) * 0.2, 2)
+        cap = int(days) * 50.0
+        return round(c if c < cap else cap, 2)
+    if commission_id == 21 and days is not None and days > 0:
+        return round(float(actual_win) * 0.15 - int(days) * 2.0, 2)
+    if commission_id == 26 and days is not None and days > 0:
+        c = round(float(actual_win) * 0.2, 2)
+        cap = int(days) * 40.0
+        return round(c if c < cap else cap, 2)
+    if commission_id == 36:
+        return round(float(actual_win) * 0.2, 2)
+    if commission_id == 37:
+        c = round(float(actual_win) * 0.2, 2)
+        return 0.0 if c < 0 else c
     # Indigo Sky: 20% Actual Win − $2.50 × Days_on_Floor (COM-000006)
     if commission_id == 6 and days is not None and days > 0:
         return round(float(actual_win) * 0.20 - int(days) * 2.5, 2)
@@ -310,6 +356,25 @@ def commission_from_id(
             c = 0.0
         cap = int(days) * 60.0
         return round(c if c < cap else cap, 2)
+    if commission_id == 22 and days is not None and days > 0:
+        c = round(float(actual_win) * 0.2, 2)
+        if c < 0:
+            c = 0.0
+        cap = int(days) * 65.0
+        return round(c if c < cap else cap, 2)
+    if commission_id == 16 and days is not None and days > 0:
+        return round(65.0 * int(days), 2)
+    if commission_id == 31 and days is not None and days > 0:
+        c = round(float(actual_win) * 0.2, 2)
+        floor = int(days) * 35.0
+        cap = int(days) * 75.0
+        if c < floor:
+            return floor
+        if c > cap:
+            return cap
+        return c
+    if commission_id == 32 and days is not None and days > 0:
+        return round(60.0 * int(days), 2)
     if commission_id == 23 and days is not None and days > 0:
         return round(45.0 * int(days), 2)
     if commission_id == 20 and days is not None and days > 0:
