@@ -316,7 +316,7 @@ def recipe_label(commission_id: int | None) -> str | None:
         16: "$65/day rent",
         17: "greater of 20% or $35/day",
         18: "20% / $50/day max; no loss",
-        19: "20% / $60/day max",
+        19: "20% / $60/day max (loss passes)",
         20: "$55/day rent",
         21: "15% − $2/day",
         22: "20% / $65/day max",
@@ -439,11 +439,9 @@ def commission_from_id(
     if commission_id == 27:
         c = round(float(actual_win) * 0.15, 2)
         return 0.0 if c < 0 else c
-    # COM-000019: 20% with $60/day maximum
+    # COM-000019: 20% with $60/day maximum (Navajo — loss passes)
     if commission_id == 19 and days is not None and days > 0:
         c = round(float(actual_win) * 0.2, 2)
-        if c < 0:
-            c = 0.0
         cap = int(days) * 60.0
         return round(c if c < cap else cap, 2)
     if commission_id == 22 and days is not None and days > 0:
