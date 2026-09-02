@@ -133,7 +133,7 @@
     els["view-catalog"].hidden = view !== "catalog";
     els["view-emaint"].hidden = view !== "emaint";
     const subtitles = {
-      calendar: "projects.ims schedule · month grid + day filter",
+      calendar: "projects.ims + pre-eMaint catalog · month grid + day filter",
       catalog: "projects.project_catalog · machine lines + commission printout",
       emaint: "projects.emaint_landing · raw eMaint PROJECT mirror (read-only)",
     };

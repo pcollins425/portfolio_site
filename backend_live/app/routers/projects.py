@@ -2,7 +2,8 @@
 
 Read-only v1 (2026-07-09 plan):
   - GET /api/projects/calendar          — IMS schedule rows for a date window,
-    grouped per day, with catalog cross-link ("Details Available")
+    plus pre-eMaint catalog headers (``ims_id`` NULL), grouped per day, with
+    catalog cross-link ("Details Available")
   - GET /api/projects/catalog           — catalog headers (search + paging)
   - GET /api/projects/catalog/{ref}     — header + per-action line summary
   - GET /api/projects/catalog/{ref}/printout — projects.project_printout rows
@@ -139,11 +140,15 @@ def projects_calendar(
     end_date: str = Query(..., description="Window end YYYY-MM-DD"),
     user: Annotated[dict[str, Any] | None, Depends(require_demo_user)] = None,
 ):
-    """IMS schedule rows overlapping [start_date, end_date], grouped per day.
+    """Schedule rows overlapping [start_date, end_date], grouped per day.
 
-    Ported from ERM projects_api_calendar: multi-day projects appear under every
-    day they span inside the window; ``matching_catalog`` marks the catalog link
-    (Details Available badge).
+    Sources:
+      1. ``projects.ims`` (eMaint schedule), with catalog link when ``pc.ims_id`` matches
+      2. Pre-eMaint ``projects.project_catalog`` rows with ``ims_id`` NULL (text
+         ``ims_project_number`` such as ``CH - 102``) — appear under their own
+         catalog key so "Details Available" opens the catalog drawer
+
+    Multi-day projects appear under every day they span inside the window.
     """
     _assert_calendar(user)
 
@@ -162,7 +167,7 @@ def projects_calendar(
             """
             SELECT
                 ims.reference_key,
-                ims.project_number,
+                CAST(ims.project_number AS nvarchar(50)) AS project_number,
                 ims.start_date,
                 ims.end_date,
                 ims.status,
@@ -182,7 +187,8 @@ def projects_calendar(
                     SELECT COUNT(*)
                     FROM projects.project_details pd
                     WHERE pd.project_id = pc.reference_key
-                ) AS catalog_line_count
+                ) AS catalog_line_count,
+                CAST(0 AS bit) AS is_catalog_only
             FROM projects.ims ims
             LEFT JOIN clients.casinos casinos ON ims.casino_id = casinos.reference_key
             LEFT JOIN clients.tribes tribes ON casinos.tribe_id = tribes.reference_key
@@ -190,9 +196,48 @@ def projects_calendar(
             LEFT JOIN projects.project_catalog pc ON pc.ims_id = ims.reference_key
             WHERE COALESCE(ims.start_date, '1900-01-01') <= %s
               AND COALESCE(ims.end_date, '2099-12-31') >= %s
-            ORDER BY ims.start_date, ims.project_number
+
+            UNION ALL
+
+            SELECT
+                pc.reference_key,
+                pc.ims_project_number AS project_number,
+                pc.date_start AS start_date,
+                pc.date_end AS end_date,
+                pc.status,
+                pc.project_type,
+                pc.description,
+                pc.notes AS comments,
+                pc.assigned_to AS lead_tech,
+                CAST(NULL AS nvarchar(100)) AS assistant_techs,
+                pc.casino_id,
+                casinos.casino_name AS property,
+                tribes.tribe_name AS tribe,
+                states.state,
+                pc.reference_key AS catalog_reference_key,
+                pc.project_name AS catalog_project_name,
+                pc.notes AS catalog_notes,
+                (
+                    SELECT COUNT(*)
+                    FROM projects.project_details pd
+                    WHERE pd.project_id = pc.reference_key
+                ) AS catalog_line_count,
+                CAST(1 AS bit) AS is_catalog_only
+            FROM projects.project_catalog pc
+            LEFT JOIN clients.casinos casinos ON pc.casino_id = casinos.reference_key
+            LEFT JOIN clients.tribes tribes ON casinos.tribe_id = tribes.reference_key
+            LEFT JOIN clients.states states ON casinos.state_id = states.reference_key
+            WHERE pc.ims_id IS NULL
+              AND COALESCE(pc.date_start, '1900-01-01') <= %s
+              AND COALESCE(pc.date_end, '2099-12-31') >= %s
+            ORDER BY start_date, project_number
             """,
-            (window_end.isoformat(), window_start.isoformat()),
+            (
+                window_end.isoformat(),
+                window_start.isoformat(),
+                window_end.isoformat(),
+                window_start.isoformat(),
+            ),
         )
     except Exception as exc:
         raise HTTPException(status_code=503, detail=f"database error: {exc}") from exc
@@ -203,7 +248,7 @@ def projects_calendar(
         projects.append(
             {
                 "reference_key": _json_value(r.get("reference_key")),
-                "project_no": r.get("project_number"),
+                "project_no": _json_value(r.get("project_number")),
                 "date_start": _date_only(r.get("start_date")),
                 "date_end": _date_only(r.get("end_date")),
                 "status": _json_value(r.get("status")),
@@ -216,6 +261,7 @@ def projects_calendar(
                 "property": _json_value(r.get("property")),
                 "tribe": _json_value(r.get("tribe")),
                 "state": _json_value(r.get("state")),
+                "catalog_only": bool(r.get("is_catalog_only")),
                 "matching_catalog": (
                     {
                         "reference_key": catalog_key,
