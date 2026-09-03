@@ -9,6 +9,7 @@ openpyxl>=3.1.0
 cursor-sdk>=0.1.1
 smbprotocol>=1.10.0
 python-multipart>=0.0.9
+stripe>=11.0.0
 # FSR Apply (scripts.fsr_intake.apply_from_review → Gmail workbook fetch)
 google-auth>=2.0
 google-auth-oauthlib>=1.0
