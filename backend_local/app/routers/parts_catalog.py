@@ -15,7 +15,7 @@ from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 
 from app.auth_deps import require_demo_user
-from app.parts_customer_auth import optional_parts_customer
+from app.parts_customer_auth import optional_parts_user
 from app import mssql
 
 router = APIRouter(prefix="/api/parts-catalog", tags=["parts-catalog"])
@@ -324,14 +324,15 @@ def _price_lines(lines: list[CheckoutLinePayIn]) -> tuple[list[dict], Decimal]:
     return priced, subtotal
 
 
-def _load_parts_customer(customer_id: str) -> dict | None:
+def _load_parts_company(company_id: str) -> dict | None:
     rows = _field_query(
         """
-        SELECT customer_id, email, display_name, company, stripe_customer_id, tax_exempt_status
-        FROM inventory.parts_customer
-        WHERE customer_id = %s
+        SELECT company_id, casino_id, display_name, casino_short, shop_enabled,
+               stripe_customer_id, tax_exempt_status
+        FROM inventory.parts_company
+        WHERE company_id = %s AND shop_enabled = 1
         """,
-        (customer_id,),
+        (company_id,),
     )
     return rows[0] if rows else None
 
@@ -341,7 +342,7 @@ def _tax_quote_for(
     priced: list[dict],
     subtotal: Decimal,
     ship: dict[str, str],
-    parts_customer: dict | None,
+    parts_company: dict | None,
 ) -> dict:
     import stripe
 
@@ -359,7 +360,7 @@ def _tax_quote_for(
             }
         )
 
-    exempt = bool(parts_customer and (parts_customer.get("tax_exempt_status") or "") == "approved")
+    exempt = bool(parts_company and (parts_company.get("tax_exempt_status") or "") == "approved")
     stripe_customer_id = None
     calc_kwargs: dict[str, Any] = {
         "currency": "usd",
@@ -367,11 +368,11 @@ def _tax_quote_for(
     }
 
     if exempt:
-        stripe_customer_id = (parts_customer.get("stripe_customer_id") or "").strip() or None
+        stripe_customer_id = (parts_company.get("stripe_customer_id") or "").strip() or None
+        ship_name = parts_company.get("display_name") or parts_company.get("casino_short") or "Parts buyer"
         if not stripe_customer_id:
             cust = stripe.Customer.create(
-                email=parts_customer.get("email"),
-                name=parts_customer.get("display_name") or parts_customer.get("email"),
+                name=ship_name,
                 tax_exempt="exempt",
                 address={
                     "line1": ship["line1"],
@@ -382,7 +383,7 @@ def _tax_quote_for(
                     "country": ship["country"],
                 },
                 shipping={
-                    "name": parts_customer.get("display_name") or parts_customer.get("email"),
+                    "name": ship_name,
                     "address": {
                         "line1": ship["line1"],
                         "line2": ship.get("line2") or None,
@@ -393,18 +394,19 @@ def _tax_quote_for(
                     },
                 },
                 metadata={
-                    "parts_customer_id": parts_customer.get("customer_id"),
+                    "parts_company_id": parts_company.get("company_id"),
+                    "casino_id": parts_company.get("casino_id") or "",
                     "source": "parts_catalog",
                 },
             )
             stripe_customer_id = cust.id
             _field_execute(
                 """
-                UPDATE inventory.parts_customer
+                UPDATE inventory.parts_company
                 SET stripe_customer_id = %s, updated_at = SYSUTCDATETIME()
-                WHERE customer_id = %s
+                WHERE company_id = %s
                 """,
-                (stripe_customer_id, parts_customer["customer_id"]),
+                (stripe_customer_id, parts_company["company_id"]),
             )
         else:
             stripe.Customer.modify(
@@ -419,7 +421,7 @@ def _tax_quote_for(
                     "country": ship["country"],
                 },
                 shipping={
-                    "name": parts_customer.get("display_name") or parts_customer.get("email"),
+                    "name": ship_name,
                     "address": {
                         "line1": ship["line1"],
                         "line2": ship.get("line2") or None,
@@ -430,7 +432,6 @@ def _tax_quote_for(
                     },
                 },
             )
-        # Stripe allows customer OR customer_details, not both.
         calc_kwargs["customer"] = stripe_customer_id
     else:
         calc_kwargs["customer_details"] = {
@@ -451,7 +452,6 @@ def _tax_quote_for(
         raise HTTPException(status_code=502, detail=f"Stripe Tax error: {exc}") from exc
 
     tax_cents = int(calc.tax_amount_exclusive or 0)
-    # amount_total includes tax + shipping; our shipping is 0
     total_cents = int(calc.amount_total or (int((subtotal * 100).quantize(Decimal("1"))) + tax_cents))
     reason = None
     try:
@@ -461,14 +461,14 @@ def _tax_quote_for(
     except Exception:
         reason = None
 
-    status = (parts_customer or {}).get("tax_exempt_status") or "none"
+    status = (parts_company or {}).get("tax_exempt_status") or "none"
     message = None
     if status == "pending":
-        message = "Exemption under review — this order is taxed."
+        message = "Company exemption under review — this order is taxed."
     elif status == "approved" and tax_cents == 0:
-        message = "Tax exempt account — $0 tax on this order."
-    elif not parts_customer:
-        message = "Guest checkout is taxed. Create an account to apply for tax exemption."
+        message = "Company tax exempt — $0 tax on this order."
+    elif not parts_company:
+        message = "Guest checkout is taxed. Sign in with your casino company account for exemption status."
 
     return {
         "calculationId": calc.id,
@@ -480,7 +480,7 @@ def _tax_quote_for(
         "total_cents": total_cents,
         "currency": "usd",
         "taxabilityReason": reason,
-        "taxExemptStatus": status if parts_customer else "guest",
+        "taxExemptStatus": status if parts_company else "guest",
         "appliedExemption": exempt and tax_cents == 0,
         "stripeCustomerId": stripe_customer_id,
         "message": message,
@@ -511,21 +511,21 @@ def _ship_dict(body: CreatePaymentIntentIn) -> dict[str, str]:
 @router.post("/checkout/quote-tax")
 def quote_tax(
     body: QuoteTaxIn,
-    user=Depends(optional_parts_customer),
+    user=Depends(optional_parts_user),
 ):
-    """Stripe Tax quote from ship-to. Guests/pending always taxed; approved accounts may be $0."""
+    """Stripe Tax quote from ship-to. Guests/pending taxed; approved company may be $0."""
     email = body.email.strip()
     if "@" not in email or "." not in email.split("@")[-1]:
         raise HTTPException(status_code=400, detail="Valid email required")
     priced, subtotal = _price_lines(body.lines)
-    parts_customer = None
-    if user:
-        parts_customer = _load_parts_customer(str(user["sub"]))
+    parts_company = None
+    if user and user.get("company_id"):
+        parts_company = _load_parts_company(str(user["company_id"]))
     quote = _tax_quote_for(
         priced=priced,
         subtotal=subtotal,
         ship=_ship_dict(body),
-        parts_customer=parts_customer,
+        parts_company=parts_company,
     )
     return quote
 
@@ -533,7 +533,7 @@ def quote_tax(
 @router.post("/checkout/create-payment-intent")
 def create_payment_intent(
     body: CreatePaymentIntentIn,
-    user=Depends(optional_parts_customer),
+    user=Depends(optional_parts_user),
 ):
     """Price cart + tax server-side and create a Stripe PaymentIntent."""
     import stripe
@@ -543,12 +543,14 @@ def create_payment_intent(
         raise HTTPException(status_code=400, detail="Valid email required")
 
     priced, subtotal = _price_lines(body.lines)
-    parts_customer = _load_parts_customer(str(user["sub"])) if user else None
+    parts_company = (
+        _load_parts_company(str(user["company_id"])) if user and user.get("company_id") else None
+    )
     quote = _tax_quote_for(
         priced=priced,
         subtotal=subtotal,
         ship=_ship_dict(body),
-        parts_customer=parts_customer,
+        parts_company=parts_company,
     )
     amount_cents = int(quote["total_cents"])
     if amount_cents < 50:

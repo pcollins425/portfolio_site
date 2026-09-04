@@ -1,4 +1,4 @@
-"""Parts storefront customer auth (separate from DGS Google staff auth)."""
+"""Parts storefront company-user auth (separate from DGS Google staff auth)."""
 
 from __future__ import annotations
 
@@ -21,7 +21,6 @@ _PBKDF2_ITERS = 200_000
 def _jwt_secret() -> str:
     secret = (os.environ.get("PARTS_CUSTOMER_JWT_SECRET") or "").strip()
     if not secret:
-        # Fall back so local sandbox works if only demo secret exists
         secret = (os.environ.get("EMAINT_DEMO_JWT_SECRET") or "").strip()
     if not secret:
         raise HTTPException(status_code=503, detail="PARTS_CUSTOMER_JWT_SECRET not configured")
@@ -50,45 +49,62 @@ def verify_password(password: str, stored: str) -> bool:
         return False
 
 
-def mint_customer_token(*, customer_id: str, email: str, hours: int = 24 * 14) -> str:
+def mint_user_token(
+    *,
+    user_id: str,
+    company_id: str,
+    email: str,
+    role: str,
+    hours: int = 24 * 14,
+) -> str:
     now = int(time.time())
     payload = {
-        "sub": customer_id,
+        "sub": user_id,
+        "company_id": company_id,
         "email": email,
-        "typ": "parts_customer",
+        "role": role,
+        "typ": "parts_company_user",
         "iat": now,
         "exp": now + hours * 3600,
     }
     return jwt.encode(payload, _jwt_secret(), algorithm="HS256")
 
 
-def decode_customer_token(token: str) -> dict[str, Any]:
+def decode_user_token(token: str) -> dict[str, Any]:
     try:
         payload = jwt.decode(token, _jwt_secret(), algorithms=["HS256"])
     except jwt.PyJWTError as exc:
         raise HTTPException(status_code=401, detail="Invalid or expired session") from exc
-    if payload.get("typ") != "parts_customer" or not payload.get("sub"):
+    if payload.get("typ") != "parts_company_user" or not payload.get("sub"):
         raise HTTPException(status_code=401, detail="Invalid session type")
+    if not payload.get("company_id"):
+        raise HTTPException(status_code=401, detail="Invalid session company")
     return payload
 
 
-async def require_parts_customer(
+async def require_parts_user(
     creds: HTTPAuthorizationCredentials | None = Depends(_bearer),
 ) -> dict[str, Any]:
     if not creds or not creds.credentials:
         raise HTTPException(status_code=401, detail="Sign in required")
-    return decode_customer_token(creds.credentials)
+    return decode_user_token(creds.credentials)
 
 
-def optional_parts_customer(
+def optional_parts_user(
     creds: HTTPAuthorizationCredentials | None = Depends(_bearer),
 ) -> dict[str, Any] | None:
     if not creds or not creds.credentials:
         return None
     try:
-        return decode_customer_token(creds.credentials)
+        return decode_user_token(creds.credentials)
     except HTTPException:
         return None
+
+
+def require_company_admin(user: dict[str, Any] = Depends(require_parts_user)) -> dict[str, Any]:
+    if (user.get("role") or "") != "admin":
+        raise HTTPException(status_code=403, detail="Company admin required")
+    return user
 
 
 def require_staff_token(creds: HTTPAuthorizationCredentials | None = Depends(_bearer)) -> str:
