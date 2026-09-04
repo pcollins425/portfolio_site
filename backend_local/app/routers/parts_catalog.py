@@ -5,6 +5,7 @@ from __future__ import annotations
 import math
 import mimetypes
 import os
+import uuid
 from datetime import date, datetime
 from decimal import Decimal
 from pathlib import Path
@@ -15,7 +16,7 @@ from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 
 from app.auth_deps import require_demo_user
-from app.parts_customer_auth import optional_parts_user
+from app.parts_customer_auth import optional_parts_user, require_parts_user, require_staff_token
 from app import mssql
 
 router = APIRouter(prefix="/api/parts-catalog", tags=["parts-catalog"])
@@ -244,6 +245,9 @@ def checkout_config():
 class CheckoutLinePayIn(BaseModel):
     item: str = Field(min_length=1, max_length=80)
     qty: int = Field(default=1, ge=1, le=9999)
+    lease_credit: bool = False
+    lease_serial: str | None = Field(default=None, max_length=80)
+    request_tech: bool = False
 
 
 class CreatePaymentIntentIn(BaseModel):
@@ -262,6 +266,14 @@ class CreatePaymentIntentIn(BaseModel):
 
 class QuoteTaxIn(CreatePaymentIntentIn):
     pass
+
+
+class SubmitOrderIn(CreatePaymentIntentIn):
+    payment_intent_id: str | None = Field(default=None, max_length=80)
+
+
+def _new_order_id(prefix: str) -> str:
+    return f"{prefix}-{uuid.uuid4().hex[:12].upper()}"
 
 
 def _stripe_secret() -> str:
@@ -287,9 +299,62 @@ def _unit_list_price(cost) -> float | None:
     return round(cost_f * 1.30, 2)
 
 
-def _price_lines(lines: list[CheckoutLinePayIn]) -> tuple[list[dict], Decimal]:
+def _casino_has_active_smm(casino_id: str) -> bool:
+    cid = (casino_id or "").strip()
+    if not cid:
+        return False
+    rows = _field_query(
+        """
+        SELECT TOP 1 1 AS ok
+        FROM inventory.slot_master_migration
+        WHERE casino_id = %s AND is_active = 1
+        """,
+        (cid,),
+    )
+    return bool(rows)
+
+
+def _resolve_lease_serial(casino_id: str, serial: str) -> dict:
+    ser = (serial or "").strip()
+    if not ser:
+        raise HTTPException(status_code=400, detail="Lease serial required for credit lines")
+    rows = _field_query(
+        """
+        SELECT TOP 1
+            s.reference_key AS smm_id,
+            s.asset_no,
+            a.serial_number,
+            t.theme_name
+        FROM inventory.slot_master_migration AS s
+        LEFT JOIN inventory.assets AS a ON a.reference_key = s.asset_id
+        LEFT JOIN vendors.themes AS t ON t.reference_key = s.theme_id
+        WHERE s.casino_id = %s
+          AND s.is_active = 1
+          AND LTRIM(RTRIM(a.serial_number)) = %s
+        """,
+        (casino_id, ser),
+    )
+    if not rows:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Serial {ser!r} is not an active leased cabinet at this casino",
+        )
+    return rows[0]
+
+
+def _price_lines(
+    lines: list[CheckoutLinePayIn],
+    *,
+    parts_company: dict | None,
+) -> tuple[list[dict], Decimal, Decimal, int]:
+    """Return priced lines, paid_subtotal, credit_subtotal_display (0), credit_line_count."""
     priced: list[dict] = []
-    subtotal = Decimal("0.00")
+    paid_subtotal = Decimal("0.00")
+    credit_count = 0
+    lease_eligible = bool(
+        parts_company and _casino_has_active_smm(str(parts_company.get("casino_id") or ""))
+    )
+
     for line in lines:
         item = line.item.strip()
         rows = _field_query(
@@ -302,15 +367,44 @@ def _price_lines(lines: list[CheckoutLinePayIn]) -> tuple[list[dict], Decimal]:
         )
         if not rows:
             raise HTTPException(status_code=404, detail=f"part not found: {item!r}")
-        unit = _unit_list_price(rows[0].get("cost"))
-        if unit is None:
-            raise HTTPException(
-                status_code=400,
-                detail=f"No list price for {item!r} — remove it or contact us",
-            )
+
         qty = int(line.qty)
-        line_total = (Decimal(str(unit)) * qty).quantize(Decimal("0.01"))
-        subtotal += line_total
+        lease_credit = bool(line.lease_credit)
+        request_tech = bool(line.request_tech)
+        lease_serial = (line.lease_serial or "").strip() or None
+        lease_smm_id = None
+
+        if lease_credit:
+            if not parts_company:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Lease credit requires a signed-in company account",
+                )
+            if not lease_eligible:
+                raise HTTPException(
+                    status_code=400,
+                    detail="This company has no active leased cabinets for credit",
+                )
+            smm = _resolve_lease_serial(str(parts_company["casino_id"]), lease_serial or "")
+            lease_serial = str(smm.get("serial_number") or lease_serial).strip()
+            lease_smm_id = str(smm.get("smm_id") or "") or None
+            unit = 0.0
+            line_total = Decimal("0.00")
+            credit_count += 1
+        else:
+            unit = _unit_list_price(rows[0].get("cost"))
+            if unit is None:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"No list price for {item!r} — remove it or contact us",
+                )
+            line_total = (Decimal(str(unit)) * qty).quantize(Decimal("0.01"))
+            paid_subtotal += line_total
+            if lease_serial or request_tech:
+                # Ignore lease fields on paid lines
+                lease_serial = None
+                request_tech = False
+
         priced.append(
             {
                 "item": _json_value(rows[0].get("item")),
@@ -319,9 +413,13 @@ def _price_lines(lines: list[CheckoutLinePayIn]) -> tuple[list[dict], Decimal]:
                 "unit_price": unit,
                 "line_total": float(line_total),
                 "amount_cents": int((line_total * 100).quantize(Decimal("1"))),
+                "lease_credit": lease_credit,
+                "lease_serial": lease_serial,
+                "lease_smm_id": lease_smm_id,
+                "request_tech": request_tech,
             }
         )
-    return priced, subtotal
+    return priced, paid_subtotal, Decimal("0.00"), credit_count
 
 
 def _load_parts_company(company_id: str) -> dict | None:
@@ -337,19 +435,60 @@ def _load_parts_company(company_id: str) -> dict | None:
     return rows[0] if rows else None
 
 
+def _line_public(p: dict) -> dict:
+    return {
+        "item": p["item"],
+        "descrip": p["descrip"],
+        "qty": p["qty"],
+        "unit_price": p["unit_price"],
+        "line_total": p["line_total"],
+        "lease_credit": bool(p.get("lease_credit")),
+        "lease_serial": p.get("lease_serial"),
+        "request_tech": bool(p.get("request_tech")),
+    }
+
+
 def _tax_quote_for(
     *,
     priced: list[dict],
-    subtotal: Decimal,
+    paid_subtotal: Decimal,
     ship: dict[str, str],
     parts_company: dict | None,
 ) -> dict:
     import stripe
 
+    paid_lines = [p for p in priced if not p.get("lease_credit")]
+    credit_lines = [p for p in priced if p.get("lease_credit")]
+
+    # All-credit (or no taxable amount): skip Stripe Tax
+    if not paid_lines or paid_subtotal <= 0:
+        status = (parts_company or {}).get("tax_exempt_status") or "none"
+        msg = None
+        if credit_lines and not paid_lines:
+            msg = "All lease-credit lines — no payment or tax."
+        return {
+            "calculationId": None,
+            "subtotal": float(paid_subtotal),
+            "tax": 0.0,
+            "total": float(paid_subtotal),
+            "subtotal_cents": 0,
+            "tax_cents": 0,
+            "total_cents": 0,
+            "currency": "usd",
+            "taxabilityReason": None,
+            "taxExemptStatus": status if parts_company else "guest",
+            "appliedExemption": False,
+            "stripeCustomerId": None,
+            "message": msg,
+            "creditLineCount": len(credit_lines),
+            "allCredit": bool(credit_lines) and not paid_lines,
+            "lines": [_line_public(p) for p in priced],
+        }
+
     stripe.api_key = _stripe_secret()
     tax_code = _tax_code()
     line_items = []
-    for i, p in enumerate(priced):
+    for i, p in enumerate(paid_lines):
         line_items.append(
             {
                 "amount": p["amount_cents"],
@@ -452,7 +591,7 @@ def _tax_quote_for(
         raise HTTPException(status_code=502, detail=f"Stripe Tax error: {exc}") from exc
 
     tax_cents = int(calc.tax_amount_exclusive or 0)
-    total_cents = int(calc.amount_total or (int((subtotal * 100).quantize(Decimal("1"))) + tax_cents))
+    total_cents = int(calc.amount_total or (int((paid_subtotal * 100).quantize(Decimal("1"))) + tax_cents))
     reason = None
     try:
         if calc.tax_breakdown:
@@ -469,13 +608,16 @@ def _tax_quote_for(
         message = "Company tax exempt — $0 tax on this order."
     elif not parts_company:
         message = "Guest checkout is taxed. Sign in with your casino company account for exemption status."
+    if credit_lines:
+        extra = f"{len(credit_lines)} lease-credit line(s) at $0."
+        message = f"{message} {extra}".strip() if message else extra
 
     return {
         "calculationId": calc.id,
-        "subtotal": float(subtotal),
+        "subtotal": float(paid_subtotal),
         "tax": float(Decimal(tax_cents) / Decimal(100)),
         "total": float(Decimal(total_cents) / Decimal(100)),
-        "subtotal_cents": int((subtotal * 100).quantize(Decimal("1"))),
+        "subtotal_cents": int((paid_subtotal * 100).quantize(Decimal("1"))),
         "tax_cents": tax_cents,
         "total_cents": total_cents,
         "currency": "usd",
@@ -484,16 +626,129 @@ def _tax_quote_for(
         "appliedExemption": exempt and tax_cents == 0,
         "stripeCustomerId": stripe_customer_id,
         "message": message,
-        "lines": [
-            {
-                "item": p["item"],
-                "descrip": p["descrip"],
-                "qty": p["qty"],
-                "unit_price": p["unit_price"],
-                "line_total": p["line_total"],
-            }
-            for p in priced
-        ],
+        "creditLineCount": len(credit_lines),
+        "allCredit": False,
+        "lines": [_line_public(p) for p in priced],
+    }
+
+
+def _persist_shop_order(
+    *,
+    body: CreatePaymentIntentIn,
+    user: dict | None,
+    parts_company: dict | None,
+    priced: list[dict],
+    quote: dict,
+    payment_intent_id: str | None,
+) -> dict:
+    order_id = _new_order_id("PSO")
+    company_id = (parts_company or {}).get("company_id")
+    casino_id = (parts_company or {}).get("casino_id")
+    user_id = str(user["sub"]) if user and user.get("sub") else None
+    credit_count = sum(1 for p in priced if p.get("lease_credit"))
+    paid_subtotal = Decimal(str(quote.get("subtotal") or 0))
+    tax_amount = Decimal(str(quote.get("tax") or 0))
+    total_amount = Decimal(str(quote.get("total") or 0))
+
+    _field_execute(
+        """
+        INSERT INTO inventory.parts_shop_order (
+            order_id, company_id, user_id, email, contact_name, phone,
+            ship_company, ship_line1, ship_line2, ship_city, ship_state, ship_postal, ship_country,
+            paid_subtotal, tax_amount, total_amount, credit_line_count,
+            stripe_payment_intent_id, tax_calculation_id, status
+        ) VALUES (
+            %s, %s, %s, %s, %s, %s,
+            %s, %s, %s, %s, %s, %s, %s,
+            %s, %s, %s, %s,
+            %s, %s, N'submitted'
+        )
+        """,
+        (
+            order_id,
+            company_id,
+            user_id,
+            body.email.strip(),
+            body.name.strip(),
+            (body.phone or "").strip() or None,
+            (body.company or "").strip() or None,
+            body.line1.strip(),
+            (body.line2 or "").strip() or None,
+            body.city.strip(),
+            body.state.strip(),
+            body.postal.strip(),
+            (body.country or "US").strip().upper()[:2],
+            float(paid_subtotal),
+            float(tax_amount),
+            float(total_amount),
+            credit_count,
+            payment_intent_id,
+            quote.get("calculationId"),
+        ),
+    )
+
+    lease_ids: list[str] = []
+    for p in priced:
+        line_id = _new_order_id("PSL")
+        _field_execute(
+            """
+            INSERT INTO inventory.parts_shop_order_line (
+                order_line_id, order_id, item, descrip, qty, unit_price, line_total,
+                lease_credit, lease_serial, lease_smm_id, request_tech
+            ) VALUES (
+                %s, %s, %s, %s, %s, %s, %s,
+                %s, %s, %s, %s
+            )
+            """,
+            (
+                line_id,
+                order_id,
+                p["item"],
+                p.get("descrip"),
+                p["qty"],
+                p["unit_price"],
+                p["line_total"],
+                1 if p.get("lease_credit") else 0,
+                p.get("lease_serial"),
+                p.get("lease_smm_id"),
+                1 if p.get("request_tech") else 0,
+            ),
+        )
+        if p.get("lease_credit"):
+            if not company_id or not casino_id:
+                raise HTTPException(status_code=400, detail="Lease credit requires company casino")
+            lr_id = _new_order_id("PLR")
+            _field_execute(
+                """
+                INSERT INTO inventory.parts_lease_request (
+                    lease_request_id, order_id, order_line_id, company_id, casino_id,
+                    item, descrip, qty, lease_serial, lease_smm_id, request_tech, status
+                ) VALUES (
+                    %s, %s, %s, %s, %s,
+                    %s, %s, %s, %s, %s, %s, N'staged'
+                )
+                """,
+                (
+                    lr_id,
+                    order_id,
+                    line_id,
+                    company_id,
+                    casino_id,
+                    p["item"],
+                    p.get("descrip"),
+                    p["qty"],
+                    p.get("lease_serial"),
+                    p.get("lease_smm_id"),
+                    1 if p.get("request_tech") else 0,
+                ),
+            )
+            lease_ids.append(lr_id)
+
+    return {
+        "orderId": order_id,
+        "leaseRequestIds": lease_ids,
+        "creditLineCount": credit_count,
+        "status": "submitted",
     }
 
 
@@ -508,6 +763,119 @@ def _ship_dict(body: CreatePaymentIntentIn) -> dict[str, str]:
     }
 
 
+def _company_from_user(user) -> dict | None:
+    if user and user.get("company_id"):
+        return _load_parts_company(str(user["company_id"]))
+    return None
+
+
+@router.get("/account/lease-cabinets")
+def lease_cabinets(user=Depends(require_parts_user)):
+    """Active SMM cabinets at the signed-in company's casino (serial picker)."""
+    company = _load_parts_company(str(user["company_id"]))
+    if not company:
+        raise HTTPException(status_code=403, detail="Company shop access is disabled")
+    casino_id = str(company.get("casino_id") or "")
+    rows = _field_query(
+        """
+        SELECT
+            s.reference_key AS smm_id,
+            s.asset_no,
+            a.serial_number,
+            t.theme_name
+        FROM inventory.slot_master_migration AS s
+        LEFT JOIN inventory.assets AS a ON a.reference_key = s.asset_id
+        LEFT JOIN vendors.themes AS t ON t.reference_key = s.theme_id
+        WHERE s.casino_id = %s AND s.is_active = 1
+          AND a.serial_number IS NOT NULL AND LTRIM(RTRIM(a.serial_number)) <> N''
+        ORDER BY a.serial_number ASC
+        """,
+        (casino_id,),
+    )
+    cabinets = []
+    for r in rows:
+        serial = _json_value(r.get("serial_number"))
+        if not serial:
+            continue
+        theme = _json_value(r.get("theme_name"))
+        asset_no = _json_value(r.get("asset_no"))
+        hint_bits = [x for x in (theme, asset_no) if x]
+        cabinets.append(
+            {
+                "smmId": _json_value(r.get("smm_id")),
+                "serial": serial,
+                "assetNo": asset_no,
+                "theme": theme,
+                "label": f"{serial}" + (f" — {' · '.join(hint_bits)}" if hint_bits else ""),
+            }
+        )
+    return {
+        "eligible": len(cabinets) > 0,
+        "casinoId": casino_id,
+        "cabinets": cabinets,
+    }
+
+
+@router.get("/staff/lease-requests")
+def staff_lease_requests(
+    status: str = Query("staged", max_length=20),
+    _staff: str = Depends(require_staff_token),
+):
+    st = (status or "staged").strip().lower()
+    if st not in ("staged", "converted", "cancelled", "all"):
+        raise HTTPException(status_code=400, detail="status must be staged|converted|cancelled|all")
+    if st == "all":
+        rows = _field_query(
+            """
+            SELECT TOP 200
+                lr.lease_request_id, lr.order_id, lr.company_id, lr.casino_id,
+                lr.item, lr.descrip, lr.qty, lr.lease_serial, lr.lease_smm_id,
+                lr.request_tech, lr.status, lr.created_at,
+                c.display_name AS company_name, c.casino_short
+            FROM inventory.parts_lease_request AS lr
+            LEFT JOIN inventory.parts_company AS c ON c.company_id = lr.company_id
+            ORDER BY lr.created_at DESC
+            """
+        )
+    else:
+        rows = _field_query(
+            """
+            SELECT TOP 200
+                lr.lease_request_id, lr.order_id, lr.company_id, lr.casino_id,
+                lr.item, lr.descrip, lr.qty, lr.lease_serial, lr.lease_smm_id,
+                lr.request_tech, lr.status, lr.created_at,
+                c.display_name AS company_name, c.casino_short
+            FROM inventory.parts_lease_request AS lr
+            LEFT JOIN inventory.parts_company AS c ON c.company_id = lr.company_id
+            WHERE lr.status = %s
+            ORDER BY lr.created_at DESC
+            """,
+            (st,),
+        )
+    out = []
+    for r in rows:
+        created = r.get("created_at")
+        out.append(
+            {
+                "leaseRequestId": _json_value(r.get("lease_request_id")),
+                "orderId": _json_value(r.get("order_id")),
+                "companyId": _json_value(r.get("company_id")),
+                "companyName": _json_value(r.get("company_name")),
+                "casinoShort": _json_value(r.get("casino_short")),
+                "casinoId": _json_value(r.get("casino_id")),
+                "item": _json_value(r.get("item")),
+                "descrip": _json_value(r.get("descrip")),
+                "qty": int(r.get("qty") or 0),
+                "leaseSerial": _json_value(r.get("lease_serial")),
+                "leaseSmmId": _json_value(r.get("lease_smm_id")),
+                "requestTech": bool(r.get("request_tech")),
+                "status": _json_value(r.get("status")),
+                "createdAt": created.isoformat() if isinstance(created, datetime) else _json_value(created),
+            }
+        )
+    return {"requests": out, "status": st}
+
+
 @router.post("/checkout/quote-tax")
 def quote_tax(
     body: QuoteTaxIn,
@@ -517,13 +885,11 @@ def quote_tax(
     email = body.email.strip()
     if "@" not in email or "." not in email.split("@")[-1]:
         raise HTTPException(status_code=400, detail="Valid email required")
-    priced, subtotal = _price_lines(body.lines)
-    parts_company = None
-    if user and user.get("company_id"):
-        parts_company = _load_parts_company(str(user["company_id"]))
+    parts_company = _company_from_user(user)
+    priced, paid_subtotal, _credit_disp, _credit_n = _price_lines(body.lines, parts_company=parts_company)
     quote = _tax_quote_for(
         priced=priced,
-        subtotal=subtotal,
+        paid_subtotal=paid_subtotal,
         ship=_ship_dict(body),
         parts_company=parts_company,
     )
@@ -542,23 +908,46 @@ def create_payment_intent(
     if "@" not in email or "." not in email.split("@")[-1]:
         raise HTTPException(status_code=400, detail="Valid email required")
 
-    priced, subtotal = _price_lines(body.lines)
-    parts_company = (
-        _load_parts_company(str(user["company_id"])) if user and user.get("company_id") else None
-    )
+    parts_company = _company_from_user(user)
+    priced, paid_subtotal, _credit_disp, credit_n = _price_lines(body.lines, parts_company=parts_company)
     quote = _tax_quote_for(
         priced=priced,
-        subtotal=subtotal,
+        paid_subtotal=paid_subtotal,
         ship=_ship_dict(body),
         parts_company=parts_company,
     )
+
+    if quote.get("allCredit") or int(quote.get("total_cents") or 0) == 0:
+        if credit_n < 1:
+            raise HTTPException(status_code=400, detail="Nothing to charge")
+        return {
+            "clientSecret": None,
+            "paymentIntentId": None,
+            "amount": 0,
+            "currency": "usd",
+            "allCredit": True,
+            "subtotal": quote["subtotal"],
+            "tax": quote["tax"],
+            "total": quote["total"],
+            "calculationId": quote.get("calculationId"),
+            "taxabilityReason": quote.get("taxabilityReason"),
+            "taxExemptStatus": quote.get("taxExemptStatus"),
+            "appliedExemption": quote.get("appliedExemption"),
+            "message": quote.get("message") or "All lease-credit — submit without card payment.",
+            "creditLineCount": quote.get("creditLineCount"),
+            "lines": quote["lines"],
+            "mode": "test" if _stripe_secret().startswith("sk_test_") else "live",
+        }
+
     amount_cents = int(quote["total_cents"])
     if amount_cents < 50:
         raise HTTPException(status_code=400, detail="Order total must be at least $0.50")
 
     stripe.api_key = _stripe_secret()
     mode = "live" if stripe.api_key.startswith("sk_live_") else "test"
-    items_meta = ", ".join(f"{p['item']}x{p['qty']}" for p in priced)[:450]
+    items_meta = ", ".join(
+        f"{p['item']}x{p['qty']}{'L' if p.get('lease_credit') else ''}" for p in priced
+    )[:450]
     pi_kwargs: dict[str, Any] = {
         "amount": amount_cents,
         "currency": "usd",
@@ -578,6 +967,8 @@ def create_payment_intent(
             "tax_calculation": quote.get("calculationId") or "",
             "tax_cents": str(quote.get("tax_cents") or 0),
             "tax_exempt_status": str(quote.get("taxExemptStatus") or ""),
+            "credit_lines": str(credit_n),
+            "parts_company_id": str((parts_company or {}).get("company_id") or ""),
         },
         "shipping": {
             "name": body.name.strip(),
@@ -605,6 +996,7 @@ def create_payment_intent(
         "paymentIntentId": intent.id,
         "amount": amount_cents,
         "currency": "usd",
+        "allCredit": False,
         "subtotal": quote["subtotal"],
         "tax": quote["tax"],
         "total": quote["total"],
@@ -613,8 +1005,118 @@ def create_payment_intent(
         "taxExemptStatus": quote.get("taxExemptStatus"),
         "appliedExemption": quote.get("appliedExemption"),
         "message": quote.get("message"),
+        "creditLineCount": quote.get("creditLineCount"),
         "lines": quote["lines"],
         "mode": mode,
+    }
+
+
+@router.post("/checkout/submit-order")
+def submit_order(
+    body: SubmitOrderIn,
+    user=Depends(optional_parts_user),
+):
+    """Persist shop order + lease staging after PI success or all-credit checkout."""
+    import stripe
+
+    email = body.email.strip()
+    if "@" not in email or "." not in email.split("@")[-1]:
+        raise HTTPException(status_code=400, detail="Valid email required")
+
+    parts_company = _company_from_user(user)
+    priced, paid_subtotal, _credit_disp, credit_n = _price_lines(body.lines, parts_company=parts_company)
+    quote = _tax_quote_for(
+        priced=priced,
+        paid_subtotal=paid_subtotal,
+        ship=_ship_dict(body),
+        parts_company=parts_company,
+    )
+
+    pi_id = (body.payment_intent_id or "").strip() or None
+    all_credit = bool(quote.get("allCredit") or (int(quote.get("total_cents") or 0) == 0 and credit_n > 0))
+
+    if all_credit:
+        if credit_n < 1:
+            raise HTTPException(status_code=400, detail="Nothing to submit")
+        saved = _persist_shop_order(
+            body=body,
+            user=user,
+            parts_company=parts_company,
+            priced=priced,
+            quote=quote,
+            payment_intent_id=None,
+        )
+        return {
+            **saved,
+            "allCredit": True,
+            "subtotal": quote["subtotal"],
+            "tax": quote["tax"],
+            "total": quote["total"],
+            "lines": quote["lines"],
+            "message": "Lease-credit order staged.",
+        }
+
+    if not pi_id:
+        raise HTTPException(status_code=400, detail="payment_intent_id required for paid orders")
+
+    stripe.api_key = _stripe_secret()
+    try:
+        intent = stripe.PaymentIntent.retrieve(pi_id)
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=502, detail=f"Stripe error: {exc}") from exc
+
+    if intent.status != "succeeded":
+        raise HTTPException(
+            status_code=400,
+            detail=f"PaymentIntent status is {intent.status!r}, expected succeeded",
+        )
+
+    expected = int(quote["total_cents"])
+    if int(intent.amount or 0) != expected:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Payment amount mismatch (paid {intent.amount}, expected {expected})",
+        )
+
+    # Idempotent-ish: if already recorded for this PI, return existing
+    existing = _field_query(
+        """
+        SELECT TOP 1 order_id FROM inventory.parts_shop_order
+        WHERE stripe_payment_intent_id = %s
+        """,
+        (pi_id,),
+    )
+    if existing:
+        return {
+            "orderId": existing[0]["order_id"],
+            "leaseRequestIds": [],
+            "creditLineCount": credit_n,
+            "status": "submitted",
+            "allCredit": False,
+            "subtotal": quote["subtotal"],
+            "tax": quote["tax"],
+            "total": quote["total"],
+            "lines": quote["lines"],
+            "message": "Order already recorded.",
+            "duplicate": True,
+        }
+
+    saved = _persist_shop_order(
+        body=body,
+        user=user,
+        parts_company=parts_company,
+        priced=priced,
+        quote=quote,
+        payment_intent_id=pi_id,
+    )
+    return {
+        **saved,
+        "allCredit": False,
+        "subtotal": quote["subtotal"],
+        "tax": quote["tax"],
+        "total": quote["total"],
+        "lines": quote["lines"],
+        "message": "Order submitted.",
     }
 
 

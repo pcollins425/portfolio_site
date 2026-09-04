@@ -69,14 +69,27 @@ def _json_dt(v):
 
 
 def _company_public(row: dict) -> dict:
+    casino_id = row.get("casino_id")
+    lease_eligible = False
+    if casino_id:
+        hit = _field_query(
+            """
+            SELECT TOP 1 1 AS ok
+            FROM inventory.slot_master_migration
+            WHERE casino_id = %s AND is_active = 1
+            """,
+            (casino_id,),
+        )
+        lease_eligible = bool(hit)
     return {
         "company_id": row.get("company_id"),
-        "casino_id": row.get("casino_id"),
+        "casino_id": casino_id,
         "display_name": row.get("display_name"),
         "casino_short": row.get("casino_short"),
         "shop_enabled": bool(row.get("shop_enabled")),
         "tax_exempt_status": row.get("tax_exempt_status") or "none",
         "stripe_customer_id": row.get("stripe_customer_id"),
+        "lease_eligible": lease_eligible,
     }
 
 
@@ -224,10 +237,8 @@ def login(body: LoginIn):
         email=row["email"],
         role=row["role"],
     )
-    return {
-        "token": token,
-        "user": _user_public(row),
-        "company": {
+    company_pub = _company_public(
+        {
             "company_id": row["company_id"],
             "casino_id": row["casino_id"],
             "display_name": row["company_name"],
@@ -235,7 +246,12 @@ def login(body: LoginIn):
             "shop_enabled": True,
             "tax_exempt_status": row.get("tax_exempt_status") or "none",
             "stripe_customer_id": row.get("stripe_customer_id"),
-        },
+        }
+    )
+    return {
+        "token": token,
+        "user": _user_public(row),
+        "company": company_pub,
     }
 
 
