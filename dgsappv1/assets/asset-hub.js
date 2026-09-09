@@ -355,7 +355,7 @@
             <tr>
               <td class="mono">${esc(ln.line_no ?? "")}</td>
               <td class="mono">${esc(ln.oem_part_no || "")}</td>
-              <td>${esc(ln.part_name || "")}${ln.option_group ? ` <span class="dgs-v2-hub-muted">(${esc(ln.option_group)})</span>` : ""}</td>
+              <td>${esc(ln.part_name || "")}${ln.option_group ? ` <span class="dgs-v2-hub-bom-opt">(${esc(ln.option_group)})</span>` : ""}</td>
               <td>${esc(ln.section_name || "—")}</td>
               <td class="mono">${esc(ln.item || "—")}</td>
             </tr>`
