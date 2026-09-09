@@ -386,6 +386,52 @@ def asset_hub(asset_id: str):
                 "compid": _json_value(w.get("wh_compid")),
             }
 
+    bom = None
+    cab_id = asset.get("cabinet_id")
+    if cab_id:
+        try:
+            bom_rows = _field_query(
+                """
+                SELECT TOP 1
+                    b.bom_id,
+                    b.cabinet_id,
+                    b.version_name,
+                    b.title,
+                    b.source_revision,
+                    b.source_kind,
+                    b.document_filed_path,
+                    b.document_file_name,
+                    (SELECT COUNT(*)
+                     FROM vendors.parts_cabinet_bom_line AS l
+                     WHERE l.bom_id = b.bom_id AND l.is_active = 1) AS line_count,
+                    (SELECT COUNT(*)
+                     FROM vendors.parts_cabinet_bom_line AS l
+                     WHERE l.bom_id = b.bom_id AND l.is_active = 1
+                       AND l.item IS NOT NULL) AS linked_count
+                FROM vendors.parts_cabinet_bom AS b
+                WHERE b.is_active = 1 AND b.cabinet_id = %s
+                ORDER BY b.source_date DESC, b.bom_id DESC
+                """,
+                (cab_id,),
+            )
+            if bom_rows:
+                br = bom_rows[0]
+                bom = {
+                    "bom_id": _json_value(br.get("bom_id")),
+                    "cabinet_id": _json_value(br.get("cabinet_id")),
+                    "version_name": _json_value(br.get("version_name")),
+                    "title": _json_value(br.get("title")),
+                    "source_revision": _json_value(br.get("source_revision")),
+                    "source_kind": _json_value(br.get("source_kind")),
+                    "document_file_name": _json_value(br.get("document_file_name")),
+                    "document_available": bool(br.get("document_filed_path")),
+                    "line_count": int(br.get("line_count") or 0),
+                    "linked_count": int(br.get("linked_count") or 0),
+                }
+        except Exception:
+            # BOM tables optional until migration applied / field grants catch up
+            bom = None
+
     return {
         "asset_id": aid,
         "asset": asset,
@@ -397,6 +443,7 @@ def asset_hub(asset_id: str):
             "prior_count": max(0, history_count - (1 if active else 0)),
         },
         "warehouse": warehouse,
+        "bom": bom,
     }
 
 

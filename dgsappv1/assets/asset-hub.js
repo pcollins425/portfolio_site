@@ -17,6 +17,8 @@
     assetId: (params.get("id") || "").trim(),
     hub: null,
     mediaUrls: {},
+    bomSearchTimer: null,
+    bomPdfUrl: null,
   };
 
   const els = {
@@ -30,6 +32,15 @@
     captionId: document.getElementById("caption-id"),
     captionMeta: document.getElementById("caption-meta"),
     btnBack: document.getElementById("btn-back"),
+    bomBackdrop: document.getElementById("bom-backdrop"),
+    bomDrawer: document.getElementById("bom-drawer"),
+    bomDrawerTitle: document.getElementById("bom-drawer-title"),
+    bomDrawerMeta: document.getElementById("bom-drawer-meta"),
+    bomBtnPdf: document.getElementById("bom-btn-pdf"),
+    bomBtnClose: document.getElementById("bom-btn-close"),
+    bomSearch: document.getElementById("bom-search"),
+    bomSearchStatus: document.getElementById("bom-search-status"),
+    bomResults: document.getElementById("bom-results"),
   };
 
   function apiUrl(path) {
@@ -91,6 +102,10 @@
       if (url) URL.revokeObjectURL(url);
     }
     state.mediaUrls = {};
+    if (state.bomPdfUrl) {
+      URL.revokeObjectURL(state.bomPdfUrl);
+      state.bomPdfUrl = null;
+    }
   }
 
   async function loadMediaUrl(relPath) {
@@ -249,15 +264,166 @@
     return tile("Warehouse", body, pageUrl("warehouse.html"), "Go to Warehouse →");
   }
 
+  function renderBomTile(bom, asset) {
+    if (!bom) {
+      return tileWide(
+        "Parts BOM",
+        `<p class="dgs-v2-hub-empty">No parts guide filed for ${esc(asset?.cabinet_name || "this cabinet")}.</p>`
+      );
+    }
+    const body = [
+      `<div class="dgs-v2-hub-bom-title">${esc(bom.title || "Parts guide")}</div>`,
+      `<div>Rev ${esc(bom.source_revision || "—")} · ${esc(String(bom.line_count ?? 0))} lines · ${esc(String(bom.linked_count ?? 0))} linked to inventory</div>`,
+      bom.version_name ? `<div>Version · ${esc(bom.version_name)}</div>` : "",
+      `<div class="dgs-v2-hub-bom-actions">
+        <button type="button" class="dgs-v2-btn" data-bom-open="${esc(bom.bom_id)}">Search BOM</button>
+        ${bom.document_available ? `<button type="button" class="dgs-v2-btn" data-bom-pdf="${esc(bom.bom_id)}">Open catalog PDF</button>` : ""}
+      </div>`,
+    ].join("");
+    return tileWide("Parts BOM", body);
+  }
+
   function renderTiles(hub) {
     const a = hub.asset;
     els.hubGrid.innerHTML = [
       renderAssetRecordTile(a),
+      renderBomTile(hub.bom, a),
       renderCompinfoTile(hub.compinfo),
       renderContractTile(hub.contract),
       renderSlotMasterTile(hub.slot_master),
       renderWarehouseTile(hub.warehouse, hub.compinfo),
     ].join("");
+
+    els.hubGrid.querySelectorAll("[data-bom-open]").forEach((btn) => {
+      btn.addEventListener("click", () => openBomDrawer(btn.getAttribute("data-bom-open"), ""));
+    });
+    els.hubGrid.querySelectorAll("[data-bom-pdf]").forEach((btn) => {
+      btn.addEventListener("click", () => openBomPdf(btn.getAttribute("data-bom-pdf")));
+    });
+  }
+
+  function closeBomDrawer() {
+    els.bomDrawer.hidden = true;
+    els.bomDrawer.setAttribute("aria-hidden", "true");
+    els.bomBackdrop.hidden = true;
+    document.body.classList.remove("detail-open");
+    if (state.bomSearchTimer) {
+      clearTimeout(state.bomSearchTimer);
+      state.bomSearchTimer = null;
+    }
+  }
+
+  async function openBomPdf(bomId) {
+    if (!bomId) return;
+    try {
+      const headers = window.DGSAuth ? DGSAuth.authHeaders() : {};
+      const res = await fetch(apiUrl(`/api/parts-bom/${encodeURIComponent(bomId)}/document`), { headers });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.detail || res.statusText);
+      }
+      if (state.bomPdfUrl) URL.revokeObjectURL(state.bomPdfUrl);
+      const blob = await res.blob();
+      state.bomPdfUrl = URL.createObjectURL(blob);
+      window.open(state.bomPdfUrl, "_blank", "noopener");
+    } catch (err) {
+      showError(err.message || String(err));
+    }
+  }
+
+  function renderBomLines(payload) {
+    const lines = payload.lines || [];
+    if (!lines.length) {
+      els.bomResults.innerHTML = `<p class="dgs-v2-hub-empty">No matching parts.</p>`;
+      return;
+    }
+    els.bomResults.innerHTML = `
+      <table class="dgs-v2-hub-bom-table">
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>OEM PN</th>
+            <th>Name</th>
+            <th>Section</th>
+            <th>DGS item</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${lines
+            .map(
+              (ln) => `
+            <tr>
+              <td class="mono">${esc(ln.line_no ?? "")}</td>
+              <td class="mono">${esc(ln.oem_part_no || "")}</td>
+              <td>${esc(ln.part_name || "")}${ln.option_group ? ` <span class="dgs-v2-hub-muted">(${esc(ln.option_group)})</span>` : ""}</td>
+              <td>${esc(ln.section_name || "—")}</td>
+              <td class="mono">${esc(ln.item || "—")}</td>
+            </tr>`
+            )
+            .join("")}
+        </tbody>
+      </table>`;
+  }
+
+  async function loadBomLines(bomId, q) {
+    els.bomSearchStatus.textContent = "Searching…";
+    const qs = new URLSearchParams();
+    if (q) qs.set("q", q);
+    qs.set("limit", "200");
+    const path = `/api/parts-bom/${encodeURIComponent(bomId)}/lines?${qs.toString()}`;
+    const payload = await fetchJson(path);
+    const shown = payload.returned ?? (payload.lines || []).length;
+    const total = payload.total ?? shown;
+    els.bomSearchStatus.textContent =
+      total === shown
+        ? `${total} part${total === 1 ? "" : "s"}`
+        : `Showing ${shown} of ${total}`;
+    renderBomLines(payload);
+  }
+
+  function openBomDrawer(bomId, initialQ) {
+    const bom = state.hub?.bom;
+    if (!bom || bom.bom_id !== bomId) return;
+    els.bomDrawerTitle.textContent = bom.title || "Parts BOM";
+    els.bomDrawerMeta.textContent = [
+      bom.source_revision ? `Rev ${bom.source_revision}` : null,
+      `${bom.line_count} lines`,
+      state.hub?.asset?.cabinet_name,
+    ]
+      .filter(Boolean)
+      .join(" · ");
+    els.bomBtnPdf.hidden = !bom.document_available;
+    els.bomBtnPdf.onclick = () => openBomPdf(bomId);
+    els.bomSearch.value = initialQ || "";
+    els.bomDrawer.hidden = false;
+    els.bomDrawer.setAttribute("aria-hidden", "false");
+    els.bomBackdrop.hidden = false;
+    document.body.classList.add("detail-open");
+    els.bomSearch.focus();
+    loadBomLines(bomId, initialQ || "").catch((err) => {
+      els.bomSearchStatus.textContent = err.message || String(err);
+      els.bomResults.innerHTML = "";
+    });
+  }
+
+  function wireBomDrawer() {
+    els.bomBtnClose?.addEventListener("click", closeBomDrawer);
+    els.bomBackdrop?.addEventListener("click", closeBomDrawer);
+    els.bomSearch?.addEventListener("input", () => {
+      const bomId = state.hub?.bom?.bom_id;
+      if (!bomId) return;
+      if (state.bomSearchTimer) clearTimeout(state.bomSearchTimer);
+      state.bomSearchTimer = setTimeout(() => {
+        loadBomLines(bomId, els.bomSearch.value.trim()).catch((err) => {
+          els.bomSearchStatus.textContent = err.message || String(err);
+        });
+      }, 220);
+    });
+    document.addEventListener("keydown", (ev) => {
+      if (ev.key === "Escape" && els.bomDrawer && !els.bomDrawer.hidden) {
+        closeBomDrawer();
+      }
+    });
   }
 
   async function renderMedia(a) {
@@ -309,6 +475,7 @@
     showError(null);
     els.hubBody.hidden = true;
     els.hubLoading.hidden = false;
+    wireBomDrawer();
 
     if (document.referrer && new URL(document.referrer).origin === window.location.origin) {
       els.btnBack.hidden = false;

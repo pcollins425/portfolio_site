@@ -1027,6 +1027,131 @@ body.dgs-slot-master-v2 .dgs-v2-detail-subtitle a.dgs-v2-hub-serial-link:hover {
   color: #86efac;
 }
 
+.dgs-v2-hub-bom-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--dgs-v2-heading);
+  margin-bottom: 4px;
+}
+
+.dgs-v2-hub-bom-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+body.dgs-asset-hub.detail-open .detail-backdrop {
+  background: rgba(0, 0, 0, 0.45);
+  pointer-events: auto;
+  cursor: pointer;
+}
+
+body.dgs-asset-hub .dgs-v2-hub-bom-drawer {
+  background: var(--dgs-v2-card);
+  border-left: 1px solid var(--dgs-v2-border);
+  box-shadow: -8px 0 32px rgba(0, 0, 0, 0.35);
+  width: min(560px, 100vw);
+  max-width: 100%;
+}
+
+body.dgs-asset-hub .dgs-v2-drawer-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 20px 18px 16px;
+  border-bottom: 1px solid var(--dgs-v2-border);
+  background: var(--dgs-v2-card-head);
+}
+
+body.dgs-asset-hub .dgs-v2-drawer-title {
+  margin: 4px 0 0;
+  font-size: 18px;
+  line-height: 1.3;
+  color: var(--dgs-v2-heading);
+}
+
+body.dgs-asset-hub .dgs-v2-hub-bom-drawer-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+body.dgs-asset-hub .dgs-v2-drawer-close {
+  width: 36px;
+  height: 36px;
+  border: 1px solid var(--dgs-v2-border);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--dgs-v2-text-muted);
+  font-size: 22px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+body.dgs-asset-hub .dgs-v2-drawer-body {
+  overflow: auto;
+  flex: 1;
+  padding: 16px 18px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-height: 0;
+}
+
+.dgs-v2-hub-bom-search {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.dgs-v2-hub-bom-search .k {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--dgs-v2-text-muted);
+}
+
+.dgs-v2-hub-bom-search input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--dgs-v2-border);
+  background: var(--dgs-v2-input-bg, #12161e);
+  color: var(--dgs-v2-text);
+  font-size: 14px;
+}
+
+.dgs-v2-hub-bom-results {
+  min-height: 120px;
+  overflow: auto;
+}
+
+.dgs-v2-hub-bom-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.dgs-v2-hub-bom-table th,
+.dgs-v2-hub-bom-table td {
+  text-align: left;
+  padding: 8px 6px;
+  border-bottom: 1px solid var(--dgs-v2-border);
+  vertical-align: top;
+}
+
+.dgs-v2-hub-bom-table th {
+  color: var(--dgs-v2-text-muted);
+  font-weight: 500;
+  position: sticky;
+  top: 0;
+  background: var(--dgs-v2-card);
+}
+
 .dgs-v2-serial-table a.dgs-v2-hub-serial-link {
   color: var(--dgs-v2-accent);
   text-decoration: none;
