@@ -322,7 +322,11 @@
       const res = await fetch(apiUrl(`/api/parts-bom/${encodeURIComponent(bomId)}/document`), { headers });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
-        throw new Error(typeof body.detail === "string" ? body.detail : body.detail || res.statusText);
+        throw new Error(
+          typeof body.detail === "string"
+            ? body.detail
+            : res.statusText || "Failed to load catalog PDF"
+        );
       }
       const buf = await res.arrayBuffer();
       if (state.bomPdfUrl) URL.revokeObjectURL(state.bomPdfUrl);
