@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import io
 import mimetypes
 import os
 from datetime import date, datetime
@@ -9,10 +10,10 @@ from decimal import Decimal
 from pathlib import PurePosixPath
 
 from fastapi import APIRouter, HTTPException, Query
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, StreamingResponse
 
 from app import mssql
-from app.parts_bom_paths import filed_path_to_rel, resolve_catalog_file
+from app.parts_bom_paths import filed_path_to_rel, read_catalog_bytes, resolve_catalog_file
 
 router = APIRouter(prefix="/api/parts-bom", tags=["parts-bom"])
 
@@ -253,13 +254,25 @@ def bom_document(bom_id: str):
     }
 
     try:
-        full = resolve_catalog_file(rel)
+        try:
+            full = resolve_catalog_file(rel)
+            return FileResponse(
+                full,
+                media_type=media_type or "application/pdf",
+                headers=headers,
+                filename=name,
+            )
+        except FileNotFoundError:
+            data = read_catalog_bytes(rel)
+    except PermissionError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
     except FileNotFoundError as exc:
         raise HTTPException(status_code=404, detail="document file not found on NAS") from exc
+    except Exception as exc:
+        raise HTTPException(status_code=503, detail=f"document read failed: {exc}") from exc
 
-    return FileResponse(
-        full,
+    return StreamingResponse(
+        io.BytesIO(data),
         media_type=media_type or "application/pdf",
         headers=headers,
-        filename=name,
     )
