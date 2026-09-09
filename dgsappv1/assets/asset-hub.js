@@ -41,12 +41,6 @@
     bomSearch: document.getElementById("bom-search"),
     bomSearchStatus: document.getElementById("bom-search-status"),
     bomResults: document.getElementById("bom-results"),
-    bomTabSearch: document.getElementById("bom-tab-search"),
-    bomTabPdf: document.getElementById("bom-tab-pdf"),
-    bomPanelSearch: document.getElementById("bom-panel-search"),
-    bomPanelPdf: document.getElementById("bom-panel-pdf"),
-    bomPdfStatus: document.getElementById("bom-pdf-status"),
-    bomPdfFrame: document.getElementById("bom-pdf-frame"),
   };
 
   function apiUrl(path) {
@@ -319,47 +313,28 @@
     }
   }
 
-  function setBomTab(tab) {
-    const isPdf = tab === "pdf";
-    els.bomTabSearch?.classList.toggle("is-active", !isPdf);
-    els.bomTabPdf?.classList.toggle("is-active", isPdf);
-    if (els.bomPanelSearch) els.bomPanelSearch.hidden = isPdf;
-    if (els.bomPanelPdf) els.bomPanelPdf.hidden = !isPdf;
-  }
-
-  async function openBomPdf(bomId, { inDrawer = true } = {}) {
+  async function openBomPdf(bomId) {
     if (!bomId) return;
+    // Open synchronously so the browser allows the tab (async fetch alone gets blocked).
+    const viewer = window.open("about:blank", "_blank");
     try {
-      if (inDrawer && els.bomTabPdf) {
-        els.bomTabPdf.hidden = false;
-        setBomTab("pdf");
-        if (els.bomPdfStatus) {
-          els.bomPdfStatus.hidden = false;
-          els.bomPdfStatus.textContent = "Loading catalog…";
-        }
-        if (els.bomPdfFrame) els.bomPdfFrame.hidden = true;
-      }
       const headers = window.DGSAuth ? DGSAuth.authHeaders() : {};
       const res = await fetch(apiUrl(`/api/parts-bom/${encodeURIComponent(bomId)}/document`), { headers });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
-        throw new Error(body.detail || res.statusText);
+        throw new Error(typeof body.detail === "string" ? body.detail : body.detail || res.statusText);
       }
+      const buf = await res.arrayBuffer();
       if (state.bomPdfUrl) URL.revokeObjectURL(state.bomPdfUrl);
-      const blob = await res.blob();
+      const blob = new Blob([buf], { type: "application/pdf" });
       state.bomPdfUrl = URL.createObjectURL(blob);
-      if (inDrawer && els.bomPdfFrame) {
-        els.bomPdfFrame.src = state.bomPdfUrl;
-        els.bomPdfFrame.hidden = false;
-        if (els.bomPdfStatus) els.bomPdfStatus.hidden = true;
+      if (viewer && !viewer.closed) {
+        viewer.location.href = state.bomPdfUrl;
       } else {
         window.open(state.bomPdfUrl, "_blank", "noopener");
       }
     } catch (err) {
-      if (els.bomPdfStatus) {
-        els.bomPdfStatus.hidden = false;
-        els.bomPdfStatus.textContent = err.message || String(err);
-      }
+      if (viewer && !viewer.closed) viewer.close();
       showError(err.message || String(err));
     }
   }
@@ -426,10 +401,8 @@
       .filter(Boolean)
       .join(" · ");
     els.bomBtnPdf.hidden = !bom.document_available;
-    els.bomTabPdf.hidden = !bom.document_available;
-    els.bomBtnPdf.onclick = () => openBomPdf(bomId, { inDrawer: true });
+    els.bomBtnPdf.onclick = () => openBomPdf(bomId);
     els.bomSearch.value = initialQ || "";
-    setBomTab("search");
     els.bomDrawer.hidden = false;
     els.bomDrawer.setAttribute("aria-hidden", "false");
     els.bomBackdrop.hidden = false;
@@ -444,18 +417,6 @@
   function wireBomDrawer() {
     els.bomBtnClose?.addEventListener("click", closeBomDrawer);
     els.bomBackdrop?.addEventListener("click", closeBomDrawer);
-    els.bomTabSearch?.addEventListener("click", () => setBomTab("search"));
-    els.bomTabPdf?.addEventListener("click", () => {
-      const bomId = state.hub?.bom?.bom_id;
-      if (!bomId) return;
-      if (state.bomPdfUrl && els.bomPdfFrame) {
-        setBomTab("pdf");
-        els.bomPdfFrame.hidden = false;
-        if (els.bomPdfStatus) els.bomPdfStatus.hidden = true;
-        return;
-      }
-      openBomPdf(bomId, { inDrawer: true });
-    });
     els.bomSearch?.addEventListener("input", () => {
       const bomId = state.hub?.bom?.bom_id;
       if (!bomId) return;
