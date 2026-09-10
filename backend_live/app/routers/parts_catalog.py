@@ -165,10 +165,13 @@ def _photos_root() -> Path | None:
             if p.is_dir():
                 return p.resolve()
     for candidate in (
+        r"X:\parts_photos",
         r"Z:\parts_photos",
+        r"\\192.168.1.99\DGS_Analytics\parts_photos",
         "/media/parts-photos",
         "/tmp/parts_photos",
         "/mnt/z/parts_photos",
+        "/mnt/x/parts_photos",
     ):
         p = Path(candidate)
         if p.is_dir():

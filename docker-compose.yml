@@ -10,8 +10,10 @@
 #   docker compose --env-file backend_live/.env up -d --build
 #
 # **`backend_live/.env`:** media via **NAS CIFS mount** (preferred on slot server) or local bind fallback.
-# Parts photos: bind `PARTS_PHOTOS_HOST` (default `Z:/parts_photos`) → `/media/parts-photos`.
-# Do **not** set `PARTS_PHOTOS_ROOT=Z:\…` for Docker — that path does not exist in the container.
+# Parts photos: bind `PARTS_PHOTOS_HOST` → `/media/parts-photos`.
+# Default host path is UNC (drive-letter agnostic): `//192.168.1.99/DGS_Analytics/parts_photos`
+# (Slot Server often maps that share as **X:**; home may use **Z:** — prefer UNC in compose.)
+# Do **not** set `PARTS_PHOTOS_ROOT` to an X:/Z: path for Docker — that path does not exist in the container.
 #
 # Smoke test:
 #   curl http://127.0.0.1:9001/health
@@ -50,8 +52,9 @@ services:
       - assistant_sessions:/app/data/assistant_sessions
       # NAS via WSL bind (NAS_MEDIA_WSL_BIND) or local mirror (MEDIA_ROOT_HOST). See mount_nas_media_wsl.cmd.
       - ${NAS_MEDIA_WSL_BIND:-${MEDIA_ROOT_HOST:-../portfolio_media/tableau-images}}:/media/tableau-images:ro
-      # Parts catalog photos (Analytics share `parts_photos`). Override host path with PARTS_PHOTOS_HOST.
-      - ${PARTS_PHOTOS_HOST:-Z:/parts_photos}:/media/parts-photos:ro
+      # Parts catalog photos on Analytics NAS. UNC default (not X: / Z:).
+      # Override with PARTS_PHOTOS_HOST if needed (e.g. X:/parts_photos).
+      - ${PARTS_PHOTOS_HOST:-//192.168.1.99/DGS_Analytics/parts_photos}:/media/parts-photos:ro
 
 volumes:
   assistant_sessions:
