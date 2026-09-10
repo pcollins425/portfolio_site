@@ -10,10 +10,13 @@
 #   docker compose --env-file backend_live/.env up -d --build
 #
 # **`backend_live/.env`:** media via **NAS CIFS mount** (preferred on slot server) or local bind fallback.
+# Parts photos: bind `PARTS_PHOTOS_HOST` (default `Z:/parts_photos`) → `/media/parts-photos`.
+# Do **not** set `PARTS_PHOTOS_ROOT=Z:\…` for Docker — that path does not exist in the container.
 #
 # Smoke test:
 #   curl http://127.0.0.1:9001/health
 #   curl http://127.0.0.1:9001/api/media/health
+#   curl http://127.0.0.1:9001/api/parts-catalog/items/200114/photo -o NUL
 
 services:
   backend_live:
@@ -38,12 +41,17 @@ services:
       FSR_APPLY_ROOT: ${FSR_APPLY_ROOT:-/workspace}
       # Live Apply writes eMaint/SMM/projects — must be explicitly enabled in .env
       FSR_APPLY_LIVE: ${FSR_APPLY_LIVE:-0}
+      # Always the in-container path. Host folder comes from PARTS_PHOTOS_HOST bind below.
+      # Do not interpolate PARTS_PHOTOS_ROOT from .env (often Z:\… which is invalid in Linux).
+      PARTS_PHOTOS_ROOT: /media/parts-photos
     volumes:
       # Slot Server: C:/Users/DGS Slot Server/cursor-assistant — set ASSISTANT_WORKSPACE_HOST.
       - ${ASSISTANT_WORKSPACE_HOST:-../cursor-assistant}:/workspace:rw
       - assistant_sessions:/app/data/assistant_sessions
       # NAS via WSL bind (NAS_MEDIA_WSL_BIND) or local mirror (MEDIA_ROOT_HOST). See mount_nas_media_wsl.cmd.
       - ${NAS_MEDIA_WSL_BIND:-${MEDIA_ROOT_HOST:-../portfolio_media/tableau-images}}:/media/tableau-images:ro
+      # Parts catalog photos (Analytics share `parts_photos`). Override host path with PARTS_PHOTOS_HOST.
+      - ${PARTS_PHOTOS_HOST:-Z:/parts_photos}:/media/parts-photos:ro
 
 volumes:
   assistant_sessions:

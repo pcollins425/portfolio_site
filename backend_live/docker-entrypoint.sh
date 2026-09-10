@@ -12,6 +12,13 @@ else
 fi
 
 mode="$(printf '%s' "${NAS_MEDIA_MODE:-}" | tr -d '\r\n' | tr '[:upper:]' '[:lower:]')"
+
+# Parts photos bind (compose → /media/parts-photos) — works in smb and mount modes.
+if [ -d /media/parts-photos ]; then
+  export PARTS_PHOTOS_ROOT="${PARTS_PHOTOS_ROOT:-/media/parts-photos}"
+  echo "docker-entrypoint: PARTS_PHOTOS_ROOT=${PARTS_PHOTOS_ROOT}"
+fi
+
 if [ "$mode" = "smb" ]; then
   echo "docker-entrypoint: NAS_MEDIA_MODE=smb — reading media over SMB (no mount)"
   exec "$@"
@@ -95,6 +102,13 @@ mount_nas_media() {
 
   export MEDIA_ROOT="$resolved"
   echo "docker-entrypoint: MEDIA_ROOT=${MEDIA_ROOT}"
+
+  # Parts catalog photos live at share root (sibling of tableau images subpath).
+  local parts_photos="${mount_point}/parts_photos"
+  if [ -d "$parts_photos" ]; then
+    export PARTS_PHOTOS_ROOT="$parts_photos"
+    echo "docker-entrypoint: PARTS_PHOTOS_ROOT=${PARTS_PHOTOS_ROOT}"
+  fi
 }
 
 mount_nas_media
