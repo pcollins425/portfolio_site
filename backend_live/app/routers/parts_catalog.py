@@ -12,12 +12,17 @@ from pathlib import Path
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel, Field
 
 from app.auth_deps import require_demo_user
 from app.parts_customer_auth import optional_parts_user, require_parts_user, require_staff_token
 from app import mssql
+from app.nas_smb import (
+    parts_photo_smb_enabled,
+    parts_photo_smb_exists,
+    read_parts_photo_smb,
+)
 
 router = APIRouter(prefix="/api/parts-catalog", tags=["parts-catalog"])
 
@@ -1431,15 +1436,29 @@ def get_photo(item: str, which: int = Query(1, ge=1, le=2)):
     name = _filename_from_stored(_json_value(rows[0].get("p")))
     if not name or ".." in name:
         raise HTTPException(status_code=404, detail="photo not found")
+
+    media_type, _ = mimetypes.guess_type(name)
+    media_type = media_type or "image/jpeg"
+    cache = {"Cache-Control": "private, max-age=86400"}
+
+    # Local / bind mount when the file is actually present (empty Docker binds 404 otherwise).
     root = _photos_root()
-    if root is None:
-        raise HTTPException(status_code=503, detail="PARTS_PHOTOS_ROOT not configured")
-    full = (root / name).resolve()
-    if not str(full).startswith(str(root)) or not full.is_file():
-        raise HTTPException(status_code=404, detail="photo not found")
-    media_type, _ = mimetypes.guess_type(str(full))
-    return FileResponse(
-        full,
-        media_type=media_type or "image/jpeg",
-        headers={"Cache-Control": "private, max-age=86400"},
-    )
+    if root is not None:
+        full = (root / name).resolve()
+        if str(full).startswith(str(root)) and full.is_file():
+            return FileResponse(full, media_type=media_type, headers=cache)
+
+    # Windows Docker + NAS_MEDIA_MODE=smb: read share-root parts_photos over SMB (no X:/Z: bind).
+    if parts_photo_smb_enabled():
+        try:
+            if parts_photo_smb_exists(name):
+                data = read_parts_photo_smb(name)
+                return Response(content=data, media_type=media_type, headers=cache)
+        except PermissionError as exc:
+            raise HTTPException(status_code=503, detail=str(exc)) from exc
+        except FileNotFoundError:
+            pass
+        except OSError as exc:
+            raise HTTPException(status_code=503, detail=f"parts photo NAS error: {exc}") from exc
+
+    raise HTTPException(status_code=404, detail=f"photo file missing: {name}")

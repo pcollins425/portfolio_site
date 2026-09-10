@@ -268,3 +268,63 @@ def write_docs_smb_file(rel_path: str, data: bytes) -> None:
         if _is_transient_smb_error(exc):
             raise OSError(f"NAS connection failed after reconnect: {exc}") from exc
         raise OSError(f"NAS write failed: {exc}") from exc
+
+
+def _parts_photos_subpath() -> str:
+    """Share-relative folder for parts catalog images (sibling of tableau images)."""
+    return _env("PARTS_PHOTOS_SUBPATH", "parts_photos").strip("/")
+
+
+def _parts_photo_smb_uri(filename: str) -> str:
+    share = _env("NAS_MEDIA_SHARE").replace("\\", "/")
+    if not share.startswith("//"):
+        share = f"//{share.lstrip('/')}"
+    name = filename.replace("\\", "/").split("/")[-1].strip()
+    if not name or ".." in name:
+        raise ValueError("invalid parts photo filename")
+    sub = _parts_photos_subpath()
+    return f"{share}/{sub}/{name}" if sub else f"{share}/{name}"
+
+
+def parts_photo_smb_enabled() -> bool:
+    """True when live Docker should read parts photos over SMB (no host bind required)."""
+    if not _env("NAS_MEDIA_SHARE"):
+        return False
+    mode = _env("NAS_MEDIA_MODE").lower()
+    if mode == "smb":
+        return True
+    # Creds present — allow SMB fallback even if bind mount is empty
+    return bool(_env("NAS_MEDIA_USERNAME"))
+
+
+def parts_photo_smb_exists(filename: str) -> bool:
+    uri = _parts_photo_smb_uri(filename)
+
+    def _stat() -> bool:
+        smbclient.stat(uri)
+        return True
+
+    try:
+        return _with_reconnect(_stat)
+    except OSError:
+        return False
+
+
+def read_parts_photo_smb(filename: str) -> bytes:
+    """Read ``NAS_MEDIA_SHARE/parts_photos/{filename}`` (drive-letter agnostic)."""
+    uri = _parts_photo_smb_uri(filename)
+
+    def _read() -> bytes:
+        with smbclient.open_file(uri, mode="rb") as handle:
+            return handle.read()
+
+    try:
+        return _with_reconnect(_read)
+    except Exception as exc:
+        if _is_auth_error(exc):
+            raise PermissionError(f"NAS authentication or permission failed: {exc}") from exc
+        if _is_transient_smb_error(exc):
+            raise OSError(f"NAS connection failed after reconnect: {exc}") from exc
+        if isinstance(exc, OSError):
+            raise FileNotFoundError(filename) from exc
+        raise
