@@ -30,14 +30,14 @@
       <div>
         <p class="dgs-v2-eyebrow">Vendor agreements</p>
         <h1>Contracts</h1>
-        <p class="dgs-v2-subtitle">contracts-v2.html · <code>inventory.contract</code> · agreements &amp; BOL PDFs</p>
+        <p class="dgs-v2-subtitle dgs-v2-desktop-only">contracts-v2.html · <code>inventory.contract</code> · agreements &amp; BOL PDFs</p>
       </div>
-      <div class="dgs-v2-pilot-note">Split layout · vendor images from NAS</div>
+      <div class="dgs-v2-pilot-note dgs-v2-desktop-only">Split layout · vendor images from NAS</div>
     </header>
 
     <div id="error-box" class="dgs-v2-error" hidden></div>
 
-    <div class="dgs-v2-metrics" id="stat-row" aria-label="Summary statistics">
+    <div class="dgs-v2-metrics dgs-v2-desktop-only" id="stat-row" aria-label="Summary statistics">
       <div class="dgs-v2-metric">
         <div class="dgs-v2-metric-label">Total agreements</div>
         <div class="dgs-v2-metric-value" id="stat-agreements">—</div>
@@ -69,9 +69,9 @@
               <tr>
                 <th>Agreement</th>
                 <th>Vendor</th>
-                <th>SO#</th>
-                <th>Date</th>
-                <th>Total</th>
+                <th class="dgs-v2-col--desktop">SO#</th>
+                <th class="dgs-v2-col--desktop">Date</th>
+                <th>Price</th>
               </tr>
             </thead>
             <tbody id="contracts-tbody"></tbody>
@@ -80,7 +80,13 @@
         <div class="dgs-v2-list-status" id="list-status"></div>
       </section>
 
-      <aside class="dgs-v2-detail" id="detail-panel">
+      <div id="contracts-detail-backdrop" class="dgs-v2-detail-backdrop" hidden></div>
+
+      <aside class="dgs-v2-detail" id="detail-panel" aria-hidden="false">
+        <div class="dgs-v2-detail-bar dgs-v2-phone-only" hidden>
+          <span class="dgs-v2-detail-bar-title">Agreement</span>
+          <button type="button" id="detail-close" class="dgs-v2-drawer-close" aria-label="Close detail">×</button>
+        </div>
         <div class="dgs-v2-image-card" id="image-card">
           <div class="dgs-v2-image-hero">
             <div class="dgs-v2-vendor-logo" id="vendor-logo">
@@ -100,15 +106,17 @@
           <div id="detail-content" hidden>
             <div class="dgs-v2-section-label">Header</div>
             <dl class="dgs-v2-fields" id="detail-fields"></dl>
-            <div class="dgs-v2-section-label">Agreement document</div>
-            <div class="dgs-v2-doc-panel" id="agreement-doc-panel">
-              <div class="dgs-v2-doc-dropzone" id="agreement-dropzone" data-role="agreement">
-                <p class="dgs-v2-doc-dropzone-title">Drop agreement PDF here</p>
-                <p class="dgs-v2-doc-dropzone-hint">or click to choose file</p>
-                <input type="file" id="agreement-file-input" accept="application/pdf,.pdf" hidden />
+            <details class="dgs-v2-doc-details" id="agreement-doc-details" open>
+              <summary class="dgs-v2-section-label dgs-v2-doc-summary">Agreement document</summary>
+              <div class="dgs-v2-doc-panel" id="agreement-doc-panel">
+                <div class="dgs-v2-doc-dropzone" id="agreement-dropzone" data-role="agreement">
+                  <p class="dgs-v2-doc-dropzone-title">Drop agreement PDF here</p>
+                  <p class="dgs-v2-doc-dropzone-hint">or click to choose file</p>
+                  <input type="file" id="agreement-file-input" accept="application/pdf,.pdf" hidden />
+                </div>
+                <div class="dgs-v2-doc-preview" id="agreement-doc-preview" hidden></div>
               </div>
-              <div class="dgs-v2-doc-preview" id="agreement-doc-preview" hidden></div>
-            </div>
+            </details>
             <div class="dgs-v2-section-label">Bills of lading</div>
             <div class="dgs-v2-doc-panel" id="bol-doc-panel">
               <ul class="dgs-v2-doc-list" id="bol-doc-list"></ul>

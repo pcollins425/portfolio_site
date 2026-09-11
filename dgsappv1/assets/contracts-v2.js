@@ -5,6 +5,8 @@
     new URLSearchParams(window.location.search).get("api")?.replace(/\/$/, "") ||
     "https://api.collinsmediallc.com";
 
+  const PHONE_MQ = window.matchMedia("(max-width: 900px)");
+
   const state = {
     summary: null,
     items: [],
@@ -19,6 +21,7 @@
     mediaUrls: {},
     documentUrls: {},
     docUploading: false,
+    phoneDetailOpen: false,
   };
 
   const els = {
@@ -32,6 +35,11 @@
     clearSearch: document.getElementById("clear-search"),
     tbody: document.getElementById("contracts-tbody"),
     listStatus: document.getElementById("list-status"),
+    detailPanel: document.getElementById("detail-panel"),
+    detailBackdrop: document.getElementById("contracts-detail-backdrop"),
+    detailClose: document.getElementById("detail-close"),
+    detailBar: document.querySelector(".dgs-v2-detail-bar"),
+    agreementDocDetails: document.getElementById("agreement-doc-details"),
     vendorLogo: document.getElementById("vendor-logo"),
     cabinetRow: document.getElementById("cabinet-row"),
     cardTitle: document.getElementById("card-title"),
@@ -53,6 +61,43 @@
     bolDocList: document.getElementById("bol-doc-list"),
     docUploadStatus: document.getElementById("doc-upload-status"),
   };
+
+  function isPhone() {
+    return PHONE_MQ.matches;
+  }
+
+  function syncDocDetailsOpen() {
+    if (!els.agreementDocDetails) return;
+    // Phone: collapsed by default (PDF chews height). Desktop/tablet: open.
+    if (isPhone()) {
+      if (!state.phoneDetailOpen) els.agreementDocDetails.open = false;
+    } else {
+      els.agreementDocDetails.open = true;
+    }
+  }
+
+  function openPhoneDetail() {
+    if (!isPhone() || !els.detailPanel) return;
+    state.phoneDetailOpen = true;
+    document.body.classList.add("contracts-detail-open");
+    els.detailPanel.classList.add("dgs-v2-detail--sheet");
+    els.detailPanel.setAttribute("aria-hidden", "false");
+    if (els.detailBackdrop) els.detailBackdrop.hidden = false;
+    if (els.detailBar) els.detailBar.hidden = false;
+    if (els.agreementDocDetails) els.agreementDocDetails.open = false;
+  }
+
+  function closePhoneDetail() {
+    state.phoneDetailOpen = false;
+    document.body.classList.remove("contracts-detail-open");
+    if (els.detailPanel) {
+      els.detailPanel.classList.remove("dgs-v2-detail--sheet");
+      if (isPhone()) els.detailPanel.setAttribute("aria-hidden", "true");
+      else els.detailPanel.setAttribute("aria-hidden", "false");
+    }
+    if (els.detailBackdrop) els.detailBackdrop.hidden = true;
+    if (els.detailBar) els.detailBar.hidden = true;
+  }
 
   function apiUrl(path) {
     return `${API_BASE}${path}`;
@@ -339,8 +384,8 @@
         <tr data-key="${esc(row.reference_key)}" class="${row.reference_key === state.selectedKey ? "selected" : ""}">
           <td class="mono">${esc(row.agreement_id)}</td>
           <td>${esc(row.vendor_name)}</td>
-          <td>${esc(row.sales_order || "—")}</td>
-          <td>${esc(fmtDate(row.agreement_date))}</td>
+          <td class="dgs-v2-col--desktop">${esc(row.sales_order || "—")}</td>
+          <td class="dgs-v2-col--desktop">${esc(fmtDate(row.agreement_date))}</td>
           <td><strong>${esc(fmtMoney(row.total_price))}</strong></td>
         </tr>`
       )
@@ -577,6 +622,8 @@
     els.vendorLogo.innerHTML = placeholderBox("Loading…");
     els.cabinetRow.innerHTML = "";
 
+    if (isPhone()) openPhoneDetail();
+
     try {
       state.detail = await fetchJson(`/api/contracts/${encodeURIComponent(referenceKey)}`);
       setDetailEmpty(false);
@@ -612,8 +659,21 @@
     state.total = data.total || 0;
     renderList();
 
-    if (!state.selectedKey && state.items.length) {
+    // Desktop/tablet: auto-select first row. Phone uses pop-out — don't auto-open.
+    if (!isPhone() && !state.selectedKey && state.items.length) {
       await openDetail(state.items[0].reference_key);
+    }
+  }
+
+  function onViewportChange() {
+    syncDocDetailsOpen();
+    if (!isPhone()) {
+      closePhoneDetail();
+      if (els.detailPanel) els.detailPanel.setAttribute("aria-hidden", "false");
+      return;
+    }
+    if (!state.phoneDetailOpen && els.detailPanel) {
+      els.detailPanel.setAttribute("aria-hidden", "true");
     }
   }
 
@@ -621,6 +681,20 @@
     showError(null);
     bindDropzone(els.agreementDropzone, els.agreementFileInput, "agreement");
     bindDropzone(els.bolDropzone, els.bolFileInput, "bol");
+    syncDocDetailsOpen();
+    onViewportChange();
+    PHONE_MQ.addEventListener("change", onViewportChange);
+
+    if (els.detailClose) {
+      els.detailClose.addEventListener("click", () => closePhoneDetail());
+    }
+    if (els.detailBackdrop) {
+      els.detailBackdrop.addEventListener("click", () => closePhoneDetail());
+    }
+    document.addEventListener("keydown", (e) => {
+      if (e.key === "Escape" && state.phoneDetailOpen) closePhoneDetail();
+    });
+
     els.tbody.innerHTML = `<tr><td colspan="5" class="dgs-v2-lines-status">Loading…</td></tr>`;
     try {
       await Promise.all([loadSummary(), loadList()]);
@@ -634,6 +708,7 @@
     state.search = els.searchInput.value.trim();
     state.page = 1;
     state.selectedKey = null;
+    closePhoneDetail();
     revokeMediaUrls();
     revokeDocumentUrls();
     loadList().catch((err) => showError(err.message || String(err)));
@@ -644,6 +719,7 @@
     state.search = "";
     state.page = 1;
     state.selectedKey = null;
+    closePhoneDetail();
     revokeMediaUrls();
     revokeDocumentUrls();
     loadList().catch((err) => showError(err.message || String(err)));
@@ -654,6 +730,7 @@
       state.search = els.searchInput.value.trim();
       state.page = 1;
       state.selectedKey = null;
+      closePhoneDetail();
       revokeMediaUrls();
       revokeDocumentUrls();
       loadList().catch((err) => showError(err.message || String(err)));
