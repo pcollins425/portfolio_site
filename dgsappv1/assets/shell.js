@@ -71,7 +71,8 @@
   const MOBILE_TOP_NAV_MQ = window.matchMedia("(max-width: 900px)");
 
   function usesMobileTopNav() {
-    return document.body.classList.contains("dgs-mobile-top-nav");
+    // Default on for all shell pages; opt out with body.dgs-no-mobile-top-nav.
+    return !document.body.classList.contains("dgs-no-mobile-top-nav");
   }
 
   function activePageTitle(activeId) {
@@ -484,11 +485,11 @@
 
   async function boot(activeId, onReady) {
     if (window.DGSAuth && !(await DGSAuth.ensureAuth())) return;
+    // Rail collapse is desktop-only; mobile top nav hides the sidebar ≤900px.
+    document.body.classList.toggle("dgs-rail-collapsed", isRailCollapsed());
     if (usesMobileTopNav()) {
       wireMobileTopNav(activeId);
       syncMobileTopNav(activeId);
-    } else {
-      document.body.classList.toggle("dgs-rail-collapsed", isRailCollapsed());
     }
     renderAppSidebar(activeId);
     wireRailToggle(activeId);

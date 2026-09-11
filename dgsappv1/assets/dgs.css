@@ -293,7 +293,7 @@ body.dgs-rail-collapsed .dgs-sidebar-account {
   background: rgba(255, 255, 255, 0.06);
 }
 
-/* Mobile top navigation (opt-in via body.dgs-mobile-top-nav) */
+/* Mobile top navigation (default on ≤900px; opt out with body.dgs-no-mobile-top-nav) */
 .dgs-mobile-topbar {
   display: none;
   flex-shrink: 0;
