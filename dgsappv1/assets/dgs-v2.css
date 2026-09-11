@@ -3482,8 +3482,8 @@ body.dgs-contracts-v2 .dgs-v2-doc-summary::-webkit-details-marker {
   body.dgs-asset-hub .dgs-v2-hub-cells {
     flex: 1 1 0%;
     min-height: 0;
-    padding: 12px;
-    gap: 10px;
+    padding: 0 12px;
+    gap: 0;
     overflow-x: hidden;
     overflow-y: auto;
     -webkit-overflow-scrolling: touch;
@@ -3497,8 +3497,11 @@ body.dgs-contracts-v2 .dgs-v2-doc-summary::-webkit-details-marker {
     z-index: 2;
     align-items: center;
     flex-shrink: 0;
+    /* Top pad lives on the sticky bar so tiles can't show through the hero seam */
+    padding: 12px 0 10px;
+    margin: 0;
     background: var(--dgs-v2-bg);
-    padding-bottom: 10px;
+    border-bottom: 1px solid var(--dgs-v2-border-soft);
   }
 
   body.dgs-asset-hub .dgs-v2-hub-header h1 {
@@ -3514,6 +3517,7 @@ body.dgs-contracts-v2 .dgs-v2-doc-summary::-webkit-details-marker {
     min-height: 0;
     overflow: visible;
     align-content: start;
+    padding-top: 10px;
   }
 
   body.dgs-asset-hub .dgs-v2-hub-tile--wide {
