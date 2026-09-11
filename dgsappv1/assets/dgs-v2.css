@@ -3889,12 +3889,70 @@ body.dgs-projects-v2 .dgs-v2-detail-backdrop {
 @media (max-width: 600px),
        (max-width: 900px) and (max-height: 520px),
        (max-width: 1100px) and (min-aspect-ratio: 0.82) and (max-aspect-ratio: 1.22) {
+  /* Reclaim vertical chrome — Fold open gains width, not height */
+  body.dgs-projects-v2 .dgs-v2-main {
+    padding: 8px;
+  }
+
+  body.dgs-projects-v2 .dgs-v2-page-header {
+    align-items: center;
+    margin-bottom: 6px;
+    gap: 10px;
+  }
+
+  body.dgs-projects-v2 .dgs-v2-page-header > div {
+    display: flex;
+    flex-direction: row;
+    align-items: baseline;
+    gap: 0;
+    min-width: 0;
+  }
+
+  body.dgs-projects-v2 .dgs-v2-eyebrow {
+    margin: 0;
+    font-size: 10px;
+    letter-spacing: 0.06em;
+  }
+
+  body.dgs-projects-v2 .dgs-v2-page-header h1 {
+    font-size: 17px;
+    line-height: 1.2;
+  }
+
+  body.dgs-projects-v2 .dgs-v2-page-header h1::before {
+    content: "·";
+    margin: 0 0.35em;
+    color: var(--dgs-v2-text-muted);
+    font-weight: 600;
+  }
+
+  body.dgs-projects-v2 .dgs-v2-view-toggle {
+    padding: 2px;
+    border-radius: 10px;
+    align-self: center;
+  }
+
+  body.dgs-projects-v2 .dgs-v2-view-toggle button {
+    padding: 5px 11px;
+    font-size: 12px;
+    border-radius: 7px;
+    gap: 4px;
+  }
+
   body.dgs-projects-v2 .dgs-prj-cal-split {
-    gap: 14px;
+    gap: 10px;
   }
 
   body.dgs-projects-v2 .dgs-prj-cal-panel {
     max-height: none;
+  }
+
+  body.dgs-projects-v2 .dgs-prj-cal-toolbar {
+    padding: 5px 8px;
+  }
+
+  body.dgs-projects-v2 .dgs-prj-cal-weekdays span {
+    padding: 3px 2px;
   }
 
   /* Fixed short rows — no 1fr stretch eating half the viewport */
