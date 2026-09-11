@@ -30,7 +30,7 @@
       <div>
         <p class="dgs-v2-eyebrow">Operations</p>
         <h1>Projects</h1>
-        <p class="dgs-v2-subtitle" id="page-subtitle">projects.ims schedule · projects.project_catalog details</p>
+        <p class="dgs-v2-subtitle dgs-v2-desktop-only" id="page-subtitle">projects.ims schedule · projects.project_catalog details</p>
       </div>
       <nav class="dgs-v2-view-toggle" id="view-toggle" aria-label="Projects views">
         <button type="button" data-view="calendar" class="active">Calendar</button>
@@ -78,28 +78,37 @@
           <div class="dgs-v2-toolbar">
             <input type="search" id="cat-search" placeholder="Search project, IMS #, casino, status…" autocomplete="off" />
             <button type="button" id="cat-search-btn" class="dgs-v2-btn dgs-v2-btn--primary">Search</button>
-            <button type="button" id="cat-prev" class="dgs-v2-btn">Prev</button>
-            <button type="button" id="cat-next" class="dgs-v2-btn">Next</button>
           </div>
           <div class="dgs-v2-grid-wrap">
             <table class="dgs-v2-grid">
               <thead>
                 <tr>
                   <th>Project</th>
-                  <th>IMS #</th>
+                  <th class="dgs-v2-col--desktop">IMS #</th>
                   <th>Casino</th>
                   <th>Status</th>
-                  <th>Lines</th>
-                  <th>Start</th>
+                  <th class="dgs-v2-col--desktop">Lines</th>
+                  <th class="dgs-v2-col--desktop">Start</th>
                 </tr>
               </thead>
               <tbody id="cat-tbody"></tbody>
             </table>
           </div>
           <div class="dgs-v2-list-status" id="cat-list-status"></div>
+          <div class="dgs-v2-toolbar dgs-v2-toolbar--pager">
+            <button type="button" id="cat-prev" class="dgs-v2-btn">Prev</button>
+            <span class="dgs-v2-pager__label" id="cat-page-label">Page 1</span>
+            <button type="button" id="cat-next" class="dgs-v2-btn">Next</button>
+          </div>
         </section>
 
-        <aside class="dgs-v2-detail">
+        <div id="cat-detail-backdrop" class="dgs-v2-detail-backdrop" hidden></div>
+
+        <aside class="dgs-v2-detail" id="cat-detail-panel" aria-hidden="false">
+          <div class="dgs-v2-detail-bar dgs-v2-phone-only" id="cat-detail-bar" hidden>
+            <span class="dgs-v2-detail-bar-title">Project</span>
+            <button type="button" id="cat-detail-close" class="dgs-v2-drawer-close" aria-label="Close detail">×</button>
+          </div>
           <div class="dgs-v2-image-card dgs-v2-text-hero">
             <div class="dgs-v2-text-hero-body">
               <div class="dgs-v2-text-hero-state" id="cat-hero-state">Project</div>

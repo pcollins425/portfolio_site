@@ -5,6 +5,9 @@
 
   const params = new URLSearchParams(window.location.search);
 
+  // Compact = phone + tablet (incl. landscape). Desk layout only above 1366px.
+  const COMPACT_MQ = window.matchMedia("(max-width: 1366px)");
+
   const state = {
     view: null,
     permissions: { calendar: true, catalog: true },
@@ -27,6 +30,7 @@
     catSelectedKey: null,
     catDetail: null,
     printoutCache: {},
+    phoneDetailOpen: false,
   };
 
   const els = {};
@@ -37,11 +41,38 @@
     "cal-prev-year", "cal-next-year", "cal-today", "cal-search",
     "cal-clear-day", "cal-list-range", "cal-list-body",
     "cal-detail-drawer", "cal-detail-backdrop", "cal-detail-body", "cal-detail-title", "cal-detail-close",
-    "cat-search", "cat-search-btn", "cat-prev", "cat-next", "cat-tbody", "cat-list-status",
+    "cat-search", "cat-search-btn", "cat-prev", "cat-next", "cat-page-label", "cat-tbody", "cat-list-status",
+    "cat-detail-panel", "cat-detail-backdrop", "cat-detail-bar", "cat-detail-close",
     "cat-hero-state", "cat-hero-title", "cat-hero-meta",
     "cat-detail-body", "cat-detail-empty", "cat-detail-content", "cat-fields", "cat-notation-wrap", "cat-notation", "cat-actions",
     "cat-open-printout", "printout-overlay", "printout-title", "printout-meta", "printout-close", "printout-table",
   ];
+
+  function isCompact() {
+    return COMPACT_MQ.matches;
+  }
+
+  function openPhoneDetail() {
+    if (!isCompact() || !els["cat-detail-panel"]) return;
+    state.phoneDetailOpen = true;
+    document.body.classList.add("projects-detail-open");
+    els["cat-detail-panel"].classList.add("dgs-v2-detail--sheet");
+    els["cat-detail-panel"].setAttribute("aria-hidden", "false");
+    if (els["cat-detail-backdrop"]) els["cat-detail-backdrop"].hidden = false;
+    if (els["cat-detail-bar"]) els["cat-detail-bar"].hidden = false;
+  }
+
+  function closePhoneDetail() {
+    state.phoneDetailOpen = false;
+    document.body.classList.remove("projects-detail-open");
+    if (els["cat-detail-panel"]) {
+      els["cat-detail-panel"].classList.remove("dgs-v2-detail--sheet");
+      if (isCompact()) els["cat-detail-panel"].setAttribute("aria-hidden", "true");
+      else els["cat-detail-panel"].setAttribute("aria-hidden", "false");
+    }
+    if (els["cat-detail-backdrop"]) els["cat-detail-backdrop"].hidden = true;
+    if (els["cat-detail-bar"]) els["cat-detail-bar"].hidden = true;
+  }
 
   const MONTH_NAMES = [
     "January", "February", "March", "April", "May", "June",
@@ -134,6 +165,7 @@
 
     if (view === "calendar" && !state.loadedMonths.size) loadCalendarMonths();
     if (view === "catalog" && !state.catItems.length) loadCatalogList();
+    if (view !== "catalog") closePhoneDetail();
   }
 
   function firstAllowedView() {
@@ -470,12 +502,14 @@
     els["cal-detail-drawer"].classList.add("open");
     els["cal-detail-drawer"].setAttribute("aria-hidden", "false");
     els["cal-detail-backdrop"].hidden = false;
+    document.body.classList.add("projects-cal-drawer-open");
   }
 
   function closeCalDrawer() {
     els["cal-detail-drawer"].classList.remove("open");
     els["cal-detail-drawer"].setAttribute("aria-hidden", "true");
     els["cal-detail-backdrop"].hidden = true;
+    document.body.classList.remove("projects-cal-drawer-open");
   }
 
   /* ================= catalog ================= */
@@ -490,7 +524,8 @@
       state.catItems = data.items || [];
       state.catTotal = data.total || 0;
       renderCatalogList();
-      if (!state.catSelectedKey && state.catItems.length) {
+      // Wide desktop only: auto-select first row. Compact uses sheet — don't auto-open.
+      if (!isCompact() && !state.catSelectedKey && state.catItems.length) {
         await openCatalogDetail(state.catItems[0].reference_key);
       }
     } catch (err) {
@@ -505,11 +540,11 @@
         (row) => `
         <tr data-key="${esc(row.reference_key)}" class="${row.reference_key === state.catSelectedKey ? "selected" : ""}">
           <td>${esc(row.project_name || row.reference_key)}</td>
-          <td class="mono">${esc(row.ims_project_number || "—")}</td>
+          <td class="mono dgs-v2-col--desktop">${esc(row.ims_project_number || "—")}</td>
           <td>${esc(row.casino_name || "—")}</td>
           <td>${esc(row.status_name || row.status || "—")}</td>
-          <td>${esc(row.line_count)}</td>
-          <td>${esc(fmtDate(row.date_start))}</td>
+          <td class="dgs-v2-col--desktop">${esc(row.line_count)}</td>
+          <td class="dgs-v2-col--desktop">${esc(fmtDate(row.date_start))}</td>
         </tr>`
       )
       .join("");
@@ -527,6 +562,12 @@
       state.catTotal === 0
         ? `No projects found${note}.`
         : `Showing ${start}–${end} of ${state.catTotal}${note}`;
+
+    const totalPages = Math.max(1, Math.ceil(state.catTotal / state.catPageSize) || 1);
+    if (els["cat-page-label"]) {
+      els["cat-page-label"].textContent =
+        state.catTotal === 0 ? "Page 0" : `Page ${state.catPage} of ${totalPages}`;
+    }
   }
 
   function catField(label, value) {
@@ -538,6 +579,7 @@
     state.catSelectedKey = referenceKey;
     renderCatalogList();
     closePrintout();
+    if (isCompact()) openPhoneDetail();
 
     els["cat-detail-body"].classList.add("empty");
     els["cat-detail-empty"].hidden = false;
@@ -680,6 +722,7 @@
       state.catSearch = els["cat-search"].value.trim();
       state.catPage = 1;
       state.catSelectedKey = null;
+      closePhoneDetail();
       loadCatalogList();
     };
     els["cat-search-btn"].addEventListener("click", runCatSearch);
@@ -689,19 +732,38 @@
     els["cat-prev"].addEventListener("click", () => {
       if (state.catPage <= 1) return;
       state.catPage -= 1;
+      state.catSelectedKey = null;
+      closePhoneDetail();
       loadCatalogList();
     });
     els["cat-next"].addEventListener("click", () => {
       if (state.catPage * state.catPageSize >= state.catTotal) return;
       state.catPage += 1;
+      state.catSelectedKey = null;
+      closePhoneDetail();
       loadCatalogList();
     });
     els["cat-open-printout"].addEventListener("click", openPrintout);
     els["printout-close"].addEventListener("click", closePrintout);
+    els["cat-detail-close"]?.addEventListener("click", closePhoneDetail);
+    els["cat-detail-backdrop"]?.addEventListener("click", closePhoneDetail);
+
+    const onCompactChange = () => {
+      if (!isCompact()) {
+        closePhoneDetail();
+        if (els["cat-detail-panel"]) els["cat-detail-panel"].setAttribute("aria-hidden", "false");
+      } else if (!state.phoneDetailOpen && els["cat-detail-panel"]) {
+        els["cat-detail-panel"].setAttribute("aria-hidden", "true");
+      }
+    };
+    if (COMPACT_MQ.addEventListener) COMPACT_MQ.addEventListener("change", onCompactChange);
+    else if (COMPACT_MQ.addListener) COMPACT_MQ.addListener(onCompactChange);
+    onCompactChange();
 
     document.addEventListener("keydown", (e) => {
       if (e.key !== "Escape") return;
       if (!els["printout-overlay"].hidden) closePrintout();
+      else if (state.phoneDetailOpen) closePhoneDetail();
       else closeCalDrawer();
     });
   }
