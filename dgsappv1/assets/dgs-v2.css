@@ -3162,6 +3162,144 @@ body.dgs-software-vault-v2 .dgs-v2-layout-dialog-actions {
   background: rgba(255, 255, 255, 0.03);
 }
 
+/* Compact printout list + line sheet (shown ≤1366 via JS + media) */
+.dgs-prj-printout-list {
+  display: none;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 12px;
+}
+
+.dgs-prj-printout-row {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 4px;
+  width: 100%;
+  margin: 0;
+  padding: 10px 12px;
+  text-align: left;
+  border: 1px solid var(--dgs-v2-border);
+  border-radius: 12px;
+  background: var(--dgs-v2-card);
+  color: var(--dgs-v2-text);
+  font-family: inherit;
+  cursor: pointer;
+  transition: background 0.12s ease, border-color 0.12s ease;
+}
+
+.dgs-prj-printout-row:hover,
+.dgs-prj-printout-row:focus-visible {
+  background: rgba(255, 255, 255, 0.04);
+  border-color: var(--dgs-v2-accent-border);
+  outline: none;
+}
+
+.dgs-prj-printout-row-serial {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--dgs-v2-heading);
+  font-variant-numeric: tabular-nums;
+}
+
+.dgs-prj-printout-row-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 2px 10px;
+  font-size: 12px;
+}
+
+.dgs-prj-printout-row-grid strong {
+  display: block;
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--dgs-v2-text-muted);
+}
+
+.dgs-prj-printout-row-grid .dgs-prj-printout-row-val {
+  display: block;
+  color: var(--dgs-v2-text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dgs-prj-printout-row-action {
+  margin-top: 2px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--dgs-v2-accent);
+}
+
+.dgs-prj-printout-line-backdrop,
+.dgs-prj-printout-line-sheet {
+  display: none;
+}
+
+.dgs-prj-printout-line-bar {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px 0;
+  flex-shrink: 0;
+}
+
+.dgs-prj-printout-line-bar h3 {
+  margin: 2px 0 0;
+  font-size: 16px;
+  color: var(--dgs-v2-heading);
+}
+
+.dgs-prj-printout-line-bar .icon-btn {
+  width: 36px;
+  height: 36px;
+  flex-shrink: 0;
+  font-size: 22px;
+  line-height: 1;
+  border: 1px solid var(--dgs-v2-border);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--dgs-v2-text);
+  cursor: pointer;
+}
+
+.dgs-prj-printout-line-body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  -webkit-overflow-scrolling: touch;
+  padding: 12px 14px;
+  padding-bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+}
+
+.dgs-prj-printout-field {
+  display: grid;
+  grid-template-columns: minmax(96px, 34%) 1fr;
+  gap: 6px 12px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--dgs-v2-border-soft);
+  font-size: 13px;
+}
+
+.dgs-prj-printout-field dt {
+  margin: 0;
+  color: var(--dgs-v2-text-muted);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.dgs-prj-printout-field dd {
+  margin: 0;
+  color: var(--dgs-v2-text);
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
 /* --- Responsive (legacy stack retired — see Projects responsive ≤1366) --- */
 
 
@@ -3758,16 +3896,68 @@ body.dgs-projects-v2 .dgs-v2-detail-backdrop {
     inset: 0;
     z-index: 50;
     border-radius: 0;
+    border: none;
     padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+
+  body.dgs-projects-v2 .dgs-prj-printout-head {
+    align-items: center;
+    gap: 10px;
+    padding: 10px 12px;
+    padding-top: calc(10px + env(safe-area-inset-top, 0px));
+    flex-shrink: 0;
+  }
+
+  body.dgs-projects-v2 .dgs-prj-printout-head h2 {
+    margin: 2px 0;
+    font-size: 16px;
+  }
+
+  body.dgs-projects-v2 .dgs-prj-printout-head .icon-btn {
+    width: 36px;
+    height: 36px;
+    font-size: 22px;
+    line-height: 1;
+    border: 1px solid var(--dgs-v2-border);
+    border-radius: 8px;
   }
 
   body.dgs-projects-v2 .dgs-prj-printout-scroll {
     overflow: auto;
     -webkit-overflow-scrolling: touch;
+    padding-bottom: calc(12px + env(safe-area-inset-bottom, 0px) + 52px);
   }
 
-  body.dgs-projects-v2 .dgs-prj-printout-table {
-    min-width: 720px;
+  body.dgs-projects-v2 .dgs-prj-printout-list:not([hidden]) {
+    display: flex;
+  }
+
+  body.dgs-projects-v2 .dgs-prj-printout-table[hidden] {
+    display: none;
+  }
+
+  body.dgs-projects-v2.projects-printout-line-open .dgs-prj-printout-line-backdrop {
+    display: block;
+    position: absolute;
+    inset: 0;
+    z-index: 2;
+    background: rgba(0, 0, 0, 0.55);
+  }
+
+  body.dgs-projects-v2 .dgs-prj-printout-line-sheet:not([hidden]) {
+    display: flex;
+    flex-direction: column;
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 3;
+    height: min(85dvh, 720px);
+    background: var(--dgs-v2-card);
+    border: 1px solid var(--dgs-v2-border);
+    border-radius: 16px 16px 0 0;
+    box-shadow: 0 -10px 40px rgba(0, 0, 0, 0.45);
+    overflow: hidden;
   }
 
   /* ---- Calendar (condensed grid + scrolling list + sheet drawer) ---- */

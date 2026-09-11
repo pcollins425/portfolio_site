@@ -30,6 +30,8 @@
     catSelectedKey: null,
     catDetail: null,
     printoutCache: {},
+    printoutCols: [],
+    printoutRows: [],
     phoneDetailOpen: false,
   };
 
@@ -45,7 +47,9 @@
     "cat-detail-panel", "cat-detail-backdrop", "cat-detail-bar", "cat-detail-close",
     "cat-hero-state", "cat-hero-title", "cat-hero-meta",
     "cat-detail-body", "cat-detail-empty", "cat-detail-content", "cat-fields", "cat-notation-wrap", "cat-notation", "cat-actions",
-    "cat-open-printout", "printout-overlay", "printout-title", "printout-meta", "printout-close", "printout-table",
+    "cat-open-printout", "printout-overlay", "printout-title", "printout-meta", "printout-close",
+    "printout-table", "printout-list", "printout-line-backdrop", "printout-line-sheet",
+    "printout-line-title", "printout-line-body", "printout-line-close",
   ];
 
   function isCompact() {
@@ -104,6 +108,21 @@
     progressive_level_count: "Prog levels",
     tribe_name: "Tribe",
   };
+
+  function printoutLabel(col) {
+    return PRINTOUT_LABELS[col] || col.replaceAll("_", " ");
+  }
+
+  function printoutVal(v) {
+    if (v === null || v === undefined || v === "") return "";
+    return String(v);
+  }
+
+  function activePrintoutCols(data) {
+    return data.columns.filter((c) =>
+      data.rows.some((r) => printoutVal(r[c]) !== "")
+    );
+  }
 
   function apiBase() {
     return window.DGSAuth ? DGSAuth.apiBase() : "";
@@ -650,6 +669,87 @@
     }
   }
 
+  function renderPrintoutTable(cols, rows) {
+    els["printout-table"].innerHTML = `
+      <thead>
+        <tr>${cols.map((c) => `<th>${esc(printoutLabel(c))}</th>`).join("")}</tr>
+      </thead>
+      <tbody>
+        ${rows
+          .map(
+            (r) =>
+              `<tr>${cols
+                .map((c) => `<td>${esc(printoutVal(r[c])).replaceAll("\n", "<br>")}</td>`)
+                .join("")}</tr>`
+          )
+          .join("")}
+      </tbody>`;
+  }
+
+  function renderPrintoutList(rows) {
+    if (!rows.length) {
+      els["printout-list"].innerHTML = `<p class="dgs-prj-cal-empty">No printout lines.</p>`;
+      return;
+    }
+    els["printout-list"].innerHTML = rows
+      .map(
+        (r, i) => `
+        <button type="button" class="dgs-prj-printout-row" data-idx="${i}">
+          <span class="dgs-prj-printout-row-serial">${esc(printoutVal(r.serial_number) || "—")}</span>
+          <span class="dgs-prj-printout-row-grid">
+            <span><strong>Cabinet</strong><span class="dgs-prj-printout-row-val">${esc(printoutVal(r.cabinet_type) || "—")}</span></span>
+            <span><strong>Theme</strong><span class="dgs-prj-printout-row-val">${esc(printoutVal(r.theme_name) || "—")}</span></span>
+          </span>
+          <span class="dgs-prj-printout-row-action">${esc(printoutVal(r.work_notes) || "—")}</span>
+        </button>`
+      )
+      .join("");
+  }
+
+  function applyPrintoutMode() {
+    const compact = isCompact();
+    if (els["printout-table"]) els["printout-table"].hidden = compact;
+    if (els["printout-list"]) els["printout-list"].hidden = !compact;
+    if (!compact) closePrintoutLine();
+  }
+
+  function openPrintoutLine(idx) {
+    if (!isCompact()) return;
+    const row = state.printoutRows[idx];
+    if (!row) return;
+
+    const serial = printoutVal(row.serial_number) || "Line";
+    const action = printoutVal(row.work_notes);
+    els["printout-line-title"].textContent = action ? `${serial} · ${action}` : serial;
+
+    const fields = state.printoutCols
+      .map((c) => {
+        const v = printoutVal(row[c]);
+        if (!v) return "";
+        return `<div class="dgs-prj-printout-field"><dt>${esc(printoutLabel(c))}</dt><dd>${esc(v)}</dd></div>`;
+      })
+      .filter(Boolean)
+      .join("");
+
+    els["printout-line-body"].innerHTML = fields
+      ? `<dl>${fields}</dl>`
+      : `<p class="dgs-prj-cal-empty">No field values on this line.</p>`;
+
+    els["printout-line-backdrop"].hidden = false;
+    els["printout-line-sheet"].hidden = false;
+    els["printout-line-sheet"].setAttribute("aria-hidden", "false");
+    document.body.classList.add("projects-printout-line-open");
+  }
+
+  function closePrintoutLine() {
+    document.body.classList.remove("projects-printout-line-open");
+    if (els["printout-line-backdrop"]) els["printout-line-backdrop"].hidden = true;
+    if (els["printout-line-sheet"]) {
+      els["printout-line-sheet"].hidden = true;
+      els["printout-line-sheet"].setAttribute("aria-hidden", "true");
+    }
+  }
+
   async function openPrintout() {
     const d = state.catDetail;
     if (!d) return;
@@ -658,7 +758,11 @@
     els["printout-title"].textContent = d.project_name || key;
     els["printout-meta"].textContent = "Loading printout…";
     els["printout-table"].innerHTML = "";
+    els["printout-list"].innerHTML = "";
     els["printout-overlay"].hidden = false;
+    document.body.classList.add("projects-printout-open");
+    closePrintoutLine();
+    applyPrintoutMode();
 
     try {
       let data = state.printoutCache[key];
@@ -667,31 +771,22 @@
         state.printoutCache[key] = data;
       }
 
-      const cols = data.columns.filter((c) =>
-        data.rows.some((r) => r[c] !== null && r[c] !== undefined && r[c] !== "")
-      );
+      const cols = activePrintoutCols(data);
+      state.printoutCols = cols;
+      state.printoutRows = data.rows || [];
       els["printout-meta"].textContent = `${data.total} line${data.total === 1 ? "" : "s"} · projects.project_printout`;
-      els["printout-table"].innerHTML = `
-        <thead>
-          <tr>${cols.map((c) => `<th>${esc(PRINTOUT_LABELS[c] || c.replaceAll("_", " "))}</th>`).join("")}</tr>
-        </thead>
-        <tbody>
-          ${data.rows
-            .map(
-              (r) =>
-                `<tr>${cols
-                  .map((c) => `<td>${esc(r[c] ?? "").replaceAll("\n", "<br>")}</td>`)
-                  .join("")}</tr>`
-            )
-            .join("")}
-        </tbody>`;
+      renderPrintoutTable(cols, state.printoutRows);
+      renderPrintoutList(state.printoutRows);
+      applyPrintoutMode();
     } catch (err) {
       els["printout-meta"].textContent = err.message || String(err);
     }
   }
 
   function closePrintout() {
+    closePrintoutLine();
     els["printout-overlay"].hidden = true;
+    document.body.classList.remove("projects-printout-open");
   }
 
   /* ================= init ================= */
@@ -747,10 +842,18 @@
     });
     els["cat-open-printout"].addEventListener("click", openPrintout);
     els["printout-close"].addEventListener("click", closePrintout);
+    els["printout-line-close"]?.addEventListener("click", closePrintoutLine);
+    els["printout-line-backdrop"]?.addEventListener("click", closePrintoutLine);
+    els["printout-list"]?.addEventListener("click", (e) => {
+      const row = e.target.closest(".dgs-prj-printout-row[data-idx]");
+      if (!row) return;
+      openPrintoutLine(Number(row.dataset.idx));
+    });
     els["cat-detail-close"]?.addEventListener("click", closePhoneDetail);
     els["cat-detail-backdrop"]?.addEventListener("click", closePhoneDetail);
 
     const onCompactChange = () => {
+      if (!els["printout-overlay"].hidden) applyPrintoutMode();
       if (!isCompact()) {
         closePhoneDetail();
         if (els["cat-detail-panel"]) els["cat-detail-panel"].setAttribute("aria-hidden", "false");
@@ -764,7 +867,8 @@
 
     document.addEventListener("keydown", (e) => {
       if (e.key !== "Escape") return;
-      if (!els["printout-overlay"].hidden) closePrintout();
+      if (document.body.classList.contains("projects-printout-line-open")) closePrintoutLine();
+      else if (!els["printout-overlay"].hidden) closePrintout();
       else if (state.phoneDetailOpen) closePhoneDetail();
       else closeCalDrawer();
     });
