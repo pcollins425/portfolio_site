@@ -3883,8 +3883,9 @@ body.dgs-projects-v2 .dgs-v2-detail-backdrop {
   }
 }
 
-/* Phone: short month picker so the day list gets most of the viewport */
-@media (max-width: 900px) {
+/* Phone only — portrait tablets are ~768–834 wide and must keep the condensed grid.
+   Catch phone portrait (narrow) and phone landscape (short height), not tablet portrait. */
+@media (max-width: 600px), (max-width: 900px) and (max-height: 520px) {
   body.dgs-projects-v2 .dgs-prj-cal-split {
     gap: 14px;
   }
