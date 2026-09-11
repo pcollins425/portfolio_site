@@ -326,6 +326,8 @@
     if (other) cell.classList.add("is-other");
     if (today) cell.classList.add("is-today");
     if (selected) cell.classList.add("is-selected");
+    if (projects.length) cell.classList.add("has-projects");
+    if (projects.some((p) => p.matching_catalog)) cell.classList.add("has-details");
 
     const num = document.createElement("div");
     num.className = "dgs-prj-cal-day-num";
