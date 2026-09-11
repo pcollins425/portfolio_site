@@ -467,7 +467,7 @@
     if (!catalog) return "Open in Catalog";
     const n = catalog.line_count || 0;
     if (n === 0) return "Open notation";
-    return `Open in Catalog (${n} line${n === 1 ? "" : "s"})`;
+    return `Open printout (${n} line${n === 1 ? "" : "s"})`;
   }
 
   function openCalDrawer(p) {
@@ -477,10 +477,14 @@
     let html = "";
     if (p.matching_catalog) {
       const ref = p.matching_catalog.reference_key;
+      const lineCount = p.matching_catalog.line_count || 0;
+      const openPrintout = lineCount > 0;
       html += `
         <div class="dgs-prj-drawer-cta">
           <span class="dgs-prj-badge">Details Available</span>
-          <button type="button" class="dgs-v2-btn dgs-v2-btn--primary" data-open-catalog="${esc(ref)}">
+          <button type="button" class="dgs-v2-btn dgs-v2-btn--primary"
+            data-open-catalog="${esc(ref)}"
+            data-open-printout="${openPrintout ? "1" : "0"}">
             ${esc(catalogOpenLabel(p.matching_catalog))}
           </button>
         </div>`;
@@ -512,11 +516,15 @@
     const openBtn = els["cal-detail-body"].querySelector("[data-open-catalog]");
     if (openBtn) {
       openBtn.addEventListener("click", () => {
+        const ref = openBtn.dataset.openCatalog;
+        const wantPrintout = openBtn.dataset.openPrintout === "1";
         closeCalDrawer();
         setView("catalog");
-        openCatalogDetail(openBtn.dataset.openCatalog).catch((err) =>
-          showError(err.message || String(err))
-        );
+        openCatalogDetail(ref, { openSheet: !wantPrintout })
+          .then(() => {
+            if (wantPrintout) return openPrintout();
+          })
+          .catch((err) => showError(err.message || String(err)));
       });
     }
 
@@ -596,11 +604,11 @@
     return `<dt>${esc(label)}</dt><dd>${esc(val)}</dd>`;
   }
 
-  async function openCatalogDetail(referenceKey) {
+  async function openCatalogDetail(referenceKey, { openSheet = true } = {}) {
     state.catSelectedKey = referenceKey;
     renderCatalogList();
     closePrintout();
-    if (isCompact()) openPhoneDetail();
+    if (isCompact() && openSheet) openPhoneDetail();
 
     els["cat-detail-body"].classList.add("empty");
     els["cat-detail-empty"].hidden = false;
