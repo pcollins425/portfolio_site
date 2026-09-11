@@ -3403,6 +3403,7 @@ body.dgs-projects-v2 .dgs-prj-ims-split .dgs-v2-list-panel {
   min-width: 0;
 }
 
+.dgs-prj-badge {
   display: inline-flex;
   align-items: center;
   padding: 2px 8px;
