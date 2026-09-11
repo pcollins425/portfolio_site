@@ -29,6 +29,8 @@
     });
   }
 
+  const COMPACT_MQ = window.matchMedia("(max-width: 1366px)");
+
   const state = {
     items: [],
     page: 1,
@@ -40,6 +42,7 @@
     detail: null,
     map: null,
     mapMarker: null,
+    phoneDetailOpen: false,
   };
 
   const els = {
@@ -47,6 +50,7 @@
     pageSubtitle: document.getElementById("page-subtitle"),
     leaseFilter: document.getElementById("lease-filter"),
     perfNote: document.getElementById("perf-note"),
+    statRow: document.getElementById("stat-row"),
     statAdw: document.getElementById("stat-adw"),
     statWinIndex: document.getElementById("stat-win-index"),
     statCommission: document.getElementById("stat-commission"),
@@ -61,6 +65,10 @@
     clearSearch: document.getElementById("clear-search"),
     tbody: document.getElementById("casinos-tbody"),
     listStatus: document.getElementById("list-status"),
+    detailPanel: document.getElementById("detail-panel"),
+    detailBackdrop: document.getElementById("casinos-detail-backdrop"),
+    detailBar: document.getElementById("detail-bar"),
+    detailClose: document.getElementById("detail-close"),
     heroId: document.getElementById("hero-id"),
     heroTitle: document.getElementById("hero-title"),
     heroLocation: document.getElementById("hero-location"),
@@ -81,6 +89,39 @@
 
   const bootParams = new URLSearchParams(window.location.search);
   let deepLinkHandled = false;
+
+  function isCompact() {
+    return COMPACT_MQ.matches;
+  }
+
+  function invalidateMapSize() {
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => state.map?.invalidateSize());
+    });
+  }
+
+  function openPhoneDetail() {
+    if (!isCompact() || !els.detailPanel) return;
+    state.phoneDetailOpen = true;
+    document.body.classList.add("casinos-detail-open");
+    els.detailPanel.classList.add("dgs-v2-detail--sheet");
+    els.detailPanel.setAttribute("aria-hidden", "false");
+    if (els.detailBackdrop) els.detailBackdrop.hidden = false;
+    if (els.detailBar) els.detailBar.hidden = false;
+    invalidateMapSize();
+  }
+
+  function closePhoneDetail() {
+    state.phoneDetailOpen = false;
+    document.body.classList.remove("casinos-detail-open");
+    if (els.detailPanel) {
+      els.detailPanel.classList.remove("dgs-v2-detail--sheet");
+      if (isCompact()) els.detailPanel.setAttribute("aria-hidden", "true");
+      else els.detailPanel.setAttribute("aria-hidden", "false");
+    }
+    if (els.detailBackdrop) els.detailBackdrop.hidden = true;
+    if (els.detailBar) els.detailBar.hidden = true;
+  }
 
   function apiUrl(path) {
     return `${API_BASE}${path}`;
@@ -233,26 +274,64 @@
     }
   }
 
-  function renderList() {
-    els.tbody.innerHTML = state.items
-      .map((row) => {
-        const winCls = winIndexClass(row.win_index);
-        const actCls = winIndexClass(row.actual_index);
-        return `
+  function casinoRowHtml(row) {
+    const winCls = winIndexClass(row.win_index);
+    const actCls = winIndexClass(row.actual_index);
+    return `
         <tr data-key="${esc(row.reference_key)}" class="${row.reference_key === state.selectedKey ? "selected" : ""}">
-          <td class="mono">${esc(row.state_abbreviation || "—")}</td>
-          <td>${esc(row.tribe_name || "—")}</td>
+          <td class="mono dgs-v2-col--desktop">${esc(row.state_abbreviation || "—")}</td>
+          <td class="dgs-v2-col--desktop">${esc(row.tribe_name || "—")}</td>
           <td>${esc(row.casino_name || row.casino_short || "—")}</td>
           <td class="num">${fmtNum(row.active_machines)}</td>
-          <td class="mono">${esc(fmtMonth(row.last_report) || "—")}</td>
-          <td class="num">${fmtAdw(row.cipd)}</td>
-          <td class="num">${fmtAdw(row.tdw)}</td>
-          <td class="num">${fmtAdw(row.avg_adw)}</td>
+          <td class="mono dgs-v2-col--desktop">${esc(fmtMonth(row.last_report) || "—")}</td>
+          <td class="num dgs-v2-col--desktop">${fmtAdw(row.cipd)}</td>
+          <td class="num dgs-v2-col--desktop">${fmtAdw(row.tdw)}</td>
+          <td class="num dgs-v2-col--desktop">${fmtAdw(row.avg_adw)}</td>
           <td class="num ${winCls}">${fmtWinIndex(row.win_index)}</td>
           <td class="num ${actCls}">${fmtWinIndex(row.actual_index)}</td>
         </tr>`;
-      })
-      .join("");
+  }
+
+  function renderList() {
+    if (!state.items.length) {
+      els.tbody.innerHTML = "";
+    } else if (!isCompact()) {
+      els.tbody.innerHTML = state.items.map(casinoRowHtml).join("");
+    } else {
+      const sorted = [...state.items].sort((a, b) => {
+        const sa = String(a.state_abbreviation || "—");
+        const sb = String(b.state_abbreviation || "—");
+        if (sa !== sb) return sa.localeCompare(sb);
+        const ta = String(a.tribe_name || "—");
+        const tb = String(b.tribe_name || "—");
+        if (ta !== tb) return ta.localeCompare(tb);
+        return String(a.casino_name || a.casino_short || "").localeCompare(
+          String(b.casino_name || b.casino_short || "")
+        );
+      });
+      const parts = [];
+      let lastState = null;
+      let lastTribe = null;
+      for (const row of sorted) {
+        const st = row.state_abbreviation || "—";
+        const tribe = row.tribe_name || "—";
+        if (st !== lastState) {
+          parts.push(
+            `<tr class="dgs-v2-group-row dgs-v2-group-row--state" aria-hidden="true"><td colspan="10">${esc(st)}</td></tr>`
+          );
+          lastState = st;
+          lastTribe = null;
+        }
+        if (tribe !== lastTribe) {
+          parts.push(
+            `<tr class="dgs-v2-group-row dgs-v2-group-row--tribe" aria-hidden="true"><td colspan="10">${esc(tribe)}</td></tr>`
+          );
+          lastTribe = tribe;
+        }
+        parts.push(casinoRowHtml(row));
+      }
+      els.tbody.innerHTML = parts.join("");
+    }
 
     els.tbody.querySelectorAll("tr[data-key]").forEach((tr) => {
       tr.addEventListener("click", () => openDetail(tr.dataset.key));
@@ -349,7 +428,7 @@
 
       addDarkBasemap(state.map);
       state.mapMarker = L.marker([lat, lon], { icon: casinoMapPin() }).addTo(state.map);
-      requestAnimationFrame(() => state.map?.invalidateSize());
+      invalidateMapSize();
     } catch (err) {
       console.warn("Casinos map render failed:", err);
       els.mapEl.textContent = "Map could not be rendered.";
@@ -464,6 +543,7 @@
   async function openDetail(referenceKey) {
     state.selectedKey = referenceKey;
     renderList();
+    if (isCompact()) openPhoneDetail();
 
     setDetailEmpty(true);
     els.detailEmptyMsg.textContent = "Loading casino…";
@@ -541,6 +621,23 @@
       await openDetail(deepId);
       return;
     }
+
+    // Compact: list-only until tap. Desktop: auto-open first row.
+    if (isCompact()) {
+      if (state.selectedKey && !state.items.some((r) => r.reference_key === state.selectedKey)) {
+        state.selectedKey = null;
+        closePhoneDetail();
+        setDetailEmpty(true);
+        els.detailEmptyMsg.textContent = "Select a casino to view profile and contacts.";
+        renderIdentity(null);
+        renderPerformanceMetrics(null);
+        renderActions(null);
+        renderImsPreview(null);
+        destroyMap();
+      }
+      return;
+    }
+
     if (!state.selectedKey && state.items.length) {
       await openDetail(state.items[0].reference_key);
     } else if (state.selectedKey && !state.items.some((r) => r.reference_key === state.selectedKey)) {
@@ -560,12 +657,24 @@
     }
   }
 
+  function syncCompactChrome() {
+    if (!isCompact()) {
+      closePhoneDetail();
+      if (els.detailPanel) els.detailPanel.setAttribute("aria-hidden", "false");
+    } else if (!state.phoneDetailOpen && els.detailPanel) {
+      els.detailPanel.setAttribute("aria-hidden", "true");
+    }
+    renderList();
+    invalidateMapSize();
+  }
+
   async function init() {
     showError(null);
     const requested = (bootParams.get("filter") || bootParams.get("lease_filter") || "all").trim().toLowerCase();
     setLeaseFilter(requested, { push: false });
     els.tbody.innerHTML = `<tr><td colspan="10" class="dgs-v2-lines-status">Loading…</td></tr>`;
     renderPerformanceMetrics(null);
+    syncCompactChrome();
     try {
       await loadList();
     } catch (err) {
@@ -578,6 +687,7 @@
     state.search = els.searchInput.value.trim();
     state.page = 1;
     state.selectedKey = null;
+    closePhoneDetail();
     loadList().catch((err) => showError(err.message || String(err)));
   }
 
@@ -587,6 +697,7 @@
     setLeaseFilter(btn.dataset.filter);
     state.page = 1;
     state.selectedKey = null;
+    closePhoneDetail();
     loadList().catch((err) => showError(err.message || String(err)));
   });
 
@@ -596,11 +707,19 @@
     state.search = "";
     state.page = 1;
     state.selectedKey = null;
+    closePhoneDetail();
     loadList().catch((err) => showError(err.message || String(err)));
   });
   els.searchInput.addEventListener("keydown", (e) => {
     if (e.key === "Enter") runSearch();
   });
+  els.detailClose?.addEventListener("click", closePhoneDetail);
+  els.detailBackdrop?.addEventListener("click", closePhoneDetail);
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && state.phoneDetailOpen) closePhoneDetail();
+  });
+  if (COMPACT_MQ.addEventListener) COMPACT_MQ.addEventListener("change", syncCompactChrome);
+  else if (COMPACT_MQ.addListener) COMPACT_MQ.addListener(syncCompactChrome);
 
   window.CasinosV2 = { init };
 })();

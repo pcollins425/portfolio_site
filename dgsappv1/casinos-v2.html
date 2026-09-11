@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>Casinos — DGS Application</title>
   <link rel="stylesheet" href="assets/dgs.css" />
   <link rel="stylesheet" href="assets/dgs-v2.css" />
@@ -72,14 +72,14 @@
           <table class="dgs-v2-grid" id="casinos-table">
             <thead>
               <tr>
-                <th>State</th>
-                <th>Tribe</th>
+                <th class="dgs-v2-col--desktop">State</th>
+                <th class="dgs-v2-col--desktop">Tribe</th>
                 <th>Casino</th>
                 <th class="num">Active Count</th>
-                <th>Last Report</th>
-                <th class="num">CIPD</th>
-                <th class="num">TWD</th>
-                <th class="num">ADW</th>
+                <th class="dgs-v2-col--desktop">Last Report</th>
+                <th class="num dgs-v2-col--desktop">CIPD</th>
+                <th class="num dgs-v2-col--desktop">TWD</th>
+                <th class="num dgs-v2-col--desktop">ADW</th>
                 <th class="num">Win Index</th>
                 <th class="num">Actual Index</th>
               </tr>
@@ -90,16 +90,25 @@
         <div class="dgs-v2-list-status" id="list-status"></div>
       </section>
 
-      <aside class="dgs-v2-detail" id="detail-panel">
+      <div id="casinos-detail-backdrop" class="dgs-v2-detail-backdrop" hidden></div>
+
+      <aside class="dgs-v2-detail" id="detail-panel" aria-hidden="false">
+        <div class="dgs-v2-detail-bar dgs-v2-phone-only" id="detail-bar" hidden>
+          <span class="dgs-v2-detail-bar-title">Casino</span>
+          <button type="button" id="detail-close" class="dgs-v2-drawer-close" aria-label="Close detail">×</button>
+        </div>
+
         <div class="dgs-v2-detail-body empty" id="detail-body">
           <p id="detail-empty-msg">Select a casino to view profile and contacts.</p>
           <div id="detail-content" hidden>
-            <div class="dgs-v2-casino-hero">
-              <div class="dgs-v2-casino-map-wrap" id="map-wrap" hidden>
-                <div class="dgs-v2-casino-map" id="casino-map" aria-label="Casino location map"></div>
-                <a class="dgs-v2-casino-map-link" id="map-external-link" href="#" target="_blank" rel="noopener noreferrer">Open in Google Maps ↗</a>
+            <div class="dgs-v2-casino-hero" id="casino-hero">
+              <div class="dgs-v2-casino-hero-media">
+                <div class="dgs-v2-casino-map-wrap" id="map-wrap" hidden>
+                  <div class="dgs-v2-casino-map" id="casino-map" aria-label="Casino location map"></div>
+                  <a class="dgs-v2-casino-map-link" id="map-external-link" href="#" target="_blank" rel="noopener noreferrer">Open in Google Maps ↗</a>
+                </div>
+                <div class="dgs-v2-casino-map-empty" id="map-empty" hidden>No map coordinates on file</div>
               </div>
-              <div class="dgs-v2-casino-map-empty" id="map-empty" hidden>No map coordinates on file</div>
               <div class="dgs-v2-casino-identity" id="casino-identity">
                 <div class="dgs-v2-casino-id" id="hero-id">—</div>
                 <h2 class="dgs-v2-casino-title" id="hero-title">Select a casino</h2>

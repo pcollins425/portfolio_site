@@ -2355,9 +2355,253 @@ body.dgs-casinos-v2 .dgs-v2-detail-body {
   overflow: auto;
 }
 
-@media (max-width: 1100px) {
+body.dgs-casinos-v2 .dgs-v2-casino-hero-media {
+  min-width: 0;
+}
+
+body.dgs-casinos-v2 .dgs-v2-phone-only {
+  display: none;
+}
+
+body.dgs-casinos-v2 .dgs-v2-detail-backdrop {
+  display: none;
+}
+
+body.dgs-casinos-v2 .dgs-v2-group-row {
+  display: none;
+}
+
+/* Casinos compact ≤1366 — sheet + grouped list + hero strip */
+@media (max-width: 1366px) {
+  body.dgs-casinos-v2 .dgs-v2-desktop-only,
+  body.dgs-casinos-v2 .dgs-v2-pilot-note,
+  body.dgs-casinos-v2 #stat-row,
   body.dgs-casinos-v2 .dgs-v2-metrics--perf {
-    grid-template-columns: 1fr;
+    display: none !important;
+  }
+
+  body.dgs-casinos-v2 .dgs-v2-col--desktop {
+    display: none !important;
+  }
+
+  body.dgs-casinos-v2 .dgs-v2-page-header {
+    gap: 10px;
+    align-items: center;
+  }
+
+  body.dgs-casinos-v2 .dgs-v2-view-toggle {
+    padding: 2px;
+    border-radius: 9px;
+    align-self: center;
+  }
+
+  body.dgs-casinos-v2 .dgs-v2-view-toggle button {
+    padding: 4px 9px;
+    font-size: 11px;
+    border-radius: 7px;
+  }
+
+  body.dgs-casinos-v2 .dgs-v2-split {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  body.dgs-casinos-v2 .dgs-v2-list-panel {
+    flex: 1;
+    min-height: 0;
+  }
+
+  body.dgs-casinos-v2 .dgs-v2-grid-wrap {
+    flex: 1;
+    min-height: 0;
+    overflow: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  body.dgs-casinos-v2 .dgs-v2-group-row {
+    display: table-row;
+  }
+
+  body.dgs-casinos-v2 .dgs-v2-group-row td {
+    padding: 10px 8px 4px;
+    border: none;
+    background: transparent;
+    color: var(--dgs-v2-text-muted);
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    white-space: normal;
+    max-width: none;
+    pointer-events: none;
+  }
+
+  body.dgs-casinos-v2 .dgs-v2-group-row--state td {
+    padding-top: 14px;
+    color: var(--dgs-v2-heading);
+    font-size: 12px;
+  }
+
+  body.dgs-casinos-v2 .dgs-v2-group-row--tribe td {
+    padding-top: 6px;
+    padding-bottom: 2px;
+    font-weight: 600;
+    text-transform: none;
+    letter-spacing: 0;
+    color: var(--dgs-v2-text-muted);
+  }
+
+  body.dgs-casinos-v2 .dgs-v2-detail:not(.dgs-v2-detail--sheet) {
+    display: none;
+  }
+
+  body.dgs-casinos-v2 .dgs-v2-phone-only {
+    display: flex;
+  }
+
+  body.dgs-casinos-v2 .dgs-v2-detail-bar {
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 12px 14px 0;
+    flex-shrink: 0;
+  }
+
+  body.dgs-casinos-v2 .dgs-v2-detail-bar-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--dgs-v2-heading);
+  }
+
+  body.dgs-casinos-v2 .dgs-v2-detail-bar .dgs-v2-drawer-close {
+    width: 36px;
+    height: 36px;
+    border: 1px solid var(--dgs-v2-border);
+    border-radius: 8px;
+    background: transparent;
+    color: var(--dgs-v2-text);
+    font-size: 22px;
+    line-height: 1;
+    cursor: pointer;
+    flex-shrink: 0;
+  }
+
+  body.dgs-casinos-v2.casinos-detail-open .dgs-v2-detail-backdrop {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: 40;
+    background: rgba(0, 0, 0, 0.55);
+  }
+
+  body.dgs-casinos-v2 .dgs-v2-detail.dgs-v2-detail--sheet {
+    display: flex;
+    flex-direction: column;
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 45;
+    height: min(90dvh, 820px);
+    margin: 0;
+    padding-bottom: env(safe-area-inset-bottom, 0);
+    background: var(--dgs-v2-card);
+    border: 1px solid var(--dgs-v2-border);
+    border-radius: 16px 16px 0 0;
+    box-shadow: 0 -10px 40px rgba(0, 0, 0, 0.45);
+    overflow: hidden;
+  }
+
+  body.dgs-casinos-v2 .dgs-v2-detail.dgs-v2-detail--sheet .dgs-v2-detail-body {
+    flex: 1;
+    min-height: 0;
+    overflow: auto;
+    -webkit-overflow-scrolling: touch;
+    border: none;
+    border-radius: 0;
+    padding: 0 14px 16px;
+  }
+
+  /* Map + identity as Contracts/Asset Hub hero strip */
+  body.dgs-casinos-v2 .dgs-v2-detail.dgs-v2-detail--sheet .dgs-v2-casino-hero {
+    flex-direction: row;
+    align-items: stretch;
+    gap: 0;
+    margin: 8px 0 12px;
+    min-height: 148px;
+    max-height: 168px;
+    border: 1px solid var(--dgs-v2-border);
+    border-radius: 12px;
+    overflow: hidden;
+    background: rgba(255, 255, 255, 0.02);
+  }
+
+  body.dgs-casinos-v2 .dgs-v2-detail.dgs-v2-detail--sheet .dgs-v2-casino-hero-media {
+    flex: 0 0 42%;
+    width: 42%;
+    min-height: 0;
+    border-right: 1px solid var(--dgs-v2-border-soft, var(--dgs-v2-border));
+  }
+
+  body.dgs-casinos-v2 .dgs-v2-detail.dgs-v2-detail--sheet .dgs-v2-casino-map-wrap {
+    height: 100%;
+    min-height: 148px;
+    margin: 0;
+    border: none;
+    border-radius: 0;
+  }
+
+  body.dgs-casinos-v2 .dgs-v2-detail.dgs-v2-detail--sheet .dgs-v2-casino-map {
+    height: 100%;
+    min-height: 148px;
+    border-radius: 0;
+  }
+
+  body.dgs-casinos-v2 .dgs-v2-detail.dgs-v2-detail--sheet .dgs-v2-casino-map-link {
+    display: none;
+  }
+
+  body.dgs-casinos-v2 .dgs-v2-detail.dgs-v2-detail--sheet .dgs-v2-casino-map-empty {
+    height: 100%;
+    min-height: 148px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0;
+    border: none;
+    border-radius: 0;
+    padding: 12px;
+    font-size: 11px;
+  }
+
+  body.dgs-casinos-v2 .dgs-v2-detail.dgs-v2-detail--sheet .dgs-v2-casino-identity {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    padding: 12px 14px;
+  }
+
+  body.dgs-casinos-v2 .dgs-v2-detail.dgs-v2-detail--sheet .dgs-v2-casino-id {
+    font-size: 10px;
+  }
+
+  body.dgs-casinos-v2 .dgs-v2-detail.dgs-v2-detail--sheet .dgs-v2-casino-title {
+    font-size: 16px;
+    overflow-wrap: anywhere;
+  }
+
+  body.dgs-casinos-v2 .dgs-v2-detail.dgs-v2-detail--sheet .dgs-v2-casino-location {
+    font-size: 12px;
+    overflow-wrap: anywhere;
+  }
+
+  body.dgs-casinos-v2 .dgs-v2-list-status {
+    padding-bottom: env(safe-area-inset-bottom, 0);
   }
 }
 
