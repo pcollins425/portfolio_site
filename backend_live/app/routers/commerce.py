@@ -413,6 +413,7 @@ def casino_detail(reference_key: str):
                 s.state_abbreviation,
                 c.sales,
                 c.licensed,
+                c.available_vendors,
                 c.signed_master_agreement,
                 c.executed_on,
                 c.expiration,
@@ -469,6 +470,31 @@ def casino_detail(reference_key: str):
             "SELECT COUNT(*) AS n FROM projects.project_catalog WHERE casino_id = %s",
             (cid,),
         )[0]
+        ims_preview_rows = _field_query(
+            """
+            SELECT TOP 10
+                ims.reference_key,
+                ims.project_number,
+                ims.start_date,
+                ims.end_date,
+                ims.status,
+                ims.project_type,
+                ims.description,
+                pc.reference_key AS catalog_reference_key,
+                pc.project_name AS catalog_project_name,
+                pc.notes AS catalog_notes,
+                (
+                    SELECT COUNT(*)
+                    FROM projects.project_details pd
+                    WHERE pd.project_id = pc.reference_key
+                ) AS catalog_line_count
+            FROM projects.ims AS ims
+            LEFT JOIN projects.project_catalog AS pc ON pc.ims_id = ims.reference_key
+            WHERE ims.casino_id = %s
+            ORDER BY COALESCE(ims.start_date, '1900-01-01') DESC, ims.project_number DESC
+            """,
+            (cid,),
+        )
         sister_rows = []
         tribe_id = _json_value(r.get("tribe_id"))
         if tribe_id:
@@ -503,6 +529,40 @@ def casino_detail(reference_key: str):
     has_map = lat is not None and lon is not None
     location_label = _location_label(r)
     performance = _performance_block(r)
+    active_n = int(active_machines.get("n") or 0)
+    total_floor = r.get("total_number_of_machines")
+    try:
+        total_floor_n = int(total_floor) if total_floor is not None else 0
+    except (TypeError, ValueError):
+        total_floor_n = 0
+    dgs_floor_percent = (
+        round((active_n / total_floor_n) * 100, 1) if total_floor_n > 0 else None
+    )
+
+    ims_projects = []
+    for p in ims_preview_rows:
+        catalog_key = _json_value(p.get("catalog_reference_key"))
+        ims_projects.append(
+            {
+                "reference_key": _json_value(p.get("reference_key")),
+                "project_no": _json_value(p.get("project_number")),
+                "date_start": _json_value(p.get("start_date")),
+                "date_end": _json_value(p.get("end_date")),
+                "status": _json_value(p.get("status")),
+                "proj_type": _json_value(p.get("project_type")),
+                "proj_desc": _json_value(p.get("description")),
+                "matching_catalog": (
+                    {
+                        "reference_key": catalog_key,
+                        "project_name": _json_value(p.get("catalog_project_name")),
+                        "line_count": int(p.get("catalog_line_count") or 0),
+                        "notes": _json_value(p.get("catalog_notes")),
+                    }
+                    if catalog_key
+                    else None
+                ),
+            }
+        )
 
     return {
         "reference_key": _json_value(r.get("reference_key")),
@@ -523,6 +583,7 @@ def casino_detail(reference_key: str):
         "longitude": lon,
         "has_map": has_map,
         "sales": _json_value(r.get("sales")),
+        "available_vendors": _json_value(r.get("available_vendors")),
         "licensed": _bool_label(r.get("licensed")),
         "signed_master_agreement": _bool_label(r.get("signed_master_agreement")),
         "executed_on": _json_value(r.get("executed_on")),
@@ -542,9 +603,11 @@ def casino_detail(reference_key: str):
         "accounting_email": _json_value(r.get("accounting_email")),
         "update_by": _json_value(r.get("update_by")),
         "update_date": _json_value(r.get("update_date")),
-        "active_machines": int(active_machines.get("n") or 0),
+        "active_machines": active_n,
+        "dgs_floor_percent": dgs_floor_percent,
         "project_count": int(project_count.get("n") or 0),
         "catalog_count": int(catalog_count.get("n") or 0),
+        "ims_projects": ims_projects,
         "sister_casinos": [
             {
                 "reference_key": _json_value(s.get("reference_key")),

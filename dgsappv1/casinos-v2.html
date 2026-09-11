@@ -82,31 +82,37 @@
       </section>
 
       <aside class="dgs-v2-detail" id="detail-panel">
-        <div class="dgs-v2-casino-identity" id="casino-identity">
-          <div class="dgs-v2-casino-id" id="hero-id">—</div>
-          <h2 class="dgs-v2-casino-title" id="hero-title">Select a casino</h2>
-          <div class="dgs-v2-casino-location" id="hero-location">Choose a row from the list</div>
-        </div>
-
-        <div class="dgs-v2-casino-map-wrap" id="map-wrap" hidden>
-          <div class="dgs-v2-casino-map" id="casino-map" aria-label="Casino location map"></div>
-          <a class="dgs-v2-casino-map-link" id="map-external-link" href="#" target="_blank" rel="noopener noreferrer">Open in Google Maps ↗</a>
-        </div>
-
-        <div class="dgs-v2-casino-related" id="casino-related" hidden>
-          <div class="dgs-v2-section-label">Related</div>
-          <div class="dgs-v2-casino-related-links" id="casino-related-links"></div>
-          <div class="dgs-v2-casino-sisters" id="casino-sisters" hidden>
-            <div class="dgs-v2-section-label">Sister locations</div>
-            <div class="dgs-v2-casino-sister-list" id="casino-sister-list"></div>
-          </div>
-        </div>
-
         <div class="dgs-v2-detail-body empty" id="detail-body">
           <p id="detail-empty-msg">Select a casino to view profile and contacts.</p>
           <div id="detail-content" hidden>
+            <div class="dgs-v2-casino-hero">
+              <div class="dgs-v2-casino-map-wrap" id="map-wrap" hidden>
+                <div class="dgs-v2-casino-map" id="casino-map" aria-label="Casino location map"></div>
+                <a class="dgs-v2-casino-map-link" id="map-external-link" href="#" target="_blank" rel="noopener noreferrer">Open in Google Maps ↗</a>
+              </div>
+              <div class="dgs-v2-casino-map-empty" id="map-empty" hidden>No map coordinates on file</div>
+              <div class="dgs-v2-casino-identity" id="casino-identity">
+                <div class="dgs-v2-casino-id" id="hero-id">—</div>
+                <h2 class="dgs-v2-casino-title" id="hero-title">Select a casino</h2>
+                <div class="dgs-v2-casino-location" id="hero-location">Choose a row from the list</div>
+              </div>
+            </div>
+
+            <div class="dgs-v2-casino-actions" id="casino-actions">
+              <a class="dgs-v2-btn dgs-v2-btn--primary" id="slot-master-link" href="#">Slot Master</a>
+            </div>
+
             <div class="dgs-v2-section-label">Profile</div>
             <dl class="dgs-v2-fields" id="detail-fields"></dl>
+
+            <div class="dgs-v2-casino-ims" id="casino-ims">
+              <div class="dgs-v2-casino-ims-head">
+                <div class="dgs-v2-section-label">IMS projects</div>
+                <a class="dgs-v2-hub-serial-link" id="ims-view-all" href="#">View all</a>
+              </div>
+              <div class="dgs-v2-casino-ims-list" id="ims-preview-list"></div>
+            </div>
+
             <div class="dgs-v2-section-label">Agreement</div>
             <dl class="dgs-v2-fields" id="agreement-fields"></dl>
             <div class="dgs-v2-section-label">Contacts</div>

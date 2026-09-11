@@ -2036,7 +2036,104 @@ body.dgs-casinos-v2 .dgs-v2-win-index--muted {
 
 body.dgs-casinos-v2 .dgs-v2-casino-identity {
   flex-shrink: 0;
-  padding: 4px 2px 0;
+  padding: 8px 2px 0;
+}
+
+body.dgs-casinos-v2 .dgs-v2-casino-hero {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+body.dgs-casinos-v2 .dgs-v2-casino-map-empty {
+  padding: 28px 12px;
+  text-align: center;
+  font-size: 12px;
+  color: var(--dgs-v2-text-muted);
+  border: 1px dashed var(--dgs-v2-border);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.02);
+}
+
+body.dgs-casinos-v2 .dgs-v2-casino-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0 0 14px;
+}
+
+body.dgs-casinos-v2 .dgs-v2-casino-tribe-block {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+body.dgs-casinos-v2 .dgs-v2-casino-ims {
+  margin: 4px 0 16px;
+}
+
+body.dgs-casinos-v2 .dgs-v2-casino-ims-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+body.dgs-casinos-v2 .dgs-v2-casino-ims-head .dgs-v2-section-label {
+  margin: 0;
+}
+
+body.dgs-casinos-v2 .dgs-v2-casino-ims-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+body.dgs-casinos-v2 .dgs-v2-casino-ims-row {
+  display: block;
+  padding: 10px 12px;
+  border: 1px solid var(--dgs-v2-border);
+  border-radius: 10px;
+  background: var(--dgs-v2-card);
+  color: inherit;
+  text-decoration: none;
+  transition: border-color 0.12s ease, background 0.12s ease;
+}
+
+body.dgs-casinos-v2 .dgs-v2-casino-ims-row:hover {
+  border-color: var(--dgs-v2-accent-border);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+body.dgs-casinos-v2 .dgs-v2-casino-ims-row-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+body.dgs-casinos-v2 .dgs-v2-casino-ims-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--dgs-v2-heading);
+}
+
+body.dgs-casinos-v2 .dgs-v2-casino-ims-meta {
+  margin-top: 2px;
+  font-size: 11px;
+  color: var(--dgs-v2-text-muted);
+}
+
+body.dgs-casinos-v2 .dgs-v2-casino-ims-desc {
+  margin-top: 4px;
+  font-size: 12px;
+  color: var(--dgs-v2-text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 body.dgs-casinos-v2 .dgs-v2-casino-id {
@@ -3032,7 +3129,14 @@ body.dgs-software-vault-v2 .dgs-v2-layout-dialog-actions {
   color: var(--dgs-v2-text-dim);
 }
 
-.dgs-prj-badge {
+body.dgs-projects-v2 .dgs-prj-ims-split {
+  grid-template-columns: 1fr;
+}
+
+body.dgs-projects-v2 .dgs-prj-ims-split .dgs-v2-list-panel {
+  min-width: 0;
+}
+
   display: inline-flex;
   align-items: center;
   padding: 2px 8px;

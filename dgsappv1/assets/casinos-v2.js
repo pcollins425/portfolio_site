@@ -5,7 +5,6 @@
     new URLSearchParams(window.location.search).get("api")?.replace(/\/$/, "") ||
     "https://api.collinsmediallc.com";
 
-  // Bootleaf uses Carto light_all for readable roads/labels; dark equivalent = Esri Dark Gray Canvas.
   const MAP_ATTRIBUTION =
     'Tiles &copy; <a href="https://www.esri.com/">Esri</a> &mdash; Esri, TomTom, Garmin, FAO, NOAA, USGS';
 
@@ -63,12 +62,12 @@
     heroTitle: document.getElementById("hero-title"),
     heroLocation: document.getElementById("hero-location"),
     mapWrap: document.getElementById("map-wrap"),
+    mapEmpty: document.getElementById("map-empty"),
     mapEl: document.getElementById("casino-map"),
     mapLink: document.getElementById("map-external-link"),
-    related: document.getElementById("casino-related"),
-    relatedLinks: document.getElementById("casino-related-links"),
-    sisters: document.getElementById("casino-sisters"),
-    sisterList: document.getElementById("casino-sister-list"),
+    slotMasterLink: document.getElementById("slot-master-link"),
+    imsViewAll: document.getElementById("ims-view-all"),
+    imsPreviewList: document.getElementById("ims-preview-list"),
     detailBody: document.getElementById("detail-body"),
     detailEmptyMsg: document.getElementById("detail-empty-msg"),
     detailContent: document.getElementById("detail-content"),
@@ -146,6 +145,11 @@
     return Number(n).toFixed(2);
   }
 
+  function fmtPercent(n) {
+    if (n === null || n === undefined || Number.isNaN(Number(n))) return "—";
+    return `${Number(n).toFixed(1)}%`;
+  }
+
   function winIndexClass(n) {
     if (n === null || n === undefined || Number.isNaN(Number(n))) return "";
     if (Number(n) >= 1) return "dgs-v2-win-index--good";
@@ -179,8 +183,18 @@
     return pageUrl("slot_master.html", { casino: casinoId });
   }
 
-  function projectsCatalogHref(casinoId) {
-    return pageUrl("projects.html", { view: "catalog", casino: casinoId });
+  function projectsImsHref(casinoId) {
+    return pageUrl("projects.html", { view: "ims", casino: casinoId });
+  }
+
+  function imsProjectHref(casinoId, project) {
+    const catalog = project.matching_catalog;
+    if (catalog?.reference_key) {
+      const q = { view: "catalog", ref: catalog.reference_key };
+      if ((catalog.line_count || 0) > 0) q.printout = "1";
+      return pageUrl("projects.html", q);
+    }
+    return pageUrl("projects.html", { view: "ims", casino: casinoId, ims: project.reference_key });
   }
 
   function performanceFromDetail(d) {
@@ -261,10 +275,8 @@
   }
 
   function locationLine(d) {
-    const tribe = d.tribe_name ? `${d.tribe_name}` : "";
     const addr = d.location_label || [d.address, d.city, d.zip].filter(Boolean).join(", ");
-    if (tribe && addr) return `${tribe} · ${addr}`;
-    return tribe || addr || d.reference_key || "—";
+    return addr || d.reference_key || "—";
   }
 
   function renderIdentity(d) {
@@ -290,10 +302,17 @@
 
   function renderMap(d) {
     destroyMap();
-    if (!d?.has_map || d.latitude == null || d.longitude == null) {
+    if (!d) {
       els.mapWrap.hidden = true;
+      if (els.mapEmpty) els.mapEmpty.hidden = true;
       return;
     }
+    if (!d.has_map || d.latitude == null || d.longitude == null) {
+      els.mapWrap.hidden = true;
+      if (els.mapEmpty) els.mapEmpty.hidden = false;
+      return;
+    }
+    if (els.mapEmpty) els.mapEmpty.hidden = true;
 
     if (typeof window.L === "undefined") {
       els.mapWrap.hidden = false;
@@ -307,8 +326,7 @@
     els.mapEl.innerHTML = "";
     const lat = Number(d.latitude);
     const lon = Number(d.longitude);
-    const gmaps = `https://www.google.com/maps?q=${lat},${lon}`;
-    els.mapLink.href = gmaps;
+    els.mapLink.href = `https://www.google.com/maps?q=${lat},${lon}`;
 
     try {
       state.map = L.map(els.mapEl, {
@@ -318,9 +336,7 @@
       }).setView([lat, lon], 12);
 
       addDarkBasemap(state.map);
-
       state.mapMarker = L.marker([lat, lon], { icon: casinoMapPin() }).addTo(state.map);
-
       requestAnimationFrame(() => state.map?.invalidateSize());
     } catch (err) {
       console.warn("Casinos map render failed:", err);
@@ -328,100 +344,89 @@
     }
   }
 
-  function renderRelated(d) {
-    if (!els.related || !els.relatedLinks) return;
+  function tribeFieldHtml(d) {
+    const tribe = esc(d.tribe_name || "—");
+    const sisters = Array.isArray(d.sister_casinos) ? d.sister_casinos : [];
+    if (!sisters.length) return tribe;
+    const chips = sisters
+      .map((s) => {
+        const name = s.casino_name || s.casino_short || s.reference_key;
+        const stateAbbr = s.state_abbreviation ? `${s.state_abbreviation} · ` : "";
+        return `<button type="button" class="dgs-v2-casino-sister" data-sister="${esc(s.reference_key)}">${esc(
+          stateAbbr + name
+        )}</button>`;
+      })
+      .join("");
+    return `<div class="dgs-v2-casino-tribe-block"><div>${tribe}</div><div class="dgs-v2-casino-sister-list">${chips}</div></div>`;
+  }
+
+  function renderActions(d) {
+    if (!els.slotMasterLink) return;
     if (!d) {
-      els.related.hidden = true;
-      els.relatedLinks.innerHTML = "";
-      if (els.sisters) {
-        els.sisters.hidden = true;
-        els.sisterList.innerHTML = "";
-      }
+      els.slotMasterLink.href = "#";
+      els.slotMasterLink.textContent = "Slot Master";
+      return;
+    }
+    const n = Number(d.active_machines) || 0;
+    els.slotMasterLink.href = slotMasterHref(d.reference_key);
+    els.slotMasterLink.textContent = n ? `Slot Master (${fmtNum(n)})` : "Slot Master";
+  }
+
+  function renderImsPreview(d) {
+    if (!els.imsPreviewList || !els.imsViewAll) return;
+    if (!d) {
+      els.imsPreviewList.innerHTML = "";
+      els.imsViewAll.href = "#";
+      els.imsViewAll.textContent = "View all";
       return;
     }
 
-    const active = Number(d.active_machines) || 0;
-    const catalog = Number(d.catalog_count) || 0;
-    const links = [
-      {
-        href: slotMasterHref(d.reference_key),
-        label: "Slot Master",
-        meta: `${fmtNum(active)} active`,
-        enabled: true,
-      },
-      {
-        href: projectsCatalogHref(d.reference_key),
-        label: "Projects Catalog",
-        meta: `${fmtNum(catalog)} project${catalog === 1 ? "" : "s"}`,
-        enabled: true,
-      },
-    ];
+    const total = Number(d.project_count) || 0;
+    els.imsViewAll.href = projectsImsHref(d.reference_key);
+    els.imsViewAll.textContent = total ? `View all (${fmtNum(total)})` : "View all";
 
-    els.relatedLinks.innerHTML = links
-      .map(
-        (link) => `
-        <a class="dgs-v2-casino-related-link${!link.enabled ? " is-disabled" : ""}" href="${esc(link.href)}">
-          <span class="dgs-v2-casino-related-label">${esc(link.label)}</span>
-          <span class="dgs-v2-casino-related-meta">${esc(link.meta)}</span>
-        </a>`
-      )
-      .join("");
-
-    const sisters = Array.isArray(d.sister_casinos) ? d.sister_casinos : [];
-    if (els.sisters && els.sisterList) {
-      if (!sisters.length) {
-        els.sisters.hidden = true;
-        els.sisterList.innerHTML = "";
-      } else {
-        els.sisters.hidden = false;
-        els.sisterList.innerHTML = sisters
-          .map((s) => {
-            const name = s.casino_name || s.casino_short || s.reference_key;
-            const stateAbbr = s.state_abbreviation ? `${s.state_abbreviation} · ` : "";
-            const machines = Number(s.active_machines) || 0;
-            return `
-              <button type="button" class="dgs-v2-casino-sister" data-sister="${esc(s.reference_key)}">
-                <span class="dgs-v2-casino-sister-name">${esc(stateAbbr + name)}</span>
-                <span class="dgs-v2-casino-sister-meta">${fmtNum(machines)} active</span>
-              </button>`;
-          })
-          .join("");
-        els.sisterList.querySelectorAll("[data-sister]").forEach((btn) => {
-          btn.addEventListener("click", () => openDetail(btn.dataset.sister));
-        });
-      }
+    const rows = Array.isArray(d.ims_projects) ? d.ims_projects : [];
+    if (!rows.length) {
+      els.imsPreviewList.innerHTML = `<p class="dgs-v2-lines-status">No IMS projects for this casino.</p>`;
+      return;
     }
 
-    els.related.hidden = false;
+    els.imsPreviewList.innerHTML = rows
+      .map((p) => {
+        const title = p.project_no || p.reference_key || "Project";
+        const dates = [p.date_start ? fmtDate(p.date_start) : "", p.date_end ? fmtDate(p.date_end) : ""]
+          .filter(Boolean)
+          .join(" – ");
+        const badge = p.matching_catalog
+          ? `<span class="dgs-prj-badge">Details Available</span>`
+          : "";
+        return `
+          <a class="dgs-v2-casino-ims-row" href="${esc(imsProjectHref(d.reference_key, p))}">
+            <div class="dgs-v2-casino-ims-row-top">
+              <span class="dgs-v2-casino-ims-title">${esc(title)}</span>
+              ${badge}
+            </div>
+            <div class="dgs-v2-casino-ims-meta">${esc([p.status, dates].filter(Boolean).join(" · "))}</div>
+            <div class="dgs-v2-casino-ims-desc">${esc(p.proj_desc || "")}</div>
+          </a>`;
+      })
+      .join("");
   }
 
   function renderDetailFields(d) {
-    const slotLink =
-      d.active_machines > 0
-        ? `<a class="dgs-v2-hub-serial-link" href="${esc(slotMasterHref(d.reference_key))}">Slot Master (${fmtNum(d.active_machines)})</a>`
-        : fmtNum(d.active_machines);
-
     els.detailFields.innerHTML = [
-      field("Casino ID", d.reference_key),
-      field("Name", d.casino_name),
-      field("Short name", d.casino_short || "—"),
-      field("Legal title", d.legal_title || "—"),
-      field("Abbreviation", d.casino_abbreviation || "—"),
-      field("Tribe", d.tribe_name || "—"),
-      field("State", d.state ? `${d.state} (${d.state_abbreviation || "—"})` : d.state_abbreviation || "—"),
-      field("Address", d.location_label || "—"),
+      field("Casino Name", d.casino_name || d.casino_short || "—"),
+      fieldHtml("Tribe", tribeFieldHtml(d)),
+      field("House Average", fmtNum(d.main_house_average)),
+      field("Total Floor Count", fmtNum(d.total_number_of_machines)),
+      field("DGS Floor Percent", fmtPercent(d.dgs_floor_percent)),
+      field("Available Vendors", d.available_vendors || "—"),
       field("Sales", d.sales || "—"),
-      field("eMaint property", d.emaint_property || "—"),
-      field("Licensed", d.licensed),
-      field("Machine count (record)", fmtNum(d.total_number_of_machines)),
-      fieldHtml("Active machines", slotLink),
-      field("Projects", fmtNum(d.project_count)),
-      field("Main house ADW", fmtNum(d.main_house_average)),
-      field("Smoking ADW", fmtNum(d.smoking_adw)),
-      field("High limit ADW", fmtNum(d.high_limit_adw)),
-      field("Updated", fmtDate(d.update_date)),
-      field("Updated by", d.update_by || "—"),
     ].join("");
+
+    els.detailFields.querySelectorAll("[data-sister]").forEach((btn) => {
+      btn.addEventListener("click", () => openDetail(btn.dataset.sister));
+    });
 
     els.agreementFields.innerHTML = [
       field("Master agreement", d.signed_master_agreement),
@@ -452,9 +457,11 @@
     els.detailEmptyMsg.textContent = "Loading casino…";
     renderIdentity(null);
     renderPerformanceMetrics(null);
-    renderRelated(null);
+    renderActions(null);
+    renderImsPreview(null);
     destroyMap();
     els.mapWrap.hidden = true;
+    if (els.mapEmpty) els.mapEmpty.hidden = true;
     els.heroTitle.textContent = "Loading…";
 
     try {
@@ -463,7 +470,8 @@
       renderDetailFields(state.detail);
       renderIdentity(state.detail);
       renderPerformanceMetrics(state.detail);
-      renderRelated(state.detail);
+      renderActions(state.detail);
+      renderImsPreview(state.detail);
       renderMap(state.detail);
       const u = new URL(window.location.href);
       u.searchParams.set("id", referenceKey);
@@ -474,9 +482,11 @@
       els.detailEmptyMsg.textContent = err.message || String(err);
       renderIdentity(null);
       renderPerformanceMetrics(null);
-      renderRelated(null);
+      renderActions(null);
+      renderImsPreview(null);
       destroyMap();
       els.mapWrap.hidden = true;
+      if (els.mapEmpty) els.mapEmpty.hidden = true;
     }
   }
 

@@ -34,6 +34,7 @@
       </div>
       <nav class="dgs-v2-view-toggle" id="view-toggle" aria-label="Projects views">
         <button type="button" data-view="calendar" class="active">Calendar</button>
+        <button type="button" data-view="ims">IMS</button>
         <button type="button" data-view="catalog">Catalog</button>
       </nav>
     </header>
@@ -68,6 +69,39 @@
           <div class="dgs-prj-cal-list-range" id="cal-list-range"></div>
           <div class="dgs-prj-cal-list-body" id="cal-list-body"></div>
         </aside>
+      </div>
+    </section>
+
+    <!-- ============ IMS list view ============ -->
+    <section id="view-ims" class="dgs-prj-view" hidden>
+      <div class="dgs-v2-split dgs-prj-ims-split">
+        <section class="dgs-v2-list-panel">
+          <div class="dgs-v2-toolbar">
+            <input type="search" id="ims-search" placeholder="Search IMS #, description, status…" autocomplete="off" />
+            <button type="button" id="ims-search-btn" class="dgs-v2-btn dgs-v2-btn--primary">Search</button>
+          </div>
+          <div class="dgs-v2-grid-wrap">
+            <table class="dgs-v2-grid">
+              <thead>
+                <tr>
+                  <th>Project #</th>
+                  <th>Property</th>
+                  <th>Status</th>
+                  <th>Start</th>
+                  <th>End</th>
+                  <th>Details</th>
+                </tr>
+              </thead>
+              <tbody id="ims-tbody"></tbody>
+            </table>
+          </div>
+          <div class="dgs-v2-list-status" id="ims-list-status"></div>
+          <div class="dgs-v2-toolbar dgs-v2-toolbar--pager">
+            <button type="button" id="ims-prev" class="dgs-v2-btn">Prev</button>
+            <span class="dgs-v2-pager__label" id="ims-page-label">Page 1</span>
+            <button type="button" id="ims-next" class="dgs-v2-btn">Next</button>
+          </div>
+        </section>
       </div>
     </section>
 

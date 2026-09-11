@@ -1,4 +1,4 @@
-/* Projects module — Calendar (projects.ims) | Catalog (projects.project_catalog).
+/* Projects module — Calendar | IMS list | Catalog.
    Read-only v1. Calendar ported from ERM project_calendar.js (custom month grid). */
 (function () {
   "use strict";
@@ -10,7 +10,7 @@
 
   const state = {
     view: null,
-    permissions: { calendar: true, catalog: true },
+    permissions: { calendar: true, ims: true, catalog: true },
 
     // calendar
     calYear: new Date().getFullYear(),
@@ -20,6 +20,15 @@
     loadedMonths: new Set(),
     calSelectedDate: null,
     calSearch: "",
+
+    // IMS list (catalog-style rows for one casino)
+    imsItems: [],
+    imsPage: 1,
+    imsPageSize: 50,
+    imsTotal: 0,
+    imsSearch: "",
+    imsCasinoId: "",
+    imsSelectedKey: null,
 
     // catalog
     catItems: [],
@@ -39,11 +48,12 @@
   const els = {};
   const IDS = [
     "error-box", "view-toggle", "page-subtitle",
-    "view-calendar", "view-catalog",
+    "view-calendar", "view-ims", "view-catalog",
     "cal-grid", "cal-month-year", "cal-prev-month", "cal-next-month",
     "cal-prev-year", "cal-next-year", "cal-today", "cal-search",
     "cal-clear-day", "cal-list-range", "cal-list-body",
     "cal-detail-drawer", "cal-detail-backdrop", "cal-detail-body", "cal-detail-title", "cal-detail-close",
+    "ims-search", "ims-search-btn", "ims-prev", "ims-next", "ims-page-label", "ims-tbody", "ims-list-status",
     "cat-search", "cat-search-btn", "cat-prev", "cat-next", "cat-page-label", "cat-tbody", "cat-list-status",
     "cat-detail-panel", "cat-detail-backdrop", "cat-detail-bar", "cat-detail-close",
     "cat-hero-state", "cat-hero-title", "cat-hero-meta",
@@ -170,26 +180,32 @@
       btn.classList.toggle("active", btn.dataset.view === view);
     }
     els["view-calendar"].hidden = view !== "calendar";
+    if (els["view-ims"]) els["view-ims"].hidden = view !== "ims";
     els["view-catalog"].hidden = view !== "catalog";
     const subtitles = {
       calendar: "projects.ims + pre-eMaint catalog · month grid + day filter",
+      ims: "projects.ims · schedule rows for one casino",
       catalog: "projects.project_catalog · machine lines + commission printout",
     };
-    els["page-subtitle"].textContent = subtitles[view];
+    els["page-subtitle"].textContent = subtitles[view] || "";
 
     if (push) {
       const u = new URL(window.location.href);
       u.searchParams.set("view", view);
+      if (view === "ims" && state.imsCasinoId) u.searchParams.set("casino", state.imsCasinoId);
+      else if (view === "catalog" && state.catCasinoId) u.searchParams.set("casino", state.catCasinoId);
       window.history.replaceState({}, "", u.pathname + u.search);
     }
 
     if (view === "calendar" && !state.loadedMonths.size) loadCalendarMonths();
+    if (view === "ims") loadImsList();
     if (view === "catalog" && !state.catItems.length) loadCatalogList();
     if (view !== "catalog") closePhoneDetail();
+    closeCalDrawer();
   }
 
   function firstAllowedView() {
-    for (const v of ["calendar", "catalog"]) {
+    for (const v of ["calendar", "ims", "catalog"]) {
       if (state.permissions[v]) return v;
     }
     return null;
@@ -542,6 +558,83 @@
     document.body.classList.remove("projects-cal-drawer-open");
   }
 
+  /* ================= IMS list ================= */
+
+  async function loadImsList() {
+    if (!els["ims-tbody"]) return;
+
+    if (!state.imsCasinoId) {
+      state.imsItems = [];
+      state.imsTotal = 0;
+      els["ims-tbody"].innerHTML =
+        `<tr><td colspan="6" class="dgs-v2-lines-status">Pick a casino from Casinos → IMS View all, or open with ?view=ims&amp;casino=…</td></tr>`;
+      if (els["ims-list-status"]) els["ims-list-status"].textContent = "No casino filter.";
+      if (els["ims-page-label"]) els["ims-page-label"].textContent = "Page 0";
+      return;
+    }
+
+    const q = encodeURIComponent(state.imsSearch);
+    const casino = encodeURIComponent(state.imsCasinoId);
+    els["ims-tbody"].innerHTML = `<tr><td colspan="6" class="dgs-v2-lines-status">Loading…</td></tr>`;
+    try {
+      const data = await fetchJson(
+        `/api/projects/ims?casino_id=${casino}&q=${q}&page=${state.imsPage}&page_size=${state.imsPageSize}`
+      );
+      state.imsItems = data.items || [];
+      state.imsTotal = data.total || 0;
+      renderImsList();
+    } catch (err) {
+      showError(err.message || String(err));
+      els["ims-tbody"].innerHTML = "";
+    }
+  }
+
+  function renderImsList() {
+    els["ims-tbody"].innerHTML = state.imsItems
+      .map((row) => {
+        const badge = row.matching_catalog
+          ? `<span class="dgs-prj-badge">Details Available</span>`
+          : "—";
+        return `
+        <tr data-key="${esc(row.reference_key)}" class="${row.reference_key === state.imsSelectedKey ? "selected" : ""}">
+          <td class="mono">${esc(row.project_no || row.reference_key || "—")}</td>
+          <td>${esc(row.property || "—")}</td>
+          <td>${esc(row.status || "—")}</td>
+          <td>${esc(fmtDate(row.date_start))}</td>
+          <td>${esc(fmtDate(row.date_end))}</td>
+          <td>${badge}</td>
+        </tr>`;
+      })
+      .join("");
+
+    els["ims-tbody"].querySelectorAll("tr[data-key]").forEach((tr) => {
+      tr.addEventListener("click", () => {
+        const project = state.imsItems.find((p) => p.reference_key === tr.dataset.key);
+        if (!project) return;
+        state.imsSelectedKey = project.reference_key;
+        renderImsList();
+        openCalDrawer(project);
+      });
+    });
+
+    const start = state.imsTotal === 0 ? 0 : (state.imsPage - 1) * state.imsPageSize + 1;
+    const end = Math.min(state.imsPage * state.imsPageSize, state.imsTotal);
+    const noteBits = [];
+    if (state.imsSearch) noteBits.push(`matching “${state.imsSearch}”`);
+    if (state.imsCasinoId) noteBits.push(`casino ${state.imsCasinoId}`);
+    const note = noteBits.length ? ` · ${noteBits.join(" · ")}` : "";
+    els["ims-list-status"].textContent =
+      state.imsTotal === 0
+        ? `No IMS projects found${note}.`
+        : `Showing ${start}–${end} of ${state.imsTotal}${note}`;
+
+    const totalPages = Math.max(1, Math.ceil(state.imsTotal / state.imsPageSize) || 1);
+    if (els["ims-page-label"]) {
+      els["ims-page-label"].textContent =
+        state.imsTotal === 0 ? "Page 0" : `Page ${state.imsPage} of ${totalPages}`;
+    }
+  }
+
   /* ================= catalog ================= */
 
   async function loadCatalogList() {
@@ -843,6 +936,30 @@
     els["cal-detail-close"].addEventListener("click", closeCalDrawer);
     els["cal-detail-backdrop"].addEventListener("click", closeCalDrawer);
 
+    const runImsSearch = () => {
+      if (!els["ims-search"]) return;
+      state.imsSearch = els["ims-search"].value.trim();
+      state.imsPage = 1;
+      state.imsSelectedKey = null;
+      loadImsList();
+    };
+    els["ims-search-btn"]?.addEventListener("click", runImsSearch);
+    els["ims-search"]?.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") runImsSearch();
+    });
+    els["ims-prev"]?.addEventListener("click", () => {
+      if (state.imsPage <= 1) return;
+      state.imsPage -= 1;
+      state.imsSelectedKey = null;
+      loadImsList();
+    });
+    els["ims-next"]?.addEventListener("click", () => {
+      if (state.imsPage * state.imsPageSize >= state.imsTotal) return;
+      state.imsPage += 1;
+      state.imsSelectedKey = null;
+      loadImsList();
+    });
+
     const runCatSearch = () => {
       state.catSearch = els["cat-search"].value.trim();
       state.catPage = 1;
@@ -908,8 +1025,10 @@
 
     try {
       const p = await fetchJson("/api/projects/permissions");
+      const calendar = Boolean(p.calendar);
       state.permissions = {
-        calendar: Boolean(p.calendar),
+        calendar,
+        ims: Boolean(p.ims ?? p.calendar),
         catalog: Boolean(p.catalog),
       };
     } catch (_err) {
@@ -918,15 +1037,50 @@
     applyPermissionsToToggle();
 
     const deepCasino = (params.get("casino") || params.get("casino_id") || "").trim();
-    if (deepCasino) state.catCasinoId = deepCasino;
+    if (deepCasino) {
+      state.catCasinoId = deepCasino;
+      state.imsCasinoId = deepCasino;
+    }
+
+    const deepRef = (params.get("ref") || "").trim();
+    const deepIms = (params.get("ims") || "").trim();
+    const wantPrintout = params.get("printout") === "1";
 
     const requested = params.get("view");
-    let view = ["calendar", "catalog"].includes(requested) ? requested : "calendar";
-    if (deepCasino && state.permissions.catalog) view = "catalog";
+    let view = ["calendar", "ims", "catalog"].includes(requested) ? requested : "calendar";
+    // Casino deep-link without an explicit view defaults to catalog (Casinos Related → Catalog).
+    if (!requested && deepCasino && state.permissions.catalog) view = "catalog";
+    if (deepRef && state.permissions.catalog) view = "catalog";
+    if (requested === "ims" || (deepIms && !deepRef)) {
+      if (state.permissions.ims) view = "ims";
+    }
     setView(view, { push: false });
 
     if (!firstAllowedView()) {
       showError("You do not have access to any Projects views. Ask an admin for dgs_projects_calendar / dgs_projects_catalog.");
+      return;
+    }
+
+    if (view === "catalog" && deepRef) {
+      openCatalogDetail(deepRef, { openSheet: !wantPrintout })
+        .then(() => {
+          if (wantPrintout) return openPrintout();
+        })
+        .catch((err) => showError(err.message || String(err)));
+    }
+
+    if (view === "ims" && deepIms) {
+      try {
+        await loadImsList();
+        const project = state.imsItems.find((p) => p.reference_key === deepIms);
+        if (project) {
+          state.imsSelectedKey = project.reference_key;
+          renderImsList();
+          openCalDrawer(project);
+        }
+      } catch (err) {
+        showError(err.message || String(err));
+      }
     }
   }
 

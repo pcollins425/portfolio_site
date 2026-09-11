@@ -4,6 +4,7 @@ Read-only v1 (2026-07-09 plan):
   - GET /api/projects/calendar          — IMS schedule rows for a date window,
     plus pre-eMaint catalog headers (``ims_id`` NULL), grouped per day, with
     catalog cross-link ("Details Available")
+  - GET /api/projects/ims               — IMS list for one casino (catalog-style)
   - GET /api/projects/catalog           — catalog headers (search + paging)
   - GET /api/projects/catalog/{ref}     — header + per-action line summary
   - GET /api/projects/catalog/{ref}/printout — projects.project_printout rows
@@ -128,6 +129,131 @@ def projects_permissions(
     return {
         "calendar": open_access or perms.can_read_calendar(p),
         "catalog": open_access or perms.can_read_catalog(p),
+        "ims": open_access or perms.can_read_calendar(p),
+    }
+
+
+@router.get("/ims")
+def ims_list(
+    casino_id: str = Query(..., min_length=1, max_length=25, description="Casino reference_key"),
+    q: str = Query("", max_length=120, description="Search project #, description, status"),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(50, ge=1, le=200),
+    user: Annotated[dict[str, Any] | None, Depends(require_demo_user)] = None,
+):
+    """IMS schedule rows for one casino (catalog-style list), newest first."""
+    _assert_calendar(user)
+
+    cid = casino_id.strip()
+    search = q.strip()
+    search_sql = ""
+    search_params: list[Any] = [cid]
+    if search:
+        like = f"%{search}%"
+        search_sql = """
+            AND (
+                ims.project_number LIKE %s
+                OR ims.description LIKE %s
+                OR ims.status LIKE %s
+                OR casinos.casino_name LIKE %s
+            )
+        """
+        search_params.extend([like, like, like, like])
+
+    try:
+        total = int(
+            _query(
+                f"""
+                SELECT COUNT(*) AS n
+                FROM projects.ims AS ims
+                LEFT JOIN clients.casinos AS casinos ON casinos.reference_key = ims.casino_id
+                WHERE ims.casino_id = %s
+                {search_sql}
+                """,
+                tuple(search_params),
+            )[0]["n"]
+        )
+        offset = (page - 1) * page_size
+        rows = _query(
+            f"""
+            SELECT
+                ims.reference_key,
+                ims.project_number,
+                ims.start_date,
+                ims.end_date,
+                ims.status,
+                ims.project_type,
+                ims.description,
+                ims.comments,
+                ims.lead_tech,
+                ims.assistant_techs,
+                ims.casino_id,
+                casinos.casino_name AS property,
+                tribes.tribe_name AS tribe,
+                states.state,
+                pc.reference_key AS catalog_reference_key,
+                pc.project_name AS catalog_project_name,
+                pc.notes AS catalog_notes,
+                (
+                    SELECT COUNT(*)
+                    FROM projects.project_details pd
+                    WHERE pd.project_id = pc.reference_key
+                ) AS catalog_line_count
+            FROM projects.ims AS ims
+            LEFT JOIN clients.casinos AS casinos ON casinos.reference_key = ims.casino_id
+            LEFT JOIN clients.tribes AS tribes ON tribes.reference_key = casinos.tribe_id
+            LEFT JOIN clients.states AS states ON states.reference_key = COALESCE(casinos.state_id, tribes.state_id)
+            LEFT JOIN projects.project_catalog AS pc ON pc.ims_id = ims.reference_key
+            WHERE ims.casino_id = %s
+            {search_sql}
+            ORDER BY COALESCE(ims.start_date, '1900-01-01') DESC, ims.project_number DESC
+            OFFSET {offset} ROWS FETCH NEXT {page_size} ROWS ONLY
+            """,
+            tuple(search_params),
+        )
+    except Exception as exc:
+        raise HTTPException(status_code=503, detail=f"database error: {exc}") from exc
+
+    items = []
+    for r in rows:
+        catalog_key = _json_value(r.get("catalog_reference_key"))
+        items.append(
+            {
+                "reference_key": _json_value(r.get("reference_key")),
+                "project_no": _json_value(r.get("project_number")),
+                "date_start": _date_only(r.get("start_date")),
+                "date_end": _date_only(r.get("end_date")),
+                "status": _json_value(r.get("status")),
+                "proj_type": _json_value(r.get("project_type")),
+                "proj_desc": _json_value(r.get("description")),
+                "comment": _json_value(r.get("comments")),
+                "tech": _json_value(r.get("lead_tech")),
+                "assisting": _json_value(r.get("assistant_techs")),
+                "casino_id": _json_value(r.get("casino_id")),
+                "property": _json_value(r.get("property")),
+                "tribe": _json_value(r.get("tribe")),
+                "state": _json_value(r.get("state")),
+                "matching_catalog": (
+                    {
+                        "reference_key": catalog_key,
+                        "project_name": _json_value(r.get("catalog_project_name")),
+                        "line_count": int(r.get("catalog_line_count") or 0),
+                        "notes": _json_value(r.get("catalog_notes")),
+                    }
+                    if catalog_key
+                    else None
+                ),
+            }
+        )
+
+    return {
+        "items": items,
+        "casino_id": cid,
+        "search": search or None,
+        "page": page,
+        "page_size": page_size,
+        "total": total,
+        "total_pages": max(1, math.ceil(total / page_size)) if total else 1,
     }
 
 
