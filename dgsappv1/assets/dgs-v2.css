@@ -3842,7 +3842,8 @@ body.dgs-projects-v2 .dgs-v2-detail-backdrop {
   }
 
   body.dgs-projects-v2 .dgs-prj-cal-list-body {
-    padding-bottom: calc(16px + env(safe-area-inset-bottom, 0px) + 52px);
+    /* Match Asset Hub clearance — Samsung often under-reports safe-area */
+    padding-bottom: calc(28px + env(safe-area-inset-bottom, 0px) + 72px);
   }
 
   body.dgs-projects-v2 .dgs-prj-drawer {
@@ -3859,6 +3860,7 @@ body.dgs-projects-v2 .dgs-v2-detail-backdrop {
     box-shadow: 0 -10px 40px rgba(0, 0, 0, 0.45);
     transform: translateY(100%);
     padding-bottom: env(safe-area-inset-bottom, 0px);
+    z-index: 45;
   }
 
   body.dgs-projects-v2 .dgs-prj-drawer.open {
@@ -3870,10 +3872,6 @@ body.dgs-projects-v2 .dgs-v2-detail-backdrop {
     background: rgba(0, 0, 0, 0.55);
   }
 
-  body.dgs-projects-v2 .dgs-prj-drawer {
-    z-index: 45;
-  }
-
   body.dgs-projects-v2 .dgs-prj-drawer .detail-body {
     overflow: auto;
     -webkit-overflow-scrolling: touch;
@@ -3882,5 +3880,12 @@ body.dgs-projects-v2 .dgs-v2-detail-backdrop {
 
   body.dgs-projects-v2 .dgs-prj-drawer-item {
     grid-template-columns: 96px 1fr;
+  }
+}
+
+/* Tablet: system nav taller than phone; extra day-list clearance */
+@media (min-width: 901px) and (max-width: 1366px) {
+  body.dgs-projects-v2 .dgs-prj-cal-list-body {
+    padding-bottom: calc(36px + env(safe-area-inset-bottom, 0px) + 88px);
   }
 }
