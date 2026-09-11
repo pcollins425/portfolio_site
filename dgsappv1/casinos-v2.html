@@ -31,12 +31,17 @@
       <div>
         <p class="dgs-v2-eyebrow">Commerce</p>
         <h1>Casinos</h1>
-        <p class="dgs-v2-subtitle">Performance + location · latest month via <code>slot_master_id</code></p>
+        <p class="dgs-v2-subtitle dgs-v2-desktop-only" id="page-subtitle">All casinos · latest Master_Revenue month</p>
       </div>
-      <div class="dgs-v2-pilot-note" id="perf-note">Select a casino for metrics</div>
+      <nav class="dgs-v2-view-toggle" id="lease-filter" aria-label="Casino lease filter">
+        <button type="button" data-filter="all" class="active">All</button>
+        <button type="button" data-filter="leased">Leased</button>
+        <button type="button" data-filter="prospecting">Prospecting</button>
+      </nav>
     </header>
 
     <div id="error-box" class="dgs-v2-error" hidden></div>
+    <p class="dgs-v2-pilot-note" id="perf-note">Select a casino for metrics</p>
 
     <div class="dgs-v2-metrics dgs-v2-metrics--perf" id="stat-row" aria-label="Selected casino performance">
       <div class="dgs-v2-metric">

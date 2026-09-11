@@ -35,6 +35,7 @@
     pageSize: 50,
     total: 0,
     search: "",
+    leaseFilter: "all",
     selectedKey: null,
     detail: null,
     map: null,
@@ -43,6 +44,8 @@
 
   const els = {
     errorBox: document.getElementById("error-box"),
+    pageSubtitle: document.getElementById("page-subtitle"),
+    leaseFilter: document.getElementById("lease-filter"),
     perfNote: document.getElementById("perf-note"),
     statAdw: document.getElementById("stat-adw"),
     statWinIndex: document.getElementById("stat-win-index"),
@@ -257,11 +260,15 @@
 
     const start = state.total === 0 ? 0 : (state.page - 1) * state.pageSize + 1;
     const end = Math.min(state.page * state.pageSize, state.total);
-    const searchNote = state.search ? ` · matching “${state.search}”` : "";
+    const noteBits = [];
+    if (state.search) noteBits.push(`matching “${state.search}”`);
+    if (state.leaseFilter === "leased") noteBits.push("leased only");
+    if (state.leaseFilter === "prospecting") noteBits.push("prospecting only");
+    const note = noteBits.length ? ` · ${noteBits.join(" · ")}` : "";
     els.listStatus.textContent =
       state.total === 0
-        ? `No casinos found${searchNote}.`
-        : `Showing ${start.toLocaleString()}–${end.toLocaleString()} of ${state.total.toLocaleString()}${searchNote}`;
+        ? `No casinos found${note}.`
+        : `Showing ${start.toLocaleString()}–${end.toLocaleString()} of ${state.total.toLocaleString()}${note}`;
   }
 
   function field(label, value) {
@@ -495,9 +502,32 @@
     }
   }
 
+  function setLeaseFilter(filter, { push = true } = {}) {
+    const next = ["all", "leased", "prospecting"].includes(filter) ? filter : "all";
+    state.leaseFilter = next;
+    if (els.leaseFilter) {
+      for (const btn of els.leaseFilter.querySelectorAll("button[data-filter]")) {
+        btn.classList.toggle("active", btn.dataset.filter === next);
+      }
+    }
+    const subtitles = {
+      all: "All casinos · latest Master_Revenue month",
+      leased: "Casinos with installed leased cabinets (Sold excluded)",
+      prospecting: "Casinos without installed leased cabinets",
+    };
+    if (els.pageSubtitle) els.pageSubtitle.textContent = subtitles[next] || subtitles.all;
+    if (push) {
+      const u = new URL(window.location.href);
+      if (next === "all") u.searchParams.delete("filter");
+      else u.searchParams.set("filter", next);
+      window.history.replaceState({}, "", u.pathname + u.search);
+    }
+  }
+
   async function loadList() {
     const q = encodeURIComponent(state.search);
-    const path = `/api/commerce/casinos?q=${q}&page=${state.page}&page_size=${state.pageSize}`;
+    const filt = encodeURIComponent(state.leaseFilter || "all");
+    const path = `/api/commerce/casinos?q=${q}&lease_filter=${filt}&page=${state.page}&page_size=${state.pageSize}`;
     const data = await fetchJson(path);
     state.items = data.items || [];
     state.total = data.total || 0;
@@ -513,12 +543,28 @@
     }
     if (!state.selectedKey && state.items.length) {
       await openDetail(state.items[0].reference_key);
+    } else if (state.selectedKey && !state.items.some((r) => r.reference_key === state.selectedKey)) {
+      state.selectedKey = null;
+      if (state.items.length) await openDetail(state.items[0].reference_key);
+      else {
+        setDetailEmpty(true);
+        els.detailEmptyMsg.textContent = "No casinos in this filter.";
+        renderIdentity(null);
+        renderPerformanceMetrics(null);
+        renderActions(null);
+        renderImsPreview(null);
+        destroyMap();
+        if (els.mapWrap) els.mapWrap.hidden = true;
+        if (els.mapEmpty) els.mapEmpty.hidden = true;
+      }
     }
   }
 
   async function init() {
     showError(null);
-    els.tbody.innerHTML = `<tr><td colspan="6" class="dgs-v2-lines-status">Loading…</td></tr>`;
+    const requested = (bootParams.get("filter") || bootParams.get("lease_filter") || "all").trim().toLowerCase();
+    setLeaseFilter(requested, { push: false });
+    els.tbody.innerHTML = `<tr><td colspan="10" class="dgs-v2-lines-status">Loading…</td></tr>`;
     renderPerformanceMetrics(null);
     try {
       await loadList();
@@ -534,6 +580,15 @@
     state.selectedKey = null;
     loadList().catch((err) => showError(err.message || String(err)));
   }
+
+  els.leaseFilter?.addEventListener("click", (e) => {
+    const btn = e.target.closest("button[data-filter]");
+    if (!btn) return;
+    setLeaseFilter(btn.dataset.filter);
+    state.page = 1;
+    state.selectedKey = null;
+    loadList().catch((err) => showError(err.message || String(err)));
+  });
 
   els.searchBtn.addEventListener("click", runSearch);
   els.clearSearch.addEventListener("click", () => {

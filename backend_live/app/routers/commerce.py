@@ -322,6 +322,18 @@ def _location_label(row) -> str | None:
     return ", ".join(cleaned) if cleaned else None
 
 
+# Active floor rows that still count as leased (Sold action excluded).
+_LEASED_CABINET_EXISTS = """
+EXISTS (
+    SELECT 1
+    FROM inventory.slot_master_migration AS sm
+    WHERE sm.casino_id = cv.reference_key
+      AND sm.is_active = 1
+      AND UPPER(LTRIM(RTRIM(ISNULL(sm.action, N'')))) <> N'SOLD'
+)
+"""
+
+
 @casinos_router.get("/summary")
 def casinos_summary():
     try:
@@ -353,6 +365,11 @@ def casinos_summary():
 def list_casinos(
     q: str = Query("", max_length=120),
     state_id: str = Query("", max_length=25),
+    lease_filter: str = Query(
+        "all",
+        max_length=20,
+        description="all | leased | prospecting",
+    ),
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=1, le=200),
 ):
@@ -367,6 +384,17 @@ def list_casinos(
     if state_id.strip():
         clauses.append("cv.state_id = %s")
         params.append(state_id.strip())
+
+    filt = (lease_filter or "all").strip().lower()
+    if filt not in {"all", "leased", "prospecting"}:
+        raise HTTPException(
+            status_code=400,
+            detail="lease_filter must be all, leased, or prospecting",
+        )
+    if filt == "leased":
+        clauses.append(_LEASED_CABINET_EXISTS)
+    elif filt == "prospecting":
+        clauses.append(f"NOT {_LEASED_CABINET_EXISTS}")
 
     where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
 
@@ -392,7 +420,8 @@ def list_casinos(
                 c.sales,
                 (SELECT COUNT(*)
                  FROM inventory.slot_master_migration sm
-                 WHERE sm.casino_id = cv.reference_key AND sm.is_active = 1) AS active_machines,
+                 WHERE sm.casino_id = cv.reference_key AND sm.is_active = 1
+                   AND UPPER(LTRIM(RTRIM(ISNULL(sm.action, N'')))) <> N'SOLD') AS active_machines,
                 perf.performance_month,
                 perf.avg_cipd,
                 perf.avg_tdw,
@@ -444,6 +473,7 @@ def list_casinos(
         "page": page,
         "page_size": page_size,
         "total_pages": max(1, math.ceil(total / page_size)) if total else 1,
+        "lease_filter": filt,
     }
 
 
@@ -519,6 +549,7 @@ def casino_detail(reference_key: str):
             SELECT COUNT(*) AS n
             FROM inventory.slot_master_migration
             WHERE casino_id = %s AND is_active = 1
+              AND UPPER(LTRIM(RTRIM(ISNULL(action, N'')))) <> N'SOLD'
             """,
             (cid,),
         )[0]
@@ -569,6 +600,7 @@ def casino_detail(reference_key: str):
                         SELECT COUNT(*)
                         FROM inventory.slot_master_migration sm
                         WHERE sm.casino_id = c.reference_key AND sm.is_active = 1
+                          AND UPPER(LTRIM(RTRIM(ISNULL(sm.action, N'')))) <> N'SOLD'
                     ) AS active_machines
                 FROM clients.casinos AS c
                 LEFT JOIN clients.tribes AS t ON t.reference_key = c.tribe_id

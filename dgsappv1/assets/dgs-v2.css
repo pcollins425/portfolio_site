@@ -2000,6 +2000,12 @@ body.dgs-casinos-v2 .dgs-v2-metrics--perf {
   grid-template-columns: repeat(3, 1fr);
 }
 
+body.dgs-casinos-v2 .dgs-v2-main > .dgs-v2-pilot-note {
+  margin: 0 0 8px;
+  font-size: 12px;
+  color: var(--dgs-v2-text-muted);
+}
+
 body.dgs-casinos-v2 .dgs-v2-metric-sub {
   margin-top: 6px;
   font-size: 11px;
