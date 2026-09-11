@@ -38,7 +38,6 @@
         { id: "projects", label: "Projects", href: "projects.html" },
         { id: "fsr_review", label: "FSR Review", href: "fsr-review.html" },
         { id: "software_vault", label: "Software Vault", href: "software-vault.html" },
-        { id: "operations", label: "Operations (eMaint)", href: "operations.html?t=work_orders" },
       ],
     },
     {
