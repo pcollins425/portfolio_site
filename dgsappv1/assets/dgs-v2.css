@@ -3162,6 +3162,16 @@ body.dgs-software-vault-v2 .dgs-v2-layout-dialog-actions {
   background: rgba(255, 255, 255, 0.03);
 }
 
+.dgs-prj-printout a.dgs-v2-hub-serial-link {
+  color: var(--dgs-v2-accent);
+  text-decoration: none;
+  font-weight: 600;
+}
+
+.dgs-prj-printout a.dgs-v2-hub-serial-link:hover {
+  text-decoration: underline;
+}
+
 /* Compact printout list + line sheet (shown ≤1366 via JS + media) */
 .dgs-prj-printout-list {
   display: none;

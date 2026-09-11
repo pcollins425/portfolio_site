@@ -669,6 +669,16 @@
     }
   }
 
+  function printoutSerialHtml(row) {
+    const serial = printoutVal(row.serial_number);
+    if (!serial) return "—";
+    const assetId = printoutVal(row.asset_id);
+    if (assetId && window.DGSAssetNav) {
+      return DGSAssetNav.hubLinkHtml(assetId, serial, "dgs-v2-hub-serial-link");
+    }
+    return esc(serial);
+  }
+
   function renderPrintoutTable(cols, rows) {
     els["printout-table"].innerHTML = `
       <thead>
@@ -679,7 +689,10 @@
           .map(
             (r) =>
               `<tr>${cols
-                .map((c) => `<td>${esc(printoutVal(r[c])).replaceAll("\n", "<br>")}</td>`)
+                .map((c) => {
+                  if (c === "serial_number") return `<td>${printoutSerialHtml(r)}</td>`;
+                  return `<td>${esc(printoutVal(r[c])).replaceAll("\n", "<br>")}</td>`;
+                })
                 .join("")}</tr>`
           )
           .join("")}
@@ -726,7 +739,9 @@
       .map((c) => {
         const v = printoutVal(row[c]);
         if (!v) return "";
-        return `<div class="dgs-prj-printout-field"><dt>${esc(printoutLabel(c))}</dt><dd>${esc(v)}</dd></div>`;
+        const valueHtml =
+          c === "serial_number" ? printoutSerialHtml(row) : esc(v).replaceAll("\n", "<br>");
+        return `<div class="dgs-prj-printout-field"><dt>${esc(printoutLabel(c))}</dt><dd>${valueHtml}</dd></div>`;
       })
       .filter(Boolean)
       .join("");

@@ -538,10 +538,48 @@ def catalog_printout(
             """,
             (key,),
         )
+        asset_rows = _query(
+            """
+            SELECT
+                a.serial_number,
+                pd.asset_id,
+                at.action_name
+            FROM projects.project_details pd
+            INNER JOIN inventory.assets a ON a.reference_key = pd.asset_id
+            LEFT JOIN projects.action_types at ON at.action_code = pd.action_type
+            WHERE pd.project_id = %s
+              AND pd.asset_id IS NOT NULL
+            """,
+            (key,),
+        )
     except Exception as exc:
         raise HTTPException(status_code=503, detail=f"database error: {exc}") from exc
 
-    out_rows = [{c: _json_value(r.get(c)) for c in PRINTOUT_COLUMNS} for r in rows]
+    by_serial_action: dict[tuple[str, str], str] = {}
+    by_serial: dict[str, str] = {}
+    for ar in asset_rows:
+        serial = _json_value(ar.get("serial_number"))
+        asset_id = _json_value(ar.get("asset_id"))
+        action = _json_value(ar.get("action_name"))
+        if not serial or not asset_id:
+            continue
+        by_serial[str(serial)] = str(asset_id)
+        if action:
+            by_serial_action[(str(serial), str(action))] = str(asset_id)
+
+    out_rows = []
+    for r in rows:
+        row = {c: _json_value(r.get(c)) for c in PRINTOUT_COLUMNS}
+        serial = row.get("serial_number")
+        action = row.get("work_notes")
+        asset_id = None
+        if serial and action:
+            asset_id = by_serial_action.get((str(serial), str(action)))
+        if not asset_id and serial:
+            asset_id = by_serial.get(str(serial))
+        row["asset_id"] = asset_id
+        out_rows.append(row)
+
     return {
         "reference_key": key,
         "columns": PRINTOUT_COLUMNS,
