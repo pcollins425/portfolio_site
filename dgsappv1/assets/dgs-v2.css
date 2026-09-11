@@ -3386,4 +3386,22 @@ body.dgs-contracts-v2 .dgs-v2-doc-summary::-webkit-details-marker {
   body.dgs-contracts-v2 .dgs-v2-toolbar input[type="search"] {
     flex: 1 1 100%;
   }
+
+  body.dgs-contracts-v2 .dgs-v2-list-status {
+    flex-shrink: 0;
+  }
+
+  body.dgs-contracts-v2 .dgs-v2-toolbar--pager {
+    flex-shrink: 0;
+    justify-content: center;
+    align-items: center;
+    gap: 12px;
+    /* Clear Android/Samsung system nav (often under-reports safe-area) */
+    padding-bottom: calc(12px + env(safe-area-inset-bottom, 0px) + 52px);
+  }
+
+  body.dgs-contracts-v2 .dgs-v2-toolbar--pager .dgs-v2-pager__label {
+    min-width: 5.5rem;
+    text-align: center;
+  }
 }
