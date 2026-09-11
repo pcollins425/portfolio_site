@@ -576,6 +576,32 @@
     wireEvents();
     await loadPermissions();
     await loadStates();
+
+    const deepCasino = (params.get("casino") || params.get("casino_id") || "").trim();
+    if (deepCasino) {
+      try {
+        await hydrateFromCasino(deepCasino);
+      } catch (err) {
+        showError(err.message || String(err));
+      }
+    }
+  }
+
+  async function hydrateFromCasino(casinoId) {
+    const ctx = await fetchJson(`/api/slot-master/casino-context/${encodeURIComponent(casinoId)}`);
+    if (!ctx.state_id || !ctx.tribe_id || !ctx.casino_id) {
+      throw new Error(`Could not resolve casino ${casinoId} for Slot Master filters.`);
+    }
+    state.stateId = ctx.state_id;
+    state.tribeId = ctx.tribe_id;
+    state.casinoId = ctx.casino_id;
+    state.page = 1;
+    els.stateSelect.value = state.stateId;
+    await loadTribes();
+    els.tribeSelect.value = state.tribeId;
+    await loadCasinos();
+    els.casinoSelect.value = state.casinoId;
+    await loadMachines();
   }
 
   window.SlotMasterApp = { init };

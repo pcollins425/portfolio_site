@@ -65,6 +65,10 @@
     mapWrap: document.getElementById("map-wrap"),
     mapEl: document.getElementById("casino-map"),
     mapLink: document.getElementById("map-external-link"),
+    related: document.getElementById("casino-related"),
+    relatedLinks: document.getElementById("casino-related-links"),
+    sisters: document.getElementById("casino-sisters"),
+    sisterList: document.getElementById("casino-sister-list"),
     detailBody: document.getElementById("detail-body"),
     detailEmptyMsg: document.getElementById("detail-empty-msg"),
     detailContent: document.getElementById("detail-content"),
@@ -72,6 +76,9 @@
     agreementFields: document.getElementById("agreement-fields"),
     contactFields: document.getElementById("contact-fields"),
   };
+
+  const bootParams = new URLSearchParams(window.location.search);
+  let deepLinkHandled = false;
 
   function apiUrl(path) {
     return `${API_BASE}${path}`;
@@ -151,14 +158,29 @@
     els.errorBox.textContent = msg || "";
   }
 
-  function slotMasterHref(casinoId) {
-    if (!casinoId) return "";
-    if (window.DGS) {
-      return DGS.withApi(`slot_master.html?casino=${encodeURIComponent(casinoId)}`);
+  function pageUrl(path, query) {
+    if (window.DGS && typeof DGS.withApi === "function") {
+      const base = DGS.withApi(path);
+      if (!query || !Object.keys(query).length) return base;
+      const url = new URL(base, window.location.href);
+      for (const [k, v] of Object.entries(query)) {
+        if (v != null && String(v).trim() !== "") url.searchParams.set(k, String(v));
+      }
+      return url.pathname + url.search;
     }
-    const url = new URL("slot_master.html", window.location.href);
-    url.searchParams.set("casino", casinoId);
+    const url = new URL(path, window.location.href);
+    for (const [k, v] of Object.entries(query || {})) {
+      if (v != null && String(v).trim() !== "") url.searchParams.set(k, String(v));
+    }
     return url.pathname + url.search;
+  }
+
+  function slotMasterHref(casinoId) {
+    return pageUrl("slot_master.html", { casino: casinoId });
+  }
+
+  function projectsCatalogHref(casinoId) {
+    return pageUrl("projects.html", { view: "catalog", casino: casinoId });
   }
 
   function performanceFromDetail(d) {
@@ -306,6 +328,73 @@
     }
   }
 
+  function renderRelated(d) {
+    if (!els.related || !els.relatedLinks) return;
+    if (!d) {
+      els.related.hidden = true;
+      els.relatedLinks.innerHTML = "";
+      if (els.sisters) {
+        els.sisters.hidden = true;
+        els.sisterList.innerHTML = "";
+      }
+      return;
+    }
+
+    const active = Number(d.active_machines) || 0;
+    const catalog = Number(d.catalog_count) || 0;
+    const links = [
+      {
+        href: slotMasterHref(d.reference_key),
+        label: "Slot Master",
+        meta: `${fmtNum(active)} active`,
+        enabled: true,
+      },
+      {
+        href: projectsCatalogHref(d.reference_key),
+        label: "Projects Catalog",
+        meta: `${fmtNum(catalog)} project${catalog === 1 ? "" : "s"}`,
+        enabled: true,
+      },
+    ];
+
+    els.relatedLinks.innerHTML = links
+      .map(
+        (link) => `
+        <a class="dgs-v2-casino-related-link${!link.enabled ? " is-disabled" : ""}" href="${esc(link.href)}">
+          <span class="dgs-v2-casino-related-label">${esc(link.label)}</span>
+          <span class="dgs-v2-casino-related-meta">${esc(link.meta)}</span>
+        </a>`
+      )
+      .join("");
+
+    const sisters = Array.isArray(d.sister_casinos) ? d.sister_casinos : [];
+    if (els.sisters && els.sisterList) {
+      if (!sisters.length) {
+        els.sisters.hidden = true;
+        els.sisterList.innerHTML = "";
+      } else {
+        els.sisters.hidden = false;
+        els.sisterList.innerHTML = sisters
+          .map((s) => {
+            const name = s.casino_name || s.casino_short || s.reference_key;
+            const stateAbbr = s.state_abbreviation ? `${s.state_abbreviation} · ` : "";
+            const machines = Number(s.active_machines) || 0;
+            return `
+              <button type="button" class="dgs-v2-casino-sister" data-sister="${esc(s.reference_key)}">
+                <span class="dgs-v2-casino-sister-name">${esc(stateAbbr + name)}</span>
+                <span class="dgs-v2-casino-sister-meta">${fmtNum(machines)} active</span>
+              </button>`;
+          })
+          .join("");
+        els.sisterList.querySelectorAll("[data-sister]").forEach((btn) => {
+          btn.addEventListener("click", () => openDetail(btn.dataset.sister));
+        });
+      }
+    }
+
+    els.related.hidden = false;
+  }
+
   function renderDetailFields(d) {
     const slotLink =
       d.active_machines > 0
@@ -363,6 +452,7 @@
     els.detailEmptyMsg.textContent = "Loading casino…";
     renderIdentity(null);
     renderPerformanceMetrics(null);
+    renderRelated(null);
     destroyMap();
     els.mapWrap.hidden = true;
     els.heroTitle.textContent = "Loading…";
@@ -373,13 +463,18 @@
       renderDetailFields(state.detail);
       renderIdentity(state.detail);
       renderPerformanceMetrics(state.detail);
+      renderRelated(state.detail);
       renderMap(state.detail);
+      const u = new URL(window.location.href);
+      u.searchParams.set("id", referenceKey);
+      window.history.replaceState({}, "", u.pathname + u.search);
     } catch (err) {
       state.detail = null;
       setDetailEmpty(true);
       els.detailEmptyMsg.textContent = err.message || String(err);
       renderIdentity(null);
       renderPerformanceMetrics(null);
+      renderRelated(null);
       destroyMap();
       els.mapWrap.hidden = true;
     }
@@ -393,6 +488,14 @@
     state.total = data.total || 0;
     renderList();
 
+    const deepId = !deepLinkHandled
+      ? (bootParams.get("id") || bootParams.get("casino") || "").trim()
+      : "";
+    if (deepId) {
+      deepLinkHandled = true;
+      await openDetail(deepId);
+      return;
+    }
     if (!state.selectedKey && state.items.length) {
       await openDetail(state.items[0].reference_key);
     }

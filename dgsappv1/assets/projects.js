@@ -29,6 +29,7 @@
     catSearch: "",
     catSelectedKey: null,
     catDetail: null,
+    catCasinoId: "",
     printoutCache: {},
     printoutCols: [],
     printoutRows: [],
@@ -545,11 +546,12 @@
 
   async function loadCatalogList() {
     const q = encodeURIComponent(state.catSearch);
+    const casino = encodeURIComponent(state.catCasinoId || "");
     els["cat-tbody"].innerHTML = `<tr><td colspan="6" class="dgs-v2-lines-status">Loading…</td></tr>`;
     try {
-      const data = await fetchJson(
-        `/api/projects/catalog?q=${q}&page=${state.catPage}&page_size=${state.catPageSize}`
-      );
+      let path = `/api/projects/catalog?q=${q}&page=${state.catPage}&page_size=${state.catPageSize}`;
+      if (state.catCasinoId) path += `&casino_id=${casino}`;
+      const data = await fetchJson(path);
       state.catItems = data.items || [];
       state.catTotal = data.total || 0;
       renderCatalogList();
@@ -586,7 +588,10 @@
 
     const start = state.catTotal === 0 ? 0 : (state.catPage - 1) * state.catPageSize + 1;
     const end = Math.min(state.catPage * state.catPageSize, state.catTotal);
-    const note = state.catSearch ? ` · matching “${state.catSearch}”` : "";
+    const noteBits = [];
+    if (state.catSearch) noteBits.push(`matching “${state.catSearch}”`);
+    if (state.catCasinoId) noteBits.push(`casino ${state.catCasinoId}`);
+    const note = noteBits.length ? ` · ${noteBits.join(" · ")}` : "";
     els["cat-list-status"].textContent =
       state.catTotal === 0
         ? `No projects found${note}.`
@@ -912,8 +917,12 @@
     }
     applyPermissionsToToggle();
 
+    const deepCasino = (params.get("casino") || params.get("casino_id") || "").trim();
+    if (deepCasino) state.catCasinoId = deepCasino;
+
     const requested = params.get("view");
-    const view = ["calendar", "catalog"].includes(requested) ? requested : "calendar";
+    let view = ["calendar", "catalog"].includes(requested) ? requested : "calendar";
+    if (deepCasino && state.permissions.catalog) view = "catalog";
     setView(view, { push: false });
 
     if (!firstAllowedView()) {

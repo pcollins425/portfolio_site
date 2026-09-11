@@ -308,6 +308,7 @@ def projects_calendar(
 @router.get("/catalog")
 def catalog_list(
     q: str = Query("", max_length=120, description="Search name, IMS no., casino, status"),
+    casino_id: str = Query("", max_length=25, description="Exact casino reference_key filter"),
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=1, le=200),
     user: Annotated[dict[str, Any] | None, Depends(require_demo_user)] = None,
@@ -316,11 +317,12 @@ def catalog_list(
     _assert_catalog(user)
 
     search = q.strip()
+    casino = casino_id.strip()
     search_sql = ""
-    search_params: tuple = ()
+    search_params: list[Any] = []
     if search:
         like = f"%{search}%"
-        search_sql = """
+        search_sql += """
             AND (
                 pc.project_name LIKE %s
                 OR pc.reference_key LIKE %s
@@ -329,7 +331,10 @@ def catalog_list(
                 OR pc.status LIKE %s
             )
         """
-        search_params = (like, like, like, like, like)
+        search_params.extend([like, like, like, like, like])
+    if casino:
+        search_sql += " AND pc.casino_id = %s "
+        search_params.append(casino)
 
     try:
         total = int(
@@ -340,7 +345,7 @@ def catalog_list(
                 LEFT JOIN clients.casinos c ON pc.casino_id = c.reference_key
                 WHERE 1=1 {search_sql}
                 """,
-                search_params,
+                tuple(search_params),
             )[0]["n"]
         )
         offset = (page - 1) * page_size
@@ -371,7 +376,7 @@ def catalog_list(
             ORDER BY pc.date_start DESC, pc.reference_key DESC
             OFFSET {offset} ROWS FETCH NEXT {page_size} ROWS ONLY
             """,
-            search_params,
+            tuple(search_params),
         )
     except Exception as exc:
         raise HTTPException(status_code=503, detail=f"database error: {exc}") from exc
@@ -397,6 +402,7 @@ def catalog_list(
     return {
         "items": items,
         "search": search or None,
+        "casino_id": casino or None,
         "page": page,
         "page_size": page_size,
         "total": total,

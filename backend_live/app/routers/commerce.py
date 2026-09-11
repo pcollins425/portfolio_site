@@ -465,6 +465,34 @@ def casino_detail(reference_key: str):
             "SELECT COUNT(*) AS n FROM projects.ims WHERE casino_id = %s",
             (cid,),
         )[0]
+        catalog_count = _field_query(
+            "SELECT COUNT(*) AS n FROM projects.project_catalog WHERE casino_id = %s",
+            (cid,),
+        )[0]
+        sister_rows = []
+        tribe_id = _json_value(r.get("tribe_id"))
+        if tribe_id:
+            sister_rows = _field_query(
+                """
+                SELECT
+                    c.reference_key,
+                    c.casino_name,
+                    c.casino_short,
+                    s.state_abbreviation,
+                    (
+                        SELECT COUNT(*)
+                        FROM inventory.slot_master_migration sm
+                        WHERE sm.casino_id = c.reference_key AND sm.is_active = 1
+                    ) AS active_machines
+                FROM clients.casinos AS c
+                LEFT JOIN clients.tribes AS t ON t.reference_key = c.tribe_id
+                LEFT JOIN clients.states AS s ON s.reference_key = COALESCE(c.state_id, t.state_id)
+                WHERE c.tribe_id = %s
+                  AND c.reference_key <> %s
+                ORDER BY s.state_abbreviation, c.casino_name
+                """,
+                (tribe_id, cid),
+            )
     except HTTPException:
         raise
     except Exception as exc:
@@ -516,5 +544,16 @@ def casino_detail(reference_key: str):
         "update_date": _json_value(r.get("update_date")),
         "active_machines": int(active_machines.get("n") or 0),
         "project_count": int(project_count.get("n") or 0),
+        "catalog_count": int(catalog_count.get("n") or 0),
+        "sister_casinos": [
+            {
+                "reference_key": _json_value(s.get("reference_key")),
+                "casino_name": _json_value(s.get("casino_name")),
+                "casino_short": _json_value(s.get("casino_short")),
+                "state_abbreviation": _json_value(s.get("state_abbreviation")),
+                "active_machines": int(s.get("active_machines") or 0),
+            }
+            for s in sister_rows
+        ],
         "performance": performance,
     }

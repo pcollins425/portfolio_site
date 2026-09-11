@@ -236,6 +236,44 @@ def slot_master_permissions(
     }
 
 
+@router.get("/casino-context/{casino_id}")
+def casino_context(casino_id: str):
+    """Resolve state/tribe for deep-links like slot_master.html?casino=CT-…"""
+    cid = casino_id.strip()
+    if not cid:
+        raise HTTPException(status_code=400, detail="casino_id is required")
+    try:
+        rows = _field_query(
+            """
+            SELECT
+                c.reference_key AS casino_id,
+                c.casino_name,
+                c.tribe_id,
+                t.tribe_name,
+                COALESCE(c.state_id, t.state_id) AS state_id,
+                s.state AS state_name
+            FROM clients.casinos AS c
+            LEFT JOIN clients.tribes AS t ON t.reference_key = c.tribe_id
+            LEFT JOIN clients.states AS s ON s.reference_key = COALESCE(c.state_id, t.state_id)
+            WHERE c.reference_key = %s
+            """,
+            (cid,),
+        )
+    except Exception as exc:
+        raise HTTPException(status_code=503, detail=f"database error: {exc}") from exc
+    if not rows:
+        raise HTTPException(status_code=404, detail=f"casino not found: {cid!r}")
+    r = rows[0]
+    return {
+        "casino_id": _json_value(r.get("casino_id")),
+        "casino_name": _json_value(r.get("casino_name")),
+        "tribe_id": _json_value(r.get("tribe_id")),
+        "tribe_name": _json_value(r.get("tribe_name")),
+        "state_id": _json_value(r.get("state_id")),
+        "state_name": _json_value(r.get("state_name")),
+    }
+
+
 @router.get("/states")
 def list_states():
     try:

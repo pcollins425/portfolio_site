@@ -2142,6 +2142,94 @@ body.dgs-casinos-v2 .dgs-v2-casino-map-link:hover {
   text-decoration: underline;
 }
 
+body.dgs-casinos-v2 .dgs-v2-casino-related {
+  flex-shrink: 0;
+  padding: 10px 2px 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+body.dgs-casinos-v2 .dgs-v2-casino-related-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+body.dgs-casinos-v2 .dgs-v2-casino-related-link {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 140px;
+  padding: 10px 12px;
+  border: 1px solid var(--dgs-v2-border);
+  border-radius: 10px;
+  background: var(--dgs-v2-card);
+  color: var(--dgs-v2-text);
+  text-decoration: none;
+  transition: border-color 0.12s ease, background 0.12s ease;
+}
+
+body.dgs-casinos-v2 .dgs-v2-casino-related-link:hover {
+  border-color: var(--dgs-v2-accent-border);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+body.dgs-casinos-v2 .dgs-v2-casino-related-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--dgs-v2-heading);
+}
+
+body.dgs-casinos-v2 .dgs-v2-casino-related-meta {
+  font-size: 11px;
+  color: var(--dgs-v2-text-muted);
+}
+
+body.dgs-casinos-v2 .dgs-v2-casino-sisters {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+body.dgs-casinos-v2 .dgs-v2-casino-sister-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+body.dgs-casinos-v2 .dgs-v2-casino-sister {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  margin: 0;
+  padding: 8px 10px;
+  border: 1px solid var(--dgs-v2-border-soft);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--dgs-v2-text);
+  font-family: inherit;
+  cursor: pointer;
+  text-align: left;
+}
+
+body.dgs-casinos-v2 .dgs-v2-casino-sister:hover {
+  border-color: var(--dgs-v2-accent-border);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+body.dgs-casinos-v2 .dgs-v2-casino-sister-name {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--dgs-v2-heading);
+}
+
+body.dgs-casinos-v2 .dgs-v2-casino-sister-meta {
+  font-size: 11px;
+  color: var(--dgs-v2-text-muted);
+}
+
 body.dgs-casinos-v2 .dgs-v2-detail-body {
   flex: 1;
   min-height: 0;
