@@ -3447,6 +3447,12 @@ body.dgs-projects-v2 .dgs-prj-ims-split .dgs-v2-list-panel {
 
 .dgs-prj-drawer .detail-body {
   gap: 10px;
+  background: var(--dgs-v2-card);
+  color: var(--dgs-v2-text);
+}
+
+.dgs-prj-drawer .detail-label {
+  color: var(--dgs-v2-text-muted);
 }
 
 .dgs-prj-drawer-cta {
