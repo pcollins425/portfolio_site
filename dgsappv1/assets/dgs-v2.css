@@ -3770,13 +3770,13 @@ body.dgs-projects-v2 .dgs-v2-detail-backdrop {
     min-width: 720px;
   }
 
-  /* ---- Calendar (compact month strip + room for day list) ---- */
+  /* ---- Calendar (condensed grid + scrolling list + sheet drawer) ---- */
 
   body.dgs-projects-v2 .dgs-prj-cal-split {
     display: flex;
     flex-direction: column;
     grid-template-columns: none;
-    gap: 14px;
+    gap: 10px;
     flex: 1 1 0%;
     min-height: 0;
     overflow: hidden;
@@ -3785,7 +3785,7 @@ body.dgs-projects-v2 .dgs-v2-detail-backdrop {
   body.dgs-projects-v2 .dgs-prj-cal-panel {
     flex: 0 0 auto;
     min-height: 0;
-    max-height: none;
+    max-height: 42dvh;
   }
 
   body.dgs-projects-v2 .dgs-prj-cal-toolbar {
@@ -3809,48 +3809,31 @@ body.dgs-projects-v2 .dgs-v2-detail-backdrop {
     text-align: center;
   }
 
-  /* Fixed short rows — no 1fr stretch eating half the viewport */
   body.dgs-projects-v2 .dgs-prj-cal-grid {
-    grid-auto-rows: 34px;
-    overflow: hidden;
+    grid-auto-rows: minmax(48px, 1fr);
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
   }
 
   body.dgs-projects-v2 .dgs-prj-cal-day {
-    padding: 2px;
+    padding: 3px 3px;
     gap: 2px;
-    align-items: center;
-    justify-content: flex-start;
   }
 
   body.dgs-projects-v2 .dgs-prj-cal-day-num {
-    width: 22px;
-    height: 22px;
-    font-size: 12px;
+    width: 18px;
+    height: 18px;
+    font-size: 10px;
   }
 
-  /* Chips are desk-density — on compact use a dot so the month stays a picker */
-  body.dgs-projects-v2 .dgs-prj-cal-day-items,
-  body.dgs-projects-v2 .dgs-prj-cal-chip,
+  body.dgs-projects-v2 .dgs-prj-cal-chip {
+    font-size: 8px;
+    padding: 1px 3px;
+    border-radius: 3px;
+  }
+
   body.dgs-projects-v2 .dgs-prj-cal-more {
-    display: none;
-  }
-
-  body.dgs-projects-v2 .dgs-prj-cal-day.has-projects .dgs-prj-cal-day-num {
-    box-shadow: inset 0 0 0 1px var(--dgs-v2-accent-border);
-  }
-
-  body.dgs-projects-v2 .dgs-prj-cal-day.has-projects::after {
-    content: "";
-    width: 5px;
-    height: 5px;
-    border-radius: 50%;
-    background: var(--dgs-v2-accent);
-    flex-shrink: 0;
-  }
-
-  body.dgs-projects-v2 .dgs-prj-cal-day.has-projects .dgs-prj-cal-day-num.has-details,
-  body.dgs-projects-v2 .dgs-prj-cal-day.has-projects:has(.dgs-prj-cal-chip.has-details)::after {
-    background: #34d399;
+    font-size: 8px;
   }
 
   body.dgs-projects-v2 .dgs-prj-cal-list {
@@ -3897,6 +3880,59 @@ body.dgs-projects-v2 .dgs-v2-detail-backdrop {
 
   body.dgs-projects-v2 .dgs-prj-drawer-item {
     grid-template-columns: 96px 1fr;
+  }
+}
+
+/* Phone: short month picker so the day list gets most of the viewport */
+@media (max-width: 900px) {
+  body.dgs-projects-v2 .dgs-prj-cal-split {
+    gap: 14px;
+  }
+
+  body.dgs-projects-v2 .dgs-prj-cal-panel {
+    max-height: none;
+  }
+
+  /* Fixed short rows — no 1fr stretch eating half the viewport */
+  body.dgs-projects-v2 .dgs-prj-cal-grid {
+    grid-auto-rows: 34px;
+    overflow: hidden;
+  }
+
+  body.dgs-projects-v2 .dgs-prj-cal-day {
+    padding: 2px;
+    gap: 2px;
+    align-items: center;
+    justify-content: flex-start;
+  }
+
+  body.dgs-projects-v2 .dgs-prj-cal-day-num {
+    width: 22px;
+    height: 22px;
+    font-size: 12px;
+  }
+
+  body.dgs-projects-v2 .dgs-prj-cal-day-items,
+  body.dgs-projects-v2 .dgs-prj-cal-chip,
+  body.dgs-projects-v2 .dgs-prj-cal-more {
+    display: none;
+  }
+
+  body.dgs-projects-v2 .dgs-prj-cal-day.has-projects .dgs-prj-cal-day-num {
+    box-shadow: inset 0 0 0 1px var(--dgs-v2-accent-border);
+  }
+
+  body.dgs-projects-v2 .dgs-prj-cal-day.has-projects::after {
+    content: "";
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    background: var(--dgs-v2-accent);
+    flex-shrink: 0;
+  }
+
+  body.dgs-projects-v2 .dgs-prj-cal-day.has-projects.has-details::after {
+    background: #34d399;
   }
 }
 
