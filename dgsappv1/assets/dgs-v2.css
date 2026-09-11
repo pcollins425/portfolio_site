@@ -3210,6 +3210,8 @@ body.dgs-software-vault-v2 .dgs-v2-layout-dialog-actions {
 
 /* ===================== Contracts v2 responsive ===================== */
 
+/* Compact = phone + tablet (incl. landscape). Desk layout only above 1366px. */
+
 body.dgs-contracts-v2 .dgs-v2-phone-only {
   display: none;
 }
@@ -3233,8 +3235,7 @@ body.dgs-contracts-v2 .dgs-v2-doc-summary::-webkit-details-marker {
   display: none;
 }
 
-/* Tablet + phone: drop desk overview chrome; keep search power */
-@media (max-width: 1100px) {
+@media (max-width: 1366px) {
   body.dgs-contracts-v2 .dgs-v2-desktop-only {
     display: none !important;
   }
@@ -3250,25 +3251,7 @@ body.dgs-contracts-v2 .dgs-v2-doc-summary::-webkit-details-marker {
   body.dgs-contracts-v2 .dgs-v2-page-header h1 {
     font-size: 22px;
   }
-}
 
-/* Tablet: slim side detail (override generic stacked split) */
-@media (min-width: 901px) and (max-width: 1100px) {
-  body.dgs-contracts-v2 .dgs-v2-split {
-    grid-template-columns: minmax(0, 1fr) minmax(260px, 300px);
-  }
-
-  body.dgs-contracts-v2 .dgs-v2-image-hero {
-    min-height: 120px;
-  }
-
-  body.dgs-contracts-v2 .dgs-v2-cabinet-row {
-    display: none;
-  }
-}
-
-/* Phone: list-first + sheet pop-out */
-@media (max-width: 900px) {
   body.dgs-contracts-v2 .dgs-v2-main {
     display: flex;
     flex-direction: column;

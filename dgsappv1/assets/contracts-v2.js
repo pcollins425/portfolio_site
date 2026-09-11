@@ -5,7 +5,8 @@
     new URLSearchParams(window.location.search).get("api")?.replace(/\/$/, "") ||
     "https://api.collinsmediallc.com";
 
-  const PHONE_MQ = window.matchMedia("(max-width: 900px)");
+  // Compact = phone + tablet (incl. landscape). Desk layout only above 1366px.
+  const COMPACT_MQ = window.matchMedia("(max-width: 1366px)");
 
   const state = {
     summary: null,
@@ -62,14 +63,14 @@
     docUploadStatus: document.getElementById("doc-upload-status"),
   };
 
-  function isPhone() {
-    return PHONE_MQ.matches;
+  function isCompact() {
+    return COMPACT_MQ.matches;
   }
 
   function syncDocDetailsOpen() {
     if (!els.agreementDocDetails) return;
-    // Phone: collapsed by default (PDF chews height). Desktop/tablet: open.
-    if (isPhone()) {
+    // Compact: collapsed by default (PDF chews height). Desktop: open.
+    if (isCompact()) {
       if (!state.phoneDetailOpen) els.agreementDocDetails.open = false;
     } else {
       els.agreementDocDetails.open = true;
@@ -77,7 +78,7 @@
   }
 
   function openPhoneDetail() {
-    if (!isPhone() || !els.detailPanel) return;
+    if (!isCompact() || !els.detailPanel) return;
     state.phoneDetailOpen = true;
     document.body.classList.add("contracts-detail-open");
     els.detailPanel.classList.add("dgs-v2-detail--sheet");
@@ -92,7 +93,7 @@
     document.body.classList.remove("contracts-detail-open");
     if (els.detailPanel) {
       els.detailPanel.classList.remove("dgs-v2-detail--sheet");
-      if (isPhone()) els.detailPanel.setAttribute("aria-hidden", "true");
+      if (isCompact()) els.detailPanel.setAttribute("aria-hidden", "true");
       else els.detailPanel.setAttribute("aria-hidden", "false");
     }
     if (els.detailBackdrop) els.detailBackdrop.hidden = true;
@@ -622,7 +623,7 @@
     els.vendorLogo.innerHTML = placeholderBox("Loading…");
     els.cabinetRow.innerHTML = "";
 
-    if (isPhone()) openPhoneDetail();
+    if (isCompact()) openPhoneDetail();
 
     try {
       state.detail = await fetchJson(`/api/contracts/${encodeURIComponent(referenceKey)}`);
@@ -659,15 +660,15 @@
     state.total = data.total || 0;
     renderList();
 
-    // Desktop/tablet: auto-select first row. Phone uses pop-out — don't auto-open.
-    if (!isPhone() && !state.selectedKey && state.items.length) {
+    // Wide desktop only: auto-select first row. Compact uses sheet — don't auto-open.
+    if (!isCompact() && !state.selectedKey && state.items.length) {
       await openDetail(state.items[0].reference_key);
     }
   }
 
   function onViewportChange() {
     syncDocDetailsOpen();
-    if (!isPhone()) {
+    if (!isCompact()) {
       closePhoneDetail();
       if (els.detailPanel) els.detailPanel.setAttribute("aria-hidden", "false");
       return;
@@ -683,7 +684,7 @@
     bindDropzone(els.bolDropzone, els.bolFileInput, "bol");
     syncDocDetailsOpen();
     onViewportChange();
-    PHONE_MQ.addEventListener("change", onViewportChange);
+    COMPACT_MQ.addEventListener("change", onViewportChange);
 
     if (els.detailClose) {
       els.detailClose.addEventListener("click", () => closePhoneDetail());
