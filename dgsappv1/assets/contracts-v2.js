@@ -14,6 +14,7 @@
     page: 1,
     pageSize: 50,
     total: 0,
+    totalPages: 1,
     search: "",
     selectedKey: null,
     detail: null,
@@ -36,6 +37,9 @@
     clearSearch: document.getElementById("clear-search"),
     tbody: document.getElementById("contracts-tbody"),
     listStatus: document.getElementById("list-status"),
+    pagePrev: document.getElementById("page-prev"),
+    pageNext: document.getElementById("page-next"),
+    pageLabel: document.getElementById("page-label"),
     detailPanel: document.getElementById("detail-panel"),
     detailBackdrop: document.getElementById("contracts-detail-backdrop"),
     detailClose: document.getElementById("detail-close"),
@@ -403,6 +407,12 @@
       state.total === 0
         ? `No contracts found${searchNote}.`
         : `Showing ${start.toLocaleString()}–${end.toLocaleString()} of ${state.total.toLocaleString()}${searchNote}`;
+
+    if (els.pageLabel) {
+      els.pageLabel.textContent = `Page ${state.page} of ${state.totalPages}`;
+    }
+    if (els.pagePrev) els.pagePrev.disabled = state.page <= 1 || state.total === 0;
+    if (els.pageNext) els.pageNext.disabled = state.page >= state.totalPages || state.total === 0;
   }
 
   function field(label, value) {
@@ -658,6 +668,8 @@
     const data = await fetchJson(path);
     state.items = data.items || [];
     state.total = data.total || 0;
+    state.page = data.page || state.page;
+    state.totalPages = data.total_pages || Math.max(1, Math.ceil(state.total / state.pageSize) || 1);
     renderList();
 
     // Wide desktop only: auto-select first row. Compact uses sheet — don't auto-open.
@@ -737,6 +749,30 @@
       loadList().catch((err) => showError(err.message || String(err)));
     }
   });
+
+  if (els.pagePrev) {
+    els.pagePrev.addEventListener("click", () => {
+      if (state.page <= 1) return;
+      state.page -= 1;
+      state.selectedKey = null;
+      closePhoneDetail();
+      revokeMediaUrls();
+      revokeDocumentUrls();
+      loadList().catch((err) => showError(err.message || String(err)));
+    });
+  }
+
+  if (els.pageNext) {
+    els.pageNext.addEventListener("click", () => {
+      if (state.page >= state.totalPages) return;
+      state.page += 1;
+      state.selectedKey = null;
+      closePhoneDetail();
+      revokeMediaUrls();
+      revokeDocumentUrls();
+      loadList().catch((err) => showError(err.message || String(err)));
+    });
+  }
 
   window.ContractsV2 = { init };
 })();
