@@ -4,11 +4,14 @@
   New permission areas (backend_live/app/dgs_projects_permissions.py):
     - dgs_projects_calendar: READ_ONLY   (projects.ims month calendar)
     - dgs_projects_catalog:  READ_ONLY   (projects.project_catalog + printout)
-  The eMaint tab keeps using emaint_demo_projects — no new grant needed.
 
   Policy: everyone who can already read the Operations eMaint projects grid
   (emaint_demo_projects in role or override permissions) gets both new areas.
   Appends only — nothing is removed. Re-login after apply so the JWT refreshes.
+
+  Note (2026-09-11): Projects UI eMaint tab (raw emaint_landing browse) was
+  removed; seed still uses emaint_demo_projects only as the eligibility filter
+  for who gets calendar/catalog grants.
 */
 USE [dgs_application_db];
 GO

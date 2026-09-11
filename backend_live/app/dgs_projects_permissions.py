@@ -3,7 +3,6 @@
 Areas (v1 read-only):
   - dgs_projects_calendar  — projects.ims month calendar
   - dgs_projects_catalog   — projects.project_catalog + printout
-The eMaint tab reuses ``emaint_demo_projects`` (existing grants).
 """
 
 from __future__ import annotations

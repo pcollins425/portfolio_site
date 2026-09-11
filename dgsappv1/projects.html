@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>Projects — DGS Application</title>
   <link rel="stylesheet" href="assets/dgs.css" />
   <link rel="stylesheet" href="assets/dgs-v2.css" />
@@ -35,7 +35,6 @@
       <nav class="dgs-v2-view-toggle" id="view-toggle" aria-label="Projects views">
         <button type="button" data-view="calendar" class="active">Calendar</button>
         <button type="button" data-view="catalog">Catalog</button>
-        <button type="button" data-view="emaint">eMaint</button>
       </nav>
     </header>
 
@@ -140,37 +139,6 @@
         <div class="dgs-prj-printout-scroll">
           <table class="dgs-prj-printout-table" id="printout-table"></table>
         </div>
-      </div>
-    </section>
-
-    <!-- ============ eMaint view ============ -->
-    <section id="view-emaint" class="dgs-prj-view" hidden>
-      <div class="dgs-v2-split dgs-prj-em-split">
-        <section class="dgs-v2-list-panel">
-          <div class="dgs-v2-toolbar">
-            <input type="search" id="em-search" placeholder="Search eMaint projects…" autocomplete="off" />
-            <button type="button" id="em-search-btn" class="dgs-v2-btn dgs-v2-btn--primary">Search</button>
-            <button type="button" id="em-prev" class="dgs-v2-btn">Prev</button>
-            <button type="button" id="em-next" class="dgs-v2-btn">Next</button>
-          </div>
-          <div class="dgs-v2-grid-wrap">
-            <table class="dgs-v2-grid">
-              <thead id="em-thead"></thead>
-              <tbody id="em-tbody"></tbody>
-            </table>
-          </div>
-          <div class="dgs-v2-list-status" id="em-list-status"></div>
-        </section>
-
-        <aside class="dgs-v2-detail">
-          <div class="dgs-v2-detail-body empty" id="em-detail-body">
-            <p id="em-detail-empty">Select a row to see the eMaint record.</p>
-            <div id="em-detail-content" hidden>
-              <div class="dgs-v2-section-label">eMaint PROJECT record</div>
-              <dl class="dgs-v2-fields dgs-prj-fields" id="em-fields"></dl>
-            </div>
-          </div>
-        </aside>
       </div>
     </section>
   </div>

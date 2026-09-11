@@ -3166,8 +3166,7 @@ body.dgs-software-vault-v2 .dgs-v2-layout-dialog-actions {
 
 @media (max-width: 1100px) {
   .dgs-prj-cal-split,
-  .dgs-prj-cat-split,
-  .dgs-prj-em-split {
+  .dgs-prj-cat-split {
     grid-template-columns: minmax(0, 1fr);
     overflow-y: auto;
   }

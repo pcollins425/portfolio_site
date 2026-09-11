@@ -7,8 +7,6 @@ Read-only v1 (2026-07-09 plan):
   - GET /api/projects/catalog           — catalog headers (search + paging)
   - GET /api/projects/catalog/{ref}     — header + per-action line summary
   - GET /api/projects/catalog/{ref}/printout — projects.project_printout rows
-
-The eMaint tab reuses /api/emaint-demo/projects/* (existing router).
 """
 
 from __future__ import annotations
@@ -124,13 +122,12 @@ def _assert_catalog(user: dict[str, Any] | None) -> None:
 def projects_permissions(
     user: Annotated[dict[str, Any] | None, Depends(require_demo_user)] = None,
 ):
-    """Which Projects views the signed-in user can open (eMaint tab uses emaint_demo_projects)."""
+    """Which Projects views the signed-in user can open."""
     p = (user or {}).get("permissions") or {}
     open_access = user is None
     return {
         "calendar": open_access or perms.can_read_calendar(p),
         "catalog": open_access or perms.can_read_catalog(p),
-        "emaint": open_access or (p.get("emaint_demo_projects") is not None),
     }
 
 

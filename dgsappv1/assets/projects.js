@@ -1,4 +1,4 @@
-/* Projects module — Calendar (projects.ims) | Catalog (projects.project_catalog) | eMaint tab.
+/* Projects module — Calendar (projects.ims) | Catalog (projects.project_catalog).
    Read-only v1. Calendar ported from ERM project_calendar.js (custom month grid). */
 (function () {
   "use strict";
@@ -7,7 +7,7 @@
 
   const state = {
     view: null,
-    permissions: { calendar: true, catalog: true, emaint: true },
+    permissions: { calendar: true, catalog: true },
 
     // calendar
     calYear: new Date().getFullYear(),
@@ -27,21 +27,12 @@
     catSelectedKey: null,
     catDetail: null,
     printoutCache: {},
-
-    // emaint
-    emColumns: [],
-    emKeyColumn: "project_no",
-    emRows: [],
-    emOffset: 0,
-    emLimit: 50,
-    emSearch: "",
-    emSelectedKey: null,
   };
 
   const els = {};
   const IDS = [
     "error-box", "view-toggle", "page-subtitle",
-    "view-calendar", "view-catalog", "view-emaint",
+    "view-calendar", "view-catalog",
     "cal-grid", "cal-month-year", "cal-prev-month", "cal-next-month",
     "cal-prev-year", "cal-next-year", "cal-today", "cal-search",
     "cal-clear-day", "cal-list-range", "cal-list-body",
@@ -50,8 +41,6 @@
     "cat-hero-state", "cat-hero-title", "cat-hero-meta",
     "cat-detail-body", "cat-detail-empty", "cat-detail-content", "cat-fields", "cat-notation-wrap", "cat-notation", "cat-actions",
     "cat-open-printout", "printout-overlay", "printout-title", "printout-meta", "printout-close", "printout-table",
-    "em-search", "em-search-btn", "em-prev", "em-next", "em-thead", "em-tbody", "em-list-status",
-    "em-detail-body", "em-detail-empty", "em-detail-content", "em-fields",
   ];
 
   const MONTH_NAMES = [
@@ -131,11 +120,9 @@
     }
     els["view-calendar"].hidden = view !== "calendar";
     els["view-catalog"].hidden = view !== "catalog";
-    els["view-emaint"].hidden = view !== "emaint";
     const subtitles = {
       calendar: "projects.ims + pre-eMaint catalog · month grid + day filter",
       catalog: "projects.project_catalog · machine lines + commission printout",
-      emaint: "projects.emaint_landing · raw eMaint PROJECT mirror (read-only)",
     };
     els["page-subtitle"].textContent = subtitles[view];
 
@@ -147,11 +134,10 @@
 
     if (view === "calendar" && !state.loadedMonths.size) loadCalendarMonths();
     if (view === "catalog" && !state.catItems.length) loadCatalogList();
-    if (view === "emaint" && !state.emRows.length) loadEmaintRows();
   }
 
   function firstAllowedView() {
-    for (const v of ["calendar", "catalog", "emaint"]) {
+    for (const v of ["calendar", "catalog"]) {
       if (state.permissions[v]) return v;
     }
     return null;
@@ -664,90 +650,6 @@
     els["printout-overlay"].hidden = true;
   }
 
-  /* ================= eMaint tab ================= */
-
-  const EM_BROWSE_LABELS = {
-    project_no: "Project #",
-    property: "Property",
-    g_t_s: "Good to schedule",
-    exp_instal: "Expected install",
-    cab_date: "Cabinet date",
-    editdate: "Edit date",
-  };
-
-  async function loadEmaintRows() {
-    const q = state.emSearch ? `&q=${encodeURIComponent(state.emSearch)}` : "";
-    els["em-tbody"].innerHTML = `<tr><td colspan="9" class="dgs-v2-lines-status">Loading…</td></tr>`;
-    try {
-      const data = await fetchJson(
-        `/api/emaint-demo/projects/rows?limit=${state.emLimit}&offset=${state.emOffset}${q}`
-      );
-      state.emRows = data.rows || [];
-      state.emKeyColumn = data.key_column || "project_no";
-      state.emColumns = state.emRows.length
-        ? Object.keys(state.emRows[0])
-        : Object.keys(EM_BROWSE_LABELS);
-      renderEmaintRows();
-    } catch (err) {
-      showError(err.message || String(err));
-      els["em-tbody"].innerHTML = "";
-      els["em-list-status"].textContent = "";
-    }
-  }
-
-  function renderEmaintRows() {
-    const cols = state.emColumns;
-    els["em-thead"].innerHTML = `<tr>${cols
-      .map((c) => `<th>${esc(EM_BROWSE_LABELS[c] || c.replaceAll("_", " "))}</th>`)
-      .join("")}</tr>`;
-
-    els["em-tbody"].innerHTML = state.emRows
-      .map((row) => {
-        const key = row[state.emKeyColumn];
-        return `
-        <tr data-key="${esc(key)}" class="${String(key) === String(state.emSelectedKey) ? "selected" : ""}">
-          ${cols.map((c) => `<td>${esc(row[c] ?? "")}</td>`).join("")}
-        </tr>`;
-      })
-      .join("");
-
-    els["em-tbody"].querySelectorAll("tr[data-key]").forEach((tr) => {
-      tr.addEventListener("click", () => {
-        openEmaintDetail(tr.dataset.key).catch((err) => showError(err.message || String(err)));
-      });
-    });
-
-    const from = state.emOffset + 1;
-    const to = state.emOffset + state.emRows.length;
-    els["em-list-status"].textContent = state.emRows.length
-      ? `Rows ${from}–${to}${state.emSearch ? ` · matching “${state.emSearch}”` : ""}`
-      : "No rows found.";
-  }
-
-  async function openEmaintDetail(key) {
-    state.emSelectedKey = key;
-    renderEmaintRows();
-
-    els["em-detail-body"].classList.add("empty");
-    els["em-detail-empty"].hidden = false;
-    els["em-detail-empty"].textContent = "Loading record…";
-    els["em-detail-content"].hidden = true;
-
-    try {
-      const record = await fetchJson(
-        `/api/emaint-demo/projects/rows/${encodeURIComponent(key)}`
-      );
-      els["em-fields"].innerHTML = Object.entries(record.fields || {})
-        .map(([label, value]) => catField(label, value))
-        .join("");
-      els["em-detail-body"].classList.remove("empty");
-      els["em-detail-empty"].hidden = true;
-      els["em-detail-content"].hidden = false;
-    } catch (err) {
-      els["em-detail-empty"].textContent = err.message || String(err);
-    }
-  }
-
   /* ================= init ================= */
 
   function bindEvents() {
@@ -797,26 +699,6 @@
     els["cat-open-printout"].addEventListener("click", openPrintout);
     els["printout-close"].addEventListener("click", closePrintout);
 
-    const runEmSearch = () => {
-      state.emSearch = els["em-search"].value.trim();
-      state.emOffset = 0;
-      loadEmaintRows();
-    };
-    els["em-search-btn"].addEventListener("click", runEmSearch);
-    els["em-search"].addEventListener("keydown", (e) => {
-      if (e.key === "Enter") runEmSearch();
-    });
-    els["em-prev"].addEventListener("click", () => {
-      if (state.emOffset === 0) return;
-      state.emOffset = Math.max(0, state.emOffset - state.emLimit);
-      loadEmaintRows();
-    });
-    els["em-next"].addEventListener("click", () => {
-      if (state.emRows.length < state.emLimit) return;
-      state.emOffset += state.emLimit;
-      loadEmaintRows();
-    });
-
     document.addEventListener("keydown", (e) => {
       if (e.key !== "Escape") return;
       if (!els["printout-overlay"].hidden) closePrintout();
@@ -833,7 +715,6 @@
       state.permissions = {
         calendar: Boolean(p.calendar),
         catalog: Boolean(p.catalog),
-        emaint: Boolean(p.emaint),
       };
     } catch (_err) {
       /* endpoint unavailable — leave all views enabled and let per-call 403s surface */
@@ -841,7 +722,7 @@
     applyPermissionsToToggle();
 
     const requested = params.get("view");
-    const view = ["calendar", "catalog", "emaint"].includes(requested) ? requested : "calendar";
+    const view = ["calendar", "catalog"].includes(requested) ? requested : "calendar";
     setView(view, { push: false });
 
     if (!firstAllowedView()) {
