@@ -3883,9 +3883,12 @@ body.dgs-projects-v2 .dgs-v2-detail-backdrop {
   }
 }
 
-/* Phone only — portrait tablets are ~768–834 wide and must keep the condensed grid.
-   Catch phone portrait (narrow) and phone landscape (short height), not tablet portrait. */
-@media (max-width: 600px), (max-width: 900px) and (max-height: 520px) {
+/* Phone strip + Fold open (near-square). Portrait tablets are taller/narrower (~0.7)
+   and stay on the condensed chip grid. Fold open (~0.9) does not gain height, so chips
+   starve the day list the same way a phone does. */
+@media (max-width: 600px),
+       (max-width: 900px) and (max-height: 520px),
+       (max-width: 1100px) and (min-aspect-ratio: 0.82) and (max-aspect-ratio: 1.22) {
   body.dgs-projects-v2 .dgs-prj-cal-split {
     gap: 14px;
   }
