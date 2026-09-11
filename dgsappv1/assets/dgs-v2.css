@@ -2020,6 +2020,22 @@ body.dgs-casinos-v2 .dgs-v2-grid td.num {
   font-variant-numeric: tabular-nums;
 }
 
+body.dgs-casinos-v2 .dgs-v2-list-panel .dgs-v2-grid {
+  font-size: 12px;
+}
+
+body.dgs-casinos-v2 .dgs-v2-list-panel .dgs-v2-grid thead th,
+body.dgs-casinos-v2 .dgs-v2-list-panel .dgs-v2-grid tbody td {
+  padding: 7px 8px;
+  white-space: nowrap;
+}
+
+body.dgs-casinos-v2 .dgs-v2-list-panel .dgs-v2-grid tbody td:nth-child(2),
+body.dgs-casinos-v2 .dgs-v2-list-panel .dgs-v2-grid tbody td:nth-child(3) {
+  white-space: normal;
+  max-width: 11rem;
+}
+
 body.dgs-casinos-v2 .dgs-v2-win-index--good {
   color: #34d399;
   font-weight: 600;

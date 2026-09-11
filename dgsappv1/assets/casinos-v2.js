@@ -234,14 +234,19 @@
     els.tbody.innerHTML = state.items
       .map((row) => {
         const winCls = winIndexClass(row.win_index);
+        const actCls = winIndexClass(row.actual_index);
         return `
         <tr data-key="${esc(row.reference_key)}" class="${row.reference_key === state.selectedKey ? "selected" : ""}">
           <td class="mono">${esc(row.state_abbreviation || "—")}</td>
           <td>${esc(row.tribe_name || "—")}</td>
           <td>${esc(row.casino_name || row.casino_short || "—")}</td>
           <td class="num">${fmtNum(row.active_machines)}</td>
+          <td class="mono">${esc(fmtMonth(row.last_report) || "—")}</td>
+          <td class="num">${fmtAdw(row.cipd)}</td>
+          <td class="num">${fmtAdw(row.tdw)}</td>
           <td class="num">${fmtAdw(row.avg_adw)}</td>
           <td class="num ${winCls}">${fmtWinIndex(row.win_index)}</td>
+          <td class="num ${actCls}">${fmtWinIndex(row.actual_index)}</td>
         </tr>`;
       })
       .join("");

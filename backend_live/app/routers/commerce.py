@@ -256,8 +256,16 @@ WITH casino_perf AS (
     SELECT
         sm.casino_id,
         CONVERT(date, mr.[date]) AS performance_month,
+        AVG(
+            CASE
+                WHEN mr.Days_on_Floor IS NOT NULL AND mr.Days_on_Floor > 0
+                THEN CAST(mr.Coin_in AS float) / CAST(mr.Days_on_Floor AS float)
+            END
+        ) AS avg_cipd,
+        AVG(CAST(mr.TDW AS float)) AS avg_tdw,
         AVG(CAST(mr.ADW AS float)) AS avg_adw,
         AVG(CAST(mr.WIN_Index AS float)) AS avg_win_index,
+        AVG(CAST(mr.actual_index AS float)) AS avg_actual_index,
         SUM(CAST(mr.Commission AS float)) AS sum_commission,
         COUNT(*) AS performance_machines
     FROM {_PERF_VIEW} AS mr
@@ -287,8 +295,11 @@ def _performance_block(row) -> dict | None:
         return None
     return {
         "month": _json_value(row.get("performance_month")),
+        "avg_cipd": _json_value(row.get("avg_cipd")),
+        "avg_tdw": _json_value(row.get("avg_tdw")),
         "avg_adw": _json_value(row.get("avg_adw")),
         "avg_win_index": _json_value(row.get("avg_win_index")),
+        "avg_actual_index": _json_value(row.get("avg_actual_index")),
         "sum_commission": _json_value(row.get("sum_commission")),
         "machine_count": int(row.get("performance_machines") or 0),
     }
@@ -383,8 +394,11 @@ def list_casinos(
                  FROM inventory.slot_master_migration sm
                  WHERE sm.casino_id = cv.reference_key AND sm.is_active = 1) AS active_machines,
                 perf.performance_month,
+                perf.avg_cipd,
+                perf.avg_tdw,
                 perf.avg_adw,
                 perf.avg_win_index,
+                perf.avg_actual_index,
                 perf.sum_commission,
                 perf.performance_machines
             FROM clients.casino_view AS cv
@@ -402,6 +416,7 @@ def list_casinos(
     items = []
     for r in rows:
         perf = _performance_block(r)
+        last_report = perf.get("month") if perf else None
         items.append(
             {
                 "reference_key": _json_value(r.get("reference_key")),
@@ -414,9 +429,13 @@ def list_casinos(
                 "emaint_property": _json_value(r.get("emaint_property")),
                 "sales": _json_value(r.get("sales")),
                 "active_machines": int(r.get("active_machines") or 0),
+                "last_report": last_report,
                 "performance": perf,
+                "cipd": perf.get("avg_cipd") if perf else None,
+                "tdw": perf.get("avg_tdw") if perf else None,
                 "avg_adw": perf.get("avg_adw") if perf else None,
                 "win_index": perf.get("avg_win_index") if perf else None,
+                "actual_index": perf.get("avg_actual_index") if perf else None,
             }
         )
     return {
@@ -476,8 +495,11 @@ def casino_detail(reference_key: str):
                 c.update_by,
                 c.update_date,
                 perf.performance_month,
+                perf.avg_cipd,
+                perf.avg_tdw,
                 perf.avg_adw,
                 perf.avg_win_index,
+                perf.avg_actual_index,
                 perf.sum_commission,
                 perf.performance_machines
             FROM clients.casinos AS c
