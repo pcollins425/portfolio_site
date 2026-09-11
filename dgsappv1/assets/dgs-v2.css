@@ -1983,31 +1983,6 @@ a.dgs-v2-sm-fk-chip--hub .dgs-v2-wh-asset-link {
   .dgs-v2-metrics {
     grid-template-columns: repeat(2, 1fr);
   }
-
-  .dgs-v2-hub-body {
-    flex-direction: column;
-  }
-
-  .dgs-v2-hub-media {
-    width: 100%;
-    max-width: none;
-    min-height: 280px;
-    max-height: 360px;
-    border-right: none;
-    border-bottom: 1px solid var(--dgs-v2-border);
-  }
-
-  .dgs-v2-hub-kv-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .dgs-v2-hub-tile--wide {
-    grid-column: span 1;
-  }
-
-  .dgs-v2-hub-grid {
-    grid-template-columns: 1fr;
-  }
 }
 
 @media (max-width: 640px) {
@@ -3403,5 +3378,162 @@ body.dgs-contracts-v2 .dgs-v2-doc-summary::-webkit-details-marker {
   body.dgs-contracts-v2 .dgs-v2-toolbar--pager .dgs-v2-pager__label {
     min-width: 5.5rem;
     text-align: center;
+  }
+}
+
+/* ===================== Asset hub responsive ===================== */
+
+/* Compact = phone + tablet (incl. landscape). Desk layout only above 1366px. */
+
+@media (max-width: 1366px) {
+  body.dgs-asset-hub .dgs-v2-desktop-only {
+    display: none !important;
+  }
+
+  body.dgs-asset-hub .dgs-v2-hub-main {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  body.dgs-asset-hub .dgs-v2-hub-body {
+    flex: 1;
+    flex-direction: column;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  /* Short horizontal hero strip — identity stays visible without eating the viewport */
+  body.dgs-asset-hub .dgs-v2-hub-media {
+    width: 100%;
+    min-width: 0;
+    max-width: none;
+    flex: 0 0 auto;
+    border-right: none;
+    border-bottom: 1px solid var(--dgs-v2-border);
+  }
+
+  body.dgs-asset-hub .dgs-v2-hub-media-inner {
+    flex-direction: row;
+    align-items: stretch;
+    min-height: 148px;
+    max-height: 168px;
+  }
+
+  body.dgs-asset-hub .dgs-v2-hub-hero {
+    flex: 0 0 42%;
+    width: 42%;
+    min-height: 0;
+    max-height: none;
+    border-bottom: none;
+    border-right: 1px solid var(--dgs-v2-border-soft);
+  }
+
+  body.dgs-asset-hub .dgs-v2-hub-cabinet {
+    padding: 28px 12px 10px;
+  }
+
+  body.dgs-asset-hub .dgs-v2-vendor-logo {
+    top: 8px;
+    left: 8px;
+    max-width: 48%;
+  }
+
+  body.dgs-asset-hub .dgs-v2-vendor-logo img {
+    max-width: 88px;
+    max-height: 36px;
+  }
+
+  body.dgs-asset-hub .dgs-v2-image-caption {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    padding: 12px 14px;
+  }
+
+  body.dgs-asset-hub .dgs-v2-image-caption .label {
+    font-size: 10px;
+  }
+
+  body.dgs-asset-hub .dgs-v2-image-caption .title {
+    font-size: 16px;
+  }
+
+  body.dgs-asset-hub .dgs-v2-image-caption .meta {
+    font-size: 12px;
+  }
+
+  body.dgs-asset-hub .dgs-v2-hub-cells {
+    flex: 1;
+    min-height: 0;
+    padding: 12px 12px calc(12px + env(safe-area-inset-bottom, 0px) + 52px);
+    gap: 10px;
+    overflow: hidden;
+  }
+
+  body.dgs-asset-hub .dgs-v2-hub-header {
+    align-items: center;
+  }
+
+  body.dgs-asset-hub .dgs-v2-hub-header h1 {
+    font-size: 20px;
+  }
+
+  body.dgs-asset-hub .dgs-v2-hub-grid {
+    grid-template-columns: 1fr;
+    grid-auto-rows: minmax(0, auto);
+    gap: 10px;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  body.dgs-asset-hub .dgs-v2-hub-tile--wide {
+    grid-column: span 1;
+  }
+
+  body.dgs-asset-hub .dgs-v2-hub-kv-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  body.dgs-asset-hub .dgs-v2-hub-tile {
+    padding: 14px 14px;
+    border-radius: 14px;
+  }
+
+  /* BOM drawer → bottom sheet (Contracts detail sheet pattern) */
+  body.dgs-asset-hub .dgs-v2-hub-bom-drawer {
+    top: auto;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    width: 100%;
+    max-width: 100%;
+    height: min(90dvh, 820px);
+    border-left: none;
+    border-top: 1px solid var(--dgs-v2-border);
+    border-radius: 16px 16px 0 0;
+    box-shadow: 0 -10px 40px rgba(0, 0, 0, 0.45);
+    transform: translateY(100%);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+
+  body.dgs-asset-hub.detail-open .dgs-v2-hub-bom-drawer {
+    transform: translateY(0);
+  }
+
+  body.dgs-asset-hub.detail-open .detail-backdrop {
+    background: rgba(0, 0, 0, 0.55);
+    pointer-events: auto;
+  }
+
+  body.dgs-asset-hub .dgs-v2-drawer-header {
+    padding: 14px 14px 12px;
+  }
+
+  body.dgs-asset-hub .dgs-v2-drawer-body {
+    padding: 12px 14px calc(16px + env(safe-area-inset-bottom, 0px));
+    -webkit-overflow-scrolling: touch;
   }
 }
