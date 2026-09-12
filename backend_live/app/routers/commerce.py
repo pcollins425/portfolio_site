@@ -377,10 +377,11 @@ def list_casinos(
     params: list = []
     if q.strip():
         clauses.append(
-            "(cv.casino_name LIKE %s OR cv.casino_short LIKE %s OR cv.reference_key LIKE %s OR cv.tribe_name LIKE %s)"
+            "(cv.casino_name LIKE %s OR cv.casino_short LIKE %s OR cv.reference_key LIKE %s"
+            " OR cv.tribe_name LIKE %s OR cv.state LIKE %s OR cv.state_abbreviation LIKE %s)"
         )
         s = f"%{q.strip()}%"
-        params.extend([s, s, s, s])
+        params.extend([s, s, s, s, s, s])
     if state_id.strip():
         clauses.append("cv.state_id = %s")
         params.append(state_id.strip())
@@ -415,6 +416,7 @@ def list_casinos(
                 cv.tribe_id,
                 cv.tribe_name,
                 cv.state_id,
+                cv.state,
                 cv.state_abbreviation,
                 c.emaint_property,
                 c.sales,
@@ -434,7 +436,7 @@ def list_casinos(
             INNER JOIN clients.casinos AS c ON c.reference_key = cv.reference_key
             LEFT JOIN casino_perf_latest AS perf ON perf.casino_id = cv.reference_key
             {where}
-            ORDER BY cv.state_abbreviation, cv.casino_name
+            ORDER BY cv.state_abbreviation, cv.tribe_name, cv.casino_name
             OFFSET {offset} ROWS FETCH NEXT {page_size} ROWS ONLY
             """,
             tuple(params) if params else None,
@@ -454,6 +456,8 @@ def list_casinos(
                 "tribe_id": _json_value(r.get("tribe_id")),
                 "tribe_name": _json_value(r.get("tribe_name")),
                 "state_id": _json_value(r.get("state_id")),
+                "state": _json_value(r.get("state")),
+                "state_name": _json_value(r.get("state")),
                 "state_abbreviation": _json_value(r.get("state_abbreviation")),
                 "emaint_property": _json_value(r.get("emaint_property")),
                 "sales": _json_value(r.get("sales")),

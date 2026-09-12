@@ -497,6 +497,35 @@
     if (typeof onReady === "function") onReady();
   }
 
+  /** Shared infinite scroll — Casinos first; reuse on other v2 lists. */
+  function bindInfiniteScroll(root, opts) {
+    const sentinel = opts && opts.sentinel;
+    if (!root || !sentinel || typeof IntersectionObserver === "undefined") {
+      return { disconnect() {} };
+    }
+    let busy = false;
+    const io = new IntersectionObserver(
+      async (entries) => {
+        if (!entries.some((e) => e.isIntersecting)) return;
+        if (busy || (opts.isBusy && opts.isBusy())) return;
+        if (opts.hasMore && !opts.hasMore()) return;
+        busy = true;
+        try {
+          if (typeof opts.loadMore === "function") await opts.loadMore();
+        } finally {
+          busy = false;
+        }
+      },
+      { root, rootMargin: (opts && opts.rootMargin) || "240px", threshold: 0 }
+    );
+    io.observe(sentinel);
+    return {
+      disconnect() {
+        io.disconnect();
+      },
+    };
+  }
+
   window.DGS = {
     apiBase,
     withApi,
@@ -506,6 +535,7 @@
     initDashboardPage,
     setDashboardRoute,
     loadDashboardBundle,
+    bindInfiniteScroll,
     NAV_GROUPS,
   };
 })();

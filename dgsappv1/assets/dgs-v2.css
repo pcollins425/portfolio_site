@@ -314,6 +314,12 @@ body.dgs-dashboard-v2 .dgs-dashboard-mount .error-box {
   border-top: 1px solid var(--dgs-v2-border-soft);
 }
 
+.dgs-v2-scroll-sentinel {
+  height: 1px;
+  width: 100%;
+  pointer-events: none;
+}
+
 /* Detail panel */
 .dgs-v2-detail {
   display: flex;
@@ -2423,35 +2429,49 @@ body.dgs-casinos-v2 .dgs-v2-group-row {
 
   body.dgs-casinos-v2 .dgs-v2-group-row {
     display: table-row;
+    cursor: default;
   }
 
-  body.dgs-casinos-v2 .dgs-v2-group-row td {
-    padding: 10px 8px 4px;
+  body.dgs-casinos-v2 .dgs-v2-grid tbody tr.dgs-v2-group-row:hover {
+    background: transparent;
+  }
+
+  body.dgs-casinos-v2 .dgs-v2-list-panel .dgs-v2-grid tbody tr.dgs-v2-group-row td {
+    padding: 10px 10px 6px;
     border: none;
     background: transparent;
-    color: var(--dgs-v2-text-muted);
-    font-size: 11px;
+    color: var(--dgs-v2-heading);
+    font-size: 13px;
     font-weight: 700;
-    letter-spacing: 0.04em;
-    text-transform: uppercase;
+    letter-spacing: 0;
+    text-transform: none;
     white-space: normal;
     max-width: none;
     pointer-events: none;
+    cursor: default;
   }
 
-  body.dgs-casinos-v2 .dgs-v2-group-row--state td {
-    padding-top: 14px;
+  body.dgs-casinos-v2 .dgs-v2-group-label {
+    display: block;
+    line-height: 1.25;
+    overflow-wrap: anywhere;
+  }
+
+  body.dgs-casinos-v2 .dgs-v2-list-panel .dgs-v2-grid tbody tr.dgs-v2-group-row--state td {
+    padding: 12px 10px 8px;
+    background: rgba(110, 181, 255, 0.1);
+    border-top: 1px solid var(--dgs-v2-accent-border);
     color: var(--dgs-v2-heading);
-    font-size: 12px;
+    font-size: 15px;
+    font-weight: 750;
   }
 
-  body.dgs-casinos-v2 .dgs-v2-group-row--tribe td {
-    padding-top: 6px;
-    padding-bottom: 2px;
-    font-weight: 600;
-    text-transform: none;
-    letter-spacing: 0;
-    color: var(--dgs-v2-text-muted);
+  body.dgs-casinos-v2 .dgs-v2-list-panel .dgs-v2-grid tbody tr.dgs-v2-group-row--tribe td {
+    padding: 8px 10px 4px;
+    background: rgba(255, 255, 255, 0.03);
+    font-size: 13px;
+    font-weight: 650;
+    color: #e7edf7;
   }
 
   body.dgs-casinos-v2 .dgs-v2-detail:not(.dgs-v2-detail--sheet) {

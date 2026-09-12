@@ -43,7 +43,9 @@
     map: null,
     mapMarker: null,
     phoneDetailOpen: false,
+    loadingMore: false,
   };
+  let listGen = 0;
 
   const els = {
     errorBox: document.getElementById("error-box"),
@@ -64,6 +66,8 @@
     searchBtn: document.getElementById("search-btn"),
     clearSearch: document.getElementById("clear-search"),
     tbody: document.getElementById("casinos-tbody"),
+    gridWrap: document.getElementById("casinos-grid-wrap"),
+    scrollSentinel: document.getElementById("casinos-scroll-sentinel"),
     listStatus: document.getElementById("list-status"),
     detailPanel: document.getElementById("detail-panel"),
     detailBackdrop: document.getElementById("casinos-detail-backdrop"),
@@ -274,6 +278,18 @@
     }
   }
 
+  function stateLabel(row) {
+    return row.state_name || row.state || row.state_abbreviation || "—";
+  }
+
+  function tribeLabel(row) {
+    return row.tribe_name || "—";
+  }
+
+  function hasMore() {
+    return state.items.length < state.total;
+  }
+
   function casinoRowHtml(row) {
     const winCls = winIndexClass(row.win_index);
     const actCls = winIndexClass(row.actual_index);
@@ -299,12 +315,12 @@
       els.tbody.innerHTML = state.items.map(casinoRowHtml).join("");
     } else {
       const sorted = [...state.items].sort((a, b) => {
-        const sa = String(a.state_abbreviation || "—");
-        const sb = String(b.state_abbreviation || "—");
-        if (sa !== sb) return sa.localeCompare(sb);
-        const ta = String(a.tribe_name || "—");
-        const tb = String(b.tribe_name || "—");
-        if (ta !== tb) return ta.localeCompare(tb);
+        const sa = String(a.state_id || stateLabel(a));
+        const sb = String(b.state_id || stateLabel(b));
+        if (sa !== sb) return String(stateLabel(a)).localeCompare(String(stateLabel(b)));
+        const ta = String(a.tribe_id || tribeLabel(a));
+        const tb = String(b.tribe_id || tribeLabel(b));
+        if (ta !== tb) return String(tribeLabel(a)).localeCompare(String(tribeLabel(b)));
         return String(a.casino_name || a.casino_short || "").localeCompare(
           String(b.casino_name || b.casino_short || "")
         );
@@ -313,18 +329,18 @@
       let lastState = null;
       let lastTribe = null;
       for (const row of sorted) {
-        const st = row.state_abbreviation || "—";
-        const tribe = row.tribe_name || "—";
+        const st = row.state_id || stateLabel(row);
+        const tribe = row.tribe_id || tribeLabel(row);
         if (st !== lastState) {
           parts.push(
-            `<tr class="dgs-v2-group-row dgs-v2-group-row--state" aria-hidden="true"><td colspan="10">${esc(st)}</td></tr>`
+            `<tr class="dgs-v2-group-row dgs-v2-group-row--state"><td colspan="10"><span class="dgs-v2-group-label">${esc(stateLabel(row))}</span></td></tr>`
           );
           lastState = st;
           lastTribe = null;
         }
         if (tribe !== lastTribe) {
           parts.push(
-            `<tr class="dgs-v2-group-row dgs-v2-group-row--tribe" aria-hidden="true"><td colspan="10">${esc(tribe)}</td></tr>`
+            `<tr class="dgs-v2-group-row dgs-v2-group-row--tribe"><td colspan="10"><span class="dgs-v2-group-label">${esc(tribeLabel(row))}</span></td></tr>`
           );
           lastTribe = tribe;
         }
@@ -337,17 +353,19 @@
       tr.addEventListener("click", () => openDetail(tr.dataset.key));
     });
 
-    const start = state.total === 0 ? 0 : (state.page - 1) * state.pageSize + 1;
-    const end = Math.min(state.page * state.pageSize, state.total);
+    const loaded = state.items.length;
     const noteBits = [];
     if (state.search) noteBits.push(`matching “${state.search}”`);
     if (state.leaseFilter === "leased") noteBits.push("leased only");
     if (state.leaseFilter === "prospecting") noteBits.push("prospecting only");
+    if (state.loadingMore) noteBits.push("loading more");
+    else if (hasMore()) noteBits.push("scroll for more");
     const note = noteBits.length ? ` · ${noteBits.join(" · ")}` : "";
     els.listStatus.textContent =
       state.total === 0
         ? `No casinos found${note}.`
-        : `Showing ${start.toLocaleString()}–${end.toLocaleString()} of ${state.total.toLocaleString()}${note}`;
+        : `Showing ${loaded.toLocaleString()} of ${state.total.toLocaleString()}${note}`;
+    if (els.scrollSentinel) els.scrollSentinel.hidden = !hasMore();
   }
 
   function field(label, value) {
@@ -604,14 +622,35 @@
     }
   }
 
-  async function loadList() {
+  async function loadList({ append = false } = {}) {
+    const gen = append ? listGen : ++listGen;
+    if (!append) {
+      state.page = 1;
+      state.items = [];
+      state.loadingMore = false;
+    }
     const q = encodeURIComponent(state.search);
     const filt = encodeURIComponent(state.leaseFilter || "all");
     const path = `/api/commerce/casinos?q=${q}&lease_filter=${filt}&page=${state.page}&page_size=${state.pageSize}`;
     const data = await fetchJson(path);
-    state.items = data.items || [];
+    if (gen !== listGen) return;
+
+    const incoming = data.items || [];
+    if (append) {
+      const seen = new Set(state.items.map((r) => r.reference_key));
+      for (const row of incoming) {
+        if (row.reference_key && !seen.has(row.reference_key)) {
+          seen.add(row.reference_key);
+          state.items.push(row);
+        }
+      }
+    } else {
+      state.items = incoming;
+    }
     state.total = data.total || 0;
+    state.page = data.page || state.page;
     renderList();
+    if (append) return;
 
     const deepId = !deepLinkHandled
       ? (bootParams.get("id") || bootParams.get("casino") || "").trim()
@@ -657,6 +696,23 @@
     }
   }
 
+  async function loadMore() {
+    if (state.loadingMore || !hasMore()) return;
+    state.loadingMore = true;
+    const prevPage = state.page;
+    state.page += 1;
+    renderList();
+    try {
+      await loadList({ append: true });
+    } catch (err) {
+      state.page = prevPage;
+      throw err;
+    } finally {
+      state.loadingMore = false;
+      renderList();
+    }
+  }
+
   function syncCompactChrome() {
     if (!isCompact()) {
       closePhoneDetail();
@@ -675,6 +731,15 @@
     els.tbody.innerHTML = `<tr><td colspan="10" class="dgs-v2-lines-status">Loading…</td></tr>`;
     renderPerformanceMetrics(null);
     syncCompactChrome();
+    if (window.DGS && typeof DGS.bindInfiniteScroll === "function") {
+      DGS.bindInfiniteScroll(els.gridWrap, {
+        sentinel: els.scrollSentinel,
+        rootMargin: "280px",
+        hasMore,
+        isBusy: () => state.loadingMore,
+        loadMore: () => loadMore().catch((err) => showError(err.message || String(err))),
+      });
+    }
     try {
       await loadList();
     } catch (err) {
@@ -683,32 +748,30 @@
     }
   }
 
-  function runSearch() {
-    state.search = els.searchInput.value.trim();
+  function resetListAndLoad() {
     state.page = 1;
     state.selectedKey = null;
     closePhoneDetail();
     loadList().catch((err) => showError(err.message || String(err)));
   }
 
+  function runSearch() {
+    state.search = els.searchInput.value.trim();
+    resetListAndLoad();
+  }
+
   els.leaseFilter?.addEventListener("click", (e) => {
     const btn = e.target.closest("button[data-filter]");
     if (!btn) return;
     setLeaseFilter(btn.dataset.filter);
-    state.page = 1;
-    state.selectedKey = null;
-    closePhoneDetail();
-    loadList().catch((err) => showError(err.message || String(err)));
+    resetListAndLoad();
   });
 
   els.searchBtn.addEventListener("click", runSearch);
   els.clearSearch.addEventListener("click", () => {
     els.searchInput.value = "";
     state.search = "";
-    state.page = 1;
-    state.selectedKey = null;
-    closePhoneDetail();
-    loadList().catch((err) => showError(err.message || String(err)));
+    resetListAndLoad();
   });
   els.searchInput.addEventListener("keydown", (e) => {
     if (e.key === "Enter") runSearch();

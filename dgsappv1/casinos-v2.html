@@ -68,7 +68,7 @@
           <button id="search-btn" type="button" class="dgs-v2-btn dgs-v2-btn--primary">Search</button>
           <button id="clear-search" type="button" class="dgs-v2-btn">Clear</button>
         </div>
-        <div class="dgs-v2-grid-wrap">
+        <div class="dgs-v2-grid-wrap" id="casinos-grid-wrap">
           <table class="dgs-v2-grid" id="casinos-table">
             <thead>
               <tr>
@@ -86,6 +86,7 @@
             </thead>
             <tbody id="casinos-tbody"></tbody>
           </table>
+          <div id="casinos-scroll-sentinel" class="dgs-v2-scroll-sentinel" hidden aria-hidden="true"></div>
         </div>
         <div class="dgs-v2-list-status" id="list-status"></div>
       </section>
