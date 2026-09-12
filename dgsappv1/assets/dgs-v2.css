@@ -16,6 +16,9 @@
   --dgs-v2-warn-bg: rgba(245, 158, 11, 0.12);
   --dgs-v2-warn-border: rgba(245, 158, 11, 0.28);
   --dgs-v2-warn-text: #fde68a;
+  /* Compact lists: Samsung/tablet system nav under-reports safe-area */
+  --dgs-v2-system-nav-clear: calc(28px + env(safe-area-inset-bottom, 0px) + 72px);
+  --dgs-v2-system-nav-clear-tablet: calc(36px + env(safe-area-inset-bottom, 0px) + 88px);
 }
 
 body.dgs-contracts-v2.dgs-app,
@@ -2425,6 +2428,7 @@ body.dgs-casinos-v2 .dgs-v2-group-row {
     min-height: 0;
     overflow: auto;
     -webkit-overflow-scrolling: touch;
+    padding-bottom: var(--dgs-v2-system-nav-clear);
   }
 
   body.dgs-casinos-v2 .dgs-v2-group-row {
@@ -2622,6 +2626,12 @@ body.dgs-casinos-v2 .dgs-v2-group-row {
 
   body.dgs-casinos-v2 .dgs-v2-list-status {
     padding-bottom: env(safe-area-inset-bottom, 0);
+  }
+}
+
+@media (min-width: 901px) and (max-width: 1366px) {
+  body.dgs-casinos-v2 .dgs-v2-grid-wrap {
+    padding-bottom: var(--dgs-v2-system-nav-clear-tablet);
   }
 }
 
@@ -4103,8 +4113,7 @@ body.dgs-contracts-v2 .dgs-v2-doc-summary::-webkit-details-marker {
     overflow-x: hidden;
     overflow-y: auto;
     -webkit-overflow-scrolling: touch;
-    /* Clear tablet/phone system nav (safe-area often under-reports) */
-    padding-bottom: calc(28px + env(safe-area-inset-bottom, 0px) + 72px);
+    padding-bottom: var(--dgs-v2-system-nav-clear);
   }
 
   body.dgs-asset-hub .dgs-v2-hub-header {
@@ -4527,8 +4536,7 @@ body.dgs-projects-v2 .dgs-v2-detail-backdrop {
   }
 
   body.dgs-projects-v2 .dgs-prj-cal-list-body {
-    /* Match Asset Hub clearance — Samsung often under-reports safe-area */
-    padding-bottom: calc(28px + env(safe-area-inset-bottom, 0px) + 72px);
+    padding-bottom: var(--dgs-v2-system-nav-clear);
   }
 
   body.dgs-projects-v2 .dgs-prj-drawer {
@@ -4698,6 +4706,6 @@ body.dgs-projects-v2 .dgs-v2-detail-backdrop {
 /* Tablet: system nav taller than phone; extra day-list clearance */
 @media (min-width: 901px) and (max-width: 1366px) {
   body.dgs-projects-v2 .dgs-prj-cal-list-body {
-    padding-bottom: calc(36px + env(safe-area-inset-bottom, 0px) + 88px);
+    padding-bottom: var(--dgs-v2-system-nav-clear-tablet);
   }
 }
