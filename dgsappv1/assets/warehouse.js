@@ -411,6 +411,14 @@
     els.exportStatus.classList.toggle("dgs-v2-export-status--ok", Boolean(ok));
   }
 
+  function positionExportMenu() {
+    const btn = els.btnExportPivot.getBoundingClientRect();
+    els.exportMenu.style.top = `${Math.round(btn.bottom + 6)}px`;
+    els.exportMenu.style.right = `${Math.round(window.innerWidth - btn.right)}px`;
+    els.exportMenu.style.left = "auto";
+    els.exportMenu.style.bottom = "auto";
+  }
+
   function closeExportUi() {
     state.export.menuOpen = false;
     state.export.pickerOpen = false;
@@ -423,8 +431,10 @@
   function openExportMenu() {
     state.export.menuOpen = true;
     state.export.pickerOpen = false;
+    positionExportMenu();
     els.exportMenu.hidden = false;
     els.exportPicker.hidden = true;
+    // Dimmer stays under the menu (z-index 70 vs 80); still catches outside taps.
     els.exportBackdrop.hidden = false;
     els.btnExportPivot.setAttribute("aria-expanded", "true");
   }
@@ -598,6 +608,9 @@
     state.export.searchTimer = setTimeout(() => {
       loadDirectory(els.exportPickerQ.value.trim());
     }, 250);
+  });
+  window.addEventListener("resize", () => {
+    if (state.export.menuOpen) positionExportMenu();
   });
   document.addEventListener("keydown", (e) => {
     if (e.key === "Escape" && (state.export.menuOpen || state.export.pickerOpen)) {

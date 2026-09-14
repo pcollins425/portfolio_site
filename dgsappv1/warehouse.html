@@ -49,11 +49,6 @@
         </div>
         <div class="dgs-v2-export" id="export-wrap">
           <button type="button" id="btn-export-pivot" class="dgs-v2-btn dgs-v2-btn--primary" aria-haspopup="menu" aria-expanded="false" aria-controls="export-menu">Export</button>
-          <div id="export-menu" class="dgs-v2-export-menu" role="menu" hidden>
-            <button type="button" role="menuitem" data-export="download">Download</button>
-            <button type="button" role="menuitem" data-export="self">Send to my email</button>
-            <button type="button" role="menuitem" data-export="other">Email someone else…</button>
-          </div>
           <p id="export-status" class="dgs-v2-export-status" hidden></p>
         </div>
       </div>
@@ -75,6 +70,11 @@
 
   <div class="detail-backdrop" id="detail-backdrop" hidden></div>
   <div class="dgs-v2-export-backdrop" id="export-backdrop" hidden></div>
+  <div id="export-menu" class="dgs-v2-export-menu" role="menu" hidden>
+    <button type="button" role="menuitem" data-export="download">Download</button>
+    <button type="button" role="menuitem" data-export="self">Send to my email</button>
+    <button type="button" role="menuitem" data-export="other">Email someone else…</button>
+  </div>
 
   <div id="export-picker" class="dgs-v2-export-picker" hidden>
     <div class="dgs-v2-export-picker-head">

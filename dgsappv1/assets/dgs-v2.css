@@ -1275,10 +1275,10 @@ body.dgs-warehouse-v2 .dgs-v2-wh-pivot-panel {
 }
 
 .dgs-v2-export-menu {
-  position: absolute;
-  top: calc(100% + 6px);
-  right: 0;
-  z-index: 40;
+  /* Fixed + above the export backdrop so options are never under the dimmer.
+     Desktop top/right come from JS (button rect); phone uses bottom sheet rules. */
+  position: fixed;
+  z-index: 80;
   min-width: 220px;
   padding: 6px;
   border-radius: 12px;
@@ -5229,11 +5229,10 @@ body.dgs-projects-v2 .dgs-v2-detail-backdrop {
   }
 
   body.dgs-warehouse-v2 .dgs-v2-export-menu {
-    position: fixed;
-    top: auto;
-    right: 12px;
-    left: 12px;
-    bottom: var(--dgs-v2-system-nav-clear);
+    top: auto !important;
+    right: 12px !important;
+    left: 12px !important;
+    bottom: var(--dgs-v2-system-nav-clear) !important;
     min-width: 0;
     padding: 10px;
     border-radius: 16px 16px 12px 12px;
