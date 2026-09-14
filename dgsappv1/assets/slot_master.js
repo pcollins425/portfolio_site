@@ -286,8 +286,8 @@
           <td class="mono">${serialCell}</td>
           <td class="dgs-v2-col--desktop">${esc(row.vendor_name)} · ${esc(row.cabinet_name)}</td>
           <td>${esc(row.theme_name || "—")}</td>
-          <td>${esc(row.zbl || "—")}</td>
-          <td class="dgs-v2-col--desktop">${esc(row.Hold || "—")}</td>
+          <td class="dgs-v2-col--desktop">${esc(row.zbl || "—")}</td>
+          <td>${esc(row.Hold || "—")}</td>
           <td class="num dgs-v2-col--desktop">${fmtAdw(row.cipd)}</td>
           <td class="num dgs-v2-col--desktop">${fmtAdw(row.tdw)}</td>
           <td class="num dgs-v2-col--desktop">${fmtAdw(row.adw)}</td>
