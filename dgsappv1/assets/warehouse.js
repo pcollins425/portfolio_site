@@ -31,6 +31,10 @@
     grandTotal: document.getElementById("grand-total"),
     warehouseCount: document.getElementById("warehouse-count"),
     summaryGrid: document.getElementById("summary-grid"),
+    pivotTitle: document.getElementById("pivot-title"),
+    pivotHint: document.getElementById("pivot-hint"),
+    pivotWrap: document.getElementById("pivot-wrap"),
+    cabinetList: document.getElementById("cabinet-list"),
     pivotThead: document.getElementById("pivot-thead"),
     pivotTbody: document.getElementById("pivot-tbody"),
     errorBox: document.getElementById("error-box"),
@@ -58,6 +62,18 @@
     exportPickerSend: document.getElementById("export-picker-send"),
     exportPickerClose: document.getElementById("export-picker-close"),
   };
+
+  /** Same band as phone warehouse chips / Fold landscape. */
+  function isPhoneCabinetList() {
+    return (
+      window.matchMedia("(max-width: 600px)").matches ||
+      window.matchMedia("(max-width: 900px) and (max-height: 520px)").matches
+    );
+  }
+
+  function isCompactDrawer() {
+    return window.matchMedia("(max-width: 1366px)").matches;
+  }
 
   function apiUrl(path) {
     return `${API_BASE}${path}`;
@@ -121,20 +137,40 @@
     const p = state.pivot;
     if (!p) return;
 
-    els.summaryGrid.innerHTML = p.columns
-      .map((col) => {
-        const active = col.property === state.highlightProperty;
-        return `
+    const phone = isPhoneCabinetList();
+    const allActive = !state.highlightProperty;
+    const allTotal = p.grand_total;
+    const allChip = phone
+      ? `<button type="button" class="dgs-v2-wh-summary-card${allActive ? " active" : ""}" data-property="" data-filter="all">
+          <span class="dgs-v2-wh-summary-card__count">${fmtNum(allTotal)}</span>
+          <span class="dgs-v2-wh-summary-card__label">All warehouses</span>
+        </button>`
+      : "";
+
+    els.summaryGrid.innerHTML =
+      allChip +
+      p.columns
+        .map((col) => {
+          const active = col.property === state.highlightProperty;
+          return `
         <button type="button" class="dgs-v2-wh-summary-card${active ? " active" : ""}" data-property="${esc(col.property)}">
           <span class="dgs-v2-wh-summary-card__count">${fmtNum(col.total)}</span>
           <span class="dgs-v2-wh-summary-card__label">${esc(columnDisplayName(col))}</span>
         </button>`;
-      })
-      .join("");
+        })
+        .join("");
 
-    els.summaryGrid.querySelectorAll("[data-property]").forEach((btn) => {
+    els.summaryGrid.querySelectorAll(".dgs-v2-wh-summary-card").forEach((btn) => {
       btn.addEventListener("click", () => {
-        const property = btn.dataset.property;
+        const property = btn.dataset.property || "";
+        if (phone) {
+          // Phone: chips only filter the cabinet list (All = totals across warehouses).
+          state.highlightProperty = property || null;
+          renderSummaryCards();
+          renderViews();
+          return;
+        }
+        // Desktop/tablet: toggle column highlight + open column serial drill.
         state.highlightProperty = state.highlightProperty === property ? null : property;
         renderSummaryCards();
         renderPivot();
@@ -143,6 +179,104 @@
         }
       });
     });
+  }
+
+  function updatePivotChrome() {
+    const phone = isPhoneCabinetList();
+    if (!els.pivotTitle || !els.pivotHint) return;
+    if (phone) {
+      if (state.highlightProperty) {
+        els.pivotTitle.textContent = columnDisplayName(state.highlightProperty);
+        els.pivotHint.textContent = "Cabinets in this warehouse · tap for serials";
+      } else {
+        els.pivotTitle.textContent = "All warehouses";
+        els.pivotHint.textContent = "Cabinet totals across every warehouse · tap for serials";
+      }
+    } else {
+      els.pivotTitle.textContent = "Inventory pivot";
+      els.pivotHint.textContent =
+        "Rows = manufacturer & cabinet · columns = warehouse · total at row end";
+    }
+  }
+
+  function renderCabinetList() {
+    const p = state.pivot;
+    if (!p || !els.cabinetList) return;
+
+    const property = state.highlightProperty;
+    let lastManufacturer = null;
+    const parts = [];
+
+    p.rows.forEach((row) => {
+      const count = property ? row.counts[property] || 0 : row.total || 0;
+      if (property && count === 0) return;
+
+      const mfg = manufacturerKey(row);
+      if (mfg !== lastManufacturer) {
+        parts.push(`<div class="dgs-v2-wh-cabinet-group">${esc(mfg)}</div>`);
+        lastManufacturer = mfg;
+      }
+
+      const total = row.total || 0;
+      const sub =
+        property && total !== count
+          ? `<span class="dgs-v2-wh-cabinet-row__sub">All warehouses ${fmtNum(total)}</span>`
+          : "";
+
+      parts.push(`
+        <button type="button" class="dgs-v2-wh-cabinet-row"
+          data-manufacturer="${esc(row.manufacturer || "")}"
+          data-cabinet="${esc(row.cabinet || "")}"
+          data-property="${esc(property || "")}">
+          <span class="dgs-v2-wh-cabinet-row__name">${esc(cabinetLabel(row))}</span>
+          <span class="dgs-v2-wh-cabinet-row__meta">
+            <span class="dgs-v2-wh-cabinet-row__count">${fmtNum(count)}</span>
+            ${sub}
+          </span>
+        </button>`);
+    });
+
+    if (property) {
+      parts.push(`
+        <button type="button" class="dgs-v2-wh-cabinet-wh-serials" data-property="${esc(property)}">
+          All serials in ${esc(columnDisplayName(property))}
+        </button>`);
+    }
+
+    els.cabinetList.innerHTML = parts.length
+      ? parts.join("")
+      : `<p class="dgs-v2-lines-status">No cabinets in this filter.</p>`;
+
+    els.cabinetList.querySelectorAll(".dgs-v2-wh-cabinet-row").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const prop = btn.dataset.property || "";
+        if (prop) {
+          openCellDrill({
+            property: prop,
+            manufacturer: btn.dataset.manufacturer,
+            cabinet: btn.dataset.cabinet,
+          });
+        } else {
+          openRowDrill({
+            manufacturer: btn.dataset.manufacturer,
+            cabinet: btn.dataset.cabinet,
+          });
+        }
+      });
+    });
+
+    els.cabinetList.querySelectorAll(".dgs-v2-wh-cabinet-wh-serials").forEach((btn) => {
+      btn.addEventListener("click", () => openColumnDrill(btn.dataset.property));
+    });
+  }
+
+  function renderViews() {
+    const phone = isPhoneCabinetList();
+    updatePivotChrome();
+    if (els.cabinetList) els.cabinetList.hidden = !phone;
+    if (els.pivotWrap) els.pivotWrap.hidden = phone;
+    if (phone) renderCabinetList();
+    else renderPivot();
   }
 
   function cabinetLabel(row) {
@@ -257,11 +391,12 @@
   function setDrawerOpen(open) {
     state.drawer.open = open;
     document.body.classList.toggle("detail-open", open);
+    document.body.classList.toggle("dgs-wh-drawer-compact", open && isCompactDrawer());
     els.backdrop.hidden = !open;
     els.drawer.setAttribute("aria-hidden", open ? "false" : "true");
     if (!open) {
       state.selection = null;
-      renderPivot();
+      renderViews();
     }
   }
 
@@ -338,7 +473,7 @@
     els.detailTitle.textContent = meta.title;
     els.detailSubtitle.textContent = meta.subtitle;
 
-    renderPivot();
+    renderViews();
     setDrawerOpen(true);
     loadDrawerSerials();
   }
@@ -377,7 +512,7 @@
   function openColumnDrill(property) {
     state.highlightProperty = property;
     renderSummaryCards();
-    renderPivot();
+    renderViews();
     openDrill("column", {
       filter: { property },
       property,
@@ -570,10 +705,11 @@
       els.grandTotal.textContent = fmtNum(state.pivot.grand_total);
       els.warehouseCount.textContent = String(state.pivot.columns.length);
       renderSummaryCards();
-      renderPivot();
+      renderViews();
     } catch (err) {
       showError(err.message || String(err));
       els.pivotTbody.innerHTML = "";
+      if (els.cabinetList) els.cabinetList.innerHTML = "";
     }
   }
 
@@ -611,6 +747,13 @@
   });
   window.addEventListener("resize", () => {
     if (state.export.menuOpen) positionExportMenu();
+    if (state.pivot) {
+      renderSummaryCards();
+      renderViews();
+      if (state.drawer.open) {
+        document.body.classList.toggle("dgs-wh-drawer-compact", isCompactDrawer());
+      }
+    }
   });
   document.addEventListener("keydown", (e) => {
     if (e.key === "Escape" && (state.export.menuOpen || state.export.pickerOpen)) {

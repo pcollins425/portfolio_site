@@ -44,7 +44,7 @@
     <section class="dgs-v2-list-panel dgs-v2-wh-pivot-panel">
       <div class="dgs-v2-wh-pivot-head">
         <div>
-          <h2 class="dgs-v2-wh-pivot-title">Inventory pivot</h2>
+          <h2 class="dgs-v2-wh-pivot-title" id="pivot-title">Inventory pivot</h2>
           <p class="dgs-v2-subtitle" id="pivot-hint">Rows = manufacturer &amp; cabinet · columns = warehouse · total at row end</p>
         </div>
         <div class="dgs-v2-export" id="export-wrap">
@@ -53,14 +53,17 @@
         </div>
       </div>
 
-      <div class="dgs-v2-grid-wrap dgs-v2-wh-pivot-wrap">
+      <!-- Phone: cabinet list (All = totals across warehouses; chip = one warehouse) -->
+      <div id="cabinet-list" class="dgs-v2-wh-cabinet-list" hidden></div>
+
+      <div class="dgs-v2-grid-wrap dgs-v2-wh-pivot-wrap" id="pivot-wrap">
         <table class="dgs-v2-grid dgs-v2-wh-pivot" id="pivot-table">
           <thead id="pivot-thead"></thead>
           <tbody id="pivot-tbody"></tbody>
         </table>
       </div>
 
-      <div class="dgs-v2-wh-legend" aria-label="Pivot interactions">
+      <div class="dgs-v2-wh-legend dgs-v2-desktop-only" aria-label="Pivot interactions">
         <span class="dgs-v2-wh-legend-item"><span class="dgs-v2-wh-legend-swatch dgs-v2-wh-legend-swatch--cell"></span> Cell → serials for cabinet + warehouse</span>
         <span class="dgs-v2-wh-legend-item"><span class="dgs-v2-wh-legend-swatch dgs-v2-wh-legend-swatch--row"></span> Row → all serials for cabinet type</span>
         <span class="dgs-v2-wh-legend-item"><span class="dgs-v2-wh-legend-swatch dgs-v2-wh-legend-swatch--col"></span> Column → all serials in warehouse</span>
