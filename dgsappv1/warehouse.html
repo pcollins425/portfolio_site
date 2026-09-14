@@ -47,7 +47,15 @@
           <h2 class="dgs-v2-wh-pivot-title">Inventory pivot</h2>
           <p class="dgs-v2-subtitle" id="pivot-hint">Rows = manufacturer &amp; cabinet · columns = warehouse · total at row end</p>
         </div>
-        <button type="button" id="btn-export-pivot" class="dgs-v2-btn dgs-v2-btn--primary">Export to Excel</button>
+        <div class="dgs-v2-export" id="export-wrap">
+          <button type="button" id="btn-export-pivot" class="dgs-v2-btn dgs-v2-btn--primary" aria-haspopup="menu" aria-expanded="false" aria-controls="export-menu">Export</button>
+          <div id="export-menu" class="dgs-v2-export-menu" role="menu" hidden>
+            <button type="button" role="menuitem" data-export="download">Download</button>
+            <button type="button" role="menuitem" data-export="self">Send to my email</button>
+            <button type="button" role="menuitem" data-export="other">Email someone else…</button>
+          </div>
+          <p id="export-status" class="dgs-v2-export-status" hidden></p>
+        </div>
       </div>
 
       <div class="dgs-v2-grid-wrap dgs-v2-wh-pivot-wrap">
@@ -66,6 +74,23 @@
   </div>
 
   <div class="detail-backdrop" id="detail-backdrop" hidden></div>
+  <div class="dgs-v2-export-backdrop" id="export-backdrop" hidden></div>
+
+  <div id="export-picker" class="dgs-v2-export-picker" hidden>
+    <div class="dgs-v2-export-picker-head">
+      <div>
+        <p class="dgs-v2-eyebrow">Employee directory</p>
+        <h2 class="dgs-v2-export-picker-title">Email someone else</h2>
+      </div>
+      <button type="button" id="export-picker-close" class="dgs-v2-drawer-close" aria-label="Close">×</button>
+    </div>
+    <input id="export-picker-q" type="search" placeholder="Search name or email…" autocomplete="off" />
+    <div id="export-picker-list" class="dgs-v2-export-picker-list" role="listbox"></div>
+    <div class="dgs-v2-export-picker-foot">
+      <p id="export-picker-hint" class="dgs-v2-export-picker-hint">Pick a coworker, then send.</p>
+      <button type="button" id="export-picker-send" class="dgs-v2-btn dgs-v2-btn--primary" disabled>Send</button>
+    </div>
+  </div>
 
   <aside class="detail-drawer dgs-v2-drawer" id="detail-drawer" aria-hidden="true">
     <div class="dgs-v2-drawer-header">

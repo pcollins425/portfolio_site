@@ -2,19 +2,24 @@
 
 from __future__ import annotations
 
+import html
 import math
 import os
 import re
 from datetime import date, datetime
 from io import BytesIO
+from typing import Annotated, Any
+from uuid import uuid4
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
 from openpyxl import Workbook
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from openpyxl.utils import get_column_letter
+from pydantic import BaseModel, Field
 
-from app import mssql
+from app import employee_directory, mssql, resend_mail
+from app.auth_deps import require_demo_user
 
 router = APIRouter(prefix="/api/warehouse-inventory", tags=["warehouse-inventory"])
 
@@ -368,22 +373,136 @@ def warehouse_pivot():
         raise HTTPException(status_code=503, detail=f"database error: {exc}") from exc
 
 
+class PivotEmailIn(BaseModel):
+    to_self: bool = False
+    employee_id: str | None = Field(default=None, max_length=40)
+
+
+def _pivot_export_bytes() -> tuple[bytes, str]:
+    data = _build_pivot_data()
+    content = _pivot_workbook(data)
+    stamp = datetime.now().strftime("%Y-%m-%d")
+    filename = f"warehouse-inventory-pivot-{stamp}.xlsx"
+    return content, filename
+
+
+def _require_signed_in(user: dict[str, Any] | None) -> dict[str, Any]:
+    if user is None:
+        raise HTTPException(status_code=401, detail="Sign in required to email this report")
+    return user
+
+
+def _sender_record(user: dict[str, Any]) -> dict[str, str]:
+    sender = employee_directory.by_email(str(user.get("email") or ""))
+    if sender:
+        return sender
+    email = str(user.get("email") or "").strip()
+    if not email or "@" not in email:
+        raise HTTPException(status_code=400, detail="Your account has no email on file")
+    return {
+        "employee_id": str(user.get("employee_id") or "").strip(),
+        "name": str(user.get("name") or "").strip() or email,
+        "email": email,
+    }
+
+
+def _resolve_recipient(body: PivotEmailIn, sender: dict[str, str]) -> dict[str, str]:
+    employee_id = (body.employee_id or "").strip()
+    if body.to_self:
+        return sender
+    if not employee_id:
+        raise HTTPException(
+            status_code=400,
+            detail="Choose Send to my email or a directory employee",
+        )
+    recipient = employee_directory.by_id(employee_id)
+    if not recipient:
+        raise HTTPException(
+            status_code=404,
+            detail="That person is not in the active employee directory",
+        )
+    return recipient
+
+
 @router.get("/export/pivot")
 def warehouse_export_pivot():
     """Download the warehouse pivot as a formatted Excel workbook."""
     try:
-        data = _build_pivot_data()
-        content = _pivot_workbook(data)
+        content, filename = _pivot_export_bytes()
     except Exception as exc:
         raise HTTPException(status_code=503, detail=f"database error: {exc}") from exc
 
-    stamp = datetime.now().strftime("%Y-%m-%d")
-    filename = f"warehouse-inventory-pivot-{stamp}.xlsx"
     return StreamingResponse(
         BytesIO(content),
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
+
+
+@router.post("/export/pivot/email")
+def warehouse_email_pivot(
+    body: PivotEmailIn,
+    user: Annotated[dict[str, Any] | None, Depends(require_demo_user)],
+):
+    """Email the warehouse pivot to the signed-in user or an active directory employee."""
+    signed_in = _require_signed_in(user)
+    if not resend_mail.api_key_configured():
+        raise HTTPException(
+            status_code=503,
+            detail="Email is not configured on the server yet (RESEND_API_KEY)",
+        )
+
+    try:
+        sender = _sender_record(signed_in)
+        recipient = _resolve_recipient(body, sender)
+        content, filename = _pivot_export_bytes()
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=503, detail=f"database error: {exc}") from exc
+
+    stamp = filename.replace("warehouse-inventory-pivot-", "").replace(".xlsx", "")
+    sender_name = html.escape(sender["name"])
+    sender_email = html.escape(sender["email"])
+    recipient_name = html.escape(recipient["name"])
+    subject = f"Warehouse inventory — {stamp}"
+    html_body = (
+        f"<p>Hi {recipient_name},</p>"
+        "<p>The warehouse inventory pivot is attached.</p>"
+        f"<p>Sent by {sender_name} ({sender_email}) from the DGS Application.</p>"
+        "<p>DGS Reporting</p>"
+    )
+    text_body = (
+        f"Hi {recipient['name']},\n\n"
+        "The warehouse inventory pivot is attached.\n\n"
+        f"Sent by {sender['name']} ({sender['email']}) from the DGS Application.\n\n"
+        "DGS Reporting\n"
+    )
+    cc = None
+    if recipient["email"].lower() != sender["email"].lower():
+        cc = sender["email"]
+
+    try:
+        resend_id = resend_mail.send_email(
+            to=recipient["email"],
+            subject=subject,
+            html=html_body,
+            text=text_body,
+            reply_to=sender["email"],
+            cc=cc,
+            attachments=[resend_mail.attachment_bytes(filename=filename, content=content)],
+            idempotency_key=str(uuid4()),
+        )
+    except RuntimeError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+    return {
+        "ok": True,
+        "to": recipient["email"],
+        "to_name": recipient["name"],
+        "filename": filename,
+        "id": resend_id,
+    }
 
 
 @router.get("/serials")

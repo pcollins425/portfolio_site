@@ -18,6 +18,13 @@
       totalPages: 1,
       totalItems: 0,
     },
+    export: {
+      menuOpen: false,
+      pickerOpen: false,
+      people: [],
+      selected: null,
+      searchTimer: null,
+    },
   };
 
   const els = {
@@ -41,6 +48,15 @@
     drawerNextPage: document.getElementById("drawer-next-page"),
     btnCloseDetail: document.getElementById("btn-close-detail"),
     btnExportPivot: document.getElementById("btn-export-pivot"),
+    exportMenu: document.getElementById("export-menu"),
+    exportStatus: document.getElementById("export-status"),
+    exportBackdrop: document.getElementById("export-backdrop"),
+    exportPicker: document.getElementById("export-picker"),
+    exportPickerQ: document.getElementById("export-picker-q"),
+    exportPickerList: document.getElementById("export-picker-list"),
+    exportPickerHint: document.getElementById("export-picker-hint"),
+    exportPickerSend: document.getElementById("export-picker-send"),
+    exportPickerClose: document.getElementById("export-picker-close"),
   };
 
   function apiUrl(path) {
@@ -383,12 +399,46 @@
     return match ? match[1].trim() : fallback;
   }
 
-  async function exportPivot() {
-    const btn = els.btnExportPivot;
-    const priorLabel = btn.textContent;
-    btn.disabled = true;
-    btn.textContent = "Exporting…";
+  function setExportBusy(busy, label) {
+    els.btnExportPivot.disabled = busy;
+    els.btnExportPivot.textContent = busy ? (label || "Working…") : "Export";
+    if (els.exportPickerSend) els.exportPickerSend.disabled = busy || !state.export.selected;
+  }
+
+  function showExportStatus(msg, ok) {
+    els.exportStatus.hidden = !msg;
+    els.exportStatus.textContent = msg || "";
+    els.exportStatus.classList.toggle("dgs-v2-export-status--ok", Boolean(ok));
+  }
+
+  function closeExportUi() {
+    state.export.menuOpen = false;
+    state.export.pickerOpen = false;
+    els.exportMenu.hidden = true;
+    els.exportPicker.hidden = true;
+    els.exportBackdrop.hidden = true;
+    els.btnExportPivot.setAttribute("aria-expanded", "false");
+  }
+
+  function openExportMenu() {
+    state.export.menuOpen = true;
+    state.export.pickerOpen = false;
+    els.exportMenu.hidden = false;
+    els.exportPicker.hidden = true;
+    els.exportBackdrop.hidden = false;
+    els.btnExportPivot.setAttribute("aria-expanded", "true");
+  }
+
+  function toggleExportMenu() {
+    if (state.export.menuOpen || state.export.pickerOpen) closeExportUi();
+    else openExportMenu();
+  }
+
+  async function exportPivotDownload() {
+    closeExportUi();
+    setExportBusy(true, "Downloading…");
     showError(null);
+    showExportStatus(null);
     try {
       const headers = window.DGSAuth ? DGSAuth.authHeaders() : {};
       const res = await fetch(apiUrl("/api/warehouse-inventory/export/pivot"), { headers });
@@ -408,12 +458,98 @@
       link.download = filename;
       link.click();
       URL.revokeObjectURL(url);
+      showExportStatus("Downloaded", true);
     } catch (err) {
       showError(err.message || String(err));
     } finally {
-      btn.disabled = false;
-      btn.textContent = priorLabel;
+      setExportBusy(false);
     }
+  }
+
+  async function emailPivot({ toSelf, employeeId }) {
+    setExportBusy(true, "Sending…");
+    showError(null);
+    showExportStatus("Sending…");
+    try {
+      const headers = Object.assign(
+        {},
+        window.DGSAuth ? DGSAuth.authHeaders() : {},
+        { "Content-Type": "application/json" }
+      );
+      const payload = toSelf ? { to_self: true } : { employee_id: employeeId };
+      const res = await fetch(apiUrl("/api/warehouse-inventory/export/pivot/email"), {
+        method: "POST",
+        headers,
+        body: JSON.stringify(payload),
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        const msg = body.detail || body.message || res.statusText;
+        throw new Error(typeof msg === "string" ? msg : JSON.stringify(msg));
+      }
+      closeExportUi();
+      const who = body.to_name || body.to || "them";
+      showExportStatus(`Sent to ${who}`, true);
+    } catch (err) {
+      showError(err.message || String(err));
+      showExportStatus(null);
+    } finally {
+      setExportBusy(false);
+    }
+  }
+
+  function renderDirectory(people) {
+    state.export.people = people || [];
+    if (!state.export.people.length) {
+      els.exportPickerList.innerHTML = `<p class="dgs-v2-export-empty">No matching employees.</p>`;
+      return;
+    }
+    const selectedId = state.export.selected && state.export.selected.employee_id;
+    els.exportPickerList.innerHTML = state.export.people.map((p) => {
+      const selected = p.employee_id === selectedId ? " is-selected" : "";
+      return `<button type="button" class="dgs-v2-export-person${selected}" role="option" data-id="${esc(p.employee_id)}">
+        <span class="dgs-v2-export-person__name">${esc(p.name)}</span>
+        <span class="dgs-v2-export-person__email">${esc(p.email)}</span>
+      </button>`;
+    }).join("");
+  }
+
+  function selectDirectoryPerson(employeeId) {
+    state.export.selected = state.export.people.find((p) => p.employee_id === employeeId) || null;
+    renderDirectory(state.export.people);
+    const person = state.export.selected;
+    els.exportPickerSend.disabled = !person;
+    els.exportPickerSend.textContent = person ? `Send to ${person.name}` : "Send";
+    els.exportPickerHint.textContent = person
+      ? `Will email ${person.email}`
+      : "Pick a coworker, then send.";
+  }
+
+  async function loadDirectory(q) {
+    els.exportPickerList.innerHTML = `<p class="dgs-v2-export-empty">Searching…</p>`;
+    try {
+      const qs = q ? `?q=${encodeURIComponent(q)}` : "";
+      const body = await fetchJson(`/api/employees/directory${qs}`);
+      renderDirectory(body.employees || []);
+    } catch (err) {
+      els.exportPickerList.innerHTML = `<p class="dgs-v2-export-empty">${esc(err.message || String(err))}</p>`;
+    }
+  }
+
+  async function openDirectoryPicker() {
+    state.export.menuOpen = false;
+    state.export.pickerOpen = true;
+    state.export.selected = null;
+    els.exportMenu.hidden = true;
+    els.exportPicker.hidden = false;
+    els.exportBackdrop.hidden = false;
+    els.btnExportPivot.setAttribute("aria-expanded", "true");
+    els.exportPickerSend.disabled = true;
+    els.exportPickerSend.textContent = "Send";
+    els.exportPickerHint.textContent = "Pick a coworker, then send.";
+    els.exportPickerQ.value = "";
+    await loadDirectory("");
+    els.exportPickerQ.focus();
   }
 
   async function init() {
@@ -431,7 +567,43 @@
     }
   }
 
-  els.btnExportPivot.addEventListener("click", () => exportPivot());
+  els.btnExportPivot.addEventListener("click", (e) => {
+    e.stopPropagation();
+    toggleExportMenu();
+  });
+  els.exportMenu.addEventListener("click", (e) => {
+    const btn = e.target.closest("[data-export]");
+    if (!btn) return;
+    const action = btn.getAttribute("data-export");
+    if (action === "download") exportPivotDownload();
+    else if (action === "self") {
+      closeExportUi();
+      emailPivot({ toSelf: true });
+    } else if (action === "other") {
+      openDirectoryPicker();
+    }
+  });
+  els.exportBackdrop.addEventListener("click", () => closeExportUi());
+  els.exportPickerClose.addEventListener("click", () => closeExportUi());
+  els.exportPickerList.addEventListener("click", (e) => {
+    const btn = e.target.closest("[data-id]");
+    if (btn) selectDirectoryPerson(btn.getAttribute("data-id"));
+  });
+  els.exportPickerSend.addEventListener("click", () => {
+    if (!state.export.selected) return;
+    emailPivot({ employeeId: state.export.selected.employee_id });
+  });
+  els.exportPickerQ.addEventListener("input", () => {
+    clearTimeout(state.export.searchTimer);
+    state.export.searchTimer = setTimeout(() => {
+      loadDirectory(els.exportPickerQ.value.trim());
+    }, 250);
+  });
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && (state.export.menuOpen || state.export.pickerOpen)) {
+      closeExportUi();
+    }
+  });
   els.btnCloseDetail.addEventListener("click", () => setDrawerOpen(false));
   els.backdrop.addEventListener("click", () => setDrawerOpen(false));
 
