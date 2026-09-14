@@ -5,6 +5,7 @@ from __future__ import annotations
 import math
 import os
 from datetime import date, datetime
+from decimal import Decimal
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -80,6 +81,42 @@ _MACHINE_JOIN = """
     INNER JOIN clients.casinos AS c ON c.reference_key = sm.casino_id
 """
 
+_PERF_VIEW = "[dashboard].[vw_performance_report]"
+
+# Same latest-month grain as Casinos: one Master_Revenue month per casino, then
+# per-machine CIPD / TDW / ADW / indexes for that month.
+_CASINO_LATEST_CTE = f"""
+WITH casino_latest AS (
+    SELECT MAX(CONVERT(date, mr.[date])) AS performance_month
+    FROM {_PERF_VIEW} AS mr
+    INNER JOIN inventory.slot_master_migration AS smx
+        ON smx.reference_key = mr.slot_master_id
+    WHERE smx.casino_id = %s
+      AND mr.slot_master_id IS NOT NULL
+      AND LTRIM(RTRIM(mr.slot_master_id)) <> N''
+      AND mr.[date] IS NOT NULL
+)
+"""
+
+_MACHINE_PERF_SELECT = """
+                latest.performance_month AS last_report,
+                CASE
+                    WHEN mr.Days_on_Floor IS NOT NULL AND mr.Days_on_Floor > 0
+                    THEN CAST(mr.Coin_in AS float) / CAST(mr.Days_on_Floor AS float)
+                END AS cipd,
+                CAST(mr.TDW AS float) AS tdw,
+                CAST(mr.ADW AS float) AS adw,
+                CAST(mr.WIN_Index AS float) AS win_index,
+                CAST(mr.actual_index AS float) AS actual_index
+"""
+
+_MACHINE_PERF_JOIN = f"""
+    LEFT JOIN casino_latest AS latest ON 1 = 1
+    LEFT JOIN {_PERF_VIEW} AS mr
+        ON mr.slot_master_id = sm.reference_key
+       AND CONVERT(date, mr.[date]) = latest.performance_month
+"""
+
 
 class RowPatchBody(BaseModel):
     updates: dict[str, Any] = Field(default_factory=dict)
@@ -114,6 +151,8 @@ def _json_value(v):
         return v.isoformat()
     if isinstance(v, date):
         return v.isoformat()
+    if isinstance(v, Decimal):
+        return float(v)
     if v is None:
         return None
     if isinstance(v, bool):
@@ -162,6 +201,12 @@ def _machine_row(r: dict) -> dict:
         "denom": _json_value(r.get("denom")),
         "date_instl": _json_value(r.get("date_instl")),
         "lastconver": _json_value(r.get("lastconver")),
+        "last_report": _json_value(r.get("last_report")),
+        "cipd": _json_value(r.get("cipd")),
+        "tdw": _json_value(r.get("tdw")),
+        "adw": _json_value(r.get("adw")),
+        "win_index": _json_value(r.get("win_index")),
+        "actual_index": _json_value(r.get("actual_index")),
     }
 
 
@@ -197,8 +242,29 @@ def _fetch_machine(reference_key: str) -> dict | None:
             v.vendor_name,
             cab.cabinet_name,
             th.theme_name,
-            c.casino_name
+            c.casino_name,
+            CONVERT(date, mr.[date]) AS last_report,
+            CASE
+                WHEN mr.Days_on_Floor IS NOT NULL AND mr.Days_on_Floor > 0
+                THEN CAST(mr.Coin_in AS float) / CAST(mr.Days_on_Floor AS float)
+            END AS cipd,
+            CAST(mr.TDW AS float) AS tdw,
+            CAST(mr.ADW AS float) AS adw,
+            CAST(mr.WIN_Index AS float) AS win_index,
+            CAST(mr.actual_index AS float) AS actual_index
         {_MACHINE_JOIN}
+        LEFT JOIN {_PERF_VIEW} AS mr
+            ON mr.slot_master_id = sm.reference_key
+           AND CONVERT(date, mr.[date]) = (
+                SELECT MAX(CONVERT(date, mr2.[date]))
+                FROM {_PERF_VIEW} AS mr2
+                INNER JOIN inventory.slot_master_migration AS sm2
+                    ON sm2.reference_key = mr2.slot_master_id
+                WHERE sm2.casino_id = sm.casino_id
+                  AND mr2.slot_master_id IS NOT NULL
+                  AND LTRIM(RTRIM(mr2.slot_master_id)) <> N''
+                  AND mr2.[date] IS NOT NULL
+           )
         WHERE sm.reference_key = %s
         """,
         (reference_key,),
@@ -437,6 +503,7 @@ def list_machines(
         offset = (page - 1) * page_size
         item_rows = _field_query(
             f"""
+            {_CASINO_LATEST_CTE}
             SELECT
                 sm.reference_key,
                 sm.index_key,
@@ -456,20 +523,24 @@ def list_machines(
                 v.vendor_name,
                 cab.cabinet_name,
                 th.theme_name,
-                c.casino_name
+                c.casino_name,
+                {_MACHINE_PERF_SELECT}
             {_MACHINE_JOIN}
+            {_MACHINE_PERF_JOIN}
             WHERE sm.casino_id = %s
               AND sm.is_active = 1
             {search_sql}
             ORDER BY a.serial_number
             OFFSET {offset} ROWS FETCH NEXT {page_size} ROWS ONLY
             """,
-            (cid,) + search_params,
+            (cid, cid) + search_params,
         )
     except Exception as exc:
         raise HTTPException(status_code=503, detail=f"database error: {exc}") from exc
 
     total_pages = max(1, math.ceil(total_items / page_size)) if total_items else 1
+    items = [_machine_row(r) for r in item_rows]
+    last_report = next((row.get("last_report") for row in items if row.get("last_report")), None)
 
     return {
         "casino_id": cid,
@@ -477,7 +548,8 @@ def list_machines(
         "active_count": int(stats.get("active_count") or 0),
         "history_count": int(stats.get("history_count") or 0),
         "cabinet_types": int(stats.get("cabinet_types") or 0),
-        "items": [_machine_row(r) for r in item_rows],
+        "last_report": last_report,
+        "items": items,
         "page": page,
         "page_size": page_size,
         "total": total_items,

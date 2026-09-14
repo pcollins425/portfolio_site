@@ -40,6 +40,7 @@
     totalPages: 1,
     search: "",
     stats: null,
+    lastReport: null,
     selectedKey: null,
     detail: null,
     history: [],
@@ -150,6 +151,33 @@
     return Number(n).toLocaleString();
   }
 
+  function fmtMonth(iso) {
+    if (!iso) return null;
+    const d = new Date(String(iso).slice(0, 10) + "T00:00:00");
+    if (Number.isNaN(d.getTime())) return null;
+    return d.toLocaleDateString(undefined, { month: "short", year: "numeric" });
+  }
+
+  function fmtAdw(n) {
+    if (n === null || n === undefined || Number.isNaN(Number(n))) return "—";
+    return `$${Number(n).toLocaleString(undefined, {
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0,
+    })}`;
+  }
+
+  function fmtWinIndex(n) {
+    if (n === null || n === undefined || Number.isNaN(Number(n))) return "—";
+    return Number(n).toFixed(2);
+  }
+
+  function winIndexClass(n) {
+    if (n === null || n === undefined || Number.isNaN(Number(n))) return "";
+    if (Number(n) >= 1) return "dgs-v2-win-index--good";
+    if (Number(n) >= 0.9) return "dgs-v2-win-index--warn";
+    return "dgs-v2-win-index--muted";
+  }
+
   function showError(msg) {
     els.errorBox.hidden = !msg;
     els.errorBox.textContent = msg || "";
@@ -251,6 +279,8 @@
     const serialCell = row.asset_id
       ? AssetNav.hubLinkHtml(row.asset_id, serialLabel)
       : esc(serialLabel);
+    const winCls = winIndexClass(row.win_index);
+    const actCls = winIndexClass(row.actual_index);
     return `
         <tr data-key="${esc(row.reference_key)}" class="${row.reference_key === state.selectedKey ? "selected" : ""}">
           <td class="mono">${serialCell}</td>
@@ -258,6 +288,11 @@
           <td>${esc(row.theme_name || "—")}</td>
           <td>${esc(row.zbl || "—")}</td>
           <td class="dgs-v2-col--desktop">${esc(row.Hold || "—")}</td>
+          <td class="num dgs-v2-col--desktop">${fmtAdw(row.cipd)}</td>
+          <td class="num dgs-v2-col--desktop">${fmtAdw(row.tdw)}</td>
+          <td class="num dgs-v2-col--desktop">${fmtAdw(row.adw)}</td>
+          <td class="num ${winCls}">${fmtWinIndex(row.win_index)}</td>
+          <td class="num ${actCls}">${fmtWinIndex(row.actual_index)}</td>
         </tr>`;
   }
 
@@ -283,14 +318,14 @@
         const cabinet = cabinetLabel(row);
         if (vendor !== lastVendor) {
           parts.push(
-            `<tr class="dgs-v2-group-row dgs-v2-group-row--state"><td colspan="5"><span class="dgs-v2-group-label">${esc(vendor)}</span></td></tr>`
+            `<tr class="dgs-v2-group-row dgs-v2-group-row--state"><td colspan="10"><span class="dgs-v2-group-label">${esc(vendor)}</span></td></tr>`
           );
           lastVendor = vendor;
           lastCabinet = null;
         }
         if (cabinet !== lastCabinet) {
           parts.push(
-            `<tr class="dgs-v2-group-row dgs-v2-group-row--tribe"><td colspan="5"><span class="dgs-v2-group-label">${esc(cabinet)}</span></td></tr>`
+            `<tr class="dgs-v2-group-row dgs-v2-group-row--tribe"><td colspan="10"><span class="dgs-v2-group-label">${esc(cabinet)}</span></td></tr>`
           );
           lastCabinet = cabinet;
         }
@@ -310,9 +345,11 @@
     const searchNote = state.search ? `matching “${state.search}”` : "";
     const casino = state.casinos.find((c) => c.casino_id === state.casinoId);
     const casinoLabel = casino ? casino.casino_name : state.casinoId;
+    const monthLabel = fmtMonth(state.lastReport);
     const noteBits = [];
     if (searchNote) noteBits.push(searchNote);
     if (casinoLabel) noteBits.push(casinoLabel);
+    if (monthLabel) noteBits.push(monthLabel);
     if (state.loadingMore) noteBits.push("loading more");
     else if (hasMore()) noteBits.push("scroll for more");
     const note = noteBits.length ? ` · ${noteBits.join(" · ")}` : "";
@@ -600,10 +637,11 @@
     const append = !!(opts && opts.append);
     const gen = append ? listGen : ++listGen;
 
-    if (!state.casinoId) {
+      if (!state.casinoId) {
       state.machines = [];
       state.stats = null;
       state.total = 0;
+      state.lastReport = null;
       if (els.split) els.split.hidden = true;
       renderStats();
       clearDetail();
@@ -636,6 +674,7 @@
         cabinet_types: data.cabinet_types,
         history_count: data.history_count,
       };
+      state.lastReport = data.last_report || state.machines.find((r) => r.last_report)?.last_report || null;
       if (els.split) els.split.hidden = false;
       renderStats();
       renderList();

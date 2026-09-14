@@ -1568,6 +1568,30 @@ body.dgs-slot-master-v2 .dgs-v2-sm-detail-head {
   border-bottom: 1px solid var(--dgs-v2-border);
 }
 
+body.dgs-slot-master-v2 .dgs-v2-grid th.num,
+body.dgs-slot-master-v2 .dgs-v2-grid td.num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+body.dgs-slot-master-v2 .dgs-v2-list-panel .dgs-v2-grid {
+  font-size: 12px;
+}
+
+body.dgs-slot-master-v2 .dgs-v2-win-index--good {
+  color: #34d399;
+  font-weight: 600;
+}
+
+body.dgs-slot-master-v2 .dgs-v2-win-index--warn {
+  color: #fbbf24;
+  font-weight: 600;
+}
+
+body.dgs-slot-master-v2 .dgs-v2-win-index--muted {
+  color: var(--dgs-v2-text-muted);
+}
+
 .dgs-v2-sm-cascade {
   background: var(--dgs-v2-card);
   border: 1px solid var(--dgs-v2-border);
