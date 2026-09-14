@@ -4990,3 +4990,69 @@ body.dgs-projects-v2 .dgs-v2-detail-backdrop {
     padding-bottom: var(--dgs-v2-system-nav-clear-tablet);
   }
 }
+
+/* ===================== Warehouse phone filter chips ===================== */
+
+/* Phone only — tablet keeps the summary cards. Horizontal chips so the pivot
+   stays on screen. Same phone band as Projects calendar strip. */
+@media (max-width: 600px),
+       (max-width: 900px) and (max-height: 520px) {
+  body.dgs-warehouse-v2 .dgs-v2-desktop-only {
+    display: none !important;
+  }
+
+  body.dgs-warehouse-v2 .dgs-v2-page-header h1 {
+    font-size: 22px;
+  }
+
+  body.dgs-warehouse-v2 .dgs-v2-main {
+    padding: 12px;
+    gap: 10px;
+  }
+
+  body.dgs-warehouse-v2 .dgs-v2-wh-selector .dgs-v2-section-label {
+    display: none;
+  }
+
+  body.dgs-warehouse-v2 .dgs-v2-wh-selector {
+    min-width: 0;
+  }
+
+  body.dgs-warehouse-v2 .dgs-v2-wh-summary-grid {
+    display: flex;
+    flex-wrap: nowrap;
+    gap: 8px;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: 4px;
+    scrollbar-width: none;
+  }
+
+  body.dgs-warehouse-v2 .dgs-v2-wh-summary-grid::-webkit-scrollbar {
+    display: none;
+  }
+
+  body.dgs-warehouse-v2 .dgs-v2-wh-summary-card {
+    flex: 0 0 auto;
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    border-radius: 10px;
+    white-space: nowrap;
+  }
+
+  body.dgs-warehouse-v2 .dgs-v2-wh-summary-card__count {
+    font-size: 14px;
+    order: 2;
+  }
+
+  body.dgs-warehouse-v2 .dgs-v2-wh-summary-card__label {
+    margin-top: 0;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--dgs-v2-heading);
+    order: 1;
+  }
+}
