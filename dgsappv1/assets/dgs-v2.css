@@ -2384,6 +2384,49 @@ body.dgs-casinos-v2 .dgs-v2-casino-ims-desc {
   white-space: nowrap;
 }
 
+body.dgs-casinos-v2 .dgs-v2-casino-hubspot-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 16px;
+}
+
+body.dgs-casinos-v2 .dgs-v2-casino-hubspot-card {
+  cursor: default;
+}
+
+body.dgs-casinos-v2 .dgs-v2-casino-hubspot-card:hover {
+  border-color: var(--dgs-v2-border);
+  background: var(--dgs-v2-card);
+}
+
+body.dgs-casinos-v2 .dgs-v2-casino-hubspot-empty {
+  padding: 10px 12px;
+  border: 1px dashed var(--dgs-v2-border);
+  border-radius: 10px;
+  font-size: 12px;
+  color: var(--dgs-v2-text-muted);
+}
+
+body.dgs-casinos-v2 .dgs-v2-casino-deals {
+  margin-bottom: 8px;
+}
+
+body.dgs-casinos-v2 .dgs-v2-casino-deals-closed {
+  margin-top: 8px;
+}
+
+body.dgs-casinos-v2 .dgs-v2-casino-deals-closed > summary {
+  cursor: pointer;
+  font-size: 12px;
+  color: var(--dgs-v2-text-muted);
+  margin-bottom: 6px;
+}
+
+body.dgs-casinos-v2 .dgs-v2-casino-deals-closed .dgs-v2-casino-hubspot-list {
+  margin-bottom: 0;
+}
+
 body.dgs-casinos-v2 .dgs-v2-casino-id {
   font-size: 11px;
   font-weight: 600;

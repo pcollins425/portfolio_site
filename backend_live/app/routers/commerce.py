@@ -87,6 +87,152 @@ def _available_vendor_names(raw) -> str | None:
     return ", ".join(names)
 
 
+def _iso_dt(v):
+    if v is None:
+        return None
+    if isinstance(v, datetime):
+        return v.isoformat()
+    if isinstance(v, date):
+        return v.isoformat()
+    return _json_value(v)
+
+
+def _as_bool(v) -> bool:
+    if v is None:
+        return False
+    if isinstance(v, bool):
+        return v
+    try:
+        return bool(int(v))
+    except (TypeError, ValueError):
+        return bool(v)
+
+
+def _person_name(first, last) -> str | None:
+    parts = [str(p).strip() for p in (first, last) if p and str(p).strip()]
+    return " ".join(parts) if parts else None
+
+
+def _hubspot_for_casino(casino_id: str) -> dict:
+    """Read-only HubSpot landing for Commerce casino detail (no live HubSpot calls)."""
+    empty = {
+        "linked": False,
+        "synced_at": None,
+        "company": None,
+        "contacts": [],
+        "deals": [],
+    }
+    company_rows = _field_query(
+        """
+        SELECT TOP 1
+            co.hubspot_company_id,
+            co.name,
+            co.domain,
+            co.phone,
+            co.lifecycle_stage,
+            co.synced_at,
+            LTRIM(RTRIM(CONCAT(
+                ISNULL(o.first_name, N''),
+                N' ',
+                ISNULL(o.last_name, N'')
+            ))) AS owner_name
+        FROM clients.hubspot_company_casino AS j
+        INNER JOIN clients.hubspot_company AS co
+            ON co.hubspot_company_id = j.hubspot_company_id
+        LEFT JOIN clients.hubspot_owner AS o
+            ON o.hubspot_owner_id = co.hubspot_owner_id
+        WHERE j.casino_id = %s
+        ORDER BY co.synced_at DESC
+        """,
+        (casino_id,),
+    )
+    if not company_rows:
+        return empty
+
+    co = company_rows[0]
+    owner = _json_value(co.get("owner_name"))
+    company = {
+        "name": _json_value(co.get("name")),
+        "domain": _json_value(co.get("domain")),
+        "phone": _json_value(co.get("phone")),
+        "lifecycle_stage": _json_value(co.get("lifecycle_stage")),
+        "owner_name": owner or None,
+    }
+
+    contact_rows = _field_query(
+        """
+        SELECT
+            first_name,
+            last_name,
+            email,
+            phone,
+            job_title
+        FROM clients.vw_hubspot_casino_contacts
+        WHERE casino_id = %s
+        ORDER BY
+            CASE WHEN NULLIF(LTRIM(RTRIM(job_title)), N'') IS NULL THEN 1 ELSE 0 END,
+            last_name,
+            first_name
+        """,
+        (casino_id,),
+    )
+    contacts = []
+    for row in contact_rows:
+        contacts.append(
+            {
+                "name": _person_name(row.get("first_name"), row.get("last_name")),
+                "job_title": _json_value(row.get("job_title")),
+                "email": _json_value(row.get("email")),
+                "phone": _json_value(row.get("phone")),
+            }
+        )
+
+    deal_rows = _field_query(
+        """
+        SELECT
+            hubspot_deal_id,
+            deal_key,
+            deal_name,
+            deal_stage,
+            amount,
+            close_date,
+            ims_id,
+            is_closed,
+            is_closed_won
+        FROM clients.vw_hubspot_casino_deals
+        WHERE casino_id = %s
+        ORDER BY
+            CASE WHEN ISNULL(is_closed, 0) = 0 THEN 0 ELSE 1 END,
+            close_date DESC,
+            deal_name
+        """,
+        (casino_id,),
+    )
+    deals = []
+    for row in deal_rows:
+        deals.append(
+            {
+                "hubspot_deal_id": _json_value(row.get("hubspot_deal_id")),
+                "deal_key": _json_value(row.get("deal_key")),
+                "deal_name": _json_value(row.get("deal_name")),
+                "deal_stage": _json_value(row.get("deal_stage")),
+                "amount": _json_value(row.get("amount")),
+                "close_date": _json_value(row.get("close_date")),
+                "ims_id": _json_value(row.get("ims_id")),
+                "is_closed": _as_bool(row.get("is_closed")),
+                "is_closed_won": _as_bool(row.get("is_closed_won")),
+            }
+        )
+
+    return {
+        "linked": True,
+        "synced_at": _iso_dt(co.get("synced_at")),
+        "company": company,
+        "contacts": contacts,
+        "deals": deals,
+    }
+
+
 # --- Vendors ---
 
 
@@ -615,6 +761,7 @@ def casino_detail(reference_key: str):
                 """,
                 (tribe_id, cid),
             )
+        hubspot = _hubspot_for_casino(cid)
     except HTTPException:
         raise
     except Exception as exc:
@@ -715,4 +862,5 @@ def casino_detail(reference_key: str):
             for s in sister_rows
         ],
         "performance": performance,
+        "hubspot": hubspot,
     }
