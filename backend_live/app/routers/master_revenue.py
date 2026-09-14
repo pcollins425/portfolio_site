@@ -524,9 +524,30 @@ def _executive_ops_series(month_ends: list[date]) -> list[dict[str, Any]]:
     except Exception:
         open_by_ym = {me.isoformat()[:7]: 0 for me in month_ends}
 
-    # --- HubSpot deals ---
+    # --- HubSpot deals: created / won / lost in month (not open-at-month-end stock) ---
+    created_by_ym: dict[str, int] = {}
     won_by_ym: dict[str, int] = {}
     lost_by_ym: dict[str, int] = {}
+    try:
+        for r in _app_query(
+            """
+            SELECT
+                CONVERT(char(7), create_date, 126) AS ym,
+                COUNT(*) AS n
+            FROM clients.hubspot_deal
+            WHERE create_date IS NOT NULL
+              AND create_date >= %s
+              AND create_date <= %s
+            GROUP BY CONVERT(char(7), create_date, 126)
+            """,
+            (window_start, window_end),
+        ):
+            ym = str(r.get("ym") or "").strip()
+            if ym:
+                created_by_ym[ym] = int(r.get("n") or 0)
+    except Exception:
+        created_by_ym = {}
+
     try:
         for r in _app_query(
             """
@@ -554,24 +575,6 @@ def _executive_ops_series(month_ends: list[date]) -> list[dict[str, Any]]:
             lost_by_ym[ym] = int(r.get("lost") or 0)
     except Exception:
         won_by_ym, lost_by_ym = {}, {}
-
-    deals_open_by_ym: dict[str, int] = {}
-    for me in month_ends:
-        ym = me.isoformat()[:7]
-        try:
-            n = _app_query(
-                """
-                SELECT COUNT(*) AS n
-                FROM clients.hubspot_deal
-                WHERE ISNULL(is_closed, 0) = 0
-                   OR close_date IS NULL
-                   OR close_date > %s
-                """,
-                (me,),
-            )[0]
-            deals_open_by_ym[ym] = int(n.get("n") or 0)
-        except Exception:
-            deals_open_by_ym[ym] = 0
 
     # --- EOD playable floor (machines + leased clients) ---
     smm_rows = _exec_fetch_smm_floor_rows()
@@ -712,7 +715,7 @@ def _executive_ops_series(month_ends: list[date]) -> list[dict[str, Any]]:
                     "closed": closed_by_ym.get(ym, 0),
                 },
                 "deals": {
-                    "open": deals_open_by_ym.get(ym, 0),
+                    "created": created_by_ym.get(ym, 0),
                     "won": won_by_ym.get(ym, 0),
                     "closed": lost_by_ym.get(ym, 0),
                 },

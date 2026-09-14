@@ -7,7 +7,7 @@ import { fmtUsd } from "../data/mockData";
 type MonthSeriesRow = {
   month: string;
   projects: { open: number; closed: number };
-  deals: { open: number; won: number; closed: number };
+  deals: { created: number; won: number; closed: number };
   placements: { machines: number; delta: number };
   footprint: {
     changed: number;
@@ -155,7 +155,7 @@ export default function ExecutivePage() {
                   <tr>
                     <th className="px-4 py-3">Month</th>
                     <th className="px-4 py-3">Projects open / closed</th>
-                    <th className="px-4 py-3">Deals open / won / lost</th>
+                    <th className="px-4 py-3">Deals created / won / lost</th>
                     <th className="px-4 py-3">Machines / Δ</th>
                     <th className="px-4 py-3">Footprint Δ %</th>
                     <th className="px-4 py-3">Leased clients</th>
@@ -170,7 +170,7 @@ export default function ExecutivePage() {
                         {row.projects.open} / {row.projects.closed}
                       </td>
                       <td className={t.tableCell}>
-                        {row.deals.open} / {row.deals.won} / {row.deals.closed}
+                        {row.deals.created} / {row.deals.won} / {row.deals.closed}
                       </td>
                       <td className={t.tableCell}>
                         {row.placements.machines.toLocaleString()}
@@ -211,7 +211,8 @@ export default function ExecutivePage() {
             <p className={t.calloutBody}>
               Revenue KPIs: Master_Revenue façade. Projects: <code className={t.code}>projects.ims</code>{" "}
               calendar window (open = start ≤ M &lt; end; closed = end in M — not eMaint Open status /
-              undated rows). Deals: HubSpot landing. Machines = playable SMM EOD floor roster. Footprint Δ =
+              undated rows). Deals: HubSpot landing — created in M / won / lost by{" "}
+              <code className={t.code}>close_date</code>. Machines = playable SMM EOD floor roster. Footprint Δ =
               CONVERT + swaps ÷ machines. Clients = distinct casinos on that roster. Reporting = Finance
               billing coverage.
             </p>
