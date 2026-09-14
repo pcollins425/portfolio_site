@@ -4488,7 +4488,13 @@ body.dgs-contracts-v2 .dgs-v2-doc-summary::-webkit-details-marker {
 
 /* ===================== Casino hub ===================== */
 
-/* Caption must not flex-shrink under the map column. */
+/*
+  Casino Hub is CRM-dense (long contact/deal lists). Do NOT reuse Asset Hub's
+  2-col grid + minmax(168px, auto) rows — overflow:hidden tiles under-report
+  row height and later cards paint on top of Profile (see 2026-09-14 screenshot).
+  Stack full-width cards; scroll the grid only.
+*/
+
 body.dgs-casino-hub .dgs-v2-image-caption {
   flex-shrink: 0;
 }
@@ -4555,24 +4561,41 @@ body.dgs-casino-hub .dgs-v2-casino-hub-header-actions {
   flex-shrink: 0;
 }
 
-/* Casino hub tiles hold long CRM lists — auto rows + contain overflow. */
 body.dgs-casino-hub .dgs-v2-hub-grid {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 0;
+  gap: 12px;
+  min-height: 0;
+  min-width: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  align-content: stretch;
+  grid-template-columns: none;
   grid-auto-rows: auto;
-  align-content: start;
 }
 
-body.dgs-casino-hub .dgs-v2-hub-tile {
-  min-width: 0;
+body.dgs-casino-hub .dgs-v2-hub-tile,
+body.dgs-casino-hub .dgs-v2-hub-tile--wide {
+  display: flex;
+  flex-direction: column;
+  flex: 0 0 auto;
+  width: 100%;
   max-width: 100%;
-  overflow: hidden;
-  align-self: start;
+  min-width: 0;
   height: auto;
+  overflow: visible;
+  grid-column: auto;
+  align-self: stretch;
+  position: relative;
+  z-index: 0;
 }
 
 body.dgs-casino-hub .dgs-v2-hub-tile-head {
   min-width: 0;
   flex-wrap: wrap;
   gap: 8px;
+  flex-shrink: 0;
 }
 
 body.dgs-casino-hub .dgs-v2-hub-tile-body {
@@ -4581,12 +4604,7 @@ body.dgs-casino-hub .dgs-v2-hub-tile-body {
   word-break: break-word;
 }
 
-/* Half-width tiles can't use Asset Hub's 4-col KV — 2 cols keeps labels readable. */
 body.dgs-casino-hub .dgs-v2-hub-kv-grid {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-}
-
-body.dgs-casino-hub .dgs-v2-hub-tile--wide .dgs-v2-hub-kv-grid {
   grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
@@ -4769,27 +4787,19 @@ body.dgs-casino-hub .dgs-v2-casino-deals-closed > summary {
     font-size: 20px;
   }
 
+  /* On compact, cells scroll — grid is just a stacked list inside. */
   body.dgs-casino-hub .dgs-v2-hub-grid {
     flex: none;
-    display: grid;
-    grid-template-columns: 1fr;
-    gap: 10px;
-    min-height: 0;
     overflow: visible;
-    align-content: start;
     padding-top: 10px;
   }
 
+  body.dgs-casino-hub .dgs-v2-hub-tile,
   body.dgs-casino-hub .dgs-v2-hub-tile--wide {
-    grid-column: span 1;
-  }
-
-  body.dgs-casino-hub .dgs-v2-hub-tile {
     padding: 14px;
     border-radius: 14px;
   }
 
-  body.dgs-casino-hub .dgs-v2-hub-tile--wide .dgs-v2-hub-kv-grid,
   body.dgs-casino-hub .dgs-v2-hub-kv-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -4800,8 +4810,7 @@ body.dgs-casino-hub .dgs-v2-casino-deals-closed > summary {
 }
 
 @media (max-width: 640px) {
-  body.dgs-casino-hub .dgs-v2-hub-kv-grid,
-  body.dgs-casino-hub .dgs-v2-hub-tile--wide .dgs-v2-hub-kv-grid {
+  body.dgs-casino-hub .dgs-v2-hub-kv-grid {
     grid-template-columns: 1fr;
   }
 }
