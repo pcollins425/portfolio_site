@@ -118,7 +118,7 @@ export default function ExecutivePage() {
             ? "Loading aggregates…"
             : err
               ? `Could not load live data (${err}). Check API connectivity and façade view.`
-              : `Month-end ${latest}: revenue KPIs + trailing ${windowMonths}-month ops pulse (${data?.source ?? "live"}). Machines = playable EOD floor roster; open project/deal counts are reconstructed from dates.`}
+              : `Month-end ${latest}: revenue KPIs + trailing ${windowMonths}-month ops pulse (${data?.source ?? "live"}). Machines = playable EOD floor roster. Project open = calendar still spanning month-end (IMS dates); most jobs are same-day.`}
         </p>
       </section>
 
@@ -209,11 +209,11 @@ export default function ExecutivePage() {
           <div className={t.calloutSky}>
             <p className={t.calloutTitleSky}>Sources</p>
             <p className={t.calloutBody}>
-              Revenue KPIs: Master_Revenue façade. Projects: <code className={t.code}>projects.ims</code>.
-              Deals: HubSpot landing <code className={t.code}>clients.hubspot_deal</code>. Machines =
-              playable SMM EOD floor roster (one cabinet per casino×asset). Footprint Δ = CONVERT +
-              swaps (INSTALL/REMOVE same project) ÷ machines — MOVE/UPGRADE excluded. Clients = distinct
-              casinos on that roster. Reporting = Finance billing coverage.
+              Revenue KPIs: Master_Revenue façade. Projects: <code className={t.code}>projects.ims</code>{" "}
+              calendar window (open = start ≤ M &lt; end; closed = end in M — not eMaint Open status /
+              undated rows). Deals: HubSpot landing. Machines = playable SMM EOD floor roster. Footprint Δ =
+              CONVERT + swaps ÷ machines. Clients = distinct casinos on that roster. Reporting = Finance
+              billing coverage.
             </p>
           </div>
         </>

@@ -472,7 +472,10 @@ def _executive_ops_series(month_ends: list[date]) -> list[dict[str, Any]]:
     window_start = date(month_ends[0].year, month_ends[0].month, 1)
     window_end = month_ends[-1]
 
-    # --- Projects: closed-in-month + open-at-month-end (reconstructed) ---
+    # --- Projects: calendar window (IMS). Most jobs are same-day / ≤3 days.
+    # Open = still spanning M-end (start ≤ M < end). Ignore eMaint status and
+    # undated Open rows — those were inflating the stock to ~60+.
+    # Closed = end_date in M (status ignored; catches rare stale Open).
     closed_by_ym: dict[str, int] = {}
     try:
         for r in _app_query(
@@ -481,10 +484,9 @@ def _executive_ops_series(month_ends: list[date]) -> list[dict[str, Any]]:
                 CONVERT(char(7), end_date, 126) AS ym,
                 COUNT(*) AS n
             FROM projects.ims
-            WHERE status = N'Completed'
-              AND end_date IS NOT NULL
-              AND end_date >= %s
-              AND end_date <= %s
+            WHERE end_date IS NOT NULL
+              AND CAST(end_date AS date) >= %s
+              AND CAST(end_date AS date) <= %s
             GROUP BY CONVERT(char(7), end_date, 126)
             """,
             (window_start, window_end),
@@ -495,26 +497,32 @@ def _executive_ops_series(month_ends: list[date]) -> list[dict[str, Any]]:
     except Exception:
         closed_by_ym = {}
 
-    open_by_ym: dict[str, int] = {}
-    for me in month_ends:
-        ym = me.isoformat()[:7]
-        try:
-            n = _app_query(
-                """
-                SELECT COUNT(*) AS n
-                FROM projects.ims
-                WHERE (start_date IS NULL OR start_date <= %s)
-                  AND (
-                    status = N'Open'
-                    OR end_date IS NULL
-                    OR end_date > %s
-                  )
-                """,
-                (me, me),
-            )[0]
-            open_by_ym[ym] = int(n.get("n") or 0)
-        except Exception:
-            open_by_ym[ym] = 0
+    open_by_ym: dict[str, int] = {me.isoformat()[:7]: 0 for me in month_ends}
+    try:
+        proj_rows = _app_query(
+            """
+            SELECT start_date, end_date
+            FROM projects.ims
+            WHERE start_date IS NOT NULL
+              AND end_date IS NOT NULL
+              AND CAST(start_date AS date) <= %s
+              AND CAST(end_date AS date) > %s
+            """,
+            (window_end, window_start),
+        )
+        for me in month_ends:
+            ym = me.isoformat()[:7]
+            n = 0
+            for r in proj_rows:
+                sd = _as_date(r.get("start_date"))
+                ed = _as_date(r.get("end_date"))
+                if sd is None or ed is None:
+                    continue
+                if sd <= me < ed:
+                    n += 1
+            open_by_ym[ym] = n
+    except Exception:
+        open_by_ym = {me.isoformat()[:7]: 0 for me in month_ends}
 
     # --- HubSpot deals ---
     won_by_ym: dict[str, int] = {}
