@@ -410,9 +410,13 @@
     }).addTo(state.map);
     state.mapMarker = L.marker([lat, lon]).addTo(state.map);
     state.map.setView([lat, lon], 12);
+    const fixSize = () => state.map?.invalidateSize();
     requestAnimationFrame(() => {
-      requestAnimationFrame(() => state.map?.invalidateSize());
+      requestAnimationFrame(fixSize);
     });
+    // Hub body unhides after load — remeasure once layout is final.
+    setTimeout(fixSize, 50);
+    setTimeout(fixSize, 250);
   }
 
   function renderCaption(d) {

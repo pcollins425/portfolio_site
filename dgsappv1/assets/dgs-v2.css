@@ -26,6 +26,7 @@ body.dgs-assets-v2.dgs-app,
 body.dgs-vendors-v2.dgs-app,
 body.dgs-casinos-v2.dgs-app,
 body.dgs-asset-hub.dgs-app,
+body.dgs-casino-hub.dgs-app,
 body.dgs-warehouse-v2.dgs-app,
 body.dgs-slot-master-v2.dgs-app,
 body.dgs-software-vault-v2.dgs-app,
@@ -42,6 +43,7 @@ body.dgs-assets-v2 .dgs-v2-main,
 body.dgs-vendors-v2 .dgs-v2-main,
 body.dgs-casinos-v2 .dgs-v2-main,
 body.dgs-asset-hub .dgs-v2-main,
+body.dgs-casino-hub .dgs-v2-main,
 body.dgs-warehouse-v2 .dgs-v2-main,
 body.dgs-slot-master-v2 .dgs-v2-main,
 body.dgs-software-vault-v2 .dgs-v2-main,
@@ -4487,30 +4489,33 @@ body.dgs-contracts-v2 .dgs-v2-doc-summary::-webkit-details-marker {
 /* ===================== Casino hub ===================== */
 
 body.dgs-casino-hub .dgs-v2-casino-hub-hero {
-  display: flex;
-  flex-direction: column;
-  min-height: 280px;
-  background: #e6e8ec;
+  flex: 1;
+  min-height: 0;
   position: relative;
+  overflow: hidden;
+  background: #e6e8ec;
+  border-bottom: 1px solid var(--dgs-v2-border-soft);
 }
 
 body.dgs-casino-hub .dgs-v2-casino-hub-map {
-  flex: 1;
-  min-height: 220px;
+  position: absolute;
+  inset: 0;
   width: 100%;
+  height: 100%;
   z-index: 1;
 }
 
 body.dgs-casino-hub .dgs-v2-casino-hub-map-empty {
-  flex: 1;
+  position: absolute;
+  inset: 0;
   display: flex;
   align-items: center;
   justify-content: center;
-  min-height: 220px;
   padding: 16px;
   color: #6b7280;
   font-size: 13px;
   text-align: center;
+  z-index: 1;
 }
 
 body.dgs-casino-hub .dgs-v2-casino-hub-map-empty[hidden] {
@@ -4633,11 +4638,8 @@ body.dgs-casino-hub .dgs-v2-casino-hub-person-meta {
     width: 42%;
     min-height: 0;
     max-height: none;
-  }
-
-  body.dgs-casino-hub .dgs-v2-casino-hub-map,
-  body.dgs-casino-hub .dgs-v2-casino-hub-map-empty {
-    min-height: 0;
+    border-bottom: none;
+    border-right: 1px solid var(--dgs-v2-border-soft);
   }
 
   body.dgs-casino-hub .dgs-v2-casino-hub-map-link {
