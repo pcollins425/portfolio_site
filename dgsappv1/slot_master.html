@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>Slot Master — DGS Application</title>
   <link rel="stylesheet" href="assets/dgs.css" />
   <link rel="stylesheet" href="assets/dgs-v2.css" />
@@ -30,14 +30,14 @@
       <div>
         <p class="dgs-v2-eyebrow">Deployed machines</p>
         <h1>Slot Master</h1>
-        <p class="dgs-v2-subtitle"><code>inventory.slot_master_migration</code> · resolved via asset, casino, theme FKs</p>
+        <p class="dgs-v2-subtitle dgs-v2-desktop-only"><code>inventory.slot_master_migration</code> · resolved via asset, casino, theme FKs</p>
       </div>
     </header>
 
     <div id="error-box" class="dgs-v2-error" hidden></div>
 
     <section class="dgs-v2-sm-cascade" aria-label="Location filters">
-      <p class="dgs-v2-section-label">Location</p>
+      <p class="dgs-v2-section-label dgs-v2-desktop-only">Location</p>
       <div class="dgs-v2-sm-cascade__row">
         <label class="dgs-v2-sm-cascade-select">
           <span class="dgs-v2-sm-cascade-select__label">State</span>
@@ -56,7 +56,7 @@
       </div>
     </section>
 
-    <div class="dgs-v2-metrics" id="stat-row" aria-label="Summary statistics" hidden>
+    <div class="dgs-v2-metrics dgs-v2-desktop-only" id="stat-row" aria-label="Summary statistics" hidden>
       <div class="dgs-v2-metric">
         <div class="dgs-v2-metric-label">Active machines</div>
         <div class="dgs-v2-metric-value" id="stat-active">—</div>
@@ -71,78 +71,89 @@
       </div>
     </div>
 
-    <section class="dgs-v2-list-panel" id="list-panel" hidden>
-      <div class="dgs-v2-toolbar">
-        <input id="search-input" type="search" placeholder="Search serial, asset #, theme, ZBL…" autocomplete="off" />
-        <button id="search-btn" type="button" class="dgs-v2-btn dgs-v2-btn--primary">Search</button>
-        <button id="clear-search" type="button" class="dgs-v2-btn">Clear</button>
-      </div>
-      <div class="dgs-v2-grid-wrap">
-        <table class="dgs-v2-grid" id="machines-table">
-          <thead>
-            <tr>
-              <th>Serial</th>
-              <th>Cabinet</th>
-              <th>Theme</th>
-              <th>ZBL</th>
-              <th>Hold</th>
-            </tr>
-          </thead>
-          <tbody id="machines-tbody"></tbody>
-        </table>
-      </div>
-      <div class="dgs-v2-list-status" id="list-status"></div>
-    </section>
-  </div>
-
-  <div class="detail-backdrop" id="detail-backdrop" hidden></div>
-
-  <aside class="detail-drawer detail-split dgs-v2-drawer dgs-v2-sm-drawer" id="detail-drawer" aria-hidden="true">
-    <div class="dgs-v2-drawer-header">
-      <div>
-        <p class="dgs-v2-eyebrow" id="detail-eyebrow">Active deployment</p>
-        <h2 class="dgs-v2-drawer-title" id="detail-title">Machine</h2>
-        <p class="dgs-v2-subtitle" id="detail-subtitle"></p>
-      </div>
-      <div class="dgs-v2-sm-drawer-badges">
-        <span class="dgs-v2-sm-badge" id="detail-active-badge" hidden>Active</span>
-        <button type="button" id="btn-close-detail" class="dgs-v2-drawer-close" aria-label="Close details">×</button>
-      </div>
-    </div>
-    <div class="dgs-v2-drawer-body dgs-v2-sm-detail-body">
-      <div class="dgs-v2-sm-fk-row" id="fk-chips"></div>
-
-      <button type="button" class="dgs-v2-sm-summary-toggle" id="btn-toggle-summary" aria-expanded="false">
-        <span>Current settings</span>
-        <span class="dgs-v2-sm-summary-toggle__hint" id="summary-hint">▾ Show all attributes</span>
-      </button>
-      <div class="dgs-v2-sm-summary-strip" id="summary-strip"></div>
-
-      <div class="dgs-v2-sm-edit-panel" id="edit-panel" hidden>
-        <div class="dgs-v2-sm-edit-panel__head">
-          <div>
-            <p class="dgs-v2-sm-edit-panel__title">All attributes · direct edit</p>
-            <p class="dgs-v2-subtitle" id="edit-panel-subtitle"></p>
-          </div>
-          <button type="button" class="dgs-v2-btn" id="btn-collapse-edit">▴ Collapse</button>
+    <div class="dgs-v2-split" id="sm-split" hidden>
+      <section class="dgs-v2-list-panel" id="list-panel">
+        <div class="dgs-v2-toolbar">
+          <input id="search-input" type="search" placeholder="Search serial, asset #, theme, ZBL…" autocomplete="off" />
+          <button id="search-btn" type="button" class="dgs-v2-btn dgs-v2-btn--primary">Search</button>
+          <button id="clear-search" type="button" class="dgs-v2-btn">Clear</button>
         </div>
-        <div class="dgs-v2-sm-edit-grid" id="edit-grid"></div>
-        <div class="dgs-v2-sm-edit-actions" id="edit-actions" hidden>
-          <button type="button" class="dgs-v2-btn dgs-v2-btn--primary" id="btn-apply">Apply changes</button>
-          <button type="button" class="dgs-v2-btn" id="btn-discard">Discard</button>
+        <div class="dgs-v2-grid-wrap" id="machines-grid-wrap">
+          <table class="dgs-v2-grid" id="machines-table">
+            <thead>
+              <tr>
+                <th>Serial</th>
+                <th class="dgs-v2-col--desktop">Cabinet</th>
+                <th>Theme</th>
+                <th>ZBL</th>
+                <th class="dgs-v2-col--desktop">Hold</th>
+              </tr>
+            </thead>
+            <tbody id="machines-tbody"></tbody>
+          </table>
+          <div id="machines-scroll-sentinel" class="dgs-v2-scroll-sentinel" hidden aria-hidden="true"></div>
         </div>
-      </div>
-
-      <section class="dgs-v2-sm-history-section" aria-label="Asset history">
-        <div class="dgs-v2-sm-history-head">
-          <h3 class="dgs-v2-section-label" id="history-title">Asset history</h3>
-          <span class="dgs-v2-list-status" id="history-count"></span>
-        </div>
-        <p class="dgs-v2-subtitle dgs-v2-sm-history-note">Click a row to load that snapshot into the edit form.</p>
-        <div class="dgs-v2-sm-history-list" id="history-list"></div>
+        <div class="dgs-v2-list-status" id="list-status"></div>
       </section>
+
+      <div id="sm-detail-backdrop" class="dgs-v2-detail-backdrop" hidden></div>
+
+      <aside class="dgs-v2-detail" id="detail-panel" aria-hidden="false">
+        <div class="dgs-v2-detail-bar dgs-v2-phone-only" id="detail-bar" hidden>
+          <span class="dgs-v2-detail-bar-title" id="detail-bar-title">Machine</span>
+          <button type="button" id="detail-close" class="dgs-v2-drawer-close" aria-label="Close detail">×</button>
+        </div>
+
+        <div class="dgs-v2-detail-body empty" id="detail-body">
+          <p id="detail-empty-msg">Select a machine to view deployment and history.</p>
+          <div id="detail-content" hidden>
+            <div class="dgs-v2-sm-detail-head">
+              <div>
+                <p class="dgs-v2-eyebrow" id="detail-eyebrow">Active deployment</p>
+                <h2 class="dgs-v2-drawer-title" id="detail-title">Machine</h2>
+                <p class="dgs-v2-subtitle" id="detail-subtitle"></p>
+              </div>
+              <div class="dgs-v2-sm-drawer-badges">
+                <span class="dgs-v2-sm-badge" id="detail-active-badge" hidden>Active</span>
+              </div>
+            </div>
+
+            <div class="dgs-v2-sm-fk-row" id="fk-chips"></div>
+
+            <button type="button" class="dgs-v2-sm-summary-toggle" id="btn-toggle-summary" aria-expanded="false">
+              <span>Current settings</span>
+              <span class="dgs-v2-sm-summary-toggle__hint" id="summary-hint">▾ Show all attributes</span>
+            </button>
+            <div class="dgs-v2-sm-summary-strip" id="summary-strip"></div>
+
+            <div class="dgs-v2-sm-edit-panel" id="edit-panel" hidden>
+              <div class="dgs-v2-sm-edit-panel__head">
+                <div>
+                  <p class="dgs-v2-sm-edit-panel__title">All attributes · direct edit</p>
+                  <p class="dgs-v2-subtitle" id="edit-panel-subtitle"></p>
+                </div>
+                <button type="button" class="dgs-v2-btn" id="btn-collapse-edit">▴ Collapse</button>
+              </div>
+              <div class="dgs-v2-sm-edit-grid" id="edit-grid"></div>
+              <div class="dgs-v2-sm-edit-actions" id="edit-actions" hidden>
+                <button type="button" class="dgs-v2-btn dgs-v2-btn--primary" id="btn-apply">Apply changes</button>
+                <button type="button" class="dgs-v2-btn" id="btn-discard">Discard</button>
+              </div>
+            </div>
+
+            <section class="dgs-v2-sm-history-section" aria-label="Asset history">
+              <div class="dgs-v2-sm-history-head">
+                <h3 class="dgs-v2-section-label" id="history-title">Asset history</h3>
+                <span class="dgs-v2-list-status" id="history-count"></span>
+              </div>
+              <p class="dgs-v2-subtitle dgs-v2-sm-history-note">Click a row to load that snapshot into the edit form.</p>
+              <div class="dgs-v2-sm-history-list" id="history-list"></div>
+            </section>
+          </div>
+        </div>
+      </aside>
     </div>
-  </aside>
+  </div>
 
   <script src="assets/auth.js"></script>
   <script src="assets/shell.js"></script>
