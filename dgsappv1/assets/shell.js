@@ -397,7 +397,32 @@
     const nav = document.getElementById("dgs-dashboard-nav");
     if (!nav) return;
     const v2 = document.body.classList.contains("dgs-dashboard-v2");
+    const phone = window.matchMedia("(max-width: 640px)").matches;
     nav.innerHTML = "";
+
+    if (v2 && phone) {
+      const sel = document.createElement("select");
+      sel.className = "dgs-dashboard-view-select";
+      sel.setAttribute("aria-label", "Dashboard views");
+      for (const item of DASHBOARD_NAV) {
+        const opt = document.createElement("option");
+        opt.value = item.route;
+        let label = item.label;
+        if (item.route === "/analyst" && analystOpenMonths > 0) {
+          label += ` (${analystOpenMonths})`;
+        }
+        if (item.route === "/commission" && commissionOpenMonths > 0) {
+          label += ` (${commissionOpenMonths})`;
+        }
+        opt.textContent = label;
+        if (item.route === activeRoute) opt.selected = true;
+        sel.appendChild(opt);
+      }
+      sel.addEventListener("change", () => setDashboardRoute(sel.value));
+      nav.appendChild(sel);
+      return;
+    }
+
     for (const item of DASHBOARD_NAV) {
       const el = document.createElement(v2 ? "button" : "a");
       if (!v2) el.href = "#";
@@ -478,6 +503,16 @@
     window.addEventListener("dgs-commission-open-months", (e) => {
       setCommissionOpenMonths(e.detail);
     });
+    const phoneMq = window.matchMedia("(max-width: 640px)");
+    const onPhoneNavMode = () => {
+      const nav = document.getElementById("dgs-dashboard-nav");
+      const active = nav?.querySelector(".active")?.getAttribute("data-route")
+        || nav?.querySelector("select")?.value
+        || initial;
+      renderDashboardSubnav(active);
+    };
+    if (phoneMq.addEventListener) phoneMq.addEventListener("change", onPhoneNavMode);
+    else if (phoneMq.addListener) phoneMq.addListener(onPhoneNavMode);
     renderDashboardSubnav(initial);
     setDashboardRoute(initial);
   }

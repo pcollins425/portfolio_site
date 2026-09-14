@@ -72,6 +72,51 @@ function Kpi({
   );
 }
 
+function MonthCard({ row }: { row: MonthSeriesRow }) {
+  const t = useDashboardTheme();
+  return (
+    <article className={`rounded-xl border border-white/10 bg-[#141922] p-3 ${t.code}`}>
+      <header className="mb-2 flex items-baseline justify-between gap-2">
+        <h3 className="text-sm font-semibold text-[#f3f5f9]">{fmtMonthLabel(row.month)}</h3>
+        <span className="text-xs text-[#8b96a8]">
+          {row.reporting.pct.toFixed(0)}% reporting ({row.reporting.reported}/
+          {row.reporting.expected})
+        </span>
+      </header>
+      <dl className="grid grid-cols-2 gap-x-3 gap-y-2 text-xs">
+        <div>
+          <dt className="text-[#8b96a8]">Projects</dt>
+          <dd className="font-mono text-[#c5cdd9]">
+            {row.projects.open} open / {row.projects.closed} closed
+          </dd>
+        </div>
+        <div>
+          <dt className="text-[#8b96a8]">Deals</dt>
+          <dd className="font-mono text-[#c5cdd9]">
+            {row.deals.created} / {row.deals.won} / {row.deals.closed}
+          </dd>
+        </div>
+        <div>
+          <dt className="text-[#8b96a8]">Machines</dt>
+          <dd className="font-mono text-[#c5cdd9]">
+            {row.placements.machines.toLocaleString()} ({fmtDelta(row.placements.delta)})
+          </dd>
+        </div>
+        <div>
+          <dt className="text-[#8b96a8]">Footprint Δ</dt>
+          <dd className="font-mono text-[#c5cdd9]">
+            {row.footprint.pct.toFixed(2)}% ({row.footprint.converts}c+{row.footprint.swaps}s)
+          </dd>
+        </div>
+        <div className="col-span-2">
+          <dt className="text-[#8b96a8]">Leased clients</dt>
+          <dd className="font-mono text-[#c5cdd9]">{row.leased_clients}</dd>
+        </div>
+      </dl>
+    </article>
+  );
+}
+
 export default function ExecutivePage() {
   const t = useDashboardTheme();
   const { month } = useDashboardMonth();
@@ -111,21 +156,28 @@ export default function ExecutivePage() {
   const series = [...(data?.series ?? [])].reverse(); // newest first for table
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6 md:space-y-8">
       <section>
         <h2 className={t.pageTitle}>Executive snapshot</h2>
-        <p className={t.pageSub}>
+        <p className={`${t.pageSub} hidden sm:block`}>
           {loading
             ? "Loading aggregates…"
             : err
               ? `Could not load live data (${err}). Check API connectivity and façade view.`
               : `Month-end ${latest}: revenue KPIs + trailing ${windowMonths}-month ops pulse (${data?.source ?? "live"}${data?.series_source ? ` · ops ${data.series_source}` : ""}). Machines = playable EOD floor roster. Project open = calendar still spanning month-end (IMS dates); most jobs are same-day.`}
         </p>
+        <p className={`${t.pageSub} sm:hidden`}>
+          {loading
+            ? "Loading…"
+            : err
+              ? `Load failed (${err}).`
+              : `${latest.slice(0, 7) || "—"} · ${windowMonths}mo ops${data?.series_source ? ` · ${data.series_source}` : ""}`}
+        </p>
       </section>
 
       {!err && (
         <>
-          <div className="grid gap-4 sm:grid-cols-3">
+          <div className="grid gap-3 grid-cols-1 sm:grid-cols-3 sm:gap-4">
             <Kpi
               label="Coin-in"
               value={fmtUsd(coinIn)}
@@ -150,64 +202,78 @@ export default function ExecutivePage() {
             <p className={t.panelLabel}>
               Ops pulse — trailing {windowMonths} months (newest first)
             </p>
-            <div className={`mt-4 ${t.tableWrap} overflow-x-auto`}>
-              <table className="min-w-full text-left text-sm">
-                <thead className={t.tableHead}>
-                  <tr>
-                    <th className="px-4 py-3">Month</th>
-                    <th className="px-4 py-3">Projects open / closed</th>
-                    <th className="px-4 py-3">Deals created / won / lost</th>
-                    <th className="px-4 py-3">Machines / Δ</th>
-                    <th className="px-4 py-3">Footprint Δ %</th>
-                    <th className="px-4 py-3">Leased clients</th>
-                    <th className="px-4 py-3">Reporting %</th>
-                  </tr>
-                </thead>
-                <tbody className={t.tableRow}>
-                  {series.map((row) => (
-                    <tr key={row.month}>
-                      <td className={t.tableCellName}>{fmtMonthLabel(row.month)}</td>
-                      <td className={t.tableCell}>
-                        {row.projects.open} / {row.projects.closed}
-                      </td>
-                      <td className={t.tableCell}>
-                        {row.deals.created} / {row.deals.won} / {row.deals.closed}
-                      </td>
-                      <td className={t.tableCell}>
-                        {row.placements.machines.toLocaleString()}
-                        <span className="ml-1 text-xs opacity-70">
-                          ({fmtDelta(row.placements.delta)})
-                        </span>
-                      </td>
-                      <td className={t.tableCell}>
-                        {row.footprint.pct.toFixed(2)}%
-                        <span className="ml-1 text-xs opacity-70">
-                          ({row.footprint.converts}c+{row.footprint.swaps}s /{" "}
-                          {row.footprint.active.toLocaleString()})
-                        </span>
-                      </td>
-                      <td className={t.tableCell}>{row.leased_clients}</td>
-                      <td className={t.tableCell}>
-                        {row.reporting.pct.toFixed(1)}%
-                        <span className="ml-1 text-xs opacity-70">
-                          ({row.reporting.reported}/{row.reporting.expected})
-                        </span>
-                      </td>
-                    </tr>
-                  ))}
-                  {!series.length && !loading && (
+
+            {/* Phone: stacked month cards */}
+            <div className="mt-3 space-y-3 md:hidden">
+              {series.map((row) => (
+                <MonthCard key={row.month} row={row} />
+              ))}
+              {!series.length && !loading && (
+                <p className={`${t.tableCellMuted} px-1 py-4`}>No series rows returned.</p>
+              )}
+            </div>
+
+            {/* Tablet/desktop: scrollable wide table */}
+            <div className="mt-4 hidden md:block">
+              <div className="overflow-x-auto rounded-xl border border-white/10">
+                <table className="min-w-[720px] w-full text-left text-sm">
+                  <thead className={t.tableHead}>
                     <tr>
-                      <td className={t.tableCellMuted} colSpan={7}>
-                        No series rows returned.
-                      </td>
+                      <th className="px-3 py-2.5 whitespace-nowrap">Month</th>
+                      <th className="px-3 py-2.5 whitespace-nowrap">Projects</th>
+                      <th className="px-3 py-2.5 whitespace-nowrap">Deals</th>
+                      <th className="px-3 py-2.5 whitespace-nowrap">Machines / Δ</th>
+                      <th className="px-3 py-2.5 whitespace-nowrap">Footprint Δ %</th>
+                      <th className="px-3 py-2.5 whitespace-nowrap">Clients</th>
+                      <th className="px-3 py-2.5 whitespace-nowrap">Reporting %</th>
                     </tr>
-                  )}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody className={t.tableRow}>
+                    {series.map((row) => (
+                      <tr key={row.month}>
+                        <td className={t.tableCellName}>{fmtMonthLabel(row.month)}</td>
+                        <td className={t.tableCell}>
+                          {row.projects.open} / {row.projects.closed}
+                        </td>
+                        <td className={t.tableCell}>
+                          {row.deals.created} / {row.deals.won} / {row.deals.closed}
+                        </td>
+                        <td className={t.tableCell}>
+                          {row.placements.machines.toLocaleString()}
+                          <span className="ml-1 text-xs opacity-70">
+                            ({fmtDelta(row.placements.delta)})
+                          </span>
+                        </td>
+                        <td className={t.tableCell}>
+                          {row.footprint.pct.toFixed(2)}%
+                          <span className="ml-1 text-xs opacity-70">
+                            ({row.footprint.converts}c+{row.footprint.swaps}s /{" "}
+                            {row.footprint.active.toLocaleString()})
+                          </span>
+                        </td>
+                        <td className={t.tableCell}>{row.leased_clients}</td>
+                        <td className={t.tableCell}>
+                          {row.reporting.pct.toFixed(1)}%
+                          <span className="ml-1 text-xs opacity-70">
+                            ({row.reporting.reported}/{row.reporting.expected})
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                    {!series.length && !loading && (
+                      <tr>
+                        <td className={t.tableCellMuted} colSpan={7}>
+                          No series rows returned.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
             </div>
           </div>
 
-          <div className={t.calloutSky}>
+          <div className={`${t.calloutSky} hidden sm:block`}>
             <p className={t.calloutTitleSky}>Sources</p>
             <p className={t.calloutBody}>
               Revenue KPIs: Master_Revenue façade. Projects: <code className={t.code}>projects.ims</code>{" "}

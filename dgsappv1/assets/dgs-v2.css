@@ -5633,3 +5633,71 @@ body.dgs-projects-v2 .dgs-v2-detail-backdrop {
     max-width: 140px;
   }
 }
+
+/* ===================== Dashboard compact ≤1366 / phone ===================== */
+
+@media (max-width: 1366px) {
+  body.dgs-dashboard-v2 .dgs-v2-main {
+    padding: 12px 14px 16px;
+    gap: 12px;
+  }
+
+  body.dgs-dashboard-v2 .dgs-v2-page-header {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+  }
+
+  body.dgs-dashboard-v2 .dgs-v2-page-header h1 {
+    font-size: 22px;
+  }
+
+  body.dgs-dashboard-v2 .dgs-v2-subtitle {
+    display: none;
+  }
+
+  body.dgs-dashboard-v2 .dgs-v2-view-toggle {
+    display: flex;
+    flex-wrap: wrap;
+    width: 100%;
+    max-width: 100%;
+    align-self: stretch;
+    overflow: visible;
+    box-sizing: border-box;
+    padding: 3px;
+    gap: 3px;
+  }
+
+  body.dgs-dashboard-v2 .dgs-v2-view-toggle button {
+    padding: 6px 10px;
+    font-size: 12px;
+    white-space: nowrap;
+    flex: 0 0 auto;
+  }
+
+  body.dgs-dashboard-v2 .dgs-dashboard-mount {
+    border-radius: 12px;
+  }
+}
+
+@media (max-width: 640px) {
+  body.dgs-dashboard-v2 .dgs-v2-view-toggle {
+    padding: 0;
+    border: none;
+    background: transparent;
+  }
+
+  body.dgs-dashboard-v2 .dgs-dashboard-view-select {
+    width: 100%;
+    box-sizing: border-box;
+    appearance: none;
+    border: 1px solid var(--dgs-v2-border);
+    background: var(--dgs-v2-card-head);
+    color: var(--dgs-v2-heading);
+    border-radius: 10px;
+    padding: 10px 12px;
+    font-size: 15px;
+    font-weight: 600;
+    font-family: inherit;
+  }
+}
