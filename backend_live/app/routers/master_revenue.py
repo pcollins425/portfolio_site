@@ -211,8 +211,261 @@ def _app_query(sql: str, params=None):
     )
 
 
+_EXEC_SOLD_CASINO_ID = "CT-00907"
+_EXEC_IMS_ERA_ACTIONS = frozenset(
+    {
+        "MOVE",
+        "UPGRADE",
+        "RECONFIG",
+        "RECONFIGURE",
+        "RECONFIGURATION",
+        "CONFIG",
+        "CONFIG CHANGE",
+        "CONFIG_CHANGE",
+    }
+)
+
+
+def _exec_norm_action(v: object) -> str:
+    return str(v or "").strip().upper()
+
+
+def _exec_is_non_playable(row: dict[str, Any]) -> bool:
+    text = " ".join(
+        [
+            str(row.get("asset_no") or ""),
+            str(row.get("cabinet_type") or ""),
+            str(row.get("machine_type") or ""),
+            str(row.get("cabinet_name") or ""),
+            str(row.get("theme_name") or ""),
+            str(row.get("serial_number") or ""),
+        ]
+    ).lower()
+    return any(tok in text for tok in ("center", "sign", "controller", "server"))
+
+
+def _exec_effective_from(row: dict[str, Any]) -> date | None:
+    action = _exec_norm_action(row.get("action"))
+    lastconver = _as_date(row.get("lastconver"))
+    golive = _as_date(row.get("golive001"))
+    instl = _as_date(row.get("date_instl"))
+    ims_start = _as_date(row.get("project_start"))
+
+    if action == "CONVERT":
+        return lastconver
+    if action in _EXEC_IMS_ERA_ACTIONS:
+        if ims_start is not None:
+            return ims_start
+        if action == "UPGRADE" and lastconver is not None:
+            return lastconver
+        return None
+    if action in ("", "INSTALL"):
+        return golive or instl
+    if ims_start is not None:
+        return ims_start
+    if lastconver is not None:
+        return lastconver
+    return golive or instl
+
+
+def _exec_stint_era(row: dict[str, Any]) -> date | None:
+    action = _exec_norm_action(row.get("action"))
+    if action in ("CONVERT", "UPGRADE"):
+        return _as_date(row.get("lastconver")) or (
+            _as_date(row.get("project_start")) if action == "UPGRADE" else None
+        )
+    if action == "MOVE":
+        return _as_date(row.get("project_start"))
+    return (
+        _as_date(row.get("lastconver"))
+        or _as_date(row.get("golive001"))
+        or _as_date(row.get("date_instl"))
+    )
+
+
+def _exec_upgrade_era(row: dict[str, Any]) -> date | None:
+    return _as_date(row.get("lastconver")) or _as_date(row.get("project_start"))
+
+
+def _exec_logic_suppress(
+    row: dict[str, Any],
+    siblings: list[dict[str, Any]],
+    *,
+    month_start: date,
+    as_of: date,
+) -> bool:
+    """True if row is suppressed by Finance-style convert/MOVE/UPGRADE close-out."""
+    action = _exec_norm_action(row.get("action"))
+    ref = str(row.get("reference_key") or "")
+    era = _exec_stint_era(row)
+    lc_self = _as_date(row.get("lastconver"))
+
+    for s in siblings:
+        if str(s.get("reference_key") or "") == ref:
+            continue
+        succ_lc = _as_date(s.get("lastconver"))
+        if succ_lc is None or era is None:
+            continue
+        if succ_lc > era and succ_lc < month_start:
+            return True
+
+    if action == "MOVE":
+        ps = _as_date(row.get("project_start"))
+        if ps is None or ps > as_of:
+            return True
+
+    for s in siblings:
+        if str(s.get("reference_key") or "") == ref:
+            continue
+        if _exec_norm_action(s.get("action")) != "MOVE":
+            continue
+        mv_start = _as_date(s.get("project_start"))
+        if mv_start is None or mv_start > as_of:
+            continue
+        if action not in ("MOVE", "UPGRADE", "CONVERT"):
+            if lc_self is None or lc_self <= mv_start:
+                return True
+        elif action in ("CONVERT", "UPGRADE"):
+            sm_start = lc_self if action == "CONVERT" else _exec_upgrade_era(row)
+            if sm_start is not None and sm_start < mv_start:
+                return True
+        elif action == "MOVE" and era is not None:
+            if era < mv_start or (
+                not bool(row.get("is_active"))
+                and bool(s.get("is_active"))
+                and era <= mv_start
+            ):
+                return True
+
+    if action != "CONVERT":
+        for s in siblings:
+            if str(s.get("reference_key") or "") == ref:
+                continue
+            if _exec_norm_action(s.get("action")) != "UPGRADE":
+                continue
+            upg_era = _exec_upgrade_era(s)
+            if upg_era is None or upg_era > as_of:
+                continue
+            upg_rmvl = _as_date(s.get("rmvl_date"))
+            if upg_rmvl is not None and upg_rmvl < month_start:
+                continue
+            if action not in ("MOVE", "UPGRADE", "CONVERT"):
+                if lc_self is not None and not (lc_self < upg_era):
+                    continue
+                inst = _as_date(row.get("golive001")) or _as_date(row.get("date_instl"))
+                if lc_self is None and inst is not None and not (inst < upg_era):
+                    continue
+                return True
+            if action in ("MOVE", "UPGRADE") and era is not None and era < upg_era:
+                return True
+    return False
+
+
+def _exec_fetch_smm_floor_rows() -> list[dict[str, Any]]:
+    """One fetch of SMM history for EOD floor counts (siblings needed for close-out)."""
+    try:
+        return _app_query(
+            f"""
+            SELECT
+                m.reference_key,
+                m.index_key,
+                m.asset_id,
+                m.casino_id,
+                m.project_id,
+                m.action,
+                m.is_active,
+                m.asset_no,
+                m.date_instl,
+                m.golive001,
+                m.lastconver,
+                m.rmvl_date,
+                a.serial_number,
+                a.cabinet_type,
+                a.machine_type,
+                cab.cabinet_name,
+                t.theme_name,
+                i.start_date AS project_start
+            FROM inventory.slot_master_migration AS m
+            INNER JOIN inventory.assets AS a ON a.reference_key = m.asset_id
+            LEFT JOIN vendors.cabinets AS cab ON cab.reference_key = a.cabinet_id
+            LEFT JOIN vendors.themes AS t ON t.reference_key = m.theme_id
+            LEFT JOIN projects.ims AS i ON i.reference_key = m.project_id
+            WHERE m.casino_id <> N'{_EXEC_SOLD_CASINO_ID}'
+              AND m.casino_id IS NOT NULL
+              AND LTRIM(RTRIM(m.casino_id)) <> N''
+            """
+        )
+    except Exception:
+        return []
+
+
+def _exec_floor_counts_by_month(
+    month_ends: list[date], rows: list[dict[str, Any]]
+) -> tuple[dict[str, int], dict[str, int]]:
+    """Playable EOD machines + distinct casinos per YYYY-MM (one identity per casino×asset)."""
+    machines_by_ym: dict[str, int] = {}
+    clients_by_ym: dict[str, int] = {}
+    if not rows:
+        for me in month_ends:
+            ym = me.isoformat()[:7]
+            machines_by_ym[ym] = 0
+            clients_by_ym[ym] = 0
+        return machines_by_ym, clients_by_ym
+
+    by_ca: dict[tuple[str, str], list[dict[str, Any]]] = {}
+    enriched_all: list[dict[str, Any]] = []
+    for raw in rows:
+        enriched = dict(raw)
+        enriched["effective_from"] = _exec_effective_from(raw)
+        enriched["non_playable"] = _exec_is_non_playable(raw)
+        enriched_all.append(enriched)
+        key = (str(raw.get("casino_id") or ""), str(raw.get("asset_id") or ""))
+        by_ca.setdefault(key, []).append(enriched)
+
+    for me in month_ends:
+        ym = me.isoformat()[:7]
+        month_start = me.replace(day=1)
+        candidates: list[dict[str, Any]] = []
+        for enriched in enriched_all:
+            eff = enriched["effective_from"]
+            rmvl = _as_date(enriched.get("rmvl_date"))
+            if eff is None or eff > me:
+                continue
+            if rmvl is not None and rmvl <= me:
+                continue
+            key = (
+                str(enriched.get("casino_id") or ""),
+                str(enriched.get("asset_id") or ""),
+            )
+            if _exec_logic_suppress(
+                enriched, by_ca.get(key, []), month_start=month_start, as_of=me
+            ):
+                continue
+            candidates.append(enriched)
+
+        best: dict[tuple[str, str], dict[str, Any]] = {}
+
+        def _sort_key(r: dict[str, Any]) -> tuple:
+            return (
+                r["effective_from"],
+                int(r.get("index_key") or 0),
+                1 if r.get("is_active") else 0,
+            )
+
+        for r in sorted(candidates, key=_sort_key):
+            key = (str(r.get("casino_id") or ""), str(r.get("asset_id") or ""))
+            best[key] = r
+
+        playable = [r for r in best.values() if not r.get("non_playable")]
+        machines_by_ym[ym] = len(playable)
+        clients_by_ym[ym] = len(
+            {str(r.get("casino_id") or "") for r in playable if r.get("casino_id")}
+        )
+    return machines_by_ym, clients_by_ym
+
+
 def _executive_ops_series(month_ends: list[date]) -> list[dict[str, Any]]:
-    """Build trailing ops metrics for each month-end (plan definitions)."""
+    """Trailing ops metrics: EOD machines, convert+swap footprint, reporting coverage."""
     if not month_ends:
         return []
 
@@ -312,87 +565,68 @@ def _executive_ops_series(month_ends: list[date]) -> list[dict[str, Any]]:
         except Exception:
             deals_open_by_ym[ym] = 0
 
-    # --- SMM placements (INSTALL only) ---
-    placements_by_ym: dict[str, int] = {}
+    # --- EOD playable floor (machines + leased clients) ---
+    smm_rows = _exec_fetch_smm_floor_rows()
+    machines_by_ym, leased_by_ym = _exec_floor_counts_by_month(month_ends, smm_rows)
+
+    # --- Footprint numerator: CONVERT + swaps (INSTALL/REMOVE same project) ---
+    converts_by_ym: dict[str, int] = {}
     try:
         for r in _app_query(
             """
             SELECT
-                CONVERT(char(7), COALESCE(date_instl, golive001), 126) AS ym,
-                COUNT(*) AS n
+                CONVERT(char(7), lastconver, 126) AS ym,
+                COUNT(DISTINCT asset_id) AS n
             FROM inventory.slot_master_migration
-            WHERE UPPER(LTRIM(RTRIM(ISNULL(action, N'')))) = N'INSTALL'
-              AND COALESCE(date_instl, golive001) IS NOT NULL
-              AND COALESCE(date_instl, golive001) >= %s
-              AND COALESCE(date_instl, golive001) <= %s
-            GROUP BY CONVERT(char(7), COALESCE(date_instl, golive001), 126)
+            WHERE UPPER(LTRIM(RTRIM(ISNULL(action, N'')))) = N'CONVERT'
+              AND lastconver IS NOT NULL
+              AND lastconver >= %s
+              AND lastconver <= %s
+            GROUP BY CONVERT(char(7), lastconver, 126)
             """,
             (window_start, window_end),
         ):
             ym = str(r.get("ym") or "").strip()
             if ym:
-                placements_by_ym[ym] = int(r.get("n") or 0)
+                converts_by_ym[ym] = int(r.get("n") or 0)
     except Exception:
-        placements_by_ym = {}
+        converts_by_ym = {}
 
-    # --- Footprint change numerator: CONVERT + MOVE in month ---
-    changed_by_ym: dict[str, int] = {}
+    swaps_by_ym: dict[str, int] = {}
     try:
         for r in _app_query(
             """
             SELECT
-                CONVERT(char(7), change_dt, 126) AS ym,
-                COUNT(*) AS n
+                ym,
+                SUM(CASE WHEN n_install < n_remove THEN n_install ELSE n_remove END) AS swaps
             FROM (
                 SELECT
-                    CASE
-                        WHEN UPPER(LTRIM(RTRIM(ISNULL(action, N'')))) = N'CONVERT'
-                            THEN COALESCE(lastconver, date_instl, golive001)
-                        WHEN UPPER(LTRIM(RTRIM(ISNULL(action, N'')))) = N'MOVE'
-                            THEN COALESCE(lastconver, date_instl, golive001)
-                        ELSE NULL
-                    END AS change_dt
-                FROM inventory.slot_master_migration
-                WHERE UPPER(LTRIM(RTRIM(ISNULL(action, N'')))) IN (N'CONVERT', N'MOVE')
+                    CONVERT(char(7), i.start_date, 126) AS ym,
+                    pc.reference_key AS catalog_id,
+                    SUM(CASE WHEN pd.action_type = N'INSTALL' THEN 1 ELSE 0 END) AS n_install,
+                    SUM(CASE WHEN pd.action_type = N'REMOVE' THEN 1 ELSE 0 END) AS n_remove
+                FROM projects.project_details AS pd
+                INNER JOIN projects.project_catalog AS pc
+                    ON pc.reference_key = pd.project_id
+                INNER JOIN projects.ims AS i
+                    ON i.reference_key = pc.ims_id
+                WHERE pd.action_type IN (N'INSTALL', N'REMOVE')
+                  AND i.start_date IS NOT NULL
+                  AND i.start_date >= %s
+                  AND i.start_date <= %s
+                GROUP BY CONVERT(char(7), i.start_date, 126), pc.reference_key
+                HAVING SUM(CASE WHEN pd.action_type = N'INSTALL' THEN 1 ELSE 0 END) > 0
+                   AND SUM(CASE WHEN pd.action_type = N'REMOVE' THEN 1 ELSE 0 END) > 0
             ) AS x
-            WHERE change_dt IS NOT NULL
-              AND change_dt >= %s
-              AND change_dt <= %s
-            GROUP BY CONVERT(char(7), change_dt, 126)
+            GROUP BY ym
             """,
             (window_start, window_end),
         ):
             ym = str(r.get("ym") or "").strip()
             if ym:
-                changed_by_ym[ym] = int(r.get("n") or 0)
+                swaps_by_ym[ym] = int(r.get("swaps") or 0)
     except Exception:
-        changed_by_ym = {}
-
-    # --- Active leased seats + clients at each month-end (reconstructed) ---
-    active_by_ym: dict[str, int] = {}
-    leased_by_ym: dict[str, int] = {}
-    for me in month_ends:
-        ym = me.isoformat()[:7]
-        try:
-            row = _app_query(
-                """
-                SELECT
-                    COUNT(*) AS seats,
-                    COUNT(DISTINCT casino_id) AS clients
-                FROM inventory.slot_master_migration
-                WHERE casino_id IS NOT NULL
-                  AND LTRIM(RTRIM(casino_id)) <> N''
-                  AND UPPER(LTRIM(RTRIM(ISNULL(action, N'')))) <> N'SOLD'
-                  AND COALESCE(date_instl, golive001, CAST('19000101' AS date)) <= %s
-                  AND (rmvl_date IS NULL OR rmvl_date > %s)
-                """,
-                (me, me),
-            )[0]
-            active_by_ym[ym] = int(row.get("seats") or 0)
-            leased_by_ym[ym] = int(row.get("clients") or 0)
-        except Exception:
-            active_by_ym[ym] = 0
-            leased_by_ym[ym] = 0
+        swaps_by_ym = {}
 
     # --- Reporting coverage (casino grain from billing_coverage snapshot) ---
     expected_by_ym: dict[str, int] = {}
@@ -429,7 +663,6 @@ def _executive_ops_series(month_ends: list[date]) -> list[dict[str, Any]]:
             expected_by_ym[ym] = len(exp_sets.get(ym, set()))
             reported_by_ym[ym] = len(rep_sets.get(ym, set()))
     except Exception:
-        # Fallback: distinct casinos with MR rows that month vs leased clients
         try:
             for r in _revenue_query(
                 f"""
@@ -450,11 +683,16 @@ def _executive_ops_series(month_ends: list[date]) -> list[dict[str, Any]]:
             pass
 
     series: list[dict[str, Any]] = []
+    prev_machines: int | None = None
     for me in month_ends:
         ym = me.isoformat()[:7]
-        changed = changed_by_ym.get(ym, 0)
-        active = active_by_ym.get(ym, 0)
-        fp_pct = round((changed / active) * 100.0, 2) if active else 0.0
+        machines = machines_by_ym.get(ym, 0)
+        delta = (machines - prev_machines) if prev_machines is not None else 0
+        prev_machines = machines
+        converts = converts_by_ym.get(ym, 0)
+        swaps = swaps_by_ym.get(ym, 0)
+        changed = converts + swaps
+        fp_pct = round((changed / machines) * 100.0, 2) if machines else 0.0
         expected = expected_by_ym.get(ym, 0)
         reported = reported_by_ym.get(ym, 0)
         rep_pct = round((reported / expected) * 100.0, 2) if expected else 0.0
@@ -470,10 +708,15 @@ def _executive_ops_series(month_ends: list[date]) -> list[dict[str, Any]]:
                     "won": won_by_ym.get(ym, 0),
                     "closed": lost_by_ym.get(ym, 0),
                 },
-                "placements": placements_by_ym.get(ym, 0),
+                "placements": {
+                    "machines": machines,
+                    "delta": delta,
+                },
                 "footprint": {
                     "changed": changed,
-                    "active": active,
+                    "converts": converts,
+                    "swaps": swaps,
+                    "active": machines,
                     "pct": fp_pct,
                 },
                 "leased_clients": leased_by_ym.get(ym, 0),

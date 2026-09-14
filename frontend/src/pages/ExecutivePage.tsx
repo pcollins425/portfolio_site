@@ -8,8 +8,14 @@ type MonthSeriesRow = {
   month: string;
   projects: { open: number; closed: number };
   deals: { open: number; won: number; closed: number };
-  placements: number;
-  footprint: { changed: number; active: number; pct: number };
+  placements: { machines: number; delta: number };
+  footprint: {
+    changed: number;
+    converts: number;
+    swaps: number;
+    active: number;
+    pct: number;
+  };
   leased_clients: number;
   reporting: { reported: number; expected: number; pct: number };
 };
@@ -31,6 +37,10 @@ type ExecutivePayload = {
 
 function fmtMom(v: number) {
   return `MoM ${v >= 0 ? "+" : ""}${(v * 100).toFixed(1)}%`;
+}
+
+function fmtDelta(n: number) {
+  return `${n >= 0 ? "+" : ""}${n}`;
 }
 
 function fmtMonthLabel(iso: string) {
@@ -108,7 +118,7 @@ export default function ExecutivePage() {
             ? "Loading aggregates…"
             : err
               ? `Could not load live data (${err}). Check API connectivity and façade view.`
-              : `Month-end ${latest}: revenue KPIs + trailing ${windowMonths}-month ops pulse (${data?.source ?? "live"}). Open project/deal counts are reconstructed from dates.`}
+              : `Month-end ${latest}: revenue KPIs + trailing ${windowMonths}-month ops pulse (${data?.source ?? "live"}). Machines = playable EOD floor roster; open project/deal counts are reconstructed from dates.`}
         </p>
       </section>
 
@@ -146,7 +156,7 @@ export default function ExecutivePage() {
                     <th className="px-4 py-3">Month</th>
                     <th className="px-4 py-3">Projects open / closed</th>
                     <th className="px-4 py-3">Deals open / won / lost</th>
-                    <th className="px-4 py-3">Placements</th>
+                    <th className="px-4 py-3">Machines / Δ</th>
                     <th className="px-4 py-3">Footprint Δ %</th>
                     <th className="px-4 py-3">Leased clients</th>
                     <th className="px-4 py-3">Reporting %</th>
@@ -162,11 +172,17 @@ export default function ExecutivePage() {
                       <td className={t.tableCell}>
                         {row.deals.open} / {row.deals.won} / {row.deals.closed}
                       </td>
-                      <td className={t.tableCell}>{row.placements}</td>
+                      <td className={t.tableCell}>
+                        {row.placements.machines.toLocaleString()}
+                        <span className="ml-1 text-xs opacity-70">
+                          ({fmtDelta(row.placements.delta)})
+                        </span>
+                      </td>
                       <td className={t.tableCell}>
                         {row.footprint.pct.toFixed(2)}%
                         <span className="ml-1 text-xs opacity-70">
-                          ({row.footprint.changed}/{row.footprint.active})
+                          ({row.footprint.converts}c+{row.footprint.swaps}s /{" "}
+                          {row.footprint.active.toLocaleString()})
                         </span>
                       </td>
                       <td className={t.tableCell}>{row.leased_clients}</td>
@@ -194,10 +210,10 @@ export default function ExecutivePage() {
             <p className={t.calloutTitleSky}>Sources</p>
             <p className={t.calloutBody}>
               Revenue KPIs: Master_Revenue façade. Projects: <code className={t.code}>projects.ims</code>.
-              Deals: HubSpot landing <code className={t.code}>clients.hubspot_deal</code>. Placements =
-              SMM INSTALL; footprint Δ = CONVERT + MOVE ÷ active leased seats. Clients = distinct
-              leased casinos. Reporting = Finance billing coverage (casinos with expected vs invoiced
-              entries).
+              Deals: HubSpot landing <code className={t.code}>clients.hubspot_deal</code>. Machines =
+              playable SMM EOD floor roster (one cabinet per casino×asset). Footprint Δ = CONVERT +
+              swaps (INSTALL/REMOVE same project) ÷ machines — MOVE/UPGRADE excluded. Clients = distinct
+              casinos on that roster. Reporting = Finance billing coverage.
             </p>
           </div>
         </>
