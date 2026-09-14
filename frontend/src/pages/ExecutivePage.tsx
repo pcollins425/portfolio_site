@@ -26,6 +26,7 @@ type ExecutivePayload = {
   latest?: string;
   prev?: string;
   window_months?: number;
+  series_source?: string;
   coinIn?: number;
   coinInMom?: number;
   actualWin?: number;
@@ -118,7 +119,7 @@ export default function ExecutivePage() {
             ? "Loading aggregates…"
             : err
               ? `Could not load live data (${err}). Check API connectivity and façade view.`
-              : `Month-end ${latest}: revenue KPIs + trailing ${windowMonths}-month ops pulse (${data?.source ?? "live"}). Machines = playable EOD floor roster. Project open = calendar still spanning month-end (IMS dates); most jobs are same-day.`}
+              : `Month-end ${latest}: revenue KPIs + trailing ${windowMonths}-month ops pulse (${data?.source ?? "live"}${data?.series_source ? ` · ops ${data.series_source}` : ""}). Machines = playable EOD floor roster. Project open = calendar still spanning month-end (IMS dates); most jobs are same-day.`}
         </p>
       </section>
 

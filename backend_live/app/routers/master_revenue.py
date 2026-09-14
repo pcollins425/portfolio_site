@@ -174,10 +174,11 @@ WHERE [date] = %s
 
     window_months = 12
     month_ends = _trailing_month_ends(latest_d, window_months)
-    series = _executive_ops_series(month_ends)
+    series, series_source = _executive_ops_series_prefer_snapshot(month_ends)
 
     return {
         "source": "live",
+        "series_source": series_source,
         "latest": latest_d.isoformat(),
         "prev": prev_d.isoformat(),
         "window_months": window_months,
@@ -209,6 +210,86 @@ def _app_query(sql: str, params=None):
         profile="field",
         load_env=False,
     )
+
+
+def _executive_ops_series_prefer_snapshot(
+    month_ends: list[date],
+) -> tuple[list[dict[str, Any]], str]:
+    """Prefer finance.executive_ops_month; fall back to live compute if incomplete."""
+    if not month_ends:
+        return [], "empty"
+    try:
+        rows = mssql.query(
+            """
+            SELECT
+                month_end,
+                projects_open,
+                projects_closed,
+                deals_created,
+                deals_won,
+                deals_lost,
+                machines,
+                machines_delta,
+                footprint_converts,
+                footprint_swaps,
+                footprint_changed,
+                footprint_pct,
+                leased_clients,
+                reporting_reported,
+                reporting_expected,
+                reporting_pct
+            FROM finance.executive_ops_month
+            WHERE month_end >= %s AND month_end <= %s
+            """,
+            params=(month_ends[0], month_ends[-1]),
+            database=_revenue_catalog(),
+            profile="dashboard",
+            load_env=False,
+        )
+        by_me = {_as_date(r.get("month_end")): r for r in rows}
+        if all(me in by_me for me in month_ends):
+            series: list[dict[str, Any]] = []
+            for me in month_ends:
+                r = by_me[me]
+                machines = int(r.get("machines") or 0)
+                changed = int(r.get("footprint_changed") or 0)
+                expected = int(r.get("reporting_expected") or 0)
+                reported = int(r.get("reporting_reported") or 0)
+                series.append(
+                    {
+                        "month": me.isoformat(),
+                        "projects": {
+                            "open": int(r.get("projects_open") or 0),
+                            "closed": int(r.get("projects_closed") or 0),
+                        },
+                        "deals": {
+                            "created": int(r.get("deals_created") or 0),
+                            "won": int(r.get("deals_won") or 0),
+                            "closed": int(r.get("deals_lost") or 0),
+                        },
+                        "placements": {
+                            "machines": machines,
+                            "delta": int(r.get("machines_delta") or 0),
+                        },
+                        "footprint": {
+                            "changed": changed,
+                            "converts": int(r.get("footprint_converts") or 0),
+                            "swaps": int(r.get("footprint_swaps") or 0),
+                            "active": machines,
+                            "pct": float(r.get("footprint_pct") or 0),
+                        },
+                        "leased_clients": int(r.get("leased_clients") or 0),
+                        "reporting": {
+                            "reported": reported,
+                            "expected": expected,
+                            "pct": float(r.get("reporting_pct") or 0),
+                        },
+                    }
+                )
+            return series, "snapshot"
+    except Exception:
+        pass
+    return _executive_ops_series(month_ends), "live"
 
 
 _EXEC_SOLD_CASINO_ID = "CT-00907"
