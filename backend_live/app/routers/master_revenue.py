@@ -134,6 +134,7 @@ def periods(limit: int = Query(36, ge=1, le=120)):
 
 @router.get("/executive")
 def executive(month: str | None = Query(None, description="YYYY-MM or YYYY-MM-DD month-end slice")):
+    """Executive pulse: revenue KPIs + trailing-12 ops series (no casino bars)."""
     period_rows = _distinct_periods(24)
     try:
         latest_d, prev_d = _resolve_target_period(month, period_rows)
@@ -150,22 +151,10 @@ SELECT
 FROM {_MV} AS mr
 WHERE [date] = %s
 """
-    bars_sql = f"""
-SELECT
-    RTRIM([Casino]) AS casino,
-    SUM(ISNULL([Commission], 0)) AS commission,
-    SUM(ISNULL([Actual_win], 0)) AS actual_win
-FROM {_MV} AS mr
-WHERE [date] = %s
-GROUP BY RTRIM([Casino])
-ORDER BY SUM(ISNULL([Commission], 0)) DESC
-"""
-
-    (cur_rows, prior_rows, bar_rows) = _revenue_query_many(
+    (cur_rows, prior_rows) = _revenue_query_many(
         [
             (sum_sql, (latest_d,)),
             (sum_sql, (prev_d,)),
-            (bars_sql, (latest_d,)),
         ]
     )
 
@@ -183,28 +172,319 @@ ORDER BY SUM(ISNULL([Commission], 0)) DESC
     def pct(a: float, b: float) -> float:
         return (a - b) / b if b else 0.0
 
-    bar_out = []
-    for b in bar_rows:
-        bar_out.append(
-            {
-                "casino": str(b["casino"] or "").strip() or "?",
-                "commission": float(b["commission"] or 0),
-                "actual_win": float(b["actual_win"] or 0),
-            }
-        )
+    window_months = 12
+    month_ends = _trailing_month_ends(latest_d, window_months)
+    series = _executive_ops_series(month_ends)
 
     return {
         "source": "live",
         "latest": latest_d.isoformat(),
         "prev": prev_d.isoformat(),
+        "window_months": window_months,
         "coinIn": cur["coin_in"],
         "coinInMom": pct(cur["coin_in"], prior["coin_in"]),
         "actualWin": cur["actual_win"],
         "actualMom": pct(cur["actual_win"], prior["actual_win"]),
         "commission": cur["commission"],
         "commissionMom": pct(cur["commission"], prior["commission"]),
-        "bars": bar_out,
+        "series": series,
     }
+
+
+def _trailing_month_ends(end: date, n: int) -> list[date]:
+    """Ascending list of month-end dates ending at ``end`` (inclusive)."""
+    ym = end.isoformat()[:7]
+    out: list[date] = []
+    for i in range(n - 1, -1, -1):
+        label = _shift_month(ym, -i)
+        out.append(_month_bounds(label)[1])
+    return out
+
+
+def _app_query(sql: str, params=None):
+    return mssql.query(
+        sql,
+        params=params,
+        database=_revenue_catalog(),
+        profile="field",
+        load_env=False,
+    )
+
+
+def _executive_ops_series(month_ends: list[date]) -> list[dict[str, Any]]:
+    """Build trailing ops metrics for each month-end (plan definitions)."""
+    if not month_ends:
+        return []
+
+    window_start = date(month_ends[0].year, month_ends[0].month, 1)
+    window_end = month_ends[-1]
+
+    # --- Projects: closed-in-month + open-at-month-end (reconstructed) ---
+    closed_by_ym: dict[str, int] = {}
+    try:
+        for r in _app_query(
+            """
+            SELECT
+                CONVERT(char(7), end_date, 126) AS ym,
+                COUNT(*) AS n
+            FROM projects.ims
+            WHERE status = N'Completed'
+              AND end_date IS NOT NULL
+              AND end_date >= %s
+              AND end_date <= %s
+            GROUP BY CONVERT(char(7), end_date, 126)
+            """,
+            (window_start, window_end),
+        ):
+            ym = str(r.get("ym") or "").strip()
+            if ym:
+                closed_by_ym[ym] = int(r.get("n") or 0)
+    except Exception:
+        closed_by_ym = {}
+
+    open_by_ym: dict[str, int] = {}
+    for me in month_ends:
+        ym = me.isoformat()[:7]
+        try:
+            n = _app_query(
+                """
+                SELECT COUNT(*) AS n
+                FROM projects.ims
+                WHERE (start_date IS NULL OR start_date <= %s)
+                  AND (
+                    status = N'Open'
+                    OR end_date IS NULL
+                    OR end_date > %s
+                  )
+                """,
+                (me, me),
+            )[0]
+            open_by_ym[ym] = int(n.get("n") or 0)
+        except Exception:
+            open_by_ym[ym] = 0
+
+    # --- HubSpot deals ---
+    won_by_ym: dict[str, int] = {}
+    lost_by_ym: dict[str, int] = {}
+    try:
+        for r in _app_query(
+            """
+            SELECT
+                CONVERT(char(7), close_date, 126) AS ym,
+                SUM(CASE WHEN is_closed_won = 1 THEN 1 ELSE 0 END) AS won,
+                SUM(
+                    CASE
+                        WHEN is_closed = 1 AND ISNULL(is_closed_won, 0) = 0 THEN 1
+                        ELSE 0
+                    END
+                ) AS lost
+            FROM clients.hubspot_deal
+            WHERE close_date IS NOT NULL
+              AND close_date >= %s
+              AND close_date <= %s
+            GROUP BY CONVERT(char(7), close_date, 126)
+            """,
+            (window_start, window_end),
+        ):
+            ym = str(r.get("ym") or "").strip()
+            if not ym:
+                continue
+            won_by_ym[ym] = int(r.get("won") or 0)
+            lost_by_ym[ym] = int(r.get("lost") or 0)
+    except Exception:
+        won_by_ym, lost_by_ym = {}, {}
+
+    deals_open_by_ym: dict[str, int] = {}
+    for me in month_ends:
+        ym = me.isoformat()[:7]
+        try:
+            n = _app_query(
+                """
+                SELECT COUNT(*) AS n
+                FROM clients.hubspot_deal
+                WHERE ISNULL(is_closed, 0) = 0
+                   OR close_date IS NULL
+                   OR close_date > %s
+                """,
+                (me,),
+            )[0]
+            deals_open_by_ym[ym] = int(n.get("n") or 0)
+        except Exception:
+            deals_open_by_ym[ym] = 0
+
+    # --- SMM placements (INSTALL only) ---
+    placements_by_ym: dict[str, int] = {}
+    try:
+        for r in _app_query(
+            """
+            SELECT
+                CONVERT(char(7), COALESCE(date_instl, golive001), 126) AS ym,
+                COUNT(*) AS n
+            FROM inventory.slot_master_migration
+            WHERE UPPER(LTRIM(RTRIM(ISNULL(action, N'')))) = N'INSTALL'
+              AND COALESCE(date_instl, golive001) IS NOT NULL
+              AND COALESCE(date_instl, golive001) >= %s
+              AND COALESCE(date_instl, golive001) <= %s
+            GROUP BY CONVERT(char(7), COALESCE(date_instl, golive001), 126)
+            """,
+            (window_start, window_end),
+        ):
+            ym = str(r.get("ym") or "").strip()
+            if ym:
+                placements_by_ym[ym] = int(r.get("n") or 0)
+    except Exception:
+        placements_by_ym = {}
+
+    # --- Footprint change numerator: CONVERT + MOVE in month ---
+    changed_by_ym: dict[str, int] = {}
+    try:
+        for r in _app_query(
+            """
+            SELECT
+                CONVERT(char(7), change_dt, 126) AS ym,
+                COUNT(*) AS n
+            FROM (
+                SELECT
+                    CASE
+                        WHEN UPPER(LTRIM(RTRIM(ISNULL(action, N'')))) = N'CONVERT'
+                            THEN COALESCE(lastconver, date_instl, golive001)
+                        WHEN UPPER(LTRIM(RTRIM(ISNULL(action, N'')))) = N'MOVE'
+                            THEN COALESCE(lastconver, date_instl, golive001)
+                        ELSE NULL
+                    END AS change_dt
+                FROM inventory.slot_master_migration
+                WHERE UPPER(LTRIM(RTRIM(ISNULL(action, N'')))) IN (N'CONVERT', N'MOVE')
+            ) AS x
+            WHERE change_dt IS NOT NULL
+              AND change_dt >= %s
+              AND change_dt <= %s
+            GROUP BY CONVERT(char(7), change_dt, 126)
+            """,
+            (window_start, window_end),
+        ):
+            ym = str(r.get("ym") or "").strip()
+            if ym:
+                changed_by_ym[ym] = int(r.get("n") or 0)
+    except Exception:
+        changed_by_ym = {}
+
+    # --- Active leased seats + clients at each month-end (reconstructed) ---
+    active_by_ym: dict[str, int] = {}
+    leased_by_ym: dict[str, int] = {}
+    for me in month_ends:
+        ym = me.isoformat()[:7]
+        try:
+            row = _app_query(
+                """
+                SELECT
+                    COUNT(*) AS seats,
+                    COUNT(DISTINCT casino_id) AS clients
+                FROM inventory.slot_master_migration
+                WHERE casino_id IS NOT NULL
+                  AND LTRIM(RTRIM(casino_id)) <> N''
+                  AND UPPER(LTRIM(RTRIM(ISNULL(action, N'')))) <> N'SOLD'
+                  AND COALESCE(date_instl, golive001, CAST('19000101' AS date)) <= %s
+                  AND (rmvl_date IS NULL OR rmvl_date > %s)
+                """,
+                (me, me),
+            )[0]
+            active_by_ym[ym] = int(row.get("seats") or 0)
+            leased_by_ym[ym] = int(row.get("clients") or 0)
+        except Exception:
+            active_by_ym[ym] = 0
+            leased_by_ym[ym] = 0
+
+    # --- Reporting coverage (casino grain from billing_coverage snapshot) ---
+    expected_by_ym: dict[str, int] = {}
+    reported_by_ym: dict[str, int] = {}
+    try:
+        cov_rows = mssql.query(
+            """
+            SELECT
+                processing_month,
+                casino_short,
+                expected_entries,
+                invoiced_entries
+            FROM finance.billing_coverage
+            WHERE processing_month >= %s
+              AND processing_month <= %s
+            """,
+            params=(window_start, window_end),
+            database=_revenue_catalog(),
+            profile="dashboard",
+            load_env=False,
+        )
+        exp_sets: dict[str, set[str]] = {}
+        rep_sets: dict[str, set[str]] = {}
+        for r in cov_rows:
+            ym = _ym_label(r.get("processing_month"))
+            casino = str(r.get("casino_short") or "").strip()
+            if not ym or not casino:
+                continue
+            if int(r.get("expected_entries") or 0) > 0:
+                exp_sets.setdefault(ym, set()).add(casino)
+            if int(r.get("invoiced_entries") or 0) > 0:
+                rep_sets.setdefault(ym, set()).add(casino)
+        for ym in set(list(exp_sets.keys()) + list(rep_sets.keys())):
+            expected_by_ym[ym] = len(exp_sets.get(ym, set()))
+            reported_by_ym[ym] = len(rep_sets.get(ym, set()))
+    except Exception:
+        # Fallback: distinct casinos with MR rows that month vs leased clients
+        try:
+            for r in _revenue_query(
+                f"""
+                SELECT
+                    CONVERT(char(7), [date], 126) AS ym,
+                    COUNT(DISTINCT RTRIM([Casino])) AS n
+                FROM {_MV} AS mr
+                WHERE [date] >= %s AND [date] <= %s
+                GROUP BY CONVERT(char(7), [date], 126)
+                """,
+                (window_start, window_end),
+            ):
+                ym = str(r.get("ym") or "").strip()
+                if ym:
+                    reported_by_ym[ym] = int(r.get("n") or 0)
+                    expected_by_ym[ym] = leased_by_ym.get(ym, 0)
+        except Exception:
+            pass
+
+    series: list[dict[str, Any]] = []
+    for me in month_ends:
+        ym = me.isoformat()[:7]
+        changed = changed_by_ym.get(ym, 0)
+        active = active_by_ym.get(ym, 0)
+        fp_pct = round((changed / active) * 100.0, 2) if active else 0.0
+        expected = expected_by_ym.get(ym, 0)
+        reported = reported_by_ym.get(ym, 0)
+        rep_pct = round((reported / expected) * 100.0, 2) if expected else 0.0
+        series.append(
+            {
+                "month": me.isoformat(),
+                "projects": {
+                    "open": open_by_ym.get(ym, 0),
+                    "closed": closed_by_ym.get(ym, 0),
+                },
+                "deals": {
+                    "open": deals_open_by_ym.get(ym, 0),
+                    "won": won_by_ym.get(ym, 0),
+                    "closed": lost_by_ym.get(ym, 0),
+                },
+                "placements": placements_by_ym.get(ym, 0),
+                "footprint": {
+                    "changed": changed,
+                    "active": active,
+                    "pct": fp_pct,
+                },
+                "leased_clients": leased_by_ym.get(ym, 0),
+                "reporting": {
+                    "reported": reported,
+                    "expected": expected,
+                    "pct": rep_pct,
+                },
+            }
+        )
+    return series
 
 
 @router.get("/analyst/trends")

@@ -1,39 +1,43 @@
 import { useEffect, useState } from "react";
-import {
-  Bar,
-  BarChart,
-  CartesianGrid,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from "recharts";
 import { fetchJson } from "../api/client";
 import { useDashboardMonth, withMonthQuery } from "../dgs/MonthContext";
 import { useDashboardTheme } from "../dgs/ThemeContext";
 import { fmtUsd } from "../data/mockData";
+
+type MonthSeriesRow = {
+  month: string;
+  projects: { open: number; closed: number };
+  deals: { open: number; won: number; closed: number };
+  placements: number;
+  footprint: { changed: number; active: number; pct: number };
+  leased_clients: number;
+  reporting: { reported: number; expected: number; pct: number };
+};
 
 type ExecutivePayload = {
   source: string;
   error?: string;
   latest?: string;
   prev?: string;
+  window_months?: number;
   coinIn?: number;
   coinInMom?: number;
   actualWin?: number;
   actualMom?: number;
   commission?: number;
   commissionMom?: number;
-  bars?: { casino: string; commission: number; actual_win: number }[];
+  series?: MonthSeriesRow[];
 };
 
-function normalizeBars(rows: ExecutivePayload["bars"]) {
-  if (!rows?.length) return [];
-  return rows.map((r) => ({
-    casino: r.casino,
-    commission: Number(r.commission),
-    actual_win: Number(r.actual_win),
-  }));
+function fmtMom(v: number) {
+  return `MoM ${v >= 0 ? "+" : ""}${(v * 100).toFixed(1)}%`;
+}
+
+function fmtMonthLabel(iso: string) {
+  if (!iso || iso.length < 7) return iso || "—";
+  const d = new Date(`${iso.slice(0, 10)}T00:00:00`);
+  if (Number.isNaN(d.getTime())) return iso.slice(0, 7);
+  return d.toLocaleDateString(undefined, { year: "numeric", month: "short" });
 }
 
 function Kpi({
@@ -85,17 +89,15 @@ export default function ExecutivePage() {
     };
   }, [month]);
 
-  const bars =
-    normalizeBars(data?.bars) ||
-    ([] as { casino: string; commission: number; actual_win: number }[]);
-
   const latest = data?.latest ?? "";
+  const windowMonths = data?.window_months ?? 12;
   const coinIn = data?.coinIn ?? 0;
   const coinInMom = data?.coinInMom ?? 0;
   const actualWin = data?.actualWin ?? 0;
   const actualMom = data?.actualMom ?? 0;
   const commission = data?.commission ?? 0;
   const commissionMom = data?.commissionMom ?? 0;
+  const series = [...(data?.series ?? [])].reverse(); // newest first for table
 
   return (
     <div className="space-y-8">
@@ -103,10 +105,10 @@ export default function ExecutivePage() {
         <h2 className={t.pageTitle}>Executive snapshot</h2>
         <p className={t.pageSub}>
           {loading
-            ? "Loading aggregates from Master_Revenue…"
+            ? "Loading aggregates…"
             : err
               ? `Could not load live data (${err}). Check API connectivity and façade view.`
-              : `Month-end ${latest}: national totals (${data?.source ?? "live"})`}
+              : `Month-end ${latest}: revenue KPIs + trailing ${windowMonths}-month ops pulse (${data?.source ?? "live"}). Open project/deal counts are reconstructed from dates.`}
         </p>
       </section>
 
@@ -116,41 +118,87 @@ export default function ExecutivePage() {
             <Kpi
               label="Coin-in"
               value={fmtUsd(coinIn)}
-              sub={`MoM ${coinInMom >= 0 ? "+" : ""}${(coinInMom * 100).toFixed(1)}%`}
+              sub={fmtMom(coinInMom)}
               positive={coinInMom >= 0}
             />
             <Kpi
               label="Actual win"
               value={fmtUsd(actualWin)}
-              sub={`MoM ${actualMom >= 0 ? "+" : ""}${(actualMom * 100).toFixed(1)}%`}
+              sub={fmtMom(actualMom)}
               positive={actualMom >= 0}
             />
             <Kpi
               label="Commission"
               value={fmtUsd(commission)}
-              sub={`MoM ${commissionMom >= 0 ? "+" : ""}${(commissionMom * 100).toFixed(1)}%`}
+              sub={fmtMom(commissionMom)}
               positive={commissionMom >= 0}
             />
           </div>
 
           <div className={t.panel}>
-            <p className={t.panelLabel}>Commission by casino ({latest || "latest period"})</p>
-            <div className="mt-4 h-72">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={bars} layout="vertical" margin={{ left: 16 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke={t.chart.grid} horizontal={false} />
-                  <XAxis type="number" stroke={t.chart.axis} tickFormatter={(v) => `${Math.round(v / 1000)}k`} />
-                  <YAxis type="category" dataKey="casino" stroke={t.chart.axis} width={140} tick={{ fontSize: 11 }} />
-                  <Tooltip
-                    contentStyle={{ backgroundColor: t.chart.tooltipBg, borderColor: t.chart.tooltipBorder }}
-                    formatter={(value: number, name: string) =>
-                      [fmtUsd(value), name === "commission" ? "Commission" : "Actual win"]
-                    }
-                  />
-                  <Bar dataKey="commission" fill={t.chart.commission} radius={[0, 4, 4, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
+            <p className={t.panelLabel}>
+              Ops pulse — trailing {windowMonths} months (newest first)
+            </p>
+            <div className={`mt-4 ${t.tableWrap} overflow-x-auto`}>
+              <table className="min-w-full text-left text-sm">
+                <thead className={t.tableHead}>
+                  <tr>
+                    <th className="px-4 py-3">Month</th>
+                    <th className="px-4 py-3">Projects open / closed</th>
+                    <th className="px-4 py-3">Deals open / won / lost</th>
+                    <th className="px-4 py-3">Placements</th>
+                    <th className="px-4 py-3">Footprint Δ %</th>
+                    <th className="px-4 py-3">Leased clients</th>
+                    <th className="px-4 py-3">Reporting %</th>
+                  </tr>
+                </thead>
+                <tbody className={t.tableRow}>
+                  {series.map((row) => (
+                    <tr key={row.month}>
+                      <td className={t.tableCellName}>{fmtMonthLabel(row.month)}</td>
+                      <td className={t.tableCell}>
+                        {row.projects.open} / {row.projects.closed}
+                      </td>
+                      <td className={t.tableCell}>
+                        {row.deals.open} / {row.deals.won} / {row.deals.closed}
+                      </td>
+                      <td className={t.tableCell}>{row.placements}</td>
+                      <td className={t.tableCell}>
+                        {row.footprint.pct.toFixed(2)}%
+                        <span className="ml-1 text-xs opacity-70">
+                          ({row.footprint.changed}/{row.footprint.active})
+                        </span>
+                      </td>
+                      <td className={t.tableCell}>{row.leased_clients}</td>
+                      <td className={t.tableCell}>
+                        {row.reporting.pct.toFixed(1)}%
+                        <span className="ml-1 text-xs opacity-70">
+                          ({row.reporting.reported}/{row.reporting.expected})
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                  {!series.length && !loading && (
+                    <tr>
+                      <td className={t.tableCellMuted} colSpan={7}>
+                        No series rows returned.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
             </div>
+          </div>
+
+          <div className={t.calloutSky}>
+            <p className={t.calloutTitleSky}>Sources</p>
+            <p className={t.calloutBody}>
+              Revenue KPIs: Master_Revenue façade. Projects: <code className={t.code}>projects.ims</code>.
+              Deals: HubSpot landing <code className={t.code}>clients.hubspot_deal</code>. Placements =
+              SMM INSTALL; footprint Δ = CONVERT + MOVE ÷ active leased seats. Clients = distinct
+              leased casinos. Reporting = Finance billing coverage (casinos with expected vs invoiced
+              entries).
+            </p>
           </div>
         </>
       )}
