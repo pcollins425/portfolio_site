@@ -81,6 +81,7 @@
     mapEl: document.getElementById("casino-map"),
     mapLink: document.getElementById("map-external-link"),
     slotMasterLink: document.getElementById("slot-master-link"),
+    casinoHubLink: document.getElementById("casino-hub-link"),
     imsViewAll: document.getElementById("ims-view-all"),
     imsPreviewList: document.getElementById("ims-preview-list"),
     detailBody: document.getElementById("detail-body"),
@@ -232,6 +233,10 @@
     return pageUrl("slot_master.html", { casino: casinoId });
   }
 
+  function casinoHubHref(casinoId) {
+    return pageUrl("casino-hub.html", { id: casinoId });
+  }
+
   function projectsImsHref(casinoId) {
     return pageUrl("projects.html", { view: "ims", casino: casinoId });
   }
@@ -381,16 +386,6 @@
     return `<div class="dgs-v2-casino-hubspot-empty">${esc(message)}</div>`;
   }
 
-  function contactCard(c) {
-    const title = c.name || c.email || "Contact";
-    const meta = [c.job_title, c.email, c.phone].filter(Boolean).join(" · ");
-    return `
-      <div class="dgs-v2-casino-ims-row dgs-v2-casino-hubspot-card">
-        <div class="dgs-v2-casino-ims-title">${esc(title)}</div>
-        <div class="dgs-v2-casino-ims-meta">${esc(meta || "—")}</div>
-      </div>`;
-  }
-
   function dealImsHref(casinoId, deal) {
     if (!deal?.ims_id) return null;
     return pageUrl("projects.html", { view: "ims", casino: casinoId, ims: deal.ims_id });
@@ -406,16 +401,10 @@
     const projectLine = imsHref
       ? `<a class="dgs-v2-hub-serial-link" href="${esc(imsHref)}">Project ${esc(deal.ims_id)}</a>`
       : `<span class="dgs-v2-casino-ims-desc">No project linked</span>`;
-    const badge = deal.is_closed_won
-      ? `<span class="dgs-prj-badge">Won</span>`
-      : deal.is_closed
-        ? `<span class="dgs-prj-badge">Closed</span>`
-        : "";
     return `
       <div class="dgs-v2-casino-ims-row dgs-v2-casino-hubspot-card">
         <div class="dgs-v2-casino-ims-row-top">
           <span class="dgs-v2-casino-ims-title">${esc(title)}</span>
-          ${badge}
         </div>
         <div class="dgs-v2-casino-ims-meta">${esc(meta || "—")}</div>
         ${projectLine}
@@ -424,16 +413,26 @@
 
   function renderHubspotContacts(d) {
     const hs = d?.hubspot;
+    const hubHref = d?.reference_key ? casinoHubHref(d.reference_key) : "#";
     if (!hs?.linked) {
       els.contactFields.innerHTML = hubspotEmpty("No HubSpot company linked");
       return;
     }
-    const contacts = hs.contacts || [];
-    if (!contacts.length) {
-      els.contactFields.innerHTML = hubspotEmpty("No HubSpot contacts for this property");
+    const n = (hs.contacts || []).length;
+    if (!n) {
+      els.contactFields.innerHTML = `
+        <div class="dgs-v2-casino-hubspot-empty">
+          No HubSpot contacts · <a class="dgs-v2-hub-serial-link" href="${esc(hubHref)}">Open casino hub</a>
+        </div>`;
       return;
     }
-    els.contactFields.innerHTML = contacts.map(contactCard).join("");
+    els.contactFields.innerHTML = `
+      <div class="dgs-v2-casino-ims-row dgs-v2-casino-hubspot-card">
+        <div class="dgs-v2-casino-ims-title">${esc(fmtNum(n))} contact${n === 1 ? "" : "s"}</div>
+        <div class="dgs-v2-casino-ims-meta">
+          <a class="dgs-v2-hub-serial-link" href="${esc(hubHref)}">View all on casino hub →</a>
+        </div>
+      </div>`;
   }
 
   function renderHubspotDeals(d) {
@@ -443,24 +442,12 @@
       els.dealFields.innerHTML = hubspotEmpty("No HubSpot company linked");
       return;
     }
-    const deals = hs.deals || [];
-    if (!deals.length) {
-      els.dealFields.innerHTML = hubspotEmpty("No HubSpot deals for this property");
+    const open = (hs.deals || []).filter((x) => !x.is_closed);
+    if (!open.length) {
+      els.dealFields.innerHTML = hubspotEmpty("No open deals");
       return;
     }
-    const open = deals.filter((x) => !x.is_closed);
-    const closed = deals.filter((x) => x.is_closed);
-    const openHtml = open.map((deal) => dealCard(d.reference_key, deal)).join("");
-    const closedHtml = closed.length
-      ? `<details class="dgs-v2-casino-deals-closed">
-          <summary>Closed deals (${closed.length})</summary>
-          <div class="dgs-v2-casino-hubspot-list">${closed
-            .map((deal) => dealCard(d.reference_key, deal))
-            .join("")}</div>
-        </details>`
-      : "";
-    els.dealFields.innerHTML =
-      (openHtml || (closed.length ? hubspotEmpty("No open deals") : "")) + closedHtml;
+    els.dealFields.innerHTML = open.map((deal) => dealCard(d.reference_key, deal)).join("");
   }
 
   function locationLine(d) {
@@ -554,11 +541,20 @@
     if (!d) {
       els.slotMasterLink.href = "#";
       els.slotMasterLink.textContent = "Slot Master";
+      if (els.casinoHubLink) {
+        els.casinoHubLink.href = "#";
+        els.casinoHubLink.hidden = true;
+      }
       return;
     }
     const n = Number(d.active_machines) || 0;
     els.slotMasterLink.href = slotMasterHref(d.reference_key);
     els.slotMasterLink.textContent = n ? `Slot Master (${fmtNum(n)})` : "Slot Master";
+    if (els.casinoHubLink) {
+      els.casinoHubLink.hidden = false;
+      els.casinoHubLink.href = casinoHubHref(d.reference_key);
+      els.casinoHubLink.textContent = "Casino hub";
+    }
   }
 
   function renderImsPreview(d) {
@@ -603,8 +599,6 @@
   }
 
   function renderDetailFields(d) {
-    const hs = d.hubspot;
-    const company = hs?.company;
     const profileRows = [
       field("Casino Name", d.casino_name || d.casino_short || "—"),
       fieldHtml("Tribe", tribeFieldHtml(d)),
@@ -614,13 +608,6 @@
       field("Available Vendors", d.available_vendors || "—"),
       field("Sales", d.sales || "—"),
     ];
-    if (hs?.linked && company) {
-      if (company.owner_name) profileRows.push(field("HubSpot owner", company.owner_name));
-      if (company.phone) profileRows.push(field("Company phone", company.phone));
-      if (company.lifecycle_stage) {
-        profileRows.push(field("Lifecycle", company.lifecycle_stage));
-      }
-    }
     els.detailFields.innerHTML = profileRows.join("");
 
     els.detailFields.querySelectorAll("[data-sister]").forEach((btn) => {

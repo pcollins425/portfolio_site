@@ -800,7 +800,8 @@ body.dgs-dashboard-v2 .dgs-dashboard-mount .error-box {
 }
 
 /* Asset hub — reference page (not in nav) */
-body.dgs-asset-hub .dgs-v2-hub-main {
+body.dgs-asset-hub .dgs-v2-hub-main,
+body.dgs-casino-hub .dgs-v2-hub-main {
   padding: 0;
   gap: 0;
 }
@@ -4479,6 +4480,227 @@ body.dgs-contracts-v2 .dgs-v2-doc-summary::-webkit-details-marker {
 /* Narrow phones: Asset record fields stack cleaner */
 @media (max-width: 640px) {
   body.dgs-asset-hub .dgs-v2-hub-kv-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ===================== Casino hub ===================== */
+
+body.dgs-casino-hub .dgs-v2-casino-hub-hero {
+  display: flex;
+  flex-direction: column;
+  min-height: 280px;
+  background: #e6e8ec;
+  position: relative;
+}
+
+body.dgs-casino-hub .dgs-v2-casino-hub-map {
+  flex: 1;
+  min-height: 220px;
+  width: 100%;
+  z-index: 1;
+}
+
+body.dgs-casino-hub .dgs-v2-casino-hub-map-empty {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 220px;
+  padding: 16px;
+  color: #6b7280;
+  font-size: 13px;
+  text-align: center;
+}
+
+body.dgs-casino-hub .dgs-v2-casino-hub-map-empty[hidden] {
+  display: none !important;
+}
+
+body.dgs-casino-hub .dgs-v2-casino-hub-map-link {
+  position: absolute;
+  right: 10px;
+  bottom: 10px;
+  z-index: 500;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--dgs-v2-heading);
+  background: rgba(255, 255, 255, 0.92);
+  border: 1px solid var(--dgs-v2-border);
+  border-radius: 8px;
+  padding: 6px 8px;
+  text-decoration: none;
+}
+
+body.dgs-casino-hub .dgs-v2-casino-hub-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+body.dgs-casino-hub .dgs-v2-casino-hub-people {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+body.dgs-casino-hub .dgs-v2-casino-hub-person {
+  padding: 8px 0;
+  border-bottom: 1px solid var(--dgs-v2-border-soft);
+}
+
+body.dgs-casino-hub .dgs-v2-casino-hub-person:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+body.dgs-casino-hub .dgs-v2-casino-hub-person--link {
+  display: block;
+  color: inherit;
+  text-decoration: none;
+}
+
+body.dgs-casino-hub .dgs-v2-casino-hub-person--link:hover .dgs-v2-casino-hub-person-name {
+  color: var(--dgs-v2-accent);
+}
+
+body.dgs-casino-hub .dgs-v2-casino-hub-person-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+body.dgs-casino-hub .dgs-v2-casino-hub-person-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--dgs-v2-heading);
+}
+
+body.dgs-casino-hub .dgs-v2-casino-hub-person-meta {
+  margin-top: 2px;
+  font-size: 11px;
+  color: var(--dgs-v2-text-muted);
+}
+
+@media (max-width: 1366px) {
+  body.dgs-casino-hub .dgs-v2-desktop-only {
+    display: none !important;
+  }
+
+  body.dgs-casino-hub.dgs-app {
+    height: 100dvh;
+    max-height: 100dvh;
+    overflow: hidden;
+  }
+
+  body.dgs-casino-hub .dgs-v2-hub-main {
+    display: flex;
+    flex-direction: column;
+    flex: 1 1 0%;
+    min-height: 0;
+    max-height: 100%;
+    overflow: hidden;
+    padding: 0;
+  }
+
+  body.dgs-casino-hub .dgs-v2-hub-body {
+    flex: 1 1 0%;
+    flex-direction: column;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  body.dgs-casino-hub .dgs-v2-hub-media {
+    width: 100%;
+    min-width: 0;
+    max-width: none;
+    flex: 0 0 auto;
+    border-right: none;
+    border-bottom: 1px solid var(--dgs-v2-border);
+  }
+
+  body.dgs-casino-hub .dgs-v2-hub-media-inner {
+    flex-direction: row;
+    align-items: stretch;
+    min-height: 148px;
+    max-height: 168px;
+  }
+
+  body.dgs-casino-hub .dgs-v2-casino-hub-hero {
+    flex: 0 0 42%;
+    width: 42%;
+    min-height: 0;
+    max-height: none;
+  }
+
+  body.dgs-casino-hub .dgs-v2-casino-hub-map,
+  body.dgs-casino-hub .dgs-v2-casino-hub-map-empty {
+    min-height: 0;
+  }
+
+  body.dgs-casino-hub .dgs-v2-casino-hub-map-link {
+    font-size: 10px;
+    padding: 4px 6px;
+    right: 6px;
+    bottom: 6px;
+  }
+
+  body.dgs-casino-hub .dgs-v2-image-caption {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    padding: 12px 14px;
+  }
+
+  body.dgs-casino-hub .dgs-v2-hub-cells {
+    flex: 1 1 0%;
+    min-height: 0;
+    padding: 0 12px;
+    gap: 0;
+    overflow-x: hidden;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: var(--dgs-v2-system-nav-clear);
+  }
+
+  body.dgs-casino-hub .dgs-v2-hub-header {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    align-items: center;
+    flex-shrink: 0;
+    padding: 12px 0 10px;
+    margin: 0;
+    background: var(--dgs-v2-bg);
+    border-bottom: 1px solid var(--dgs-v2-border-soft);
+  }
+
+  body.dgs-casino-hub .dgs-v2-hub-header h1 {
+    font-size: 20px;
+  }
+
+  body.dgs-casino-hub .dgs-v2-hub-grid {
+    flex: none;
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 10px;
+    min-height: 0;
+    overflow: visible;
+    align-content: start;
+    padding-top: 10px;
+  }
+
+  body.dgs-casino-hub .dgs-v2-hub-tile--wide {
+    grid-column: span 1;
+  }
+}
+
+@media (max-width: 640px) {
+  body.dgs-casino-hub .dgs-v2-hub-kv-grid {
     grid-template-columns: 1fr;
   }
 }

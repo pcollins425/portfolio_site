@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Casino hub — DGS Application</title>
+  <link rel="stylesheet" href="assets/dgs.css" />
+  <link rel="stylesheet" href="assets/dgs-v2.css" />
+  <link rel="stylesheet" href="assets/vendor/leaflet/leaflet.css" />
+</head>
+<body class="dgs-app dgs-casino-hub">
+  <aside class="dgs-sidebar" id="dgs-sidebar">
+    <div class="dgs-sidebar-brand">
+      <div class="dgs-brand-text">
+        <span class="dgs-brand-eyebrow">Dynamic Gaming Solutions</span>
+        <span class="dgs-brand-title">DGS Application</span>
+      </div>
+      <button type="button" id="dgs-rail-toggle" class="dgs-rail-toggle" aria-expanded="true" title="Collapse navigation">◧</button>
+    </div>
+    <nav class="dgs-sidebar-nav" id="dgs-app-nav" aria-label="Application"></nav>
+    <div class="dgs-sidebar-account" id="sidebar-account" hidden>
+      <span class="dgs-sidebar-user" id="user-label"></span>
+      <button type="button" id="btn-sign-out" class="dgs-sidebar-signout">Sign out</button>
+    </div>
+  </aside>
+
+  <div id="dgs-nav-flyout" class="dgs-nav-flyout" hidden></div>
+
+  <div class="dgs-main dgs-v2-main dgs-v2-hub-main">
+    <div id="error-box" class="dgs-v2-error" hidden></div>
+
+    <div class="dgs-v2-hub-body" id="hub-body" hidden>
+      <aside class="dgs-v2-hub-media" aria-label="Casino map">
+        <div class="dgs-v2-hub-media-inner">
+          <div class="dgs-v2-hub-hero dgs-v2-casino-hub-hero">
+            <div class="dgs-v2-casino-hub-map" id="hub-map" aria-label="Casino location map"></div>
+            <div class="dgs-v2-casino-hub-map-empty" id="hub-map-empty" hidden>No map coordinates on file</div>
+            <a class="dgs-v2-casino-hub-map-link" id="hub-map-link" href="#" target="_blank" rel="noopener noreferrer" hidden>Open in Google Maps ↗</a>
+          </div>
+          <div class="dgs-v2-image-caption">
+            <div class="label">Casino identity</div>
+            <div class="title" id="caption-title">—</div>
+            <div class="meta mono" id="caption-id">—</div>
+            <div class="meta" id="caption-meta">—</div>
+          </div>
+        </div>
+      </aside>
+
+      <main class="dgs-v2-hub-cells">
+        <header class="dgs-v2-hub-header">
+          <div>
+            <p class="dgs-v2-eyebrow dgs-v2-desktop-only">Reference view</p>
+            <h1>Casino hub</h1>
+            <p class="dgs-v2-subtitle dgs-v2-desktop-only" id="hub-subtitle">casino-hub.html</p>
+          </div>
+          <div class="dgs-v2-casino-hub-header-actions">
+            <a class="dgs-v2-btn dgs-v2-btn--primary" id="btn-slot-master" href="#">Slot Master</a>
+            <button type="button" class="dgs-v2-btn" id="btn-back" hidden>← Back</button>
+          </div>
+        </header>
+
+        <div class="dgs-v2-hub-grid" id="hub-grid"></div>
+      </main>
+    </div>
+
+    <div class="dgs-v2-hub-loading" id="hub-loading">Loading casino hub…</div>
+  </div>
+
+  <script src="assets/auth.js"></script>
+  <script src="assets/shell.js"></script>
+  <script src="assets/vendor/leaflet/leaflet.js"></script>
+  <script src="assets/casino-hub.js"></script>
+  <script>DGS.boot("casinos", () => CasinoHub.init());</script>
+</body>
+</html>
