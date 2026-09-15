@@ -370,15 +370,15 @@
           <option value="0"${e.active ? "" : " selected"}>No</option>
         </select></label>
       </div>
-      <p class="detail-label">Effective permissions</p>
+      <p class="dgs-v2-section-label">Effective permissions</p>
       <div class="perm-effective" id="eff-chips">${effectiveChips(state.draftEffective)}</div>
-      <p class="detail-label">Area toggles (overrides vs role)</p>
+      <p class="dgs-v2-section-label">Area toggles (overrides vs role)</p>
       ${renderPermGrid("employee")}
       <div class="perm-actions">
         ${
           canWrite
-            ? `<button type="button" class="btn btn-primary" id="btn-save-emp">Save</button>
-               <button type="button" class="btn" id="btn-reset-ov">Reset overrides…</button>`
+            ? `<button type="button" class="dgs-v2-btn dgs-v2-btn--primary" id="btn-save-emp">Save</button>
+               <button type="button" class="dgs-v2-btn" id="btn-reset-ov">Reset overrides…</button>`
             : "<span class=\"perm-hint\">Read-only</span>"
         }
       </div>
@@ -429,13 +429,13 @@
           r.role || ""
         )}" /></label>
       </div>
-      <p class="detail-label">Template permissions</p>
+      <p class="dgs-v2-section-label">Template permissions</p>
       <div class="perm-effective">${effectiveChips(state.draftRoleMap)}</div>
       ${renderPermGrid("role")}
       <div class="perm-actions">
         ${
           canWrite
-            ? '<button type="button" class="btn btn-primary" id="btn-save-role">Save role</button>'
+            ? '<button type="button" class="dgs-v2-btn dgs-v2-btn--primary" id="btn-save-role">Save role</button>'
             : "<span class=\"perm-hint\">Read-only</span>"
         }
       </div>

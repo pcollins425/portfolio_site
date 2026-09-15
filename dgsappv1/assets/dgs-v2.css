@@ -32,7 +32,8 @@ body.dgs-slot-master-v2.dgs-app,
 body.dgs-software-vault-v2.dgs-app,
 body.dgs-parts-inventory-v2.dgs-app,
 body.dgs-projects-v2.dgs-app,
-body.dgs-dashboard-v2.dgs-app {
+body.dgs-dashboard-v2.dgs-app,
+body.dgs-employees-admin-v2.dgs-app {
   height: 100vh;
   overflow: hidden;
   color-scheme: dark;
@@ -49,7 +50,8 @@ body.dgs-slot-master-v2 .dgs-v2-main,
 body.dgs-software-vault-v2 .dgs-v2-main,
 body.dgs-parts-inventory-v2 .dgs-v2-main,
 body.dgs-projects-v2 .dgs-v2-main,
-body.dgs-dashboard-v2 .dgs-v2-main {
+body.dgs-dashboard-v2 .dgs-v2-main,
+body.dgs-employees-admin-v2 .dgs-v2-main {
   display: flex;
   flex-direction: column;
   padding: 24px 28px 20px;
@@ -5872,5 +5874,227 @@ body.dgs-warehouse-v2.dgs-wh-drawer-compact .dgs-v2-drawer-body {
     font-size: 15px;
     font-weight: 600;
     font-family: inherit;
+  }
+}
+
+/* —— Employees & Permissions admin (v2) —— */
+body.dgs-employees-admin-v2 .dgs-emp-browse {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--dgs-v2-card);
+  border: 1px solid var(--dgs-v2-border);
+  border-radius: 14px;
+  overflow: hidden;
+}
+
+body.dgs-employees-admin-v2 .dgs-emp-filter {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  color: var(--dgs-v2-text-muted);
+  font-size: 13px;
+}
+
+body.dgs-employees-admin-v2 .dgs-emp-filter select {
+  padding: 8px 10px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: var(--dgs-v2-bg);
+  color: var(--dgs-v2-text);
+  font-family: inherit;
+  font-size: 13px;
+}
+
+body.dgs-employees-admin-v2 .dgs-v2-drawer {
+  width: min(520px, 100vw);
+}
+
+body.dgs-employees-admin-v2 .dgs-v2-drawer-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1rem 1.15rem;
+  border-bottom: 1px solid var(--dgs-v2-border);
+  background: var(--dgs-v2-card-head);
+}
+
+body.dgs-employees-admin-v2 .dgs-v2-drawer-title {
+  margin: 0.15rem 0;
+  font-size: 1.15rem;
+  color: var(--dgs-v2-heading);
+}
+
+body.dgs-employees-admin-v2 .dgs-v2-drawer-close {
+  border: none;
+  background: transparent;
+  color: var(--dgs-v2-text-muted);
+  font-size: 1.5rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+body.dgs-employees-admin-v2 .dgs-v2-drawer-body {
+  padding: 1rem 1.15rem 1.5rem;
+  overflow: auto;
+}
+
+body.dgs-employees-admin-v2 .perm-admin-grid {
+  display: grid;
+  gap: 0.85rem;
+}
+
+body.dgs-employees-admin-v2 .perm-group {
+  border: 1px solid var(--dgs-v2-border);
+  border-radius: 12px;
+  padding: 0.75rem 0.9rem;
+  background: rgba(0, 0, 0, 0.18);
+}
+
+body.dgs-employees-admin-v2 .perm-group h3 {
+  margin: 0 0 0.55rem;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--dgs-v2-text-muted);
+}
+
+body.dgs-employees-admin-v2 .perm-row {
+  display: grid;
+  grid-template-columns: minmax(7rem, 1fr) minmax(9rem, 1.2fr) minmax(6rem, 0.85fr);
+  gap: 0.45rem;
+  align-items: center;
+  padding: 0.35rem 0;
+  border-top: 1px solid var(--dgs-v2-border-soft);
+}
+
+body.dgs-employees-admin-v2 .perm-row:first-of-type {
+  border-top: 0;
+}
+
+body.dgs-employees-admin-v2 .perm-row label {
+  font-size: 0.88rem;
+  color: var(--dgs-v2-text);
+}
+
+body.dgs-employees-admin-v2 .perm-row select {
+  width: 100%;
+  padding: 7px 8px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: var(--dgs-v2-bg);
+  color: var(--dgs-v2-text);
+  font-family: inherit;
+  font-size: 12px;
+}
+
+body.dgs-employees-admin-v2 .perm-hint {
+  font-size: 0.72rem;
+  color: var(--dgs-v2-text-dim);
+}
+
+body.dgs-employees-admin-v2 .perm-effective {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin: 0.4rem 0 0.9rem;
+}
+
+body.dgs-employees-admin-v2 .perm-chip {
+  font-size: 0.72rem;
+  padding: 0.2rem 0.5rem;
+  border-radius: 999px;
+  background: var(--dgs-v2-accent-bg);
+  border: 1px solid var(--dgs-v2-accent-border);
+  color: var(--dgs-v2-text);
+}
+
+body.dgs-employees-admin-v2 .perm-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 1rem;
+}
+
+body.dgs-employees-admin-v2 .perm-identity {
+  display: grid;
+  gap: 0.55rem;
+  margin-bottom: 1rem;
+}
+
+body.dgs-employees-admin-v2 .perm-identity label {
+  display: grid;
+  gap: 0.25rem;
+  font-size: 0.82rem;
+  color: var(--dgs-v2-text-muted);
+}
+
+body.dgs-employees-admin-v2 .perm-identity input,
+body.dgs-employees-admin-v2 .perm-identity select {
+  padding: 0.45rem 0.55rem;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: var(--dgs-v2-bg);
+  color: var(--dgs-v2-text);
+  font-family: inherit;
+}
+
+body.dgs-employees-admin-v2 .dgs-v2-btn--danger {
+  border-color: rgba(185, 70, 70, 0.55);
+  background: rgba(139, 46, 46, 0.85);
+  color: #fff;
+}
+
+body.dgs-employees-admin-v2 .dgs-emp-reset-modal[hidden],
+body.dgs-employees-admin-v2 .dgs-v2-error[hidden] {
+  display: none !important;
+}
+
+body.dgs-employees-admin-v2 .dgs-emp-reset-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.55);
+}
+
+body.dgs-employees-admin-v2 .dgs-emp-reset-card {
+  background: var(--dgs-v2-card);
+  border: 1px solid var(--dgs-v2-border);
+  border-radius: 14px;
+  padding: 1.2rem 1.4rem;
+  max-width: 28rem;
+  width: calc(100% - 2rem);
+  color: var(--dgs-v2-text);
+}
+
+body.dgs-employees-admin-v2 .dgs-emp-reset-card h3 {
+  margin: 0 0 0.6rem;
+  color: var(--dgs-v2-heading);
+}
+
+body.dgs-employees-admin-v2 .dgs-emp-reset-card p {
+  margin: 0 0 1rem;
+  line-height: 1.45;
+  color: var(--dgs-v2-text-muted);
+}
+
+body.dgs-employees-admin-v2 .dgs-emp-reset-actions {
+  display: flex;
+  gap: 0.5rem;
+  justify-content: flex-end;
+}
+
+@media (max-width: 900px) {
+  body.dgs-employees-admin-v2 .dgs-v2-page-header {
+    gap: 0.75rem;
+  }
+
+  body.dgs-employees-admin-v2 .perm-row {
+    grid-template-columns: 1fr;
+    gap: 0.25rem;
   }
 }

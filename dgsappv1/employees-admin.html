@@ -2,40 +2,12 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>Employees &amp; Permissions — DGS Application</title>
   <link rel="stylesheet" href="assets/dgs.css" />
-  <style>
-    .perm-admin-grid { display: grid; gap: 1rem; }
-    .perm-group { border: 1px solid var(--dgs-border, #2a3140); border-radius: 8px; padding: 0.75rem 1rem; }
-    .perm-group h3 { margin: 0 0 0.6rem; font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.04em; opacity: 0.75; }
-    .perm-row { display: grid; grid-template-columns: minmax(8rem, 1fr) minmax(10rem, 1.2fr) minmax(7rem, 0.8fr); gap: 0.5rem; align-items: center; padding: 0.35rem 0; border-top: 1px solid rgba(255,255,255,0.06); }
-    .perm-row:first-of-type { border-top: 0; }
-    .perm-row label { font-size: 0.9rem; }
-    .perm-row select { width: 100%; }
-    .perm-hint { font-size: 0.75rem; opacity: 0.65; }
-    .perm-effective { display: flex; flex-wrap: wrap; gap: 0.35rem; margin: 0.5rem 0 1rem; }
-    .perm-chip { font-size: 0.75rem; padding: 0.2rem 0.5rem; border-radius: 999px; background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.12); }
-    .perm-actions { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 1rem; }
-    .perm-identity { display: grid; gap: 0.6rem; margin-bottom: 1rem; }
-    .perm-identity label { display: grid; gap: 0.25rem; font-size: 0.85rem; }
-    .perm-identity input, .perm-identity select { padding: 0.4rem 0.5rem; }
-    .perm-denied { padding: 1.5rem; }
-    #reset-modal[hidden], #error-box[hidden] { display: none !important; }
-    .reset-modal {
-      position: fixed; inset: 0; z-index: 80; display: flex; align-items: center; justify-content: center;
-      background: rgba(0,0,0,0.55);
-    }
-    .reset-modal-card {
-      background: var(--dgs-panel, #161b24); border: 1px solid var(--dgs-border, #2a3140);
-      border-radius: 10px; padding: 1.25rem 1.5rem; max-width: 28rem; width: calc(100% - 2rem);
-    }
-    .reset-modal-card p { margin: 0 0 1rem; line-height: 1.45; }
-    .reset-modal-actions { display: flex; gap: 0.5rem; justify-content: flex-end; }
-    .btn-danger { background: #8b2e2e; color: #fff; border: none; }
-  </style>
+  <link rel="stylesheet" href="assets/dgs-v2.css" />
 </head>
-<body class="dgs-app">
+<body class="dgs-app dgs-employees-admin-v2">
   <aside class="dgs-sidebar" id="dgs-sidebar">
     <div class="dgs-sidebar-brand">
       <div class="dgs-brand-text">
@@ -53,66 +25,67 @@
 
   <div id="dgs-nav-flyout" class="dgs-nav-flyout" hidden></div>
 
-  <div class="dgs-main">
-    <header class="page-header">
-      <p class="page-eyebrow">Admin</p>
-      <h1>Employees &amp; Permissions</h1>
-      <p class="subtitle">Role templates + per-person overrides · one level per area · grant only what you hold</p>
+  <div class="dgs-main dgs-v2-main">
+    <header class="dgs-v2-page-header">
+      <div>
+        <p class="dgs-v2-eyebrow">Admin</p>
+        <h1>Employees &amp; Permissions</h1>
+        <p class="dgs-v2-subtitle dgs-v2-desktop-only">Role templates + per-person overrides · one level per area · grant only what you hold</p>
+      </div>
+      <nav class="dgs-v2-view-toggle" id="perm-subnav" aria-label="Admin views">
+        <button type="button" class="active" data-view="employees" id="tab-employees">Employees</button>
+        <button type="button" data-view="roles" id="tab-roles">Roles</button>
+      </nav>
     </header>
 
-    <nav class="dgs-subnav" id="perm-subnav" aria-label="Admin views">
-      <button type="button" class="active" data-view="employees" id="tab-employees">Employees</button>
-      <button type="button" data-view="roles" id="tab-roles">Roles</button>
-    </nav>
-
-    <div id="error-box" class="error-box" hidden></div>
-    <div id="denied-box" class="perm-denied error-box" hidden>
+    <div id="error-box" class="dgs-v2-error" hidden></div>
+    <div id="denied-box" class="dgs-v2-error dgs-emp-denied" hidden>
       You need <code>employees</code> or <code>roles</code> read access to open this section.
     </div>
 
-    <section class="browse-panel" id="browse-panel">
-      <div class="toolbar">
+    <section class="dgs-v2-list-panel dgs-emp-browse" id="browse-panel">
+      <div class="dgs-v2-toolbar">
         <input id="search-input" type="search" placeholder="Search…" autocomplete="off" />
-        <label class="toolbar-field" id="active-filter-wrap">
-          <span class="toolbar-field__label">Active</span>
+        <label class="dgs-emp-filter" id="active-filter-wrap">
+          <span class="dgs-emp-filter-label">Active</span>
           <select id="active-filter">
             <option value="all">All</option>
             <option value="1" selected>Active</option>
             <option value="0">Inactive</option>
           </select>
         </label>
-        <button id="btn-refresh" type="button" class="btn">Refresh</button>
+        <button id="btn-refresh" type="button" class="dgs-v2-btn">Refresh</button>
       </div>
-      <div class="grid-wrap">
-        <table class="data-grid" id="browse-table">
+      <div class="dgs-v2-grid-wrap">
+        <table class="dgs-v2-grid" id="browse-table">
           <thead id="browse-thead"></thead>
           <tbody id="browse-tbody"></tbody>
         </table>
       </div>
-      <div class="status" id="list-status"></div>
+      <div class="dgs-v2-list-status" id="list-status"></div>
     </section>
   </div>
 
   <div class="detail-backdrop" id="detail-backdrop" hidden></div>
-  <aside class="detail-drawer" id="detail-drawer" aria-hidden="true">
-    <div class="detail-header">
+  <aside class="detail-drawer dgs-v2-drawer" id="detail-drawer" aria-hidden="true">
+    <div class="dgs-v2-drawer-header">
       <div>
-        <p class="detail-label" id="detail-label">Detail</p>
-        <h2 id="detail-title">—</h2>
-        <p class="subtitle" id="detail-subtitle"></p>
+        <p class="dgs-v2-eyebrow" id="detail-label">Detail</p>
+        <h2 class="dgs-v2-drawer-title" id="detail-title">—</h2>
+        <p class="dgs-v2-subtitle" id="detail-subtitle"></p>
       </div>
-      <button type="button" id="btn-close-detail" class="icon-btn" aria-label="Close details">×</button>
+      <button type="button" id="btn-close-detail" class="dgs-v2-drawer-close" aria-label="Close details">×</button>
     </div>
-    <div class="detail-body" id="detail-body"></div>
+    <div class="dgs-v2-drawer-body" id="detail-body"></div>
   </aside>
 
-  <div id="reset-modal" class="reset-modal" hidden>
-    <div class="reset-modal-card" role="dialog" aria-labelledby="reset-title">
+  <div id="reset-modal" class="dgs-emp-reset-modal" hidden>
+    <div class="dgs-emp-reset-card" role="dialog" aria-labelledby="reset-title">
       <h3 id="reset-title">Reset overrides?</h3>
       <p id="reset-message">Clears all personal overrides and restores the role base permissions.</p>
-      <div class="reset-modal-actions">
-        <button type="button" class="btn" id="btn-reset-cancel">Cancel</button>
-        <button type="button" class="btn btn-danger" id="btn-reset-confirm">Reset to role</button>
+      <div class="dgs-emp-reset-actions">
+        <button type="button" class="dgs-v2-btn" id="btn-reset-cancel">Cancel</button>
+        <button type="button" class="dgs-v2-btn dgs-v2-btn--danger" id="btn-reset-confirm">Reset to role</button>
       </div>
     </div>
   </div>
