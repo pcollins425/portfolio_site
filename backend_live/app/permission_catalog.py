@@ -70,7 +70,6 @@ PERMISSION_CATALOG: tuple[CatalogArea, ...] = (
     CatalogArea("emaint_demo_purchase_orders", "Ops · Purchase Orders", "dgs_app"),
     CatalogArea("dgs_projects_calendar", "Projects · Calendar", "dgs_app", (LEVEL_READ, LEVEL_UPDATES, LEVEL_ADDS_UPDATES, LEVEL_ALL)),
     CatalogArea("dgs_projects_catalog", "Projects · Catalog", "dgs_app", (LEVEL_READ, LEVEL_UPDATES, LEVEL_ADDS_UPDATES, LEVEL_ALL)),
-    CatalogArea("dgs_fsr_review", "FSR Review", "dgs_app"),
     CatalogArea("dgs_performance_intake", "Performance Intake", "dgs_app"),
     CatalogArea(ANALYST_AREA, "Analyst Queue", "dgs_app"),
     CatalogArea(COMMISSION_AREA, "Commission Queue", "dgs_app"),
