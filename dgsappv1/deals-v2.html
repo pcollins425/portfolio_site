@@ -59,23 +59,23 @@
       </div>
     </div>
 
-    <div class="dgs-v2-toolbar dgs-deals-toolbar">
-      <input id="search-input" type="search" placeholder="Search deal, casino, stage, SO…" autocomplete="off" />
-      <button id="search-btn" type="button" class="dgs-v2-btn dgs-v2-btn--primary">Search</button>
-      <button id="clear-search" type="button" class="dgs-v2-btn">Clear</button>
-      <label class="dgs-deals-filter-label" for="status-filter">Status</label>
-      <select id="status-filter" class="dgs-v2-select">
-        <option value="open" selected>Open</option>
-        <option value="closed">Closed</option>
-        <option value="won">Won</option>
-        <option value="all">All</option>
-      </select>
-      <span class="dgs-v2-list-status" id="list-status"></span>
-    </div>
+    <div class="dgs-v2-split">
+      <section class="dgs-v2-list-panel">
+        <div class="dgs-v2-toolbar">
+          <input id="search-input" type="search" placeholder="Search deal, casino, stage, SO…" autocomplete="off" />
+          <button id="search-btn" type="button" class="dgs-v2-btn dgs-v2-btn--primary">Search</button>
+          <button id="clear-search" type="button" class="dgs-v2-btn">Clear</button>
+          <label class="dgs-deals-filter-label" for="status-filter">Status</label>
+          <select id="status-filter" class="dgs-v2-select">
+            <option value="open" selected>Open</option>
+            <option value="closed">Closed</option>
+            <option value="won">Won</option>
+            <option value="all">All</option>
+          </select>
+        </div>
 
-    <div class="dgs-deals-layout">
-      <section class="dgs-deals-main" id="deals-main">
         <div id="board-view" class="dgs-deals-board" hidden></div>
+
         <div id="catalog-view" class="dgs-v2-grid-wrap" hidden>
           <table class="dgs-v2-grid" id="deals-table">
             <thead>
@@ -91,18 +91,22 @@
             <tbody id="deals-tbody"></tbody>
           </table>
         </div>
+
+        <div class="dgs-v2-list-status" id="list-status"></div>
       </section>
 
-      <aside class="dgs-v2-detail-panel dgs-deals-detail" id="detail-panel">
-        <div class="dgs-v2-card-head">
-          <div>
-            <h2 id="card-title">Select a deal</h2>
-            <p class="dgs-v2-card-meta" id="card-meta"></p>
+      <aside class="dgs-v2-detail" id="detail-panel">
+        <div class="dgs-v2-image-card dgs-v2-text-hero">
+          <div class="dgs-v2-text-hero-body">
+            <div class="dgs-v2-text-hero-state">Selected deal</div>
+            <h2 class="dgs-v2-text-hero-title" id="card-title">Select a deal</h2>
+            <p class="dgs-v2-text-hero-meta" id="card-meta"></p>
           </div>
         </div>
-        <div class="dgs-v2-detail-body" id="detail-body">
-          <p class="dgs-v2-empty" id="detail-empty-msg">Click a card or row to inspect deal fields.</p>
+        <div class="dgs-v2-detail-body empty" id="detail-body">
+          <p id="detail-empty-msg">Click a card or row to inspect deal fields.</p>
           <div id="detail-content" hidden>
+            <div class="dgs-v2-section-label">Deal</div>
             <dl class="dgs-v2-fields" id="detail-fields"></dl>
           </div>
         </div>

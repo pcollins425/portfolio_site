@@ -33,6 +33,7 @@
     tbody: document.getElementById("deals-tbody"),
     cardTitle: document.getElementById("card-title"),
     cardMeta: document.getElementById("card-meta"),
+    detailBody: document.getElementById("detail-body"),
     detailEmptyMsg: document.getElementById("detail-empty-msg"),
     detailContent: document.getElementById("detail-content"),
     detailFields: document.getElementById("detail-fields"),
@@ -110,12 +111,14 @@
     if (!d) {
       els.cardTitle.textContent = "Select a deal";
       els.cardMeta.textContent = "";
+      els.detailBody.classList.add("empty");
       els.detailEmptyMsg.hidden = false;
       els.detailContent.hidden = true;
       return;
     }
     els.cardTitle.textContent = d.deal_name || d.deal_key || `Deal ${d.hubspot_deal_id}`;
     els.cardMeta.textContent = [d.deal_key, d.casino_name].filter(Boolean).join(" · ");
+    els.detailBody.classList.remove("empty");
     els.detailEmptyMsg.hidden = true;
     els.detailContent.hidden = false;
 
