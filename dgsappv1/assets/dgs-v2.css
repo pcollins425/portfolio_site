@@ -6697,6 +6697,18 @@ body.dgs-deals-v2 .dgs-v2-detail-backdrop {
   }
 }
 
+/* Mobile portrait: drop Amount from the catalog columns */
+@media (max-width: 900px) and (orientation: portrait) {
+  body.dgs-deals-v2 #deals-table th:nth-child(4),
+  body.dgs-deals-v2 #deals-table td:nth-child(4) {
+    display: none;
+  }
+
+  body.dgs-deals-v2 .dgs-deal-card-amount {
+    display: none;
+  }
+}
+
 @media (min-width: 901px) and (max-width: 1366px) {
   body.dgs-deals-v2 .dgs-deal-column {
     flex-basis: 230px;
