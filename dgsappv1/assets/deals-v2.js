@@ -315,7 +315,7 @@
   }
 
   function applyView() {
-    // Phone never shows board.
+    // Phone never shows board — hide the whole toggle when only Catalog applies.
     const board = state.view === "board" && !isPhone();
     if (state.view === "board" && isPhone()) state.view = "catalog";
 
@@ -323,10 +323,10 @@
     document.body.classList.toggle("dgs-deals-view-catalog", !board);
     els.boardView.hidden = !board;
     els.catalogView.hidden = board;
+    if (els.viewToggle) els.viewToggle.hidden = isPhone();
     els.viewToggle.querySelectorAll("button").forEach((btn) => {
-      const view = btn.getAttribute("data-view");
-      btn.classList.toggle("active", view === state.view);
-      if (view === "board") btn.hidden = isPhone();
+      btn.classList.toggle("active", btn.getAttribute("data-view") === state.view);
+      btn.hidden = false;
     });
     renderPipelineOptions();
     if (board) renderBoard();
@@ -397,15 +397,26 @@
     els.tbody.innerHTML = state.items
       .map((d) => {
         const selected = String(d.hubspot_deal_id) === String(state.selectedId) ? " is-selected" : "";
+        const title = d.deal_name || d.deal_key || "—";
+        const casino = d.casino_name || d.casino_id || "—";
         const stage = d.deal_stage_label || d.deal_stage || "—";
+        const amount = fmtMoney(d.amount);
+        const close = fmtDate(d.close_date);
+        const owner = d.owner_name || "—";
+        const metaBits = [casino, stage].filter((x) => x && x !== "—");
         return `
           <tr class="${selected.trim()}" data-deal-id="${esc(d.hubspot_deal_id)}" tabindex="0">
-            <td>${esc(d.deal_name || d.deal_key || "—")}</td>
-            <td>${esc(d.casino_name || d.casino_id || "—")}</td>
-            <td title="${esc(stage)}">${esc(stage)}</td>
-            <td>${esc(fmtMoney(d.amount))}</td>
-            <td>${esc(fmtDate(d.close_date))}</td>
-            <td>${esc(d.owner_name || "—")}</td>
+            <td>
+              <span class="dgs-deals-row-title">${esc(title)}</span>
+              <span class="dgs-deals-row-meta">
+                ${esc(metaBits.join(" · ") || "—")}<span class="dgs-deals-row-meta-amt"> · ${esc(amount)}</span>
+              </span>
+            </td>
+            <td class="dgs-v2-col--desktop">${esc(casino)}</td>
+            <td class="dgs-v2-col--desktop" title="${esc(stage)}">${esc(stage)}</td>
+            <td class="dgs-v2-col--desktop">${esc(amount)}</td>
+            <td class="dgs-v2-col--desktop">${esc(close)}</td>
+            <td class="dgs-v2-col--desktop">${esc(owner)}</td>
           </tr>`;
       })
       .join("");

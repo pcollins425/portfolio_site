@@ -6499,6 +6499,10 @@ body.dgs-deals-v2 #deals-tbody tr.is-selected td {
   background: var(--dgs-v2-accent-bg);
 }
 
+body.dgs-deals-v2 .dgs-deals-row-meta {
+  display: none;
+}
+
 /* Compact = phone + tablet (desk layout only above 1366px) */
 body.dgs-deals-v2 .dgs-v2-phone-only {
   display: none;
@@ -6519,6 +6523,35 @@ body.dgs-deals-v2 .dgs-v2-detail-backdrop {
 
   body.dgs-deals-v2 .dgs-v2-subtitle {
     display: none;
+  }
+
+  body.dgs-deals-v2 .dgs-v2-col--desktop {
+    display: none !important;
+  }
+
+  body.dgs-deals-v2 #deals-table thead {
+    display: none;
+  }
+
+  body.dgs-deals-v2 .dgs-deals-row-title {
+    display: block;
+    font-weight: 600;
+    font-size: 14px;
+    line-height: 1.3;
+    color: var(--dgs-v2-heading);
+  }
+
+  body.dgs-deals-v2 .dgs-deals-row-meta {
+    display: block;
+    margin-top: 3px;
+    font-size: 12px;
+    line-height: 1.35;
+    color: var(--dgs-v2-text-muted);
+    font-weight: 400;
+  }
+
+  body.dgs-deals-v2 .dgs-deals-catalog {
+    padding-bottom: var(--dgs-v2-system-nav-clear);
   }
 
   body.dgs-deals-v2 .dgs-v2-main {
@@ -6711,10 +6744,10 @@ body.dgs-deals-v2 .dgs-v2-detail-backdrop {
   }
 }
 
-/* Phone ≤900: Catalog only (board stays on tablet / foldable) */
+/* Phone ≤900: Catalog only — hide Board/Catalog toggle when only one view applies */
 @media (max-width: 900px) {
-  body.dgs-deals-v2 .dgs-v2-view-toggle button[data-view="board"] {
-    display: none;
+  body.dgs-deals-v2 .dgs-v2-view-toggle {
+    display: none !important;
   }
 
   body.dgs-deals-v2 .dgs-deal-column {
@@ -6724,19 +6757,11 @@ body.dgs-deals-v2 .dgs-v2-detail-backdrop {
   body.dgs-deals-v2 .dgs-deals-filter-label {
     display: none;
   }
-
-  body.dgs-deals-v2 #deals-table th:nth-child(5),
-  body.dgs-deals-v2 #deals-table th:nth-child(6),
-  body.dgs-deals-v2 #deals-table td:nth-child(5),
-  body.dgs-deals-v2 #deals-table td:nth-child(6) {
-    display: none;
-  }
 }
 
-/* Mobile portrait: drop Amount from the catalog columns */
+/* Mobile portrait: drop Amount from compact meta + board cards */
 @media (max-width: 900px) and (orientation: portrait) {
-  body.dgs-deals-v2 #deals-table th:nth-child(4),
-  body.dgs-deals-v2 #deals-table td:nth-child(4) {
+  body.dgs-deals-v2 .dgs-deals-row-meta-amt {
     display: none;
   }
 
@@ -6751,6 +6776,10 @@ body.dgs-deals-v2 .dgs-v2-detail-backdrop {
   }
 
   body.dgs-deals-v2 .dgs-deals-board {
+    padding-bottom: var(--dgs-v2-system-nav-clear-tablet, 24px);
+  }
+
+  body.dgs-deals-v2 .dgs-deals-catalog {
     padding-bottom: var(--dgs-v2-system-nav-clear-tablet, 24px);
   }
 }
