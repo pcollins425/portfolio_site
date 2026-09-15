@@ -1,4 +1,4 @@
-"""Paul-only Analyst intake queue."""
+"""Analyst intake queue API — gated by dgs_analyst area."""
 from __future__ import annotations
 
 from typing import Annotated, Any
@@ -24,7 +24,7 @@ def analyst_summary(
     months: int | None = Query(None, ge=1, le=120, description="Omit to scan all façade months"),
     user: Annotated[dict[str, Any] | None, Depends(require_demo_user)] = None,
 ):
-    q.assert_paul(user)
+    q.assert_analyst_read(user)
     if not through or len(through.strip()) < 7:
         raise HTTPException(status_code=400, detail="through=YYYY-MM required")
     return q.queue_summary(through=through.strip()[:7], months=months)
@@ -36,7 +36,7 @@ def analyst_queue(
     status: str = Query("open"),
     user: Annotated[dict[str, Any] | None, Depends(require_demo_user)] = None,
 ):
-    q.assert_paul(user)
+    q.assert_analyst_read(user)
     if not month or len(month.strip()) < 7:
         raise HTTPException(status_code=400, detail="month=YYYY-MM required")
     return q.queue_for_month(month.strip()[:7], status=status)
@@ -47,7 +47,7 @@ def analyst_resolutions(
     month: str | None = Query(None, description="YYYY-MM focus month"),
     user: Annotated[dict[str, Any] | None, Depends(require_demo_user)] = None,
 ):
-    q.assert_paul(user)
+    q.assert_analyst_read(user)
     if not month or len(month.strip()) < 7:
         raise HTTPException(status_code=400, detail="month=YYYY-MM required")
     return q.checked_for_month(month.strip()[:7])
@@ -58,6 +58,6 @@ def analyst_resolve(
     body: ResolveBody,
     user: Annotated[dict[str, Any] | None, Depends(require_demo_user)] = None,
 ):
-    q.assert_paul(user)
+    q.assert_analyst_write(user)
     saved = q.resolve_flag(body.id, status=body.status, note=body.note, user=user)
     return {"ok": True, "id": body.id, **saved}

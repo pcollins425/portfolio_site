@@ -4,14 +4,11 @@ from __future__ import annotations
 
 import os
 from datetime import date, datetime, timedelta
-from typing import Annotated, Any
+from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, Query
-from pydantic import BaseModel, Field
+from fastapi import APIRouter, HTTPException, Query
 
-from app import analyst_queue as aq
 from app import mssql
-from app.auth_deps import require_demo_user
 from app.commission_rules import parse_rules, reporting_waived
 
 router = APIRouter(prefix="/api", tags=["master-revenue"])
@@ -854,80 +851,14 @@ def analyst_sanity():
     return {"source": "live", "flags": [], "deprecated": True, "use": "/api/analyst/queue"}
 
 
-class _AnalystResolveBody(BaseModel):
-    id: str = Field(min_length=3)
-    status: str
-    note: str
-
-
 @router.get("/analyst/ping")
 def analyst_ping():
     """No-auth probe: if this 404s, the image does not have the queue commit."""
     return {"ok": True, "queue": "/api/analyst/queue", "resolutions": "/api/analyst/resolutions"}
 
 
-@router.get("/analyst/summary")
-def analyst_summary(
-    through: str | None = Query(None, description="YYYY-MM latest month to include"),
-    months: int | None = Query(None, ge=1, le=120, description="Omit to scan all façade months"),
-    user: Annotated[dict[str, Any] | None, Depends(require_demo_user)] = None,
-):
-    aq.assert_paul(user)
-    if not through or len(through.strip()) < 7:
-        periods = _distinct_periods(1)
-        if not periods:
-            raise HTTPException(status_code=404, detail="No dated rows in revenue façade view")
-        through = periods[0].isoformat()[:7]
-    try:
-        return aq.queue_summary(through=through.strip()[:7], months=months)
-    except HTTPException:
-        raise
-    except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"analyst summary failed: {exc}") from exc
-
-
-@router.get("/analyst/queue")
-def analyst_queue(
-    month: str | None = Query(None, description="YYYY-MM focus month"),
-    status: str = Query("open"),
-    user: Annotated[dict[str, Any] | None, Depends(require_demo_user)] = None,
-):
-    aq.assert_paul(user)
-    if not month or len(month.strip()) < 7:
-        raise HTTPException(status_code=400, detail="month=YYYY-MM required")
-    try:
-        return aq.queue_for_month(month.strip()[:7], status=status)
-    except HTTPException:
-        raise
-    except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"analyst queue scan failed: {exc}") from exc
-
-
-@router.get("/analyst/resolutions")
-def analyst_queue_resolutions(
-    month: str | None = Query(None, description="YYYY-MM focus month"),
-    user: Annotated[dict[str, Any] | None, Depends(require_demo_user)] = None,
-):
-    aq.assert_paul(user)
-    if not month or len(month.strip()) < 7:
-        raise HTTPException(status_code=400, detail="month=YYYY-MM required")
-    try:
-        return aq.checked_for_month(month.strip()[:7])
-    except HTTPException:
-        raise
-    except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"analyst resolutions failed: {exc}") from exc
-
-
-@router.post("/analyst/queue/resolve")
-def analyst_queue_resolve(
-    body: _AnalystResolveBody,
-    user: Annotated[dict[str, Any] | None, Depends(require_demo_user)] = None,
-):
-    aq.assert_paul(user)
-    saved = aq.resolve_flag(body.id, status=body.status, note=body.note, user=user)
-    return {"ok": True, "id": body.id, **saved}
-
+# Queue / summary / resolutions / resolve live on routers.analyst (dgs_analyst gate).
+# Do not re-register them here — first match wins and stale assert_paul handlers break auth'd calls.
 
 @router.get("/finance/casinos-latest")
 def finance_casinos_latest(month: str | None = Query(None, description="YYYY-MM or YYYY-MM-DD month-end slice")):
