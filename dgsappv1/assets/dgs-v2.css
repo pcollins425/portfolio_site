@@ -6339,13 +6339,20 @@ body.dgs-deals-v2 .dgs-v2-toolbar {
   align-items: center;
 }
 
+body.dgs-deals-v2 .dgs-deals-filter {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
 body.dgs-deals-v2 .dgs-deals-filter-label {
   font-size: 11px;
   font-weight: 600;
   letter-spacing: 0.04em;
   text-transform: uppercase;
   color: var(--dgs-v2-text-muted);
-  margin-left: 4px;
+  white-space: nowrap;
 }
 
 body.dgs-deals-v2 .dgs-v2-select {
@@ -6358,6 +6365,7 @@ body.dgs-deals-v2 .dgs-v2-select {
   font-size: 13px;
   font-family: inherit;
   max-width: 240px;
+  min-width: 0;
 }
 
 body.dgs-deals-v2 .dgs-deals-stage {
@@ -6583,9 +6591,33 @@ body.dgs-deals-v2 .dgs-v2-detail-backdrop {
 
   body.dgs-deals-v2 .dgs-v2-toolbar {
     flex-shrink: 0;
+    flex-wrap: wrap;
+    padding: 10px 12px;
+    gap: 8px;
+  }
+
+  body.dgs-deals-v2 .dgs-v2-toolbar input[type="search"] {
+    flex: 1 1 100%;
+    min-width: 0;
+  }
+
+  body.dgs-deals-v2 .dgs-v2-toolbar .dgs-v2-btn {
+    flex: 1 1 calc(50% - 4px);
+  }
+
+  body.dgs-deals-v2 .dgs-deals-filter {
+    flex: 1 1 calc(50% - 4px);
+    flex-direction: column;
+    align-items: stretch;
+    gap: 4px;
+  }
+
+  body.dgs-deals-v2 .dgs-deals-filter-label {
+    font-size: 10px;
   }
 
   body.dgs-deals-v2 .dgs-v2-select {
+    width: 100%;
     max-width: none;
   }
 
@@ -6687,6 +6719,10 @@ body.dgs-deals-v2 .dgs-v2-detail-backdrop {
 
   body.dgs-deals-v2 .dgs-deal-column {
     flex-basis: 220px;
+  }
+
+  body.dgs-deals-v2 .dgs-deals-filter-label {
+    display: none;
   }
 
   body.dgs-deals-v2 #deals-table th:nth-child(5),

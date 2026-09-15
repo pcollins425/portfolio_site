@@ -65,15 +65,19 @@
           <input id="search-input" type="search" placeholder="Search deal, casino, stage, SO…" autocomplete="off" />
           <button id="search-btn" type="button" class="dgs-v2-btn dgs-v2-btn--primary">Search</button>
           <button id="clear-search" type="button" class="dgs-v2-btn">Clear</button>
-          <label class="dgs-deals-filter-label" for="pipeline-filter">Pipeline</label>
-          <select id="pipeline-filter" class="dgs-v2-select"></select>
-          <label class="dgs-deals-filter-label" for="status-filter">Status</label>
-          <select id="status-filter" class="dgs-v2-select">
-            <option value="open" selected>Open</option>
-            <option value="closed">Closed</option>
-            <option value="won">Won</option>
-            <option value="all">All</option>
-          </select>
+          <label class="dgs-deals-filter" for="pipeline-filter">
+            <span class="dgs-deals-filter-label">Pipeline</span>
+            <select id="pipeline-filter" class="dgs-v2-select"></select>
+          </label>
+          <label class="dgs-deals-filter" for="status-filter">
+            <span class="dgs-deals-filter-label">Status</span>
+            <select id="status-filter" class="dgs-v2-select">
+              <option value="open" selected>Open</option>
+              <option value="closed">Closed</option>
+              <option value="won">Won</option>
+              <option value="all">All</option>
+            </select>
+          </label>
         </div>
 
         <div class="dgs-deals-stage" id="deals-stage">
