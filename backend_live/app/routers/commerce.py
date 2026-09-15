@@ -13,6 +13,7 @@ from app import mssql
 
 casinos_router = APIRouter(prefix="/api/commerce/casinos", tags=["commerce-casinos"])
 vendors_router = APIRouter(prefix="/api/commerce/vendors", tags=["commerce-vendors"])
+deals_router = APIRouter(prefix="/api/commerce/deals", tags=["commerce-deals"])
 
 
 def _catalog() -> str:
@@ -864,3 +865,206 @@ def casino_detail(reference_key: str):
         "performance": performance,
         "hubspot": hubspot,
     }
+
+
+# --- HubSpot deals (Commerce board / catalog) ---
+
+
+def _deal_row(r: dict) -> dict:
+    return {
+        "hubspot_deal_id": _json_value(r.get("hubspot_deal_id")),
+        "deal_key": _json_value(r.get("deal_key") or r.get("reference_key")),
+        "deal_name": _json_value(r.get("deal_name")),
+        "pipeline": _json_value(r.get("pipeline")),
+        "deal_stage": _json_value(r.get("deal_stage")),
+        "amount": _json_value(r.get("amount")),
+        "close_date": _json_value(r.get("close_date")),
+        "create_date": _json_value(r.get("create_date")),
+        "project_date": _json_value(r.get("project_date")),
+        "sales_order": _json_value(r.get("sales_order")),
+        "product_units": _json_value(r.get("product_units")),
+        "payout_type": _json_value(r.get("payout_type")),
+        "ims_id": _json_value(r.get("ims_id")),
+        "casino_id": _json_value(r.get("casino_id")),
+        "casino_name": _json_value(r.get("casino_name")),
+        "owner_name": _json_value(r.get("owner_name")),
+        "is_closed": _as_bool(r.get("is_closed")),
+        "is_closed_won": _as_bool(r.get("is_closed_won")),
+        "synced_at": _iso_dt(r.get("synced_at")),
+    }
+
+
+_DEAL_LIST_SELECT = """
+SELECT
+    d.hubspot_deal_id,
+    d.reference_key AS deal_key,
+    d.deal_name,
+    d.pipeline,
+    d.deal_stage,
+    d.amount,
+    d.close_date,
+    d.create_date,
+    d.project_date,
+    d.sales_order,
+    d.product_units,
+    d.payout_type,
+    d.ims_id,
+    d.casino_id,
+    d.is_closed,
+    d.is_closed_won,
+    d.synced_at,
+    c.casino_name,
+    LTRIM(RTRIM(CONCAT(ISNULL(o.first_name, N''), N' ', ISNULL(o.last_name, N'')))) AS owner_name
+FROM clients.hubspot_deal AS d
+LEFT JOIN clients.casinos AS c ON c.reference_key = d.casino_id
+LEFT JOIN clients.hubspot_owner AS o ON o.hubspot_owner_id = d.hubspot_owner_id
+"""
+
+
+@deals_router.get("/summary")
+def deals_summary():
+    try:
+        row = _field_query(
+            """
+            SELECT
+                COUNT(*) AS total,
+                SUM(CASE WHEN ISNULL(is_closed, 0) = 0 THEN 1 ELSE 0 END) AS open_count,
+                SUM(CASE WHEN ISNULL(is_closed, 0) = 1 THEN 1 ELSE 0 END) AS closed_count,
+                SUM(CASE WHEN ISNULL(is_closed_won, 0) = 1 THEN 1 ELSE 0 END) AS won_count,
+                SUM(CASE WHEN ISNULL(is_closed, 0) = 0 THEN ISNULL(amount, 0) ELSE 0 END) AS open_amount,
+                COUNT(DISTINCT NULLIF(deal_stage, N'')) AS stage_count,
+                MAX(synced_at) AS last_sync
+            FROM clients.hubspot_deal
+            """
+        )[0]
+    except Exception as exc:
+        raise HTTPException(status_code=503, detail=f"database error: {exc}") from exc
+    return {
+        "total": int(row.get("total") or 0),
+        "open_count": int(row.get("open_count") or 0),
+        "closed_count": int(row.get("closed_count") or 0),
+        "won_count": int(row.get("won_count") or 0),
+        "open_amount": _json_value(row.get("open_amount")),
+        "stage_count": int(row.get("stage_count") or 0),
+        "last_sync": _json_value(row.get("last_sync")),
+    }
+
+
+@deals_router.get("")
+def list_deals(
+    q: str = Query("", max_length=120),
+    status: str = Query("open", description="open|closed|all|won"),
+    pipeline: str = Query("", max_length=50),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(100, ge=1, le=500),
+):
+    status_n = (status or "open").strip().lower()
+    where = ["1=1"]
+    params: list = []
+    if status_n == "open":
+        where.append("ISNULL(d.is_closed, 0) = 0")
+    elif status_n == "closed":
+        where.append("ISNULL(d.is_closed, 0) = 1")
+    elif status_n == "won":
+        where.append("ISNULL(d.is_closed_won, 0) = 1")
+    # all = no filter
+
+    pipe = (pipeline or "").strip()
+    if pipe:
+        where.append("d.pipeline = %s")
+        params.append(pipe)
+
+    needle = (q or "").strip()
+    if needle:
+        where.append(
+            """(
+                d.deal_name LIKE %s OR d.reference_key LIKE %s
+                OR c.casino_name LIKE %s OR d.casino_id LIKE %s
+                OR d.deal_stage LIKE %s OR d.sales_order LIKE %s
+            )"""
+        )
+        like = f"%{needle}%"
+        params.extend([like, like, like, like, like, like])
+
+    where_sql = " AND ".join(where)
+    try:
+        total = int(
+            _field_query(
+                f"""
+                SELECT COUNT(*) AS n
+                FROM clients.hubspot_deal AS d
+                LEFT JOIN clients.casinos AS c ON c.reference_key = d.casino_id
+                WHERE {where_sql}
+                """,
+                tuple(params),
+            )[0]["n"]
+            or 0
+        )
+        offset = (page - 1) * page_size
+        rows = _field_query(
+            f"""
+            {_DEAL_LIST_SELECT}
+            WHERE {where_sql}
+            ORDER BY
+                CASE WHEN ISNULL(d.is_closed, 0) = 0 THEN 0 ELSE 1 END,
+                d.deal_stage,
+                d.close_date DESC,
+                d.deal_name
+            OFFSET %s ROWS FETCH NEXT %s ROWS ONLY
+            """,
+            tuple(params + [offset, page_size]),
+        )
+        stage_rows = _field_query(
+            f"""
+            SELECT
+                ISNULL(NULLIF(LTRIM(RTRIM(d.deal_stage)), N''), N'(no stage)') AS deal_stage,
+                COUNT(*) AS n
+            FROM clients.hubspot_deal AS d
+            LEFT JOIN clients.casinos AS c ON c.reference_key = d.casino_id
+            WHERE {where_sql}
+            GROUP BY ISNULL(NULLIF(LTRIM(RTRIM(d.deal_stage)), N''), N'(no stage)')
+            ORDER BY n DESC, deal_stage
+            """,
+            tuple(params),
+        )
+    except Exception as exc:
+        raise HTTPException(status_code=503, detail=f"database error: {exc}") from exc
+
+    return {
+        "items": [_deal_row(r) for r in rows],
+        "stages": [
+            {"deal_stage": _json_value(s.get("deal_stage")), "count": int(s.get("n") or 0)}
+            for s in stage_rows
+        ],
+        "page": page,
+        "page_size": page_size,
+        "total": total,
+        "total_pages": max(1, math.ceil(total / page_size)) if page_size else 1,
+        "status": status_n,
+    }
+
+
+@deals_router.get("/{deal_id}")
+def get_deal(deal_id: str):
+    hid = (deal_id or "").strip()
+    if not hid:
+        raise HTTPException(status_code=400, detail="deal id required")
+    try:
+        # Accept hubspot_deal_id or HSD- reference_key
+        if hid.upper().startswith("HSD-"):
+            rows = _field_query(
+                f"{_DEAL_LIST_SELECT} WHERE d.reference_key = %s",
+                (hid,),
+            )
+        else:
+            rows = _field_query(
+                f"{_DEAL_LIST_SELECT} WHERE d.hubspot_deal_id = %s",
+                (int(hid),),
+            )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail="deal id must be numeric or HSD-…") from exc
+    except Exception as exc:
+        raise HTTPException(status_code=503, detail=f"database error: {exc}") from exc
+    if not rows:
+        raise HTTPException(status_code=404, detail="Deal not found")
+    return _deal_row(rows[0])

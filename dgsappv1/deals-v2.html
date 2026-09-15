@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Deals — DGS Application</title>
+  <link rel="stylesheet" href="assets/dgs.css" />
+  <link rel="stylesheet" href="assets/dgs-v2.css" />
+</head>
+<body class="dgs-app dgs-deals-v2">
+  <aside class="dgs-sidebar" id="dgs-sidebar">
+    <div class="dgs-sidebar-brand">
+      <div class="dgs-brand-text">
+        <span class="dgs-brand-eyebrow">Dynamic Gaming Solutions</span>
+        <span class="dgs-brand-title">DGS Application</span>
+      </div>
+      <button type="button" id="dgs-rail-toggle" class="dgs-rail-toggle" aria-expanded="true" title="Collapse navigation">◧</button>
+    </div>
+    <nav class="dgs-sidebar-nav" id="dgs-app-nav" aria-label="Application"></nav>
+    <div class="dgs-sidebar-account" id="sidebar-account" hidden>
+      <span class="dgs-sidebar-user" id="user-label"></span>
+      <button type="button" id="btn-sign-out" class="dgs-sidebar-signout">Sign out</button>
+    </div>
+  </aside>
+
+  <div id="dgs-nav-flyout" class="dgs-nav-flyout" hidden></div>
+
+  <div class="dgs-main dgs-v2-main">
+    <header class="dgs-v2-page-header">
+      <div>
+        <p class="dgs-v2-eyebrow">Commerce</p>
+        <h1>Deals</h1>
+        <p class="dgs-v2-subtitle">HubSpot deals · <code>clients.hubspot_deal</code></p>
+      </div>
+      <nav class="dgs-v2-view-toggle" id="view-toggle" aria-label="Deals view">
+        <button type="button" data-view="board" class="active">Board</button>
+        <button type="button" data-view="catalog">Catalog</button>
+      </nav>
+    </header>
+
+    <div id="error-box" class="dgs-v2-error" hidden></div>
+
+    <div class="dgs-v2-metrics" id="stat-row" aria-label="Deal summary">
+      <div class="dgs-v2-metric">
+        <div class="dgs-v2-metric-label">Open</div>
+        <div class="dgs-v2-metric-value" id="stat-open">—</div>
+      </div>
+      <div class="dgs-v2-metric">
+        <div class="dgs-v2-metric-label">Open amount</div>
+        <div class="dgs-v2-metric-value" id="stat-open-amount">—</div>
+      </div>
+      <div class="dgs-v2-metric">
+        <div class="dgs-v2-metric-label">Won</div>
+        <div class="dgs-v2-metric-value" id="stat-won">—</div>
+      </div>
+      <div class="dgs-v2-metric">
+        <div class="dgs-v2-metric-label">Last sync</div>
+        <div class="dgs-v2-metric-value" id="stat-sync">—</div>
+      </div>
+    </div>
+
+    <div class="dgs-v2-toolbar dgs-deals-toolbar">
+      <input id="search-input" type="search" placeholder="Search deal, casino, stage, SO…" autocomplete="off" />
+      <button id="search-btn" type="button" class="dgs-v2-btn dgs-v2-btn--primary">Search</button>
+      <button id="clear-search" type="button" class="dgs-v2-btn">Clear</button>
+      <label class="dgs-deals-filter-label" for="status-filter">Status</label>
+      <select id="status-filter" class="dgs-v2-select">
+        <option value="open" selected>Open</option>
+        <option value="closed">Closed</option>
+        <option value="won">Won</option>
+        <option value="all">All</option>
+      </select>
+      <span class="dgs-v2-list-status" id="list-status"></span>
+    </div>
+
+    <div class="dgs-deals-layout">
+      <section class="dgs-deals-main" id="deals-main">
+        <div id="board-view" class="dgs-deals-board" hidden></div>
+        <div id="catalog-view" class="dgs-v2-grid-wrap" hidden>
+          <table class="dgs-v2-grid" id="deals-table">
+            <thead>
+              <tr>
+                <th>Deal</th>
+                <th>Casino</th>
+                <th>Stage</th>
+                <th>Amount</th>
+                <th>Close</th>
+                <th>Owner</th>
+              </tr>
+            </thead>
+            <tbody id="deals-tbody"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <aside class="dgs-v2-detail-panel dgs-deals-detail" id="detail-panel">
+        <div class="dgs-v2-card-head">
+          <div>
+            <h2 id="card-title">Select a deal</h2>
+            <p class="dgs-v2-card-meta" id="card-meta"></p>
+          </div>
+        </div>
+        <div class="dgs-v2-detail-body" id="detail-body">
+          <p class="dgs-v2-empty" id="detail-empty-msg">Click a card or row to inspect deal fields.</p>
+          <div id="detail-content" hidden>
+            <dl class="dgs-v2-fields" id="detail-fields"></dl>
+          </div>
+        </div>
+      </aside>
+    </div>
+  </div>
+
+  <script src="assets/auth.js"></script>
+  <script src="assets/shell.js"></script>
+  <script src="assets/deals-v2.js"></script>
+  <script>DGS.boot("deals", () => DealsV2.init());</script>
+</body>
+</html>

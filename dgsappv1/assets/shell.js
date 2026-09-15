@@ -29,6 +29,7 @@
       items: [
         { id: "vendors", label: "Vendors", href: "vendors-v2.html" },
         { id: "casinos", label: "Casinos", href: "casinos-v2.html" },
+        { id: "deals", label: "Deals", href: "deals-v2.html" },
       ],
     },
     {
