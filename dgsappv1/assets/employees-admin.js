@@ -304,7 +304,7 @@
             current = draft;
           }
           parts.push(`<div class="perm-row">
-            <label>${esc(area.label)}</label>
+            <span class="perm-row-name">${esc(area.label)}</span>
             <select data-area="${esc(area.id)}">${levelOptions(area.id, current, {
               allowNone: true,
               roleDefault: roleLevel,
@@ -314,7 +314,7 @@
         } else {
           current = state.draftRoleMap[area.id] || "";
           parts.push(`<div class="perm-row">
-            <label>${esc(area.label)}</label>
+            <span class="perm-row-name">${esc(area.label)}</span>
             <select data-area="${esc(area.id)}">${levelOptions(area.id, current, {
               allowNone: false,
             })}</select>
@@ -362,13 +362,25 @@
 
     els.detailBody.innerHTML = `
       <div class="perm-identity">
-        <label>Name <input id="fld-name" ${canWrite ? "" : "disabled"} value="${esc(e.name || "")}" /></label>
-        <label>Email <input id="fld-email" ${canWrite ? "" : "disabled"} value="${esc(e.email || "")}" /></label>
-        <label>Role <select id="fld-role" ${canWrite ? "" : "disabled"}>${roleSelect}</select></label>
-        <label>Active <select id="fld-active" ${canWrite ? "" : "disabled"}>
-          <option value="1"${e.active ? " selected" : ""}>Yes</option>
-          <option value="0"${e.active ? "" : " selected"}>No</option>
-        </select></label>
+        <label class="dgs-emp-field dgs-emp-field--full">
+          <span class="dgs-emp-field-label">Name</span>
+          <input id="fld-name" ${canWrite ? "" : "disabled"} value="${esc(e.name || "")}" />
+        </label>
+        <label class="dgs-emp-field dgs-emp-field--full">
+          <span class="dgs-emp-field-label">Email</span>
+          <input id="fld-email" type="email" ${canWrite ? "" : "disabled"} value="${esc(e.email || "")}" />
+        </label>
+        <label class="dgs-emp-field">
+          <span class="dgs-emp-field-label">Role</span>
+          <select id="fld-role" ${canWrite ? "" : "disabled"}>${roleSelect}</select>
+        </label>
+        <label class="dgs-emp-field">
+          <span class="dgs-emp-field-label">Active</span>
+          <select id="fld-active" ${canWrite ? "" : "disabled"}>
+            <option value="1"${e.active ? " selected" : ""}>Yes</option>
+            <option value="0"${e.active ? "" : " selected"}>No</option>
+          </select>
+        </label>
       </div>
       <p class="dgs-v2-section-label">Effective permissions</p>
       <div class="perm-effective" id="eff-chips">${effectiveChips(state.draftEffective)}</div>
@@ -425,9 +437,10 @@
 
     els.detailBody.innerHTML = `
       <div class="perm-identity">
-        <label>Name <input id="fld-role-name" ${canWrite ? "" : "disabled"} value="${esc(
-          r.role || ""
-        )}" /></label>
+        <label class="dgs-emp-field dgs-emp-field--full">
+          <span class="dgs-emp-field-label">Name</span>
+          <input id="fld-role-name" ${canWrite ? "" : "disabled"} value="${esc(r.role || "")}" />
+        </label>
       </div>
       <p class="dgs-v2-section-label">Template permissions</p>
       <div class="perm-effective">${effectiveChips(state.draftRoleMap)}</div>
