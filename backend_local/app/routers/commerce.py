@@ -958,4 +958,48 @@ def get_deal(deal_id: str):
         raise HTTPException(status_code=503, detail=f"database error: {exc}") from exc
     if not rows:
         raise HTTPException(status_code=404, detail="Deal not found")
-    return _deal_row(rows[0])
+    deal = _deal_row(rows[0])
+    hs_id = deal.get("hubspot_deal_id")
+    try:
+        line_rows = _field_query(
+            """
+            SELECT
+                hubspot_line_item_id,
+                reference_key,
+                hubspot_product_id,
+                line_name,
+                quantity,
+                amount,
+                unit_price,
+                product_type
+            FROM clients.hubspot_deal_line_item
+            WHERE hubspot_deal_id = %s
+            ORDER BY
+                CASE
+                    WHEN product_type = N'Cabinet' THEN 0
+                    WHEN product_type = N'Software' THEN 1
+                    WHEN product_type = N'Table Game Supply' THEN 2
+                    WHEN product_type IS NULL OR product_type = N'' THEN 9
+                    ELSE 5
+                END,
+                line_name,
+                hubspot_line_item_id
+            """,
+            (int(hs_id),),
+        )
+    except Exception as exc:
+        raise HTTPException(status_code=503, detail=f"database error: {exc}") from exc
+    deal["line_items"] = [
+        {
+            "hubspot_line_item_id": _json_value(r.get("hubspot_line_item_id")),
+            "line_key": _json_value(r.get("reference_key")),
+            "hubspot_product_id": _json_value(r.get("hubspot_product_id")),
+            "line_name": _json_value(r.get("line_name")),
+            "quantity": _json_value(r.get("quantity")),
+            "amount": _json_value(r.get("amount")),
+            "unit_price": _json_value(r.get("unit_price")),
+            "product_type": _json_value(r.get("product_type")),
+        }
+        for r in line_rows
+    ]
+    return deal

@@ -43,6 +43,8 @@
     detailEmptyMsg: document.getElementById("detail-empty-msg"),
     detailContent: document.getElementById("detail-content"),
     detailFields: document.getElementById("detail-fields"),
+    lineItemsTbody: document.getElementById("line-items-tbody"),
+    lineItemsStatus: document.getElementById("line-items-status"),
   };
 
   function apiUrl(path) {
@@ -159,14 +161,16 @@
     els.statSync.textContent = fmtSync(s.last_sync);
   }
 
-  function renderDetail() {
-    const d = selectedDeal();
+  function renderDetail(detail) {
+    const d = detail || selectedDeal();
     if (!d) {
       els.cardTitle.textContent = "Select a deal";
       els.cardMeta.textContent = "";
       els.detailBody.classList.add("empty");
       els.detailEmptyMsg.hidden = false;
       els.detailContent.hidden = true;
+      els.lineItemsTbody.innerHTML = "";
+      els.lineItemsStatus.textContent = "";
       return;
     }
     els.cardTitle.textContent = d.deal_name || d.deal_key || `Deal ${d.hubspot_deal_id}`;
@@ -197,9 +201,33 @@
     els.detailFields.innerHTML = fields
       .map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v == null || v === "" ? "—" : v)}</dd>`)
       .join("");
+
+    const lines = Array.isArray(d.line_items) ? d.line_items : null;
+    if (lines == null) {
+      els.lineItemsTbody.innerHTML = "";
+      els.lineItemsStatus.textContent = "Loading line items…";
+      return;
+    }
+    if (!lines.length) {
+      els.lineItemsTbody.innerHTML = "";
+      els.lineItemsStatus.textContent = "No line items on this deal.";
+      return;
+    }
+    els.lineItemsTbody.innerHTML = lines
+      .map((li) => {
+        const qty = li.quantity == null || li.quantity === "" ? "—" : Number(li.quantity).toLocaleString();
+        return `<tr>
+          <td>${esc(li.product_type || "—")}</td>
+          <td>${esc(li.line_name || "—")}</td>
+          <td>${esc(qty)}</td>
+          <td>${esc(fmtMoney(li.amount))}</td>
+        </tr>`;
+      })
+      .join("");
+    els.lineItemsStatus.textContent = `${lines.length} line item${lines.length === 1 ? "" : "s"}`;
   }
 
-  function selectDeal(id) {
+  async function selectDeal(id) {
     state.selectedId = id;
     document.querySelectorAll(".dgs-deal-card.is-selected, #deals-tbody tr.is-selected").forEach((el) => {
       el.classList.remove("is-selected");
@@ -209,7 +237,17 @@
         el.classList.add("is-selected");
       });
     }
-    renderDetail();
+    const base = selectedDeal();
+    renderDetail(base ? { ...base, line_items: null } : null);
+    if (id == null) return;
+    try {
+      const detail = await fetchJson(`/api/commerce/deals/${encodeURIComponent(String(id))}`);
+      if (String(state.selectedId) !== String(id)) return;
+      renderDetail(detail);
+    } catch (err) {
+      if (String(state.selectedId) !== String(id)) return;
+      els.lineItemsStatus.textContent = err.message || String(err);
+    }
   }
 
   function renderBoard() {
