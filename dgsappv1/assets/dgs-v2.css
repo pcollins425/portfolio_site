@@ -5965,11 +5965,26 @@ body.dgs-employees-admin-v2 .dgs-v2-drawer-body {
   flex: 1;
   min-height: 0;
   overflow: auto;
-  padding: 16px 18px 28px;
+  padding: 16px 18px 20px;
   display: flex;
   flex-direction: column;
   gap: 14px;
   background: var(--dgs-v2-card);
+}
+
+body.dgs-employees-admin-v2 .dgs-emp-drawer-foot {
+  flex-shrink: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  padding: 12px 18px calc(12px + env(safe-area-inset-bottom, 0px));
+  border-top: 1px solid var(--dgs-v2-border);
+  background: var(--dgs-v2-card-head);
+}
+
+body.dgs-employees-admin-v2 .dgs-emp-drawer-foot[hidden] {
+  display: none !important;
 }
 
 /* Identity form — field cards (Slot Master cascade pattern) */
@@ -6099,27 +6114,6 @@ body.dgs-employees-admin-v2 .perm-effective {
   flex-wrap: wrap;
   gap: 6px;
   margin: 0;
-}
-
-body.dgs-employees-admin-v2 .perm-chip {
-  font-size: 11px;
-  font-weight: 500;
-  padding: 4px 10px;
-  border-radius: 999px;
-  background: rgba(110, 181, 255, 0.12);
-  border: 1px solid rgba(110, 181, 255, 0.35);
-  color: #d7e9ff;
-}
-
-body.dgs-employees-admin-v2 .perm-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-top: 4px;
-  position: sticky;
-  bottom: 0;
-  background: linear-gradient(180deg, transparent, var(--dgs-v2-card) 28%);
-  padding: 10px 0 4px;
 }
 
 body.dgs-employees-admin-v2 .dgs-v2-btn--danger {

@@ -40,6 +40,7 @@
     detailTitle: document.getElementById("detail-title"),
     detailSubtitle: document.getElementById("detail-subtitle"),
     detailBody: document.getElementById("detail-body"),
+    detailActions: document.getElementById("detail-actions"),
     resetModal: document.getElementById("reset-modal"),
     resetMessage: document.getElementById("reset-message"),
     tabEmployees: document.getElementById("tab-employees"),
@@ -97,6 +98,17 @@
     document.body.classList.remove("detail-open");
     if (els.drawer) els.drawer.setAttribute("aria-hidden", "true");
     if (els.backdrop) els.backdrop.hidden = true;
+    if (els.detailActions) {
+      els.detailActions.hidden = true;
+      els.detailActions.innerHTML = "";
+    }
+  }
+
+  function setDetailActions(html) {
+    if (!els.detailActions) return;
+    const content = (html || "").trim();
+    els.detailActions.innerHTML = content;
+    els.detailActions.hidden = !content;
   }
 
   function openDetail() {
@@ -386,15 +398,13 @@
       <div class="perm-effective" id="eff-chips">${effectiveChips(state.draftEffective)}</div>
       <p class="dgs-v2-section-label">Area toggles (overrides vs role)</p>
       ${renderPermGrid("employee")}
-      <div class="perm-actions">
-        ${
-          canWrite
-            ? `<button type="button" class="dgs-v2-btn dgs-v2-btn--primary" id="btn-save-emp">Save</button>
-               <button type="button" class="dgs-v2-btn" id="btn-reset-ov">Reset overrides…</button>`
-            : "<span class=\"perm-hint\">Read-only</span>"
-        }
-      </div>
     `;
+    setDetailActions(
+      canWrite
+        ? `<button type="button" class="dgs-v2-btn dgs-v2-btn--primary" id="btn-save-emp">Save</button>
+           <button type="button" class="dgs-v2-btn" id="btn-reset-ov">Reset overrides…</button>`
+        : `<span class="perm-hint">Read-only</span>`
+    );
 
     els.detailBody.querySelectorAll("select[data-area]").forEach((sel) => {
       sel.disabled = !canWrite;
@@ -445,14 +455,12 @@
       <p class="dgs-v2-section-label">Template permissions</p>
       <div class="perm-effective">${effectiveChips(state.draftRoleMap)}</div>
       ${renderPermGrid("role")}
-      <div class="perm-actions">
-        ${
-          canWrite
-            ? '<button type="button" class="dgs-v2-btn dgs-v2-btn--primary" id="btn-save-role">Save role</button>'
-            : "<span class=\"perm-hint\">Read-only</span>"
-        }
-      </div>
     `;
+    setDetailActions(
+      canWrite
+        ? '<button type="button" class="dgs-v2-btn dgs-v2-btn--primary" id="btn-save-role">Save role</button>'
+        : '<span class="perm-hint">Read-only</span>'
+    );
 
     els.detailBody.querySelectorAll("select[data-area]").forEach((sel) => {
       sel.disabled = !canWrite;
