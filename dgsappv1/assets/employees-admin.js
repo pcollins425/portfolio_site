@@ -195,7 +195,7 @@
       const inactive = e.active
         ? ""
         : ' <span class="dgs-emp-inactive dgs-v2-phone-only">Inactive</span>';
-      tr.innerHTML = `<td>${esc(e.name || "—")}${inactive}</td><td class="dgs-v2-col--desktop">${esc(
+      tr.innerHTML = `<td>${esc(employeeDisplayName(e))}${inactive}</td><td class="dgs-v2-col--desktop">${esc(
         e.email || ""
       )}</td><td>${esc(
         e.role_name || e.role_id || "—"
@@ -267,6 +267,15 @@
       .replace(/</g, "&lt;")
       .replace(/>/g, "&gt;")
       .replace(/"/g, "&quot;");
+  }
+
+  /** Prefer first + last; fall back to stored name / ref. */
+  function employeeDisplayName(e) {
+    const joined = [e?.first_name, e?.last_name]
+      .map((p) => String(p || "").trim())
+      .filter(Boolean)
+      .join(" ");
+    return joined || String(e?.name || "").trim() || e?.reference_key || "—";
   }
 
   function levelOptions(areaId, current, { allowNone, roleDefault }) {
@@ -385,7 +394,7 @@
     const e = state.selected;
     const canWrite = !!state.actor.employees_write;
     els.detailLabel.textContent = "Employee";
-    els.detailTitle.textContent = e.name || e.reference_key;
+    els.detailTitle.textContent = employeeDisplayName(e);
     els.detailSubtitle.textContent = e.reference_key || "";
 
     const roleOpts = state.roles.length
