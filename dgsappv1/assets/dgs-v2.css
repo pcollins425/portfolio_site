@@ -6522,7 +6522,46 @@ body.dgs-deals-v2 .dgs-v2-detail-backdrop {
   }
 
   body.dgs-deals-v2 .dgs-v2-metrics {
+    display: flex;
+    flex-wrap: nowrap;
+    align-items: stretch;
+    gap: 0;
     flex-shrink: 0;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    padding: 6px 4px;
+    background: var(--dgs-v2-card);
+    border: 1px solid var(--dgs-v2-border);
+    border-radius: 10px;
+  }
+
+  body.dgs-deals-v2 .dgs-v2-metric {
+    flex: 1 1 0;
+    min-width: 4.5rem;
+    background: transparent;
+    border: none;
+    border-radius: 0;
+    padding: 2px 10px;
+    border-right: 1px solid var(--dgs-v2-border);
+  }
+
+  body.dgs-deals-v2 .dgs-v2-metric:last-child {
+    border-right: none;
+  }
+
+  body.dgs-deals-v2 .dgs-v2-metric-label {
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    line-height: 1.2;
+  }
+
+  body.dgs-deals-v2 .dgs-v2-metric-value {
+    margin-top: 2px;
+    font-size: 13px;
+    font-weight: 600;
+    line-height: 1.25;
   }
 
   body.dgs-deals-v2 .dgs-v2-split {
