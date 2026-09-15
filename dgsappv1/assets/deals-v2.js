@@ -7,6 +7,8 @@
 
   const PIPE_ALL = "";
   const PIPE_STORAGE_KEY = "dgs-deals-pipeline";
+  const COMPACT_MQ = window.matchMedia("(max-width: 1366px)");
+  const PHONE_MQ = window.matchMedia("(max-width: 900px)");
 
   const state = {
     view: "board",
@@ -19,6 +21,7 @@
     summary: null,
     selectedId: null,
     loading: false,
+    phoneDetailOpen: false,
   };
 
   const els = {
@@ -37,6 +40,10 @@
     boardView: document.getElementById("board-view"),
     catalogView: document.getElementById("catalog-view"),
     tbody: document.getElementById("deals-tbody"),
+    detailPanel: document.getElementById("detail-panel"),
+    detailBackdrop: document.getElementById("deals-detail-backdrop"),
+    detailBar: document.getElementById("detail-bar"),
+    detailClose: document.getElementById("detail-close"),
     cardTitle: document.getElementById("card-title"),
     cardMeta: document.getElementById("card-meta"),
     detailBody: document.getElementById("detail-body"),
@@ -46,6 +53,60 @@
     lineItemsTbody: document.getElementById("line-items-tbody"),
     lineItemsStatus: document.getElementById("line-items-status"),
   };
+
+  function isCompact() {
+    return COMPACT_MQ.matches;
+  }
+
+  function isPhone() {
+    return PHONE_MQ.matches;
+  }
+
+  function openPhoneDetail() {
+    if (!isCompact() || !els.detailPanel) return;
+    state.phoneDetailOpen = true;
+    document.body.classList.add("deals-detail-open");
+    els.detailPanel.classList.add("dgs-v2-detail--sheet");
+    els.detailPanel.setAttribute("aria-hidden", "false");
+    if (els.detailBackdrop) els.detailBackdrop.hidden = false;
+    if (els.detailBar) els.detailBar.hidden = false;
+  }
+
+  function closePhoneDetail() {
+    state.phoneDetailOpen = false;
+    document.body.classList.remove("deals-detail-open");
+    if (els.detailPanel) {
+      els.detailPanel.classList.remove("dgs-v2-detail--sheet");
+      if (isCompact()) els.detailPanel.setAttribute("aria-hidden", "true");
+      else els.detailPanel.setAttribute("aria-hidden", "false");
+    }
+    if (els.detailBackdrop) els.detailBackdrop.hidden = true;
+    if (els.detailBar) els.detailBar.hidden = true;
+  }
+
+  function syncViewportMode() {
+    document.body.classList.toggle("dgs-deals-phone", isPhone());
+    document.body.classList.toggle("dgs-deals-compact", isCompact());
+
+    let forcedCatalog = false;
+    // Phone: Catalog only (board stays on tablet / foldable / desktop).
+    if (isPhone() && state.view === "board") {
+      state.view = "catalog";
+      forcedCatalog = true;
+      closePhoneDetail();
+    } else if (!isCompact()) {
+      closePhoneDetail();
+    } else if (!state.phoneDetailOpen && els.detailPanel) {
+      els.detailPanel.setAttribute("aria-hidden", "true");
+    }
+    return forcedCatalog;
+  }
+
+  function onViewportChange() {
+    const forcedCatalog = syncViewportMode();
+    applyView();
+    if (forcedCatalog) loadDeals();
+  }
 
   function apiUrl(path) {
     return `${API_BASE}${path}`;
@@ -236,6 +297,9 @@
       document.querySelectorAll(`[data-deal-id="${CSS.escape(String(id))}"]`).forEach((el) => {
         el.classList.add("is-selected");
       });
+      openPhoneDetail();
+    } else {
+      closePhoneDetail();
     }
     const base = selectedDeal();
     renderDetail(base ? { ...base, line_items: null } : null);
@@ -248,6 +312,26 @@
       if (String(state.selectedId) !== String(id)) return;
       els.lineItemsStatus.textContent = err.message || String(err);
     }
+  }
+
+  function applyView() {
+    // Phone never shows board.
+    const board = state.view === "board" && !isPhone();
+    if (state.view === "board" && isPhone()) state.view = "catalog";
+
+    document.body.classList.toggle("dgs-deals-view-board", board);
+    document.body.classList.toggle("dgs-deals-view-catalog", !board);
+    els.boardView.hidden = !board;
+    els.catalogView.hidden = board;
+    els.viewToggle.querySelectorAll("button").forEach((btn) => {
+      const view = btn.getAttribute("data-view");
+      btn.classList.toggle("active", view === state.view);
+      if (view === "board") btn.hidden = isPhone();
+    });
+    renderPipelineOptions();
+    if (board) renderBoard();
+    else renderCatalog();
+    if (!state.selectedId) renderDetail(null);
   }
 
   function renderBoard() {
@@ -338,21 +422,6 @@
     });
   }
 
-  function applyView() {
-    const board = state.view === "board";
-    document.body.classList.toggle("dgs-deals-view-board", board);
-    document.body.classList.toggle("dgs-deals-view-catalog", !board);
-    els.boardView.hidden = !board;
-    els.catalogView.hidden = board;
-    els.viewToggle.querySelectorAll("button").forEach((btn) => {
-      btn.classList.toggle("active", btn.getAttribute("data-view") === state.view);
-    });
-    renderPipelineOptions();
-    if (board) renderBoard();
-    else renderCatalog();
-    renderDetail();
-  }
-
   async function loadSummary() {
     state.summary = await fetchJson("/api/commerce/deals/summary");
     renderSummary();
@@ -401,8 +470,10 @@
       const btn = e.target.closest("button[data-view]");
       if (!btn) return;
       const next = btn.getAttribute("data-view");
+      if (next === "board" && isPhone()) return;
       if (next === state.view) return;
       state.view = next;
+      closePhoneDetail();
       ensurePipelineForView();
       persistPipeline();
       renderPipelineOptions();
@@ -437,11 +508,22 @@
       persistPipeline();
       loadDeals();
     });
+
+    els.detailClose?.addEventListener("click", closePhoneDetail);
+    els.detailBackdrop?.addEventListener("click", closePhoneDetail);
+    document.addEventListener("keydown", (e) => {
+      if (e.key === "Escape" && state.phoneDetailOpen) closePhoneDetail();
+    });
+    if (COMPACT_MQ.addEventListener) COMPACT_MQ.addEventListener("change", onViewportChange);
+    else if (COMPACT_MQ.addListener) COMPACT_MQ.addListener(onViewportChange);
+    if (PHONE_MQ.addEventListener) PHONE_MQ.addEventListener("change", onViewportChange);
+    else if (PHONE_MQ.addListener) PHONE_MQ.addListener(onViewportChange);
   }
 
   async function init() {
     loadPersistedPipeline();
     bind();
+    syncViewportMode();
     applyView();
     try {
       await Promise.all([loadSummary(), loadMeta()]);

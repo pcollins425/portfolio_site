@@ -6491,12 +6491,179 @@ body.dgs-deals-v2 #deals-tbody tr.is-selected td {
   background: var(--dgs-v2-accent-bg);
 }
 
-@media (max-width: 1000px) {
+/* Compact = phone + tablet (desk layout only above 1366px) */
+body.dgs-deals-v2 .dgs-v2-phone-only {
+  display: none;
+}
+
+body.dgs-deals-v2 .dgs-v2-detail-backdrop {
+  display: none;
+}
+
+@media (max-width: 1366px) {
+  body.dgs-deals-v2 .dgs-v2-page-header {
+    margin-bottom: 12px;
+  }
+
+  body.dgs-deals-v2 .dgs-v2-page-header h1 {
+    font-size: 22px;
+  }
+
+  body.dgs-deals-v2 .dgs-v2-subtitle {
+    display: none;
+  }
+
+  body.dgs-deals-v2 .dgs-v2-main {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    overflow: hidden;
+    padding: 12px;
+  }
+
+  body.dgs-deals-v2 .dgs-v2-metrics {
+    flex-shrink: 0;
+  }
+
   body.dgs-deals-v2 .dgs-v2-split {
-    grid-template-columns: 1fr;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    grid-template-columns: none;
+    gap: 0;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  body.dgs-deals-v2 .dgs-v2-list-panel {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+  }
+
+  body.dgs-deals-v2 .dgs-v2-toolbar {
+    flex-shrink: 0;
   }
 
   body.dgs-deals-v2 .dgs-v2-select {
     max-width: none;
+  }
+
+  body.dgs-deals-v2 .dgs-deals-stage {
+    flex: 1;
+    min-height: 0;
+  }
+
+  body.dgs-deals-v2 .dgs-v2-list-status {
+    flex-shrink: 0;
+  }
+
+  body.dgs-deals-v2 .dgs-v2-detail:not(.dgs-v2-detail--sheet) {
+    display: none;
+  }
+
+  body.dgs-deals-v2 .dgs-v2-phone-only {
+    display: flex;
+  }
+
+  body.dgs-deals-v2 .dgs-v2-detail-bar {
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 12px 14px 0;
+    flex-shrink: 0;
+  }
+
+  body.dgs-deals-v2 .dgs-v2-detail-bar-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--dgs-v2-heading);
+  }
+
+  body.dgs-deals-v2 .dgs-v2-detail-bar .dgs-v2-drawer-close {
+    width: 36px;
+    height: 36px;
+    border: 1px solid var(--dgs-v2-border);
+    border-radius: 8px;
+    background: transparent;
+    color: var(--dgs-v2-text);
+    font-size: 22px;
+    line-height: 1;
+    cursor: pointer;
+    flex-shrink: 0;
+  }
+
+  body.dgs-deals-v2.deals-detail-open .dgs-v2-detail-backdrop {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: 40;
+    background: rgba(0, 0, 0, 0.55);
+  }
+
+  body.dgs-deals-v2 .dgs-v2-detail.dgs-v2-detail--sheet {
+    display: flex;
+    flex-direction: column;
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 45;
+    height: min(90dvh, 820px);
+    margin: 0;
+    padding-bottom: env(safe-area-inset-bottom, 0);
+    background: var(--dgs-v2-card);
+    border: 1px solid var(--dgs-v2-border);
+    border-radius: 16px 16px 0 0;
+    box-shadow: 0 -10px 40px rgba(0, 0, 0, 0.45);
+    overflow: hidden;
+  }
+
+  body.dgs-deals-v2 .dgs-v2-detail.dgs-v2-detail--sheet .dgs-v2-image-card {
+    border-radius: 0;
+    border-left: none;
+    border-right: none;
+  }
+
+  body.dgs-deals-v2 .dgs-v2-detail.dgs-v2-detail--sheet .dgs-v2-detail-body {
+    flex: 1;
+    min-height: 0;
+    overflow: auto;
+    -webkit-overflow-scrolling: touch;
+    border: none;
+    border-radius: 0;
+  }
+
+  body.dgs-deals-v2 .dgs-v2-lines-wrap {
+    overflow-x: auto;
+  }
+}
+
+/* Phone ≤900: Catalog only (board stays on tablet / foldable) */
+@media (max-width: 900px) {
+  body.dgs-deals-v2 .dgs-v2-view-toggle button[data-view="board"] {
+    display: none;
+  }
+
+  body.dgs-deals-v2 .dgs-deal-column {
+    flex-basis: 220px;
+  }
+
+  body.dgs-deals-v2 #deals-table th:nth-child(5),
+  body.dgs-deals-v2 #deals-table th:nth-child(6),
+  body.dgs-deals-v2 #deals-table td:nth-child(5),
+  body.dgs-deals-v2 #deals-table td:nth-child(6) {
+    display: none;
+  }
+}
+
+@media (min-width: 901px) and (max-width: 1366px) {
+  body.dgs-deals-v2 .dgs-deal-column {
+    flex-basis: 230px;
+  }
+
+  body.dgs-deals-v2 .dgs-deals-board {
+    padding-bottom: var(--dgs-v2-system-nav-clear-tablet, 24px);
   }
 }

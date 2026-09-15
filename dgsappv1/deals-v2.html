@@ -98,7 +98,13 @@
         <div class="dgs-v2-list-status" id="list-status"></div>
       </section>
 
-      <aside class="dgs-v2-detail" id="detail-panel">
+      <div id="deals-detail-backdrop" class="dgs-v2-detail-backdrop" hidden></div>
+
+      <aside class="dgs-v2-detail" id="detail-panel" aria-hidden="false">
+        <div class="dgs-v2-detail-bar dgs-v2-phone-only" id="detail-bar" hidden>
+          <span class="dgs-v2-detail-bar-title">Deal</span>
+          <button type="button" id="detail-close" class="dgs-v2-drawer-close" aria-label="Close detail">×</button>
+        </div>
         <div class="dgs-v2-image-card dgs-v2-text-hero">
           <div class="dgs-v2-text-hero-body">
             <div class="dgs-v2-text-hero-state">Selected deal</div>
