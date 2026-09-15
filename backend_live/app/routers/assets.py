@@ -20,6 +20,14 @@ _ASSET_FROM = """
     LEFT JOIN vendors.cabinets AS cab ON cab.reference_key = a.cabinet_id
 """
 
+# Location-only: warehouse properties vs everything else (incl. active lease floor units).
+_WHERE_WAREHOUSE_PROP = """
+    (
+        LOWER(LTRIM(RTRIM(ISNULL(ci.property, N'')))) LIKE N'%warehouse%'
+        OR LTRIM(RTRIM(ISNULL(ci.property, N''))) = N'To Be Refurbished'
+    )
+"""
+
 
 def _catalog() -> str:
     return (os.environ.get("MSSQL_DATABASE") or "dgs_application_db").strip()
@@ -80,7 +88,7 @@ def list_assets(
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=1, le=200),
 ):
-    """Paginated asset browse list."""
+    """Paginated asset browse list (all COMPINFO landing rows, including active leases)."""
     search = q.strip()
     like = f"%{search}%" if search else None
 
@@ -97,9 +105,11 @@ def list_assets(
                 OR ci.status LIKE %s
                 OR v.vendor_name LIKE %s
                 OR cab.cabinet_name LIKE %s
+                OR ci.manufac LIKE %s
+                OR ci.assettype LIKE %s
             )
         """
-        search_params = (like,) * 8
+        search_params = (like,) * 10
 
     try:
         count_row = _field_query(
@@ -133,6 +143,38 @@ def list_assets(
             """,
             search_params,
         )
+
+        fleet: list[dict] = []
+        if search:
+            fleet_rows = _field_query(
+                f"""
+                SELECT TOP 8
+                    ISNULL(NULLIF(LTRIM(RTRIM(v.vendor_name)), N''), ISNULL(NULLIF(LTRIM(RTRIM(ci.manufac)), N''), N'(unknown)')) AS vendor_name,
+                    ISNULL(NULLIF(LTRIM(RTRIM(cab.cabinet_name)), N''), ISNULL(NULLIF(LTRIM(RTRIM(ci.assettype)), N''), N'(unknown)')) AS cabinet_name,
+                    COUNT(*) AS total,
+                    SUM(CASE WHEN {_WHERE_WAREHOUSE_PROP.strip()} THEN 1 ELSE 0 END) AS in_warehouse
+                {_ASSET_FROM}
+                WHERE 1=1
+                {search_sql}
+                GROUP BY
+                    ISNULL(NULLIF(LTRIM(RTRIM(v.vendor_name)), N''), ISNULL(NULLIF(LTRIM(RTRIM(ci.manufac)), N''), N'(unknown)')),
+                    ISNULL(NULLIF(LTRIM(RTRIM(cab.cabinet_name)), N''), ISNULL(NULLIF(LTRIM(RTRIM(ci.assettype)), N''), N'(unknown)'))
+                ORDER BY COUNT(*) DESC
+                """,
+                search_params,
+            )
+            for fr in fleet_rows:
+                tot = int(fr["total"] or 0)
+                wh = int(fr["in_warehouse"] or 0)
+                fleet.append(
+                    {
+                        "vendor_name": _json_value(fr.get("vendor_name")),
+                        "cabinet_name": _json_value(fr.get("cabinet_name")),
+                        "total": tot,
+                        "in_warehouse": wh,
+                        "on_floor": max(0, tot - wh),
+                    }
+                )
     except Exception as exc:
         raise HTTPException(status_code=503, detail=f"database error: {exc}") from exc
 
@@ -154,6 +196,7 @@ def list_assets(
 
     return {
         "items": items,
+        "fleet": fleet if search else [],
         "search": search or None,
         "page": page,
         "page_size": page_size,

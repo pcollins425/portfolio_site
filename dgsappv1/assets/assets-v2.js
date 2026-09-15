@@ -5,6 +5,8 @@
     new URLSearchParams(window.location.search).get("api")?.replace(/\/$/, "") ||
     "https://api.collinsmediallc.com";
 
+  const COMPACT_MQ = window.matchMedia("(max-width: 1366px)");
+
   const AssetNav = window.DGSAssetNav || {
     hubHref: () => "",
     hubLinkHtml: (_, label) => String(label ?? "—"),
@@ -15,6 +17,7 @@
   const state = {
     summary: null,
     items: [],
+    fleet: [],
     page: 1,
     pageSize: 50,
     total: 0,
@@ -23,6 +26,7 @@
     detail: null,
     mediaUrls: {},
     prepStatusConfig: null,
+    phoneDetailOpen: false,
   };
 
   const els = {
@@ -34,8 +38,13 @@
     searchInput: document.getElementById("search-input"),
     searchBtn: document.getElementById("search-btn"),
     clearSearch: document.getElementById("clear-search"),
+    fleetStrip: document.getElementById("fleet-strip"),
     tbody: document.getElementById("assets-tbody"),
     listStatus: document.getElementById("list-status"),
+    detailPanel: document.getElementById("detail-panel"),
+    detailBackdrop: document.getElementById("assets-detail-backdrop"),
+    detailBar: document.getElementById("detail-bar"),
+    detailClose: document.getElementById("detail-close"),
     vendorLogo: document.getElementById("vendor-logo"),
     cabinetRow: document.getElementById("cabinet-row"),
     cardTitle: document.getElementById("card-title"),
@@ -44,11 +53,46 @@
     detailEmptyMsg: document.getElementById("detail-empty-msg"),
     detailContent: document.getElementById("detail-content"),
     detailFields: document.getElementById("detail-fields"),
+    missingLinkWarn: document.getElementById("missing-link-warn"),
     assetNavActions: document.getElementById("asset-nav-actions"),
     prepActions: document.getElementById("prep-actions"),
     prepStatus: document.getElementById("prep-status"),
     prepHint: document.getElementById("prep-hint"),
   };
+
+  function isCompact() {
+    return COMPACT_MQ.matches;
+  }
+
+  function openPhoneDetail() {
+    if (!isCompact() || !els.detailPanel) return;
+    state.phoneDetailOpen = true;
+    document.body.classList.add("assets-detail-open");
+    els.detailPanel.classList.add("dgs-v2-detail--sheet");
+    els.detailPanel.setAttribute("aria-hidden", "false");
+    if (els.detailBackdrop) els.detailBackdrop.hidden = false;
+    if (els.detailBar) els.detailBar.hidden = false;
+  }
+
+  function closePhoneDetail() {
+    state.phoneDetailOpen = false;
+    document.body.classList.remove("assets-detail-open");
+    if (els.detailPanel) {
+      els.detailPanel.classList.remove("dgs-v2-detail--sheet");
+      if (isCompact()) els.detailPanel.setAttribute("aria-hidden", "true");
+      else els.detailPanel.setAttribute("aria-hidden", "false");
+    }
+    if (els.detailBackdrop) els.detailBackdrop.hidden = true;
+    if (els.detailBar) els.detailBar.hidden = true;
+  }
+
+  function syncCompactChrome() {
+    document.body.classList.toggle("dgs-assets-compact", isCompact());
+    if (!isCompact()) closePhoneDetail();
+    else if (!state.phoneDetailOpen && els.detailPanel) {
+      els.detailPanel.setAttribute("aria-hidden", "true");
+    }
+  }
 
   function apiUrl(path) {
     return `${API_BASE}${path}`;
@@ -125,15 +169,15 @@
       els.vendorLogo.innerHTML = placeholderBox("Select an asset");
       els.cabinetRow.innerHTML = "";
       els.cardTitle.textContent = "—";
-      els.cardMeta.textContent = "Choose a row from the list";
+      els.cardMeta.textContent = "Search or pick a row";
       return;
     }
 
-    const title = d.comp_desc || d.compid || "Asset";
+    const title = d.comp_desc || d.serial_no || d.compid || "Asset";
     els.cardTitle.textContent = title;
     const vendorLabel = d.vendor_name || d.manufac || "—";
     const cabLabel = d.cabinet_name || d.assettype || "—";
-    els.cardMeta.textContent = `${vendorLabel} · ${d.serial_no || "no serial"} · ${d.property || "—"}`;
+    els.cardMeta.textContent = `${vendorLabel} · ${cabLabel} · ${d.property || "—"}`;
 
     const logoPath = d.vendor_logo_media_path;
     if (logoPath) {
@@ -152,7 +196,7 @@
         ? `<div class="dgs-v2-cabinet-thumb"><img src="${url}" alt="${esc(cabLabel)}" title="${esc(cabLabel)}" /></div>`
         : `<div class="dgs-v2-cabinet-thumb">${placeholderBox(cabLabel)}</div>`;
     } else {
-      els.cabinetRow.innerHTML = cabPath === undefined ? "" : `<div class="dgs-v2-cabinet-thumb">${placeholderBox(cabLabel)}</div>`;
+      els.cabinetRow.innerHTML = `<div class="dgs-v2-cabinet-thumb">${placeholderBox(cabLabel)}</div>`;
     }
   }
 
@@ -165,25 +209,73 @@
     els.statMissingLink.textContent = fmtNum(s.missing_asset_links);
   }
 
+  function renderFleet() {
+    if (!els.fleetStrip) return;
+    const rows = state.fleet || [];
+    if (!state.search || !rows.length) {
+      els.fleetStrip.hidden = true;
+      els.fleetStrip.innerHTML = "";
+      return;
+    }
+    els.fleetStrip.hidden = false;
+    els.fleetStrip.innerHTML =
+      `<div class="dgs-assets-fleet-head">How many · matching “${esc(state.search)}”</div>` +
+      rows
+        .map((f) => {
+          const label = [f.vendor_name, f.cabinet_name].filter(Boolean).join(" · ");
+          return `<div class="dgs-assets-fleet-row">
+            <span class="dgs-assets-fleet-name">${esc(label)}</span>
+            <span class="dgs-assets-fleet-counts">
+              <span title="In warehouse / TBR">${fmtNum(f.in_warehouse)} WH</span>
+              <span title="On floor (incl. active leases)">${fmtNum(f.on_floor)} floor</span>
+              <span class="dgs-assets-fleet-total">${fmtNum(f.total)} total</span>
+            </span>
+          </div>`;
+        })
+        .join("");
+  }
+
   function renderList() {
-    els.tbody.innerHTML = state.items
-      .map((row) => {
-        const serialCell = row.asset_id
-          ? AssetNav.hubLinkHtml(row.asset_id, row.serial_no || row.asset_id)
-          : esc(row.serial_no || "—");
-        return `
-        <tr data-key="${esc(row.compid)}" class="${row.compid === state.selectedKey ? "selected" : ""}">
-          <td class="mono">${esc(row.compid)}</td>
-          <td class="mono">${serialCell}</td>
-          <td>${esc(row.comp_desc || "—")}</td>
-          <td>${esc(row.property || "—")}</td>
-          <td>${esc(row.status || "—")}</td>
-        </tr>`;
-      })
-      .join("");
+    if (!state.items.length) {
+      els.tbody.innerHTML = `<tr><td colspan="4" class="dgs-v2-empty">No assets match this search.</td></tr>`;
+    } else {
+      els.tbody.innerHTML = state.items
+        .map((row) => {
+          const selected = row.compid === state.selectedKey ? " selected" : "";
+          const title = row.comp_desc || row.serial_no || row.compid || "—";
+          const serial = row.serial_no || "—";
+          const metaBits = [
+            row.property || null,
+            row.status || null,
+            [row.vendor_name, row.cabinet_name].filter(Boolean).join(" · ") || null,
+          ].filter(Boolean);
+          const serialCell = row.asset_id
+            ? AssetNav.hubLinkHtml(row.asset_id, serial)
+            : esc(serial);
+          return `
+          <tr data-key="${esc(row.compid)}" class="${selected.trim()}" tabindex="0">
+            <td>
+              <span class="dgs-assets-row-title">${esc(title)}</span>
+              <span class="dgs-assets-row-meta">${esc(metaBits.join(" · ") || "—")}</span>
+              <span class="dgs-assets-row-serial dgs-v2-phone-only mono">${serialCell}</span>
+            </td>
+            <td class="mono dgs-v2-col--desktop">${serialCell}</td>
+            <td class="dgs-v2-col--desktop">${esc(row.property || "—")}</td>
+            <td class="dgs-v2-col--desktop">${esc(row.status || "—")}</td>
+          </tr>`;
+        })
+        .join("");
+    }
 
     els.tbody.querySelectorAll("tr[data-key]").forEach((tr) => {
-      tr.addEventListener("click", () => openDetail(tr.dataset.key));
+      const pick = () => openDetail(tr.dataset.key);
+      tr.addEventListener("click", pick);
+      tr.addEventListener("keydown", (e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          pick();
+        }
+      });
     });
     els.tbody.querySelectorAll("a.dgs-v2-hub-serial-link").forEach((link) => {
       link.addEventListener("click", (event) => event.stopPropagation());
@@ -214,31 +306,28 @@
       return;
     }
     els.assetNavActions.hidden = false;
-    els.assetNavActions.innerHTML = AssetNav.hubActionHtml(d.asset_id);
+    els.assetNavActions.innerHTML = AssetNav.hubActionHtml(d.asset_id, "Open Asset hub →");
   }
 
   function renderDetailFields(d) {
+    const missing = !d.asset_id;
+    if (els.missingLinkWarn) {
+      els.missingLinkWarn.hidden = !missing;
+    }
     const refKeyHtml = d.asset_id
       ? AssetNav.hubLinkHtml(d.asset_id, d.asset_id)
       : "—";
+    const zbl = [d.zone, d.bank, d.location].filter(Boolean).join(" · ") || "—";
     els.detailFields.innerHTML = [
-      field("Asset ID", d.compid),
-      fieldHtml("Reference key", refKeyHtml),
       field("Serial", d.serial_no || "—"),
+      fieldHtml("AST / ref", refKeyHtml),
+      field("Property", d.property || "—"),
       field("Status", d.status || "—"),
-      field("Game title", d.comp_desc || "—"),
       field("Vendor", d.vendor_name || d.manufac || "—"),
       field("Cabinet", d.cabinet_name || d.assettype || "—"),
-      field("Model", d.model_no || "—"),
-      field("Property", d.property || "—"),
-      field("Zone / bank / loc", [d.zone, d.bank, d.location].filter(Boolean).join(" · ") || "—"),
-      field("Class", d.class || "—"),
-      field("Install date", fmtDate(d.date_instl)),
-      field("Go live", fmtDate(d.golive001)),
-      field("Removal", fmtDate(d.rmvl_date)),
-      field("Denom / bet", [d.denom, d.bet_line].filter(Boolean).join(" · ") || "—"),
-      field("Paytable / media", [d.paytable, d.prog_media].filter(Boolean).join(" · ") || "—"),
-      field("Comments", d.comment || "—"),
+      field("ZBL", zbl),
+      field("Install", fmtDate(d.date_instl)),
+      field("COMPINFO id", d.compid),
     ].join("");
   }
 
@@ -323,7 +412,7 @@
         renderDetailFields(state.detail);
         renderPrepActions(state.detail);
       }
-      await Promise.all([loadSummary(), loadList()]);
+      await Promise.all([loadSummary(), loadList({ skipAutoSelect: true })]);
       if (state.selectedKey === compid) {
         state.detail = await fetchJson(`/api/assets/${encodeURIComponent(compid)}`);
         renderDetailFields(state.detail);
@@ -341,12 +430,14 @@
     els.detailContent.hidden = empty;
     if (empty) {
       renderAssetNavActions(null);
+      if (els.missingLinkWarn) els.missingLinkWarn.hidden = true;
     }
   }
 
   async function openDetail(compid) {
     state.selectedKey = compid;
     renderList();
+    openPhoneDetail();
 
     setDetailEmpty(true);
     els.detailEmptyMsg.textContent = "Loading asset…";
@@ -404,29 +495,41 @@
     const path = `/api/assets?q=${q}&page=${state.page}&page_size=${state.pageSize}`;
     const data = await fetchJson(path);
     state.items = data.items || [];
+    state.fleet = data.fleet || [];
     state.total = data.total || 0;
+    renderFleet();
     renderList();
 
-    if (!skipAutoSelect && !state.selectedKey && state.items.length) {
+    if (!skipAutoSelect && !state.selectedKey && state.items.length && !isCompact()) {
       await openDetail(state.items[0].compid);
     }
   }
 
+  function runSearch() {
+    state.search = els.searchInput.value.trim();
+    state.page = 1;
+    state.selectedKey = null;
+    closePhoneDetail();
+    revokeMediaUrls();
+    loadList({ skipAutoSelect: true }).catch((err) => showError(err.message || String(err)));
+  }
+
   async function init() {
     showError(null);
-    els.tbody.innerHTML = `<tr><td colspan="5" class="dgs-v2-lines-status">Loading…</td></tr>`;
+    syncCompactChrome();
+    els.tbody.innerHTML = `<tr><td colspan="4" class="dgs-v2-lines-status">Loading…</td></tr>`;
     await loadPrepStatusConfig();
     const params = new URLSearchParams(window.location.search);
     const deepAsset = (params.get("asset") || params.get("id") || "").trim();
     const deepCompid = (params.get("compid") || "").trim();
     try {
       await loadSummary();
-      await loadList({ skipAutoSelect: !!(deepAsset || deepCompid) });
+      await loadList({ skipAutoSelect: !!(deepAsset || deepCompid) || isCompact() });
       if (deepCompid) {
         await openDetail(deepCompid);
       } else if (deepAsset) {
         await openDetailByAssetId(deepAsset);
-      } else if (!state.selectedKey && state.items.length) {
+      } else if (!isCompact() && !state.selectedKey && state.items.length) {
         await openDetail(state.items[0].compid);
       }
     } catch (err) {
@@ -435,32 +538,21 @@
     }
   }
 
-  els.searchBtn.addEventListener("click", () => {
-    state.search = els.searchInput.value.trim();
-    state.page = 1;
-    state.selectedKey = null;
-    revokeMediaUrls();
-    loadList().catch((err) => showError(err.message || String(err)));
-  });
-
+  els.searchBtn.addEventListener("click", runSearch);
   els.clearSearch.addEventListener("click", () => {
     els.searchInput.value = "";
-    state.search = "";
-    state.page = 1;
-    state.selectedKey = null;
-    revokeMediaUrls();
-    loadList().catch((err) => showError(err.message || String(err)));
+    runSearch();
   });
-
   els.searchInput.addEventListener("keydown", (e) => {
-    if (e.key === "Enter") {
-      state.search = els.searchInput.value.trim();
-      state.page = 1;
-      state.selectedKey = null;
-      revokeMediaUrls();
-      loadList().catch((err) => showError(err.message || String(err)));
-    }
+    if (e.key === "Enter") runSearch();
   });
+  els.detailClose?.addEventListener("click", closePhoneDetail);
+  els.detailBackdrop?.addEventListener("click", closePhoneDetail);
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && state.phoneDetailOpen) closePhoneDetail();
+  });
+  if (COMPACT_MQ.addEventListener) COMPACT_MQ.addEventListener("change", syncCompactChrome);
+  else if (COMPACT_MQ.addListener) COMPACT_MQ.addListener(syncCompactChrome);
 
   window.AssetsV2 = { init };
 })();
