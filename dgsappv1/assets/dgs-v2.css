@@ -6357,17 +6357,39 @@ body.dgs-deals-v2 .dgs-v2-select {
   color: var(--dgs-v2-text);
   font-size: 13px;
   font-family: inherit;
+  max-width: 240px;
+}
+
+body.dgs-deals-v2 .dgs-deals-stage {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+body.dgs-deals-v2 .dgs-deals-stage > [hidden] {
+  display: none !important;
+}
+
+body.dgs-deals-v2 .dgs-deals-board,
+body.dgs-deals-v2 .dgs-deals-catalog {
+  position: absolute;
+  inset: 0;
+  min-height: 0;
 }
 
 body.dgs-deals-v2 .dgs-deals-board {
-  flex: 1;
   display: flex;
   gap: 12px;
   overflow-x: auto;
   overflow-y: hidden;
   padding: 12px 14px;
   align-items: stretch;
-  min-height: 0;
+}
+
+body.dgs-deals-v2 .dgs-deals-catalog {
+  overflow: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 body.dgs-deals-v2 .dgs-deal-column {
@@ -6472,5 +6494,9 @@ body.dgs-deals-v2 #deals-tbody tr.is-selected td {
 @media (max-width: 1000px) {
   body.dgs-deals-v2 .dgs-v2-split {
     grid-template-columns: 1fr;
+  }
+
+  body.dgs-deals-v2 .dgs-v2-select {
+    max-width: none;
   }
 }

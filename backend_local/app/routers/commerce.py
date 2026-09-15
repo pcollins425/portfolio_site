@@ -675,7 +675,10 @@ def _deal_row(r: dict) -> dict:
         "deal_key": _json_value(r.get("deal_key") or r.get("reference_key")),
         "deal_name": _json_value(r.get("deal_name")),
         "pipeline": _json_value(r.get("pipeline")),
+        "pipeline_label": _json_value(r.get("pipeline_label") or r.get("pipeline")),
         "deal_stage": _json_value(r.get("deal_stage")),
+        "deal_stage_label": _json_value(r.get("deal_stage_label") or r.get("deal_stage")),
+        "stage_display_order": _json_value(r.get("stage_display_order")),
         "amount": _json_value(r.get("amount")),
         "close_date": _json_value(r.get("close_date")),
         "create_date": _json_value(r.get("create_date")),
@@ -699,7 +702,10 @@ SELECT
     d.reference_key AS deal_key,
     d.deal_name,
     d.pipeline,
+    ISNULL(p.label, d.pipeline) AS pipeline_label,
     d.deal_stage,
+    ISNULL(st.label, d.deal_stage) AS deal_stage_label,
+    st.display_order AS stage_display_order,
     d.amount,
     d.close_date,
     d.create_date,
@@ -717,7 +723,71 @@ SELECT
 FROM clients.hubspot_deal AS d
 LEFT JOIN clients.casinos AS c ON c.reference_key = d.casino_id
 LEFT JOIN clients.hubspot_owner AS o ON o.hubspot_owner_id = d.hubspot_owner_id
+LEFT JOIN clients.hubspot_pipeline AS p ON p.pipeline_id = d.pipeline
+LEFT JOIN clients.hubspot_pipeline_stage AS st
+    ON st.pipeline_id = d.pipeline AND st.stage_id = d.deal_stage
 """
+
+
+@deals_router.get("/meta")
+def deals_meta():
+    """Pipeline + stage label catalog for board/catalog filters."""
+    try:
+        pipe_rows = _field_query(
+            """
+            SELECT
+                p.pipeline_id,
+                p.label,
+                p.display_order,
+                p.is_default,
+                (SELECT COUNT(*) FROM clients.hubspot_deal d WHERE d.pipeline = p.pipeline_id) AS deal_count
+            FROM clients.hubspot_pipeline AS p
+            WHERE ISNULL(p.is_active, 1) = 1
+            ORDER BY p.display_order, p.label
+            """
+        )
+        stage_rows = _field_query(
+            """
+            SELECT
+                s.pipeline_id,
+                s.stage_id,
+                s.label,
+                s.display_order,
+                s.is_closed
+            FROM clients.hubspot_pipeline_stage AS s
+            WHERE ISNULL(s.is_active, 1) = 1
+            ORDER BY s.pipeline_id, s.display_order, s.label
+            """
+        )
+    except Exception as exc:
+        raise HTTPException(status_code=503, detail=f"database error: {exc}") from exc
+
+    stages_by_pipe: dict[str, list] = {}
+    for s in stage_rows:
+        pid = str(s.get("pipeline_id") or "")
+        stages_by_pipe.setdefault(pid, []).append(
+            {
+                "stage_id": _json_value(s.get("stage_id")),
+                "label": _json_value(s.get("label")),
+                "display_order": int(s.get("display_order") or 0),
+                "is_closed": _as_bool(s.get("is_closed")),
+            }
+        )
+
+    pipelines = []
+    for p in pipe_rows:
+        pid = _json_value(p.get("pipeline_id"))
+        pipelines.append(
+            {
+                "pipeline_id": pid,
+                "label": _json_value(p.get("label")),
+                "display_order": int(p.get("display_order") or 0),
+                "is_default": _as_bool(p.get("is_default")),
+                "deal_count": int(p.get("deal_count") or 0),
+                "stages": stages_by_pipe.get(str(pid or ""), []),
+            }
+        )
+    return {"pipelines": pipelines}
 
 
 @deals_router.get("/summary")
@@ -766,7 +836,6 @@ def list_deals(
         where.append("ISNULL(d.is_closed, 0) = 1")
     elif status_n == "won":
         where.append("ISNULL(d.is_closed_won, 0) = 1")
-    # all = no filter
 
     pipe = (pipeline or "").strip()
     if pipe:
@@ -779,11 +848,12 @@ def list_deals(
             """(
                 d.deal_name LIKE %s OR d.reference_key LIKE %s
                 OR c.casino_name LIKE %s OR d.casino_id LIKE %s
-                OR d.deal_stage LIKE %s OR d.sales_order LIKE %s
+                OR d.deal_stage LIKE %s OR ISNULL(st.label, N'') LIKE %s
+                OR d.sales_order LIKE %s OR ISNULL(p.label, N'') LIKE %s
             )"""
         )
         like = f"%{needle}%"
-        params.extend([like, like, like, like, like, like])
+        params.extend([like, like, like, like, like, like, like, like])
 
     where_sql = " AND ".join(where)
     try:
@@ -793,6 +863,9 @@ def list_deals(
                 SELECT COUNT(*) AS n
                 FROM clients.hubspot_deal AS d
                 LEFT JOIN clients.casinos AS c ON c.reference_key = d.casino_id
+                LEFT JOIN clients.hubspot_pipeline AS p ON p.pipeline_id = d.pipeline
+                LEFT JOIN clients.hubspot_pipeline_stage AS st
+                    ON st.pipeline_id = d.pipeline AND st.stage_id = d.deal_stage
                 WHERE {where_sql}
                 """,
                 tuple(params),
@@ -806,7 +879,8 @@ def list_deals(
             WHERE {where_sql}
             ORDER BY
                 CASE WHEN ISNULL(d.is_closed, 0) = 0 THEN 0 ELSE 1 END,
-                d.deal_stage,
+                ISNULL(st.display_order, 9999),
+                ISNULL(st.label, d.deal_stage),
                 d.close_date DESC,
                 d.deal_name
             OFFSET %s ROWS FETCH NEXT %s ROWS ONLY
@@ -817,12 +891,25 @@ def list_deals(
             f"""
             SELECT
                 ISNULL(NULLIF(LTRIM(RTRIM(d.deal_stage)), N''), N'(no stage)') AS deal_stage,
+                ISNULL(
+                    NULLIF(LTRIM(RTRIM(st.label)), N''),
+                    ISNULL(NULLIF(LTRIM(RTRIM(d.deal_stage)), N''), N'(no stage)')
+                ) AS deal_stage_label,
+                MIN(ISNULL(st.display_order, 9999)) AS display_order,
                 COUNT(*) AS n
             FROM clients.hubspot_deal AS d
             LEFT JOIN clients.casinos AS c ON c.reference_key = d.casino_id
+            LEFT JOIN clients.hubspot_pipeline AS p ON p.pipeline_id = d.pipeline
+            LEFT JOIN clients.hubspot_pipeline_stage AS st
+                ON st.pipeline_id = d.pipeline AND st.stage_id = d.deal_stage
             WHERE {where_sql}
-            GROUP BY ISNULL(NULLIF(LTRIM(RTRIM(d.deal_stage)), N''), N'(no stage)')
-            ORDER BY n DESC, deal_stage
+            GROUP BY
+                ISNULL(NULLIF(LTRIM(RTRIM(d.deal_stage)), N''), N'(no stage)'),
+                ISNULL(
+                    NULLIF(LTRIM(RTRIM(st.label)), N''),
+                    ISNULL(NULLIF(LTRIM(RTRIM(d.deal_stage)), N''), N'(no stage)')
+                )
+            ORDER BY display_order, deal_stage_label
             """,
             tuple(params),
         )
@@ -832,7 +919,12 @@ def list_deals(
     return {
         "items": [_deal_row(r) for r in rows],
         "stages": [
-            {"deal_stage": _json_value(s.get("deal_stage")), "count": int(s.get("n") or 0)}
+            {
+                "deal_stage": _json_value(s.get("deal_stage")),
+                "deal_stage_label": _json_value(s.get("deal_stage_label")),
+                "display_order": int(s.get("display_order") or 0),
+                "count": int(s.get("n") or 0),
+            }
             for s in stage_rows
         ],
         "page": page,
@@ -840,6 +932,7 @@ def list_deals(
         "total": total,
         "total_pages": max(1, math.ceil(total / page_size)) if page_size else 1,
         "status": status_n,
+        "pipeline": pipe or None,
     }
 
 
@@ -849,7 +942,6 @@ def get_deal(deal_id: str):
     if not hid:
         raise HTTPException(status_code=400, detail="deal id required")
     try:
-        # Accept hubspot_deal_id or HSD- reference_key
         if hid.upper().startswith("HSD-"):
             rows = _field_query(
                 f"{_DEAL_LIST_SELECT} WHERE d.reference_key = %s",
