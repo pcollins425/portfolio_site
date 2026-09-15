@@ -1,5 +1,6 @@
-"""Paul-only commission contract queue: Reported (A) vs Calculated (B).
+"""Commission contract queue: Reported (A) vs Calculated (B).
 
+Gated by ``dgs_commission`` area (not user-named hardcodes).
 Scan is read-only against dashboard.vw_performance_report + SMM profiles.
 Resolutions persist as JSON (assistant_sessions volume) until a SQL table exists.
 
@@ -20,6 +21,7 @@ from typing import Any
 from fastapi import HTTPException
 
 from app import mssql
+from app import permission_catalog as cat
 
 _MV = "[dashboard].[vw_performance_report]"
 SEAT_HARD_ABS = 1.00
@@ -43,8 +45,6 @@ _THROWAYAY = frozenset(
         "pass",
     }
 )
-_PAUL_EMAILS = frozenset({"paulc@dynamicgamingsolutions.com"})
-_PAUL_EMP = frozenset({"emp-000040"})
 _RESOLVE_STATUSES = frozenset(
     {"bill_a", "bill_b", "needs_root_fix", "amount_due_only"}
 )
@@ -54,6 +54,35 @@ _SUMMARY_TTL_SEC = 60.0
 _SCAN_TTL_SEC = 900.0
 _summary_cache: dict[str, Any] = {"key": None, "at": 0.0, "data": None}
 _scan_cache: dict[str, Any] = {"from": None, "to": None, "at": 0.0, "flags": None}
+
+
+def _user_perms(user: dict[str, Any] | None) -> dict[str, str]:
+    if user is None:
+        return {}
+    raw = user.get("permissions") or {}
+    return raw if isinstance(raw, dict) else cat.parse_permissions_blob(str(raw))
+
+
+def can_read_commission(user: dict[str, Any] | None) -> bool:
+    if user is None:
+        return True
+    return cat.has_area_read(_user_perms(user), cat.COMMISSION_AREA)
+
+
+def can_write_commission(user: dict[str, Any] | None) -> bool:
+    if user is None:
+        return True
+    return cat.has_area_write(_user_perms(user), cat.COMMISSION_AREA)
+
+
+def assert_commission_read(user: dict[str, Any] | None) -> None:
+    if not can_read_commission(user):
+        raise HTTPException(status_code=403, detail="No dgs_commission read access")
+
+
+def assert_commission_write(user: dict[str, Any] | None) -> None:
+    if not can_write_commission(user):
+        raise HTTPException(status_code=403, detail="No dgs_commission write access")
 
 
 def _catalog() -> str:
@@ -72,19 +101,6 @@ def store_path() -> Path:
     if sessions_dir.is_dir():
         return sessions_dir / "commission_contract_queue.json"
     return Path(__file__).resolve().parents[1] / "data" / "commission_contract_queue.json"
-
-
-def is_paul(user: dict[str, Any] | None) -> bool:
-    if user is None:
-        return True
-    email = str(user.get("email") or "").strip().lower()
-    emp = str(user.get("employee_id") or "").strip().lower()
-    return email in _PAUL_EMAILS or emp in _PAUL_EMP
-
-
-def assert_paul(user: dict[str, Any] | None) -> None:
-    if not is_paul(user):
-        raise HTTPException(status_code=403, detail="Commission contract queue is Paul-only")
 
 
 def validate_note(raw: str | None) -> str:

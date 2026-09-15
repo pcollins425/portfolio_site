@@ -49,6 +49,13 @@
       ],
     },
     {
+      id: "admin",
+      label: "Admin",
+      items: [
+        { id: "employees_admin", label: "Employees", href: "employees-admin.html" },
+      ],
+    },
+    {
       id: "workspace",
       label: "Workspace",
       items: [{ id: "assistant", label: "Assistant", href: "assistant.html" }],

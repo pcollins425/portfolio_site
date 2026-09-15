@@ -1,5 +1,6 @@
-"""Paul-only Analyst intake queue: self-vs-self coin-per-day watches.
+"""Analyst intake queue: self-vs-self coin-per-day watches.
 
+Gated by ``dgs_analyst`` area (not user-named hardcodes).
 Scan is read-only against dashboard.vw_performance_report.
 Resolutions persist as JSON (assistant_sessions volume) until a SQL table exists.
 """
@@ -17,6 +18,7 @@ from typing import Any
 from fastapi import HTTPException
 
 from app import mssql
+from app import permission_catalog as cat
 
 _MV = "[dashboard].[vw_performance_report]"
 RATIO_CUTOFF = 5.0
@@ -41,10 +43,36 @@ _THROWAYAY = frozenset(
         "pass",
     }
 )
-_PAUL_EMAILS = frozenset({"paulc@dynamicgamingsolutions.com"})
-_PAUL_EMP = frozenset({"emp-000040"})
-
 _RESOLVE_STATUSES = frozenset({"confirmed_ok", "needs_reload"})
+
+
+def _user_perms(user: dict[str, Any] | None) -> dict[str, str]:
+    if user is None:
+        return {}
+    raw = user.get("permissions") or {}
+    return raw if isinstance(raw, dict) else cat.parse_permissions_blob(str(raw))
+
+
+def can_read_analyst(user: dict[str, Any] | None) -> bool:
+    if user is None:
+        return True
+    return cat.has_area_read(_user_perms(user), cat.ANALYST_AREA)
+
+
+def can_write_analyst(user: dict[str, Any] | None) -> bool:
+    if user is None:
+        return True
+    return cat.has_area_write(_user_perms(user), cat.ANALYST_AREA)
+
+
+def assert_analyst_read(user: dict[str, Any] | None) -> None:
+    if not can_read_analyst(user):
+        raise HTTPException(status_code=403, detail="No dgs_analyst read access")
+
+
+def assert_analyst_write(user: dict[str, Any] | None) -> None:
+    if not can_write_analyst(user):
+        raise HTTPException(status_code=403, detail="No dgs_analyst write access")
 
 
 def _catalog() -> str:
@@ -63,19 +91,6 @@ def store_path() -> Path:
     if sessions_dir.is_dir():
         return sessions_dir / "analyst_queue.json"
     return Path(__file__).resolve().parents[1] / "data" / "analyst_queue.json"
-
-
-def is_paul(user: dict[str, Any] | None) -> bool:
-    if user is None:
-        return True
-    email = str(user.get("email") or "").strip().lower()
-    emp = str(user.get("employee_id") or "").strip().lower()
-    return email in _PAUL_EMAILS or emp in _PAUL_EMP
-
-
-def assert_paul(user: dict[str, Any] | None) -> None:
-    if not is_paul(user):
-        raise HTTPException(status_code=403, detail="Analyst queue is Paul-only")
 
 
 def validate_note(raw: str | None) -> str:

@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Employees &amp; Permissions — DGS Application</title>
+  <link rel="stylesheet" href="assets/dgs.css" />
+  <style>
+    .perm-admin-grid { display: grid; gap: 1rem; }
+    .perm-group { border: 1px solid var(--dgs-border, #2a3140); border-radius: 8px; padding: 0.75rem 1rem; }
+    .perm-group h3 { margin: 0 0 0.6rem; font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.04em; opacity: 0.75; }
+    .perm-row { display: grid; grid-template-columns: minmax(8rem, 1fr) minmax(10rem, 1.2fr) minmax(7rem, 0.8fr); gap: 0.5rem; align-items: center; padding: 0.35rem 0; border-top: 1px solid rgba(255,255,255,0.06); }
+    .perm-row:first-of-type { border-top: 0; }
+    .perm-row label { font-size: 0.9rem; }
+    .perm-row select { width: 100%; }
+    .perm-hint { font-size: 0.75rem; opacity: 0.65; }
+    .perm-effective { display: flex; flex-wrap: wrap; gap: 0.35rem; margin: 0.5rem 0 1rem; }
+    .perm-chip { font-size: 0.75rem; padding: 0.2rem 0.5rem; border-radius: 999px; background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.12); }
+    .perm-actions { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 1rem; }
+    .perm-identity { display: grid; gap: 0.6rem; margin-bottom: 1rem; }
+    .perm-identity label { display: grid; gap: 0.25rem; font-size: 0.85rem; }
+    .perm-identity input, .perm-identity select { padding: 0.4rem 0.5rem; }
+    .perm-denied { padding: 1.5rem; }
+    #reset-modal[hidden], #error-box[hidden] { display: none !important; }
+    .reset-modal {
+      position: fixed; inset: 0; z-index: 80; display: flex; align-items: center; justify-content: center;
+      background: rgba(0,0,0,0.55);
+    }
+    .reset-modal-card {
+      background: var(--dgs-panel, #161b24); border: 1px solid var(--dgs-border, #2a3140);
+      border-radius: 10px; padding: 1.25rem 1.5rem; max-width: 28rem; width: calc(100% - 2rem);
+    }
+    .reset-modal-card p { margin: 0 0 1rem; line-height: 1.45; }
+    .reset-modal-actions { display: flex; gap: 0.5rem; justify-content: flex-end; }
+    .btn-danger { background: #8b2e2e; color: #fff; border: none; }
+  </style>
+</head>
+<body class="dgs-app">
+  <aside class="dgs-sidebar" id="dgs-sidebar">
+    <div class="dgs-sidebar-brand">
+      <div class="dgs-brand-text">
+        <span class="dgs-brand-eyebrow">Dynamic Gaming Solutions</span>
+        <span class="dgs-brand-title">DGS Application</span>
+      </div>
+      <button type="button" id="dgs-rail-toggle" class="dgs-rail-toggle" aria-expanded="true" title="Collapse navigation">◧</button>
+    </div>
+    <nav class="dgs-sidebar-nav" id="dgs-app-nav" aria-label="Application"></nav>
+    <div class="dgs-sidebar-account" id="sidebar-account" hidden>
+      <span class="dgs-sidebar-user" id="user-label"></span>
+      <button type="button" id="btn-sign-out" class="dgs-sidebar-signout">Sign out</button>
+    </div>
+  </aside>
+
+  <div id="dgs-nav-flyout" class="dgs-nav-flyout" hidden></div>
+
+  <div class="dgs-main">
+    <header class="page-header">
+      <p class="page-eyebrow">Admin</p>
+      <h1>Employees &amp; Permissions</h1>
+      <p class="subtitle">Role templates + per-person overrides · one level per area · grant only what you hold</p>
+    </header>
+
+    <nav class="dgs-subnav" id="perm-subnav" aria-label="Admin views">
+      <button type="button" class="active" data-view="employees" id="tab-employees">Employees</button>
+      <button type="button" data-view="roles" id="tab-roles">Roles</button>
+    </nav>
+
+    <div id="error-box" class="error-box" hidden></div>
+    <div id="denied-box" class="perm-denied error-box" hidden>
+      You need <code>employees</code> or <code>roles</code> read access to open this section.
+    </div>
+
+    <section class="browse-panel" id="browse-panel">
+      <div class="toolbar">
+        <input id="search-input" type="search" placeholder="Search…" autocomplete="off" />
+        <label class="toolbar-field" id="active-filter-wrap">
+          <span class="toolbar-field__label">Active</span>
+          <select id="active-filter">
+            <option value="all">All</option>
+            <option value="1" selected>Active</option>
+            <option value="0">Inactive</option>
+          </select>
+        </label>
+        <button id="btn-refresh" type="button" class="btn">Refresh</button>
+      </div>
+      <div class="grid-wrap">
+        <table class="data-grid" id="browse-table">
+          <thead id="browse-thead"></thead>
+          <tbody id="browse-tbody"></tbody>
+        </table>
+      </div>
+      <div class="status" id="list-status"></div>
+    </section>
+  </div>
+
+  <div class="detail-backdrop" id="detail-backdrop" hidden></div>
+  <aside class="detail-drawer" id="detail-drawer" aria-hidden="true">
+    <div class="detail-header">
+      <div>
+        <p class="detail-label" id="detail-label">Detail</p>
+        <h2 id="detail-title">—</h2>
+        <p class="subtitle" id="detail-subtitle"></p>
+      </div>
+      <button type="button" id="btn-close-detail" class="icon-btn" aria-label="Close details">×</button>
+    </div>
+    <div class="detail-body" id="detail-body"></div>
+  </aside>
+
+  <div id="reset-modal" class="reset-modal" hidden>
+    <div class="reset-modal-card" role="dialog" aria-labelledby="reset-title">
+      <h3 id="reset-title">Reset overrides?</h3>
+      <p id="reset-message">Clears all personal overrides and restores the role base permissions.</p>
+      <div class="reset-modal-actions">
+        <button type="button" class="btn" id="btn-reset-cancel">Cancel</button>
+        <button type="button" class="btn btn-danger" id="btn-reset-confirm">Reset to role</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="assets/auth.js"></script>
+  <script src="assets/shell.js"></script>
+  <script src="assets/employees-admin.js"></script>
+  <script>
+    DGS.boot("employees_admin", () => {
+      if (window.DGSEmployeesAdmin) window.DGSEmployeesAdmin.init();
+    });
+  </script>
+</body>
+</html>

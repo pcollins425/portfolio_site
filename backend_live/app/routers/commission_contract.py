@@ -1,4 +1,4 @@
-"""Paul-only commission contract review queue."""
+"""Commission contract review queue — gated by dgs_commission area."""
 from __future__ import annotations
 
 from typing import Annotated, Any
@@ -33,7 +33,7 @@ def commission_summary(
     months: int | None = Query(None, ge=1, le=120, description="Omit to scan all façade months"),
     user: Annotated[dict[str, Any] | None, Depends(require_demo_user)] = None,
 ):
-    q.assert_paul(user)
+    q.assert_commission_read(user)
     if not through or len(through.strip()) < 7:
         raise HTTPException(status_code=400, detail="through=YYYY-MM required")
     try:
@@ -49,7 +49,7 @@ def commission_queue(
     kind: str = Query("all", description="all|delta|missing|unknown|roots"),
     user: Annotated[dict[str, Any] | None, Depends(require_demo_user)] = None,
 ):
-    q.assert_paul(user)
+    q.assert_commission_read(user)
     if not month or len(month.strip()) < 7:
         raise HTTPException(status_code=400, detail="month=YYYY-MM required")
     try:
@@ -63,6 +63,6 @@ def commission_resolve(
     body: ResolveBody,
     user: Annotated[dict[str, Any] | None, Depends(require_demo_user)] = None,
 ):
-    q.assert_paul(user)
+    q.assert_commission_write(user)
     saved = q.resolve_flag(body.id, status=body.status, note=body.note, user=user)
     return {"ok": True, "id": body.id, **saved}

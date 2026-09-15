@@ -38,7 +38,11 @@ def parse_permissions_blob(blob: str | None) -> dict[str, str]:
 
 def merge_permissions(role_blob: str | None, override_blob: str | None) -> dict[str, str]:
     merged = parse_permissions_blob(role_blob)
-    merged.update(parse_permissions_blob(override_blob))
+    for area, level in parse_permissions_blob(override_blob).items():
+        if (level or "").strip().upper() == "NONE":
+            merged.pop(area, None)
+        else:
+            merged[area] = level
     return merged
 
 
