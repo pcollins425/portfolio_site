@@ -27,7 +27,10 @@
     mediaUrls: {},
     prepStatusConfig: null,
     phoneDetailOpen: false,
+    loadingMore: false,
   };
+
+  let listGen = 0;
 
   const els = {
     errorBox: document.getElementById("error-box"),
@@ -39,6 +42,8 @@
     searchBtn: document.getElementById("search-btn"),
     clearSearch: document.getElementById("clear-search"),
     fleetStrip: document.getElementById("fleet-strip"),
+    gridWrap: document.querySelector(".dgs-v2-grid-wrap"),
+    scrollSentinel: document.getElementById("assets-scroll-sentinel"),
     tbody: document.getElementById("assets-tbody"),
     listStatus: document.getElementById("list-status"),
     detailPanel: document.getElementById("detail-panel"),
@@ -209,6 +214,10 @@
     els.statMissingLink.textContent = fmtNum(s.missing_asset_links);
   }
 
+  function hasMore() {
+    return state.items.length < state.total;
+  }
+
   function renderFleet() {
     if (!els.fleetStrip) return;
     const rows = state.fleet || [];
@@ -281,13 +290,17 @@
       link.addEventListener("click", (event) => event.stopPropagation());
     });
 
-    const start = state.total === 0 ? 0 : (state.page - 1) * state.pageSize + 1;
-    const end = Math.min(state.page * state.pageSize, state.total);
-    const searchNote = state.search ? ` · matching “${state.search}”` : "";
+    const loaded = state.items.length;
+    const noteBits = [];
+    if (state.search) noteBits.push(`matching “${state.search}”`);
+    if (state.loadingMore) noteBits.push("loading more");
+    else if (hasMore()) noteBits.push("scroll for more");
+    const note = noteBits.length ? ` · ${noteBits.join(" · ")}` : "";
     els.listStatus.textContent =
       state.total === 0
-        ? `No assets found${searchNote}.`
-        : `Showing ${start.toLocaleString()}–${end.toLocaleString()} of ${state.total.toLocaleString()}${searchNote}`;
+        ? `No assets found${note}.`
+        : `Showing ${loaded.toLocaleString()} of ${state.total.toLocaleString()}${note}`;
+    if (els.scrollSentinel) els.scrollSentinel.hidden = !hasMore();
   }
 
   function field(label, value) {
@@ -490,18 +503,59 @@
   }
 
   async function loadList(options) {
-    const skipAutoSelect = options && options.skipAutoSelect;
+    const append = !!(options && options.append);
+    const skipAutoSelect = !!(options && options.skipAutoSelect);
+    const gen = append ? listGen : ++listGen;
+    if (!append) {
+      state.page = 1;
+      state.items = [];
+      state.loadingMore = false;
+    }
+
     const q = encodeURIComponent(state.search);
     const path = `/api/assets?q=${q}&page=${state.page}&page_size=${state.pageSize}`;
     const data = await fetchJson(path);
-    state.items = data.items || [];
-    state.fleet = data.fleet || [];
+    if (gen !== listGen) return;
+
+    const incoming = data.items || [];
+    if (append) {
+      const seen = new Set(state.items.map((r) => r.compid));
+      for (const row of incoming) {
+        if (row.compid && !seen.has(row.compid)) {
+          seen.add(row.compid);
+          state.items.push(row);
+        }
+      }
+    } else {
+      state.items = incoming;
+      state.fleet = data.fleet || [];
+      renderFleet();
+    }
     state.total = data.total || 0;
-    renderFleet();
+    state.page = data.page || state.page;
     renderList();
+
+    if (append) return;
 
     if (!skipAutoSelect && !state.selectedKey && state.items.length && !isCompact()) {
       await openDetail(state.items[0].compid);
+    }
+  }
+
+  async function loadMore() {
+    if (state.loadingMore || !hasMore()) return;
+    state.loadingMore = true;
+    const prevPage = state.page;
+    state.page += 1;
+    renderList();
+    try {
+      await loadList({ append: true });
+    } catch (err) {
+      state.page = prevPage;
+      throw err;
+    } finally {
+      state.loadingMore = false;
+      renderList();
     }
   }
 
@@ -519,6 +573,15 @@
     syncCompactChrome();
     els.tbody.innerHTML = `<tr><td colspan="4" class="dgs-v2-lines-status">Loading…</td></tr>`;
     await loadPrepStatusConfig();
+    if (window.DGS && typeof DGS.bindInfiniteScroll === "function") {
+      DGS.bindInfiniteScroll(els.gridWrap, {
+        sentinel: els.scrollSentinel,
+        rootMargin: "280px",
+        hasMore,
+        isBusy: () => state.loadingMore,
+        loadMore: () => loadMore().catch((err) => showError(err.message || String(err))),
+      });
+    }
     const params = new URLSearchParams(window.location.search);
     const deepAsset = (params.get("asset") || params.get("id") || "").trim();
     const deepCompid = (params.get("compid") || "").trim();
