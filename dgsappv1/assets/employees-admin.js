@@ -92,16 +92,27 @@
     loadList();
   }
 
+  function isCompactDrawer() {
+    return window.matchMedia("(max-width: 1366px)").matches;
+  }
+
+  function markSelectedRow(ref) {
+    els.tbody.querySelectorAll("tr").forEach((tr) => {
+      tr.classList.toggle("dgs-v2-row--selected", !!ref && tr.dataset.ref === ref);
+    });
+  }
+
   function closeDetail() {
     state.selected = null;
     state.selectedKind = null;
-    document.body.classList.remove("detail-open");
+    document.body.classList.remove("detail-open", "dgs-emp-drawer-compact");
     if (els.drawer) els.drawer.setAttribute("aria-hidden", "true");
     if (els.backdrop) els.backdrop.hidden = true;
     if (els.detailActions) {
       els.detailActions.hidden = true;
       els.detailActions.innerHTML = "";
     }
+    markSelectedRow(null);
   }
 
   function setDetailActions(html) {
@@ -113,6 +124,7 @@
 
   function openDetail() {
     document.body.classList.add("detail-open");
+    document.body.classList.toggle("dgs-emp-drawer-compact", isCompactDrawer());
     if (els.drawer) els.drawer.setAttribute("aria-hidden", "false");
     if (els.backdrop) els.backdrop.hidden = false;
   }
@@ -171,36 +183,52 @@
 
   function renderEmployees() {
     els.thead.innerHTML =
-      "<tr><th>Name</th><th>Email</th><th>Role</th><th>Active</th><th>Overrides</th></tr>";
+      "<tr><th>Name</th><th class=\"dgs-v2-col--desktop\">Email</th><th>Role</th><th class=\"dgs-v2-col--desktop\">Active</th><th class=\"dgs-v2-col--desktop\">Overrides</th></tr>";
     els.tbody.innerHTML = "";
     for (const e of state.employees) {
       const tr = document.createElement("tr");
       tr.tabIndex = 0;
+      tr.dataset.ref = e.reference_key || "";
       const ov = e.override_map && Object.keys(e.override_map).length
         ? Object.keys(e.override_map).length
         : "—";
-      tr.innerHTML = `<td>${esc(e.name || "—")}</td><td>${esc(e.email || "")}</td><td>${esc(
+      const inactive = e.active
+        ? ""
+        : ' <span class="dgs-emp-inactive dgs-v2-phone-only">Inactive</span>';
+      tr.innerHTML = `<td>${esc(e.name || "—")}${inactive}</td><td class="dgs-v2-col--desktop">${esc(
+        e.email || ""
+      )}</td><td>${esc(
         e.role_name || e.role_id || "—"
-      )}</td><td>${e.active ? "Yes" : "No"}</td><td>${ov}</td>`;
+      )}</td><td class="dgs-v2-col--desktop">${e.active ? "Yes" : "No"}</td><td class="dgs-v2-col--desktop">${ov}</td>`;
       tr.addEventListener("click", () => selectEmployee(e.reference_key));
       els.tbody.appendChild(tr);
     }
     els.listStatus.textContent = `${state.employees.length} employee(s)`;
+    if (state.selectedKind === "employee" && state.selected) {
+      markSelectedRow(state.selected.reference_key);
+    }
   }
 
   function renderRoles() {
-    els.thead.innerHTML = "<tr><th>Role</th><th>Key</th><th>Areas</th></tr>";
+    els.thead.innerHTML =
+      "<tr><th>Role</th><th class=\"dgs-v2-col--desktop\">Key</th><th class=\"dgs-v2-col--desktop\">Areas</th></tr>";
     els.tbody.innerHTML = "";
     for (const r of state.roles) {
       const tr = document.createElement("tr");
+      tr.dataset.ref = r.reference_key || "";
       const n = r.permission_map ? Object.keys(r.permission_map).length : 0;
-      tr.innerHTML = `<td>${esc(r.role || "—")}</td><td>${esc(
+      tr.innerHTML = `<td>${esc(r.role || "—")}<span class="dgs-emp-role-meta dgs-v2-phone-only">${esc(
         r.reference_key || ""
-      )}</td><td>${n}</td>`;
+      )} · ${n} area${n === 1 ? "" : "s"}</span></td><td class="dgs-v2-col--desktop">${esc(
+        r.reference_key || ""
+      )}</td><td class="dgs-v2-col--desktop">${n}</td>`;
       tr.addEventListener("click", () => selectRole(r.reference_key));
       els.tbody.appendChild(tr);
     }
     els.listStatus.textContent = `${state.roles.length} role(s)`;
+    if (state.selectedKind === "role" && state.selected) {
+      markSelectedRow(state.selected.reference_key);
+    }
   }
 
   async function selectEmployee(ref) {
@@ -210,6 +238,7 @@
       state.selected = e;
       state.selectedKind = "employee";
       state.draftEffective = { ...(e.effective || {}) };
+      markSelectedRow(e.reference_key);
       renderEmployeeDetail();
       openDetail();
     } catch (err) {
@@ -224,6 +253,7 @@
       state.selected = r;
       state.selectedKind = "role";
       state.draftRoleMap = { ...(r.permission_map || {}) };
+      markSelectedRow(r.reference_key);
       renderRoleDetail();
       openDetail();
     } catch (err) {
@@ -572,6 +602,10 @@
       els.resetModal.hidden = true;
     });
     document.getElementById("btn-reset-confirm").addEventListener("click", confirmReset);
+    window.addEventListener("resize", () => {
+      if (!document.body.classList.contains("detail-open")) return;
+      document.body.classList.toggle("dgs-emp-drawer-compact", isCompactDrawer());
+    });
 
     try {
       const ok = await loadCatalog();

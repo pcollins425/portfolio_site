@@ -6116,6 +6116,16 @@ body.dgs-employees-admin-v2 .perm-effective {
   margin: 0;
 }
 
+body.dgs-employees-admin-v2 .perm-chip {
+  font-size: 11px;
+  font-weight: 500;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: rgba(110, 181, 255, 0.12);
+  border: 1px solid rgba(110, 181, 255, 0.35);
+  color: #d7e9ff;
+}
+
 body.dgs-employees-admin-v2 .dgs-v2-btn--danger {
   border-color: rgba(185, 70, 70, 0.55);
   background: rgba(139, 46, 46, 0.9);
@@ -6176,5 +6186,146 @@ body.dgs-employees-admin-v2 .dgs-emp-reset-actions {
   body.dgs-employees-admin-v2 .perm-row {
     grid-template-columns: 1fr;
     gap: 4px;
+  }
+}
+
+/* Compact = phone + tablet (desk layout only above 1366px) */
+body.dgs-employees-admin-v2 .dgs-v2-phone-only {
+  display: none;
+}
+
+@media (max-width: 1366px) {
+  body.dgs-employees-admin-v2 .dgs-v2-desktop-only {
+    display: none !important;
+  }
+
+  body.dgs-employees-admin-v2 .dgs-v2-col--desktop {
+    display: none;
+  }
+
+  body.dgs-employees-admin-v2 .dgs-v2-phone-only {
+    display: block;
+  }
+
+  body.dgs-employees-admin-v2 .dgs-v2-main {
+    padding: 12px;
+    gap: 10px;
+  }
+
+  body.dgs-employees-admin-v2 .dgs-v2-page-header {
+    margin-bottom: 0;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+  }
+
+  body.dgs-employees-admin-v2 .dgs-v2-page-header h1 {
+    font-size: 22px;
+  }
+
+  body.dgs-employees-admin-v2 .dgs-v2-view-toggle {
+    width: 100%;
+    align-self: stretch;
+  }
+
+  body.dgs-employees-admin-v2 .dgs-v2-view-toggle button {
+    flex: 1;
+  }
+
+  body.dgs-employees-admin-v2 .dgs-v2-toolbar {
+    flex-wrap: wrap;
+  }
+
+  body.dgs-employees-admin-v2 .dgs-v2-toolbar input[type="search"] {
+    min-width: 0;
+    flex: 1 1 100%;
+  }
+
+  body.dgs-employees-admin-v2 .dgs-emp-browse {
+    border-radius: 12px;
+  }
+
+  body.dgs-employees-admin-v2 .dgs-v2-grid-wrap {
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: var(--dgs-v2-system-nav-clear);
+  }
+
+  body.dgs-employees-admin-v2 .dgs-emp-inactive {
+    display: inline;
+    margin-left: 6px;
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--dgs-v2-warn-text);
+  }
+
+  body.dgs-employees-admin-v2 .dgs-emp-role-meta {
+    display: block;
+    margin-top: 2px;
+    font-size: 11px;
+    color: var(--dgs-v2-text-muted);
+    font-weight: 400;
+  }
+
+  /* Bottom sheet drawer (warehouse pattern) */
+  body.dgs-employees-admin-v2.dgs-emp-drawer-compact .dgs-v2-drawer.detail-drawer {
+    position: fixed;
+    left: 0;
+    right: 0;
+    top: auto;
+    bottom: 0;
+    width: 100%;
+    height: auto;
+    max-height: min(90vh, 860px);
+    border-left: none;
+    border-top: 1px solid var(--dgs-v2-border);
+    border-radius: 16px 16px 0 0;
+    box-shadow: 0 -12px 32px rgba(0, 0, 0, 0.4);
+    transform: translateY(110%);
+    transition: transform 0.2s ease;
+    z-index: 90;
+  }
+
+  body.dgs-employees-admin-v2.dgs-emp-drawer-compact.detail-open .dgs-v2-drawer.detail-drawer {
+    transform: translateY(0);
+  }
+
+  body.dgs-employees-admin-v2.dgs-emp-drawer-compact.detail-open .detail-backdrop {
+    pointer-events: auto;
+  }
+
+  body.dgs-employees-admin-v2.dgs-emp-drawer-compact .dgs-v2-drawer-body {
+    padding-bottom: 16px;
+  }
+
+  body.dgs-employees-admin-v2.dgs-emp-drawer-compact .dgs-emp-drawer-foot {
+    padding-bottom: calc(12px + var(--dgs-v2-system-nav-clear));
+  }
+}
+
+@media (min-width: 901px) and (max-width: 1366px) {
+  body.dgs-employees-admin-v2 .dgs-v2-grid-wrap {
+    padding-bottom: var(--dgs-v2-system-nav-clear-tablet);
+  }
+
+  body.dgs-employees-admin-v2.dgs-emp-drawer-compact .dgs-emp-drawer-foot {
+    padding-bottom: calc(12px + var(--dgs-v2-system-nav-clear-tablet));
+  }
+}
+
+@media (max-width: 600px),
+       (max-width: 900px) and (max-height: 520px) {
+  body.dgs-employees-admin-v2 .dgs-v2-main {
+    padding: 10px;
+    gap: 8px;
+  }
+
+  body.dgs-employees-admin-v2 .dgs-v2-page-header h1 {
+    font-size: 20px;
+  }
+
+  body.dgs-employees-admin-v2 .dgs-emp-filter-label {
+    display: none;
   }
 }
