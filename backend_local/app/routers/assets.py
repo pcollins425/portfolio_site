@@ -28,6 +28,43 @@ _WHERE_WAREHOUSE_PROP = """
     )
 """
 
+_ASSET_TOKEN_FIELD_OR = """
+            (
+                ci.compid LIKE %s
+                OR ci.serial_no LIKE %s
+                OR ci.asset_id LIKE %s
+                OR ci.comp_desc LIKE %s
+                OR ci.property LIKE %s
+                OR ci.status LIKE %s
+                OR v.vendor_name LIKE %s
+                OR cab.cabinet_name LIKE %s
+                OR ci.manufac LIKE %s
+                OR ci.assettype LIKE %s
+            )
+"""
+
+_ASSET_TOKEN_FIELD_COUNT = 10
+_ASSET_TOKEN_MAX = 8
+
+
+def _escape_like(token: str) -> str:
+    """Escape LIKE metacharacters so user input is treated literally."""
+    return token.replace("[", "[[]").replace("%", "[%]").replace("_", "[_]")
+
+
+def _token_search_clause(search: str) -> tuple[str, tuple]:
+    """Whitespace tokens AND'd; each token may match any searchable field."""
+    tokens = [t for t in search.split() if t][:_ASSET_TOKEN_MAX]
+    if not tokens:
+        return "", ()
+    parts: list[str] = []
+    params: list[str] = []
+    for token in tokens:
+        like = f"%{_escape_like(token)}%"
+        parts.append(_ASSET_TOKEN_FIELD_OR)
+        params.extend([like] * _ASSET_TOKEN_FIELD_COUNT)
+    return " AND " + " AND ".join(parts), tuple(params)
+
 
 def _catalog() -> str:
     return (os.environ.get("MSSQL_DATABASE") or "dgs_application_db").strip()
@@ -84,32 +121,13 @@ def assets_summary():
 
 @router.get("")
 def list_assets(
-    q: str = Query("", max_length=120, description="Search asset ID, serial, title, property, status"),
+    q: str = Query("", max_length=120, description="Word-token search (AND): asset ID, serial, title, property, status, vendor, cabinet"),
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=1, le=200),
 ):
     """Paginated asset browse list (all COMPINFO landing rows, including active leases)."""
     search = q.strip()
-    like = f"%{search}%" if search else None
-
-    search_sql = ""
-    search_params: tuple = ()
-    if like:
-        search_sql = """
-            AND (
-                ci.compid LIKE %s
-                OR ci.serial_no LIKE %s
-                OR ci.asset_id LIKE %s
-                OR ci.comp_desc LIKE %s
-                OR ci.property LIKE %s
-                OR ci.status LIKE %s
-                OR v.vendor_name LIKE %s
-                OR cab.cabinet_name LIKE %s
-                OR ci.manufac LIKE %s
-                OR ci.assettype LIKE %s
-            )
-        """
-        search_params = (like,) * 10
+    search_sql, search_params = _token_search_clause(search)
 
     try:
         count_row = _field_query(
