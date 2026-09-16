@@ -28,22 +28,20 @@ _WHERE_WAREHOUSE_PROP = """
     )
 """
 
-_ASSET_TOKEN_FIELD_OR = """
-            (
-                ci.compid LIKE %s
-                OR ci.serial_no LIKE %s
-                OR ci.asset_id LIKE %s
-                OR ci.comp_desc LIKE %s
-                OR ci.property LIKE %s
-                OR ci.status LIKE %s
-                OR v.vendor_name LIKE %s
-                OR cab.cabinet_name LIKE %s
-                OR ci.manufac LIKE %s
-                OR ci.assettype LIKE %s
-            )
-"""
+_ASSET_TOKEN_FIELDS = (
+    "ci.compid",
+    "ci.serial_no",
+    "ci.asset_id",
+    "ci.comp_desc",
+    "ci.property",
+    "ci.status",
+    "v.vendor_name",
+    "cab.cabinet_name",
+    "ci.manufac",
+    "ci.assettype",
+)
 
-_ASSET_TOKEN_FIELD_COUNT = 10
+_ASSET_TOKEN_FIELD_COUNT = len(_ASSET_TOKEN_FIELDS)
 _ASSET_TOKEN_MAX = 8
 
 
@@ -52,17 +50,74 @@ def _escape_like(token: str) -> str:
     return token.replace("[", "[[]").replace("%", "[%]").replace("_", "[_]")
 
 
+def _like_from_user_token(token: str, *, word_scoped: bool) -> str:
+    """Build a SQL LIKE pattern. `*` → `%` (word-scoped); plain tokens get `%…%`."""
+    if word_scoped:
+        parts = token.split("*")
+        return "%".join(_escape_like(p) for p in parts)
+    return f"%{_escape_like(token)}%"
+
+
+def _field_like_or(like_placeholder: str = "%s") -> str:
+    return (
+        "(\n"
+        + "\n".join(
+            f"                {col} LIKE {like_placeholder}"
+            + (" OR" if i < _ASSET_TOKEN_FIELD_COUNT - 1 else "")
+            for i, col in enumerate(_ASSET_TOKEN_FIELDS)
+        )
+        + "\n            )"
+    )
+
+
+def _word_scoped_exists_or() -> str:
+    """Match pattern against whitespace-separated words in any searchable field."""
+    chunks: list[str] = []
+    for col in _ASSET_TOKEN_FIELDS:
+        chunks.append(
+            f"""EXISTS (
+                SELECT 1
+                FROM STRING_SPLIT(REPLACE(ISNULL({col}, N''), NCHAR(9), N' '), N' ') AS w
+                WHERE NULLIF(LTRIM(RTRIM(w.value)), N'') IS NOT NULL
+                  AND w.value LIKE %s
+            )"""
+        )
+    return "(\n                " + "\n                OR ".join(chunks) + "\n            )"
+
+
 def _token_search_clause(search: str) -> tuple[str, tuple]:
-    """Whitespace tokens AND'd; each token may match any searchable field."""
-    tokens = [t for t in search.split() if t][:_ASSET_TOKEN_MAX]
-    if not tokens:
+    """Parse Assets search mini-language.
+
+    - Whitespace tokens AND'd
+    - Leading ``--`` → exclude (NOT match)
+    - ``*`` inside a token → word-scoped wildcard (does not cross spaces)
+    - Plain tokens → substring across whole field values
+    """
+    raw_tokens = [t for t in search.split() if t][:_ASSET_TOKEN_MAX]
+    if not raw_tokens:
         return "", ()
+
+    field_or = _field_like_or()
+    word_or = _word_scoped_exists_or()
     parts: list[str] = []
     params: list[str] = []
-    for token in tokens:
-        like = f"%{_escape_like(token)}%"
-        parts.append(_ASSET_TOKEN_FIELD_OR)
+
+    for raw in raw_tokens:
+        exclude = raw.startswith("--")
+        body = raw[2:] if exclude else raw
+        if not body or body == "*":
+            continue
+        word_scoped = "*" in body
+        like = _like_from_user_token(body, word_scoped=word_scoped)
+        group = word_or if word_scoped else field_or
+        if exclude:
+            parts.append(f"NOT {group}")
+        else:
+            parts.append(group)
         params.extend([like] * _ASSET_TOKEN_FIELD_COUNT)
+
+    if not parts:
+        return "", ()
     return " AND " + " AND ".join(parts), tuple(params)
 
 
@@ -121,7 +176,11 @@ def assets_summary():
 
 @router.get("")
 def list_assets(
-    q: str = Query("", max_length=120, description="Word-token search (AND): asset ID, serial, title, property, status, vendor, cabinet"),
+    q: str = Query(
+        "",
+        max_length=120,
+        description="Token AND search; --exclude; * word-scoped wildcard (e.g. A*S --Warehouse)",
+    ),
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=1, le=200),
 ):
