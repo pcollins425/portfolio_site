@@ -535,16 +535,31 @@ def asset_history(asset_id: str):
                 sm.zone,
                 sm.bank,
                 sm.location,
+                sm.[Hold],
+                sm.action,
+                sm.project_id,
                 sm.lastconver,
                 sm.date_instl,
+                sm.golive001,
                 sm.rmvl_date,
                 th.theme_name,
-                c.casino_name
+                c.casino_name,
+                CONVERT(date, COALESCE(sm.rmvl_date, sm.lastconver, sm.golive001, sm.date_instl)) AS event_date,
+                COALESCE(
+                    NULLIF(LTRIM(RTRIM(pc.project_name)), N''),
+                    NULLIF(LTRIM(RTRIM(ims.description)), N''),
+                    NULLIF(LTRIM(RTRIM(CAST(ims.project_number AS nvarchar(50)))), N''),
+                    NULLIF(LTRIM(RTRIM(sm.action)), N'')
+                ) AS project_name
             FROM inventory.slot_master_migration AS sm
             LEFT JOIN vendors.themes AS th ON th.reference_key = sm.theme_id
             LEFT JOIN clients.casinos AS c ON c.reference_key = sm.casino_id
+            LEFT JOIN projects.ims AS ims ON ims.reference_key = sm.project_id
+            LEFT JOIN projects.project_catalog AS pc ON pc.ims_id = ims.reference_key
             WHERE sm.asset_id = %s
-            ORDER BY sm.index_key DESC
+            ORDER BY
+                COALESCE(sm.rmvl_date, sm.lastconver, sm.golive001, sm.date_instl) DESC,
+                sm.index_key DESC
             """,
             (aid,),
         )
@@ -562,6 +577,11 @@ def asset_history(asset_id: str):
                 "casino_name": _json_value(r.get("casino_name")),
                 "theme_id": _json_value(r.get("theme_id")),
                 "theme_name": _json_value(r.get("theme_name")),
+                "hold": _json_value(r.get("Hold")),
+                "action": _json_value(r.get("action")),
+                "project_id": _json_value(r.get("project_id")),
+                "project_name": _json_value(r.get("project_name")),
+                "event_date": _json_value(r.get("event_date")),
                 "zbl": " · ".join(
                     x
                     for x in (_json_value(r.get("zone")), _json_value(r.get("bank")), _json_value(r.get("location")))
@@ -569,6 +589,7 @@ def asset_history(asset_id: str):
                 )
                 or None,
                 "date_instl": _json_value(r.get("date_instl")),
+                "golive001": _json_value(r.get("golive001")),
                 "lastconver": _json_value(r.get("lastconver")),
                 "rmvl_date": _json_value(r.get("rmvl_date")),
             }

@@ -1975,9 +1975,43 @@ a.dgs-v2-sm-fk-chip--hub .dgs-v2-sm-fk-chip__label {
 }
 
 .dgs-v2-sm-fk-chip__name {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--dgs-v2-heading);
+  line-height: 1.3;
+}
+
+.dgs-v2-sm-fk-chip__ast-row {
+  margin-top: 2px;
   font-size: 11px;
   color: var(--dgs-v2-text-muted);
-  line-height: 1.35;
+}
+
+.dgs-v2-sm-fk-chip__ast,
+a.dgs-v2-sm-fk-chip__ast {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--dgs-v2-accent);
+  text-decoration: none;
+}
+
+a.dgs-v2-sm-fk-chip__ast:hover {
+  text-decoration: underline;
+}
+
+.dgs-v2-sm-detail-ast {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--dgs-v2-text-muted);
+}
+
+.dgs-v2-sm-detail-ast a {
+  color: var(--dgs-v2-accent);
+  text-decoration: none;
+}
+
+.dgs-v2-sm-detail-ast a:hover {
+  text-decoration: underline;
 }
 
 a.dgs-v2-sm-fk-chip--hub .dgs-v2-wh-asset-link {
@@ -2195,6 +2229,28 @@ a.dgs-v2-sm-fk-chip--hub .dgs-v2-wh-asset-link {
   font-size: 13px;
   font-weight: 600;
   color: var(--dgs-v2-heading);
+  line-height: 1.35;
+}
+
+.dgs-v2-sm-history-row__badge {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--dgs-v2-text-muted);
+  background: var(--dgs-v2-bg);
+  border: 1px solid var(--dgs-v2-border);
+  vertical-align: middle;
+}
+
+.dgs-v2-sm-history-row.is-active .dgs-v2-sm-history-row__badge {
+  color: var(--dgs-v2-accent);
+  border-color: var(--dgs-v2-accent-border);
+  background: rgba(110, 181, 255, 0.08);
 }
 
 .dgs-v2-sm-history-row__sub {

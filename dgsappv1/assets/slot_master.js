@@ -362,29 +362,28 @@
 
   function renderFkChips(d) {
     const hub = d.asset_id ? AssetNav.hubHref(d.asset_id) : "";
-    const assetChip = hub
-      ? `<a class="dgs-v2-sm-fk-chip dgs-v2-sm-fk-chip--hub" href="${esc(hub)}">
-        <span class="dgs-v2-sm-fk-chip__label">Asset</span>
-        <span class="dgs-v2-wh-asset-link">${esc(d.asset_id)}</span>
-        <span class="dgs-v2-sm-fk-chip__name">${esc(d.vendor_name)} · ${esc(d.cabinet_name)}</span>
-      </a>`
-      : `<div class="dgs-v2-sm-fk-chip">
-        <span class="dgs-v2-sm-fk-chip__label">Asset</span>
-        <span class="dgs-v2-sm-fk-chip__key">${esc(d.asset_id || "—")}</span>
-        <span class="dgs-v2-sm-fk-chip__name">${esc(d.vendor_name)} · ${esc(d.cabinet_name)}</span>
-      </div>`;
+    const hold = d.Hold != null && d.Hold !== "" ? String(d.Hold) : "—";
+    const assetMeta = hub
+      ? `<a class="dgs-v2-sm-fk-chip__ast" href="${esc(hub)}">${esc(d.asset_id)}</a>`
+      : `<span class="dgs-v2-sm-fk-chip__ast">${esc(d.asset_id || "—")}</span>`;
 
     els.fkChips.innerHTML = `
-      ${assetChip}
+      <div class="dgs-v2-sm-fk-chip${hub ? " dgs-v2-sm-fk-chip--hub-wrap" : ""}">
+        <span class="dgs-v2-sm-fk-chip__label">Cabinet</span>
+        <span class="dgs-v2-sm-fk-chip__name">${esc(d.vendor_name || "—")} · ${esc(d.cabinet_name || "—")}</span>
+        <span class="dgs-v2-sm-fk-chip__ast-row">AST ${assetMeta}</span>
+      </div>
       <div class="dgs-v2-sm-fk-chip">
         <span class="dgs-v2-sm-fk-chip__label">Casino</span>
-        <span class="dgs-v2-sm-fk-chip__key">${esc(d.casino_id)}</span>
-        <span class="dgs-v2-sm-fk-chip__name">${esc(d.casino_name)}</span>
+        <span class="dgs-v2-sm-fk-chip__name">${esc(d.casino_name || "—")}</span>
       </div>
       <div class="dgs-v2-sm-fk-chip">
         <span class="dgs-v2-sm-fk-chip__label">Theme</span>
-        <span class="dgs-v2-sm-fk-chip__key">${esc(d.theme_id)}</span>
         <span class="dgs-v2-sm-fk-chip__name">${esc(d.theme_name || "—")}</span>
+      </div>
+      <div class="dgs-v2-sm-fk-chip">
+        <span class="dgs-v2-sm-fk-chip__label">Hold</span>
+        <span class="dgs-v2-sm-fk-chip__name">${esc(hold)}</span>
       </div>`;
   }
 
@@ -442,9 +441,7 @@
 
   function renderHistory() {
     const items = state.history || [];
-    els.historyTitle.textContent = state.historyAssetId
-      ? `Asset history · ${state.historyAssetId}`
-      : "Asset history";
+    els.historyTitle.textContent = "Asset history";
     const prior = Math.max(0, items.length - 1);
     els.historyCount.textContent = prior ? `${prior} prior state${prior === 1 ? "" : "s"}` : "";
 
@@ -452,14 +449,18 @@
       .map((row) => {
         const selected = state.selectedKey === row.reference_key;
         const active = row.is_active;
+        const title = row.project_name || row.action || "Unlinked stint";
+        const status = active ? "Active" : "Inactive";
+        const hold = row.hold != null && row.hold !== "" ? String(row.hold) : "—";
+        const subBits = [row.theme_name || "—", row.casino_name || "—", hold].join(" · ");
         return `
         <button type="button" class="dgs-v2-sm-history-row${selected ? " selected" : ""}${active ? " is-active" : ""}" data-key="${esc(row.reference_key)}">
           <span class="dgs-v2-sm-history-row__dot" aria-hidden="true"></span>
           <span class="dgs-v2-sm-history-row__main">
-            <span class="dgs-v2-sm-history-row__title">${esc(row.reference_key)} · ${active ? "Active" : "Inactive"}</span>
-            <span class="dgs-v2-sm-history-row__sub">${esc(row.theme_name || "—")} · ${esc(row.casino_name || "—")} · ${esc(row.zbl || "—")}</span>
+            <span class="dgs-v2-sm-history-row__title">${esc(title)} <span class="dgs-v2-sm-history-row__badge">${esc(status)}</span></span>
+            <span class="dgs-v2-sm-history-row__sub">${esc(subBits)}</span>
           </span>
-          <span class="dgs-v2-sm-history-row__date">${esc(fmtDate(row.lastconver || row.date_instl))}</span>
+          <span class="dgs-v2-sm-history-row__date">${esc(fmtDate(row.event_date))}</span>
         </button>`;
       })
       .join("");
@@ -477,14 +478,24 @@
     els.detailEyebrow.textContent = d.is_active ? "Active deployment" : "Historical snapshot";
     els.detailTitle.textContent = title;
     if (els.detailBarTitle) els.detailBarTitle.textContent = title;
+    const hold = d.Hold != null && d.Hold !== "" ? String(d.Hold) : "—";
     const assetPart = d.asset_id
       ? AssetNav.hubLinkHtml(d.asset_id, d.asset_id)
-      : "—";
-    els.detailSubtitle.innerHTML = `${esc(d.reference_key || "")} · ${assetPart} · ${esc(d.theme_id || "")}`;
+      : null;
+    const subBits = [
+      d.casino_name || null,
+      d.theme_name || null,
+      `Hold ${hold}`,
+    ].filter(Boolean);
+    els.detailSubtitle.innerHTML = assetPart
+      ? `${esc(subBits.join(" · "))} · <span class="dgs-v2-sm-detail-ast">AST ${assetPart}</span>`
+      : esc(subBits.join(" · ") || "—");
     els.detailActiveBadge.hidden = !d.is_active;
     renderFkChips(d);
     renderSummaryStrip(d);
-    els.editPanelSubtitle.textContent = `${d.reference_key || ""} · ${d.is_active ? "active row" : "inactive row"} · same edit form`;
+    els.editPanelSubtitle.textContent = d.is_active
+      ? "Active row · same edit form"
+      : "Historical snapshot · same edit form";
     els.editActions.hidden = !state.permissions.can_write;
     renderHistory();
   }
