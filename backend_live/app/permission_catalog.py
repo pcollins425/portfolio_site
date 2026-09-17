@@ -32,6 +32,11 @@ EMPLOYEES_AREA = "employees"
 ROLES_AREA = "roles"
 ANALYST_AREA = "dgs_analyst"
 COMMISSION_AREA = "dgs_commission"
+EXPENSES_AREA = "expenses"
+EXPENSES_MASS_EDIT_AREA = "dgs_expenses_mass_edit"
+FINANCE_DASHBOARD_AREA = "dgs_finance_dashboard"
+ASSISTANT_AREA = "dgs_assistant"
+ASSISTANT_SECRETS_AREA = "dgs_assistant_secrets"
 
 
 @dataclass(frozen=True)
@@ -61,7 +66,11 @@ PERMISSION_CATALOG: tuple[CatalogArea, ...] = (
     CatalogArea("order_details", "Order Details", "sales"),
     CatalogArea("sales_orders", "Sales Orders", "sales"),
     CatalogArea("activity", "Activity", "sales", (LEVEL_READ,)),
-    CatalogArea("expenses", "Expenses", "finance"),
+    CatalogArea(EXPENSES_AREA, "Expenses · Browse", "finance"),
+    CatalogArea(EXPENSES_MASS_EDIT_AREA, "Expenses · Mass Edit", "finance"),
+    CatalogArea(FINANCE_DASHBOARD_AREA, "Finance · Dashboard billing", "finance"),
+    CatalogArea(ASSISTANT_AREA, "Assistant", "workspace"),
+    CatalogArea(ASSISTANT_SECRETS_AREA, "Assistant · Secrets", "workspace"),
     CatalogArea("emaint_demo_projects", "Ops · Projects", "dgs_app"),
     CatalogArea("emaint_demo_work_orders", "Ops · Work Orders", "dgs_app"),
     CatalogArea("emaint_demo_field_techs", "Ops · Field Techs", "dgs_app"),

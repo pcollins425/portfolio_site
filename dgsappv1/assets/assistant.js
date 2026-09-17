@@ -746,6 +746,9 @@
 
   async function init() {
     wireEvents();
+    if (window.DGS && DGS.hasAreaRead && !DGS.hasAreaRead("dgs_assistant_secrets")) {
+      if (els.btnSecrets) els.btnSecrets.hidden = true;
+    }
     try {
       await loadHealth();
       await loadSessions();

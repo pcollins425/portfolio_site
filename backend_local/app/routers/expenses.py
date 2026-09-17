@@ -6,11 +6,14 @@ import math
 import os
 from datetime import date, datetime
 from decimal import Decimal
+from typing import Annotated, Any
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
+from app import dgs_org_access as org
 from app import mssql
+from app.auth_deps import require_demo_user
 
 router = APIRouter(prefix="/api/expenses", tags=["expenses"])
 
@@ -161,8 +164,11 @@ def expenses_health():
 
 
 @router.get("/cardholders")
-def list_cardholders():
+def list_cardholders(
+    user: Annotated[dict[str, Any] | None, Depends(require_demo_user)] = None,
+):
     """Active Amex cardholders from finance.card_accounts."""
+    org.assert_expenses_read(user)
     try:
         rows = _field_query(
             f"""
@@ -206,8 +212,10 @@ def list_expenses(
     q: str = Query("", max_length=120, description="Search ref, description, amount, GL"),
     page: int = Query(1, ge=1),
     page_size: int = Query(100, ge=1, le=2000),
+    user: Annotated[dict[str, Any] | None, Depends(require_demo_user)] = None,
 ):
     """Paginated expense browse — newest date first."""
+    org.assert_expenses_read(user)
     parsed_from = _parse_iso_date(date_from, "date_from")
     parsed_to = _parse_iso_date(date_to, "date_to")
     if parsed_from and parsed_to and parsed_from > parsed_to:
@@ -344,8 +352,11 @@ def _normalize_expense_account(raw: str | None, gl_by_label: dict[str, str], gl_
 
 
 @router.get("/gl-accounts")
-def list_gl_accounts():
+def list_gl_accounts(
+    user: Annotated[dict[str, Any] | None, Depends(require_demo_user)] = None,
+):
     """GL labels for mass-edit autocomplete and paste validation."""
+    org.assert_expenses_mass_edit_read(user)
     try:
         rows = _field_query(
             """
@@ -383,8 +394,12 @@ def list_gl_accounts():
 
 
 @router.post("/batch")
-def batch_update_expenses(body: BatchExpenseUpdateRequest):
+def batch_update_expenses(
+    body: BatchExpenseUpdateRequest,
+    user: Annotated[dict[str, Any] | None, Depends(require_demo_user)] = None,
+):
     """Apply spreadsheet mass-edit saves to finance.expenses."""
+    org.assert_expenses_mass_edit_write(user)
     gl_by_label, gl_codes = _load_gl_lookup()
     updated = 0
     errors: list[dict] = []
@@ -450,8 +465,12 @@ def batch_update_expenses(body: BatchExpenseUpdateRequest):
 
 
 @router.get("/{reference_key}")
-def get_expense(reference_key: str):
+def get_expense(
+    reference_key: str,
+    user: Annotated[dict[str, Any] | None, Depends(require_demo_user)] = None,
+):
     """Single expense row for the detail drawer."""
+    org.assert_expenses_read(user)
     key = reference_key.strip()
     if not key:
         raise HTTPException(status_code=400, detail="reference_key is required")

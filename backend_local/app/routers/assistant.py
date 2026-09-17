@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
+from app import dgs_org_access as org
 from app.assistant import chat, files, runs, secrets, sessions
 from app.auth_deps import require_demo_user
 
@@ -45,8 +46,9 @@ def _stream_response(event_iter):
 
 @router.get("/health")
 def assistant_health(
-    _user: Annotated[dict[str, Any] | None, Depends(require_demo_user)],
+    user: Annotated[dict[str, Any] | None, Depends(require_demo_user)] = None,
 ):
+    org.assert_assistant_read(user)
     return chat.health()
 
 
@@ -54,6 +56,7 @@ def assistant_health(
 def list_sessions(
     user: Annotated[dict[str, Any] | None, Depends(require_demo_user)] = None,
 ):
+    org.assert_assistant_read(user)
     runs.clear_stale_active_runs()
     return {"sessions": sessions.list_sessions()}
 
@@ -63,6 +66,7 @@ def create_session(
     body: CreateSessionBody | None = None,
     user: Annotated[dict[str, Any] | None, Depends(require_demo_user)] = None,
 ):
+    org.assert_assistant_read(user)
     title = body.title if body else None
     return sessions.create_session(title=title)
 
@@ -72,6 +76,7 @@ def get_session(
     session_id: str,
     user: Annotated[dict[str, Any] | None, Depends(require_demo_user)] = None,
 ):
+    org.assert_assistant_read(user)
     runs.clear_stale_active_runs()
     session = sessions.get_session(session_id)
     if session is None:
@@ -85,6 +90,7 @@ def send_message(
     body: SendMessageBody,
     user: Annotated[dict[str, Any] | None, Depends(require_demo_user)] = None,
 ):
+    org.assert_assistant_read(user)
     if sessions.get_session(session_id) is None:
         raise HTTPException(status_code=404, detail="Session not found")
     try:
@@ -101,6 +107,7 @@ def stream_active_run(
     session_id: str,
     user: Annotated[dict[str, Any] | None, Depends(require_demo_user)] = None,
 ):
+    org.assert_assistant_read(user)
     if sessions.get_session(session_id) is None:
         raise HTTPException(status_code=404, detail="Session not found")
     rec = runs.get_active_run(session_id)
@@ -113,6 +120,7 @@ def stream_active_run(
 def workspace_tree(
     user: Annotated[dict[str, Any] | None, Depends(require_demo_user)] = None,
 ):
+    org.assert_assistant_read(user)
     return files.list_tree()
 
 
@@ -121,6 +129,7 @@ def workspace_file(
     path: str,
     user: Annotated[dict[str, Any] | None, Depends(require_demo_user)] = None,
 ):
+    org.assert_assistant_read(user)
     try:
         return files.read_file_preview(path)
     except ValueError as exc:
@@ -133,6 +142,7 @@ def workspace_file(
 def get_secrets(
     user: Annotated[dict[str, Any] | None, Depends(require_demo_user)] = None,
 ):
+    org.assert_assistant_secrets_read(user)
     return secrets.list_secrets()
 
 
@@ -141,5 +151,6 @@ def put_secrets(
     body: SaveSecretsBody,
     user: Annotated[dict[str, Any] | None, Depends(require_demo_user)] = None,
 ):
+    org.assert_assistant_secrets_write(user)
     payload = [{"key": v.key, "value": v.value} for v in body.variables]
     return secrets.save_secrets(payload)

@@ -64,6 +64,18 @@ def test_serialize_roundtrip_deltas():
     assert parsed["email: approval"] == "READ_ONLY"
 
 
+def test_org_sensitive_areas_in_catalog():
+    ids = {a.id for a in cat.PERMISSION_CATALOG}
+    assert cat.EXPENSES_AREA in ids
+    assert cat.EXPENSES_MASS_EDIT_AREA in ids
+    assert cat.FINANCE_DASHBOARD_AREA in ids
+    assert cat.ASSISTANT_AREA in ids
+    assert cat.ASSISTANT_SECRETS_AREA in ids
+    assert cat.has_area_read({"expenses": "READ_ONLY"}, cat.EXPENSES_AREA)
+    assert not cat.has_area_write({"expenses": "READ_ONLY"}, cat.EXPENSES_AREA)
+    assert cat.has_area_write({"dgs_expenses_mass_edit": "UPDATES_ONLY"}, cat.EXPENSES_MASS_EDIT_AREA)
+
+
 def test_last_admin_count():
     people = [
         {
@@ -91,5 +103,6 @@ if __name__ == "__main__":
     test_overrides_from_effective()
     test_escalation_cap()
     test_serialize_roundtrip_deltas()
+    test_org_sensitive_areas_in_catalog()
     test_last_admin_count()
     print("ok")

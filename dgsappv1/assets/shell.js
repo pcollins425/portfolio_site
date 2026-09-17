@@ -44,31 +44,61 @@
       id: "finance",
       label: "Finance",
       items: [
-        { id: "expenses", label: "Expenses", href: "expenses.html" },
-        { id: "expenses_mass", label: "Mass Edit", href: "expenses-mass-edit.html" },
+        {
+          id: "expenses",
+          label: "Expenses",
+          href: "expenses.html",
+          requireAnyOf: ["expenses"],
+        },
+        {
+          id: "expenses_mass",
+          label: "Mass Edit",
+          href: "expenses-mass-edit.html",
+          requireAnyOf: ["dgs_expenses_mass_edit"],
+        },
       ],
     },
     {
       id: "admin",
       label: "Admin",
       items: [
-        { id: "employees_admin", label: "Employees", href: "employees-admin.html" },
+        {
+          id: "employees_admin",
+          label: "Employees",
+          href: "employees-admin.html",
+          requireAnyOf: ["employees", "roles"],
+        },
       ],
     },
     {
       id: "workspace",
       label: "Workspace",
-      items: [{ id: "assistant", label: "Assistant", href: "assistant.html" }],
+      items: [
+        {
+          id: "assistant",
+          label: "Assistant",
+          href: "assistant.html",
+          requireAnyOf: ["dgs_assistant"],
+        },
+      ],
     },
   ];
 
   const DASHBOARD_NAV = [
     { route: "/executive", label: "Executive" },
-    { route: "/analyst", label: "Analyst" },
-    { route: "/commission", label: "Commission" },
-    { route: "/finance", label: "Finance" },
+    { route: "/analyst", label: "Analyst", requireArea: "dgs_analyst" },
+    { route: "/commission", label: "Commission", requireArea: "dgs_commission" },
+    { route: "/finance", label: "Finance", requireArea: "dgs_finance_dashboard" },
     { route: "/performance", label: "Performance" },
   ];
+
+  const READ_LEVELS = {
+    READ_ONLY: 1,
+    UPDATES_ONLY: 1,
+    ADDS_ONLY: 1,
+    ADDS_AND_UPDATES: 1,
+    ALL_CHANGES: 1,
+  };
 
   let analystOpenMonths = 0;
   let commissionOpenMonths = 0;
@@ -76,13 +106,76 @@
   let dashboardBundlePromise = null;
   const MOBILE_TOP_NAV_MQ = window.matchMedia("(max-width: 900px)");
 
+  function permissionMap() {
+    const user = window.DGSAuth && DGSAuth.getUser && DGSAuth.getUser();
+    return (user && user.permissions) || {};
+  }
+
+  function gatesActive() {
+    return Boolean(window.DGSAuth && DGSAuth.isAuthRequired && DGSAuth.isAuthRequired());
+  }
+
+  function hasAreaRead(area) {
+    if (!area) return true;
+    if (!gatesActive()) return true;
+    const level = permissionMap()[area];
+    return Boolean(level && READ_LEVELS[level]);
+  }
+
+  function hasAnyAreaRead(areas) {
+    if (!areas || !areas.length) return true;
+    if (!gatesActive()) return true;
+    return areas.some((a) => hasAreaRead(a));
+  }
+
+  function visibleNavGroups() {
+    return NAV_GROUPS.map((group) => ({
+      ...group,
+      items: group.items.filter((item) => hasAnyAreaRead(item.requireAnyOf)),
+    })).filter((group) => group.items.length > 0);
+  }
+
+  function visibleDashboardNav() {
+    return DASHBOARD_NAV.filter((item) => !item.requireArea || hasAreaRead(item.requireArea));
+  }
+
+  function findNavItem(activeId) {
+    for (const group of NAV_GROUPS) {
+      for (const item of group.items) {
+        if (item.id === activeId) return item;
+      }
+    }
+    return null;
+  }
+
+  function showAccessDenied(message) {
+    const main =
+      document.querySelector(".dgs-main") ||
+      document.querySelector("main") ||
+      document.body;
+    if (!main) return;
+    const box = document.createElement("div");
+    box.className = "error-box";
+    box.style.margin = "1.5rem";
+    box.setAttribute("role", "alert");
+    box.textContent =
+      message || "You do not have access to this area. Ask an admin if you need it.";
+    main.prepend(box);
+  }
+
+  function pageAccessAllowed(activeId) {
+    const item = findNavItem(activeId);
+    if (!item || !item.requireAnyOf) return true;
+    return hasAnyAreaRead(item.requireAnyOf);
+  }
+
   function usesMobileTopNav() {
     // Default on for all shell pages; opt out with body.dgs-no-mobile-top-nav.
     return !document.body.classList.contains("dgs-no-mobile-top-nav");
   }
 
   function activePageTitle(activeId) {
-    for (const group of NAV_GROUPS) {
+    for (const group of visibleNavGroups()) {
       for (const item of group.items) {
         if (item.id === activeId) return item.label;
       }
@@ -140,7 +233,8 @@
     if (!menu) return;
     if (title) title.textContent = activePageTitle(activeId);
 
-    menu.innerHTML = NAV_GROUPS.map(
+    menu.innerHTML = visibleNavGroups()
+      .map(
       (group) => `
         <section class="dgs-mobile-menu-group">
           <div class="dgs-mobile-menu-group-label">${group.label}</div>
@@ -153,7 +247,8 @@
               .join("")}
           </nav>
         </section>`
-    ).join("");
+    )
+      .join("");
 
     const account = document.getElementById("sidebar-account");
     if (account && !account.hidden) {
@@ -297,7 +392,7 @@
     const groupState = loadGroupState();
     nav.innerHTML = "";
 
-    for (const group of NAV_GROUPS) {
+    for (const group of visibleNavGroups()) {
       const open = groupState[group.id] ?? group.defaultOpen ?? false;
       const section = document.createElement("div");
       section.className = "dgs-nav-group";
@@ -411,7 +506,7 @@
       const sel = document.createElement("select");
       sel.className = "dgs-dashboard-view-select";
       sel.setAttribute("aria-label", "Dashboard views");
-      for (const item of DASHBOARD_NAV) {
+      for (const item of visibleDashboardNav()) {
         const opt = document.createElement("option");
         opt.value = item.route;
         let label = item.label;
@@ -430,7 +525,7 @@
       return;
     }
 
-    for (const item of DASHBOARD_NAV) {
+    for (const item of visibleDashboardNav()) {
       const el = document.createElement(v2 ? "button" : "a");
       if (!v2) el.href = "#";
       el.type = v2 ? "button" : undefined;
@@ -478,7 +573,11 @@
   }
 
   function setDashboardRoute(route) {
-    const normalized = route.startsWith("/") ? route : `/${route}`;
+    let normalized = route.startsWith("/") ? route : `/${route}`;
+    const allowed = visibleDashboardNav().map((i) => i.route);
+    if (!allowed.includes(normalized)) {
+      normalized = allowed[0] || "/executive";
+    }
     renderDashboardSubnav(normalized);
     loadDashboardBundle()
       .then(() => {
@@ -536,6 +635,10 @@
     wireRailToggle(activeId);
     if (window.DGSAuth) DGSAuth.renderAccount();
     if (usesMobileTopNav()) syncMobileTopNav(activeId);
+    if (!pageAccessAllowed(activeId)) {
+      showAccessDenied();
+      return;
+    }
     if (typeof onReady === "function") onReady();
   }
 
@@ -578,6 +681,8 @@
     setDashboardRoute,
     loadDashboardBundle,
     bindInfiniteScroll,
+    hasAreaRead,
+    hasAnyAreaRead,
     NAV_GROUPS,
   };
 })();

@@ -4,11 +4,13 @@ from __future__ import annotations
 
 import os
 from datetime import date, datetime, timedelta
-from typing import Any
+from typing import Annotated, Any
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 
+from app import dgs_org_access as org
 from app import mssql
+from app.auth_deps import require_demo_user
 from app.commission_rules import parse_rules, reporting_waived
 
 router = APIRouter(prefix="/api", tags=["master-revenue"])
@@ -860,9 +862,12 @@ def analyst_ping():
 # Queue / summary / resolutions / resolve live on routers.analyst (dgs_analyst gate).
 # Do not re-register them here — first match wins and stale assert_paul handlers break auth'd calls.
 
-
 @router.get("/finance/casinos-latest")
-def finance_casinos_latest(month: str | None = Query(None, description="YYYY-MM or YYYY-MM-DD month-end slice")):
+def finance_casinos_latest(
+    month: str | None = Query(None, description="YYYY-MM or YYYY-MM-DD month-end slice"),
+    user: Annotated[dict[str, Any] | None, Depends(require_demo_user)] = None,
+):
+    org.assert_finance_dashboard_read(user)
     periods = _distinct_periods(24)
     try:
         latest_d, _ = _resolve_target_period(month, periods)
@@ -963,12 +968,14 @@ _NON_PLAYABLE_SQL = """
 def finance_overview(
     from_month: str = Query(..., alias="from", description="Processing month range start (YYYY-MM)"),
     to_month: str = Query(..., alias="to", description="Processing month range end (YYYY-MM)"),
+    user: Annotated[dict[str, Any] | None, Depends(require_demo_user)] = None,
 ):
     """Billing coverage from ``finance.billing_coverage`` snapshot (hybrid refresh).
 
     Live SMM/MR recompute runs offline (MR apply + nightly). Same response shape as before.
     Set ``FINANCE_OVERVIEW_LIVE=1`` to force the legacy live engine.
     """
+    org.assert_finance_dashboard_read(user)
     if (os.environ.get("FINANCE_OVERVIEW_LIVE") or "").strip().lower() in ("1", "true", "yes"):
         return _finance_overview_live(from_month, to_month)
 
