@@ -17,11 +17,15 @@ def run(verb: str, args: dict[str, Any], *, session: dict[str, Any]) -> dict[str
     if verb == "get_casino":
         return get_casino(casino_id)
     if verb == "project_status":
+        month_start, month_end, month_label = _parse_month_span(args)
         return project_status(
             casino_id,
             project_ref=(args.get("project_ref") or "").strip() or None,
             status_filter=(args.get("status_filter") or "all").strip().lower(),
             limit=int(args.get("limit") or 10),
+            month_start=month_start,
+            month_end=month_end,
+            month_label=month_label,
         )
     if verb == "project_breakdown":
         return project_breakdown(
@@ -92,13 +96,16 @@ def project_status(
     project_ref: str | None = None,
     status_filter: str = "all",
     limit: int = 10,
+    month_start: date | None = None,
+    month_end: date | None = None,
+    month_label: str | None = None,
 ) -> dict[str, Any]:
     cid = _require_casino(casino_id)
     limit = max(1, min(limit, 25))
     params: list[Any] = [cid]
     extra = ""
     if project_ref:
-        extra = """
+        extra += """
           AND (
             pc.reference_key = %s
             OR pc.ims_id = %s
@@ -107,10 +114,20 @@ def project_status(
           )
         """
         params.extend([project_ref, project_ref, project_ref, project_ref])
+    if month_start and month_end:
+        # Overlap: project touches the calendar month.
+        extra += """
+          AND pc.date_start IS NOT NULL
+          AND pc.date_start <= %s
+          AND COALESCE(pc.date_end, pc.date_start) >= %s
+        """
+        params.extend([month_end.isoformat(), month_start.isoformat()])
 
+    # Pull a wider TOP when filtering by month so status filter can still leave rows.
+    fetch = limit if not (month_start and month_end) else max(limit, 40)
     rows = db.query(
         f"""
-        SELECT TOP ({limit})
+        SELECT TOP ({fetch})
             pc.reference_key AS project_id,
             pc.ims_project_number AS project_number,
             pc.project_name,
@@ -154,6 +171,8 @@ def project_status(
                 "offer_breakdown": completed,
             }
         )
+        if len(projects) >= limit:
+            break
 
     out: dict[str, Any] = {
         "verb": "project_status",
@@ -161,6 +180,10 @@ def project_status(
         "projects": projects,
         "total": len(projects),
     }
+    if month_start and month_end:
+        out["month_start"] = month_start.isoformat()
+        out["month_end"] = month_end.isoformat()
+        out["month_label"] = month_label or f"{month_name[month_start.month]} {month_start.year}"
     if any(p.get("offer_breakdown") for p in projects):
         out["follow_up_prompt"] = "Want a breakdown of what was done?"
     return out
@@ -320,6 +343,35 @@ def _require_casino(casino_id: str) -> str:
             detail="casino_id is required (select a casino or pass CT-* in args)",
         )
     return cid
+
+
+def _parse_month_span(args: dict[str, Any]) -> tuple[date | None, date | None, str | None]:
+    """Optional month window from month_end / month_start / month_label args."""
+    import calendar
+
+    raw_end = args.get("month_end")
+    raw_start = args.get("month_start")
+    label = (str(args.get("month_label") or "").strip() or None)
+
+    if raw_end:
+        end = _parse_month_end(raw_end)
+        if raw_start:
+            start = _parse_month_end(raw_start)
+        else:
+            start = date(end.year, end.month, 1)
+        if not label:
+            label = f"{month_name[start.month]} {start.year}"
+        return start, end, label
+
+    if raw_start:
+        start = _parse_month_end(raw_start)
+        last = calendar.monthrange(start.year, start.month)[1]
+        end = date(start.year, start.month, last)
+        if not label:
+            label = f"{month_name[start.month]} {start.year}"
+        return start, end, label
+
+    return None, None, None
 
 
 def _parse_month_end(raw: Any) -> date:

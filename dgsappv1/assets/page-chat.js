@@ -134,6 +134,16 @@
       let chipText = label;
       if (String(id).startsWith("breakdown:")) {
         chipText = `Breakdown ${String(id).split(":")[1]}`;
+      } else if (String(id).startsWith("chip:perf:")) {
+        chipText = label;
+      } else if (id === "chip:most_recent") {
+        chipText = "Which is most recent?";
+      } else if (id === "chip:projects_all") {
+        chipText = "Show all projects (no month filter)";
+      } else if (id === "chip:projects_again") {
+        chipText = "List projects again";
+      } else if (id === "chip:explain_come_in") {
+        chipText = "What does come in mean?";
       } else if (id === "project_status") {
         chipText = "Project / FSR status";
       } else if (id === "performance_index") {

@@ -67,9 +67,11 @@ CONTRACTS: dict[str, dict[str, Any]] = {
             "project_ref": "optional IMS-##### or PC-##### or project number string",
             "status_filter": "optional: open | completed | all (default all, recent first)",
             "limit": "default 10, max 25",
+            "month_end": "optional YYYY-MM-DD — filter projects overlapping that calendar month",
         },
         "result": {
             "casino_id": "CT-…",
+            "month_label": "August 2026",
             "projects": [
                 {
                     "project_id": "PC-00330",
@@ -77,14 +79,14 @@ CONTRACTS: dict[str, dict[str, Any]] = {
                     "project_name": "Havasu Landing …",
                     "ims_id": "IMS-00121",
                     "status": "COMPLETED",
-                    "date_start": "2026-09-18",
-                    "date_end": "2026-09-18",
+                    "date_start": "2026-08-01",
+                    "date_end": "2026-08-03",
                     "offer_breakdown": True,
                 }
             ],
             "follow_up_prompt": "Want a breakdown of what was done?",
         },
-        "notes": "Casino-scoped only. offer_breakdown when status looks completed.",
+        "notes": "Casino-scoped. month_end ⇒ overlap filter on date_start/date_end.",
     },
     "project_breakdown": {
         "args": {

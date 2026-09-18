@@ -84,7 +84,7 @@ def route(user_text: str, *, session: dict[str, Any]) -> dict[str, Any] | None:
         "model": model_name(),
         "stream": False,
         "format": "json",
-        "options": {"temperature": 0.1, "num_predict": 256},
+        "options": {"temperature": 0.35, "num_predict": 280},
         "messages": [
             {"role": "system", "content": prompt},
             {"role": "user", "content": (user_text or "").strip()},
@@ -111,6 +111,20 @@ def route(user_text: str, *, session: dict[str, Any]) -> dict[str, Any] | None:
 def _system_prompt(session: dict[str, Any]) -> str:
     casino_id = session.get("casino_id") or ""
     casino_name = session.get("casino_name") or ""
+    focus = session.get("last_focus") if isinstance(session.get("last_focus"), dict) else {}
+    focus_bits = ""
+    if focus:
+        focus_bits = (
+            f"Sticky focus casino_id: {focus.get('casino_id') or '(none)'}; "
+            f"focus name: {focus.get('casino_short') or focus.get('casino_name') or '(none)'}; "
+            f"focus month_end: {focus.get('month_end') or '(none)'}; "
+            f"last projects: "
+            + ", ".join(
+                str(p.get("project_number") or p.get("project_id"))
+                for p in (focus.get("projects") or [])[:5]
+            )
+            + "\n"
+        )
     lanes = ", ".join(f'{o["id"]}={o["label"]}' for o in CLARIFY_LANES)
     topics = ", ".join(sorted(EXPLAIN_TOPICS))
     verbs = ", ".join(sorted(CASINO_VERBS))
@@ -119,31 +133,36 @@ def _system_prompt(session: dict[str, Any]) -> str:
         "Reply with ONLY one JSON object (no markdown).\n"
         "Shapes:\n"
         '  {"kind":"run","verb":"<verb>","args":{...}}\n'
-        '  {"kind":"clarify","reply":"<short question>","options":null}\n'
+        '  {"kind":"clarify","reply":"<natural short question>","options":null}\n'
         '  {"kind":"unsupported","reply":"<short reason>"}\n'
+        "On clarify/unsupported, write reply in plain helpful language "
+        "(you may vary wording; do not invent data).\n"
         f"Allowed verbs: {verbs}\n"
         "Args rules:\n"
-        "- get_casino: args may be {} (session casino) or {casino_id}\n"
-        "- project_status: {casino_id?, project_ref?, status_filter?: open|completed|all, limit?}\n"
-        "- project_breakdown: {casino_id?, project_id} (PC-##### or IMS-#####)\n"
+        "- get_casino: args may be {} (session/focus casino) or {casino_id} or {casino_name}\n"
+        "- project_status: {casino_id?, casino_name?, project_ref?, status_filter?: open|completed|all, "
+        "limit?, month_end?:YYYY-MM-DD} — when user names a month (e.g. August), set month_end "
+        "to that month's last day (default year 2026 if omitted)\n"
+        "- project_breakdown: {casino_id?, project_id} (PC-#####, IMS-#####, or project number)\n"
         "- performance_index: {casino_id?, month_end:YYYY-MM-DD} — month_end required\n"
         f"- explain_topic: {{topic_id}} one of: {topics}\n"
         "Never invent SQL, money, coin-in, win, or commission.\n"
         "Mapping hints:\n"
         "- GM, tribe, address, profile, contacts → get_casino\n"
-        "- projects, FSR, floor work, jobs, installs, conversions, completed → project_status\n"
-        "- serial/theme breakdown of a specific PC-/IMS- → project_breakdown\n"
+        "- projects, FSR, floor work, jobs, installs, conversions, completed, uploaded → project_status\n"
+        "- serial/theme breakdown of a specific project → project_breakdown\n"
         "- come in / received / processed / participation / month report → performance_index "
         "(only with month_end YYYY-MM-DD; else clarify which month)\n"
-        "- what does X mean (project completed / report received / performance index) → explain_topic\n"
-        "If the user is ambiguous about project vs performance 'come in', kind=clarify.\n"
+        "- what does X mean → explain_topic\n"
+        "If the user is ambiguous about project vs performance 'come in', kind=clarify "
+        "with a natural question.\n"
         f"Clarify lane ids (optional hint): {lanes}\n"
-        f"Session casino_id: {casino_id or '(none — ask user to select a casino)'}\n"
+        f"Session casino_id: {casino_id or '(none)'}\n"
         f"Session casino_name: {casino_name or '(none)'}\n"
-        "If the user names a *different* casino than the session (e.g. 'Havasu Landing' "
-        "while session is Oaklawn), put casino_name in args (server resolves to CT-*). "
-        "Do not force the session casino when another property is named.\n"
-        "Prefer kind=run when a verb is clear. Prefer clarify over guessing month_end."
+        f"{focus_bits}"
+        "If the user names a *different* casino than the session, put casino_name in args.\n"
+        "Prefer kind=run when a verb is clear. Prefer clarify over guessing month_end "
+        "only when no month word is present."
     )
 
 
@@ -187,7 +206,17 @@ def _normalize_route(raw: dict[str, Any], *, session: dict[str, Any]) -> dict[st
             }
         args = raw.get("args") if isinstance(raw.get("args"), dict) else {}
         clean: dict[str, Any] = {}
-        for key in ("casino_id", "project_ref", "project_id", "status_filter", "month_end", "topic_id"):
+        for key in (
+            "casino_id",
+            "casino_name",
+            "project_ref",
+            "project_id",
+            "status_filter",
+            "month_end",
+            "month_start",
+            "month_label",
+            "topic_id",
+        ):
             val = args.get(key)
             if val is None or val == "":
                 continue
@@ -198,7 +227,9 @@ def _normalize_route(raw: dict[str, Any], *, session: dict[str, Any]) -> dict[st
             except (TypeError, ValueError):
                 pass
         if not clean.get("casino_id") and session.get("casino_id"):
-            clean["casino_id"] = session["casino_id"]
+            # Prefer sticky focus if present.
+            focus = session.get("last_focus") if isinstance(session.get("last_focus"), dict) else {}
+            clean["casino_id"] = (focus.get("casino_id") or session.get("casino_id"))
         return {"kind": "run", "verb": verb, "args": clean}
 
     reply = str(raw.get("reply") or "").strip() or (

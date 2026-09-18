@@ -111,11 +111,13 @@ def process_message(session_id: str, content: str, *, user: dict[str, Any] | Non
         "verb": verb,
         "args": args,
         "data": data,
-        "options": _result_options(verb, data),
+        "options": _result_options(verb, data, session=rec),
         "follow_up_prompt": data.get("follow_up_prompt"),
         "router": router_source,
     }
-    focus = _focus_from_result(verb, args, data, cross_label=cross_label if cross else None)
+    focus = _focus_from_result(
+        verb, args, data, cross_label=cross_label if cross else None, session=rec
+    )
     sessions.append_exchange(
         session_id,
         text,
@@ -131,7 +133,9 @@ def _focus_from_result(
     data: dict[str, Any],
     *,
     cross_label: str | None,
+    session: dict[str, Any],
 ) -> dict[str, Any] | None:
+    prev = session.get("last_focus") if isinstance(session.get("last_focus"), dict) else {}
     if verb == "project_status":
         projects = data.get("projects") or []
         return {
@@ -139,6 +143,8 @@ def _focus_from_result(
             "casino_id": data.get("casino_id") or args.get("casino_id"),
             "casino_short": cross_label,
             "casino_name": data.get("casino_name") or cross_label,
+            "month_end": data.get("month_end") or args.get("month_end"),
+            "month_label": data.get("month_label"),
             "projects": [
                 {
                     "project_id": p.get("project_id"),
@@ -151,18 +157,31 @@ def _focus_from_result(
             "awaiting_breakdown": bool(data.get("follow_up_prompt")),
         }
     if verb == "project_breakdown":
+        siblings = prev.get("projects") or []
+        cur_id = data.get("project_id")
+        cur_num = data.get("project_number")
+        # Keep siblings for chips; ensure current is present.
+        projects = [
+            p
+            for p in siblings
+            if p.get("project_id") != cur_id and str(p.get("project_number") or "") != str(cur_num or "")
+        ]
+        projects.insert(
+            0,
+            {
+                "project_id": cur_id,
+                "project_number": cur_num,
+                "offer_breakdown": False,
+            },
+        )
         return {
             "verb": "project_breakdown",
             "casino_id": data.get("casino_id") or args.get("casino_id"),
-            "casino_short": cross_label,
-            "casino_name": data.get("casino_name") or cross_label,
-            "projects": [
-                {
-                    "project_id": data.get("project_id"),
-                    "project_number": data.get("project_number"),
-                    "offer_breakdown": False,
-                }
-            ],
+            "casino_short": cross_label or prev.get("casino_short"),
+            "casino_name": data.get("casino_name") or cross_label or prev.get("casino_name"),
+            "month_end": prev.get("month_end"),
+            "month_label": prev.get("month_label"),
+            "projects": projects[:10],
             "awaiting_breakdown": False,
         }
     if verb in {"get_casino", "performance_index"}:
@@ -177,34 +196,98 @@ def _focus_from_result(
     return None
 
 
-def _result_options(verb: str, data: dict[str, Any]) -> list[dict[str, str]] | None:
-    if verb != "project_status":
-        return None
-    projects = data.get("projects") or []
-    if not projects:
-        return None
-    opts = []
-    for p in projects[:5]:
-        num = p.get("project_number") or p.get("project_id")
-        if not num:
-            continue
-        label = f"{num}: {p.get('status') or 'status?'}"
-        opts.append({"id": f"breakdown:{num}", "label": f"Breakdown {num}"})
-    return opts or None
+def _result_options(
+    verb: str,
+    data: dict[str, Any],
+    *,
+    session: dict[str, Any] | None = None,
+) -> list[dict[str, str]] | None:
+    session = session or {}
+    focus = session.get("last_focus") if isinstance(session.get("last_focus"), dict) else {}
+    opts: list[dict[str, str]] = []
+
+    if verb == "project_status":
+        projects = data.get("projects") or []
+        month_label = data.get("month_label")
+        month_end = data.get("month_end")
+        for p in projects[:4]:
+            num = p.get("project_number") or p.get("project_id")
+            if not num:
+                continue
+            opts.append({"id": f"breakdown:{num}", "label": f"Breakdown {num}"})
+        if len(projects) > 1:
+            opts.append({"id": "chip:most_recent", "label": "Which is most recent?"})
+        if month_end:
+            opts.append(
+                {
+                    "id": f"chip:perf:{month_end}",
+                    "label": f"Did {month_label or month_end} performance come in?",
+                }
+            )
+            opts.append({"id": "chip:projects_all", "label": "Show all projects (no month filter)"})
+        elif projects:
+            # Offer a performance check for a common recent month only via freeform;
+            # keep chip light.
+            pass
+        return opts or None
+
+    if verb == "project_breakdown":
+        projects = focus.get("projects") or data.get("projects") or []
+        cur = str(data.get("project_number") or data.get("project_id") or "")
+        for p in projects[:5]:
+            num = p.get("project_number") or p.get("project_id")
+            if not num or str(num) == cur:
+                continue
+            opts.append({"id": f"breakdown:{num}", "label": f"Breakdown {num}"})
+        opts.append({"id": "chip:projects_again", "label": "List projects again"})
+        if focus.get("month_end") or data.get("month_end"):
+            me = focus.get("month_end") or data.get("month_end")
+            ml = focus.get("month_label") or data.get("month_label") or me
+            opts.append(
+                {
+                    "id": f"chip:perf:{me}",
+                    "label": f"Did {ml} performance come in?",
+                }
+            )
+        return opts or None
+
+    if verb == "performance_index":
+        opts.append({"id": "chip:projects_again", "label": "List projects for this casino"})
+        opts.append({"id": "chip:explain_come_in", "label": "What does “come in” mean?"})
+        return opts
+
+    if verb == "explain_topic":
+        opts.append({"id": "chip:projects_again", "label": "Back to project status"})
+        return opts
+
+    return None
 
 
 def _route(text: str, *, session: dict[str, Any]) -> tuple[dict[str, Any], str]:
     """Script-first; escalate ambiguous stub outcomes to Ollama."""
     stub = _stub_route(text, session=session)
     if stub.get("kind") == "run":
-        return stub, "stub"
+        return _enrich_run_args(stub, text), "stub"
     # Explicit JSON already handled inside stub; only escalate clarify/unsupported NL.
     if text.startswith("{") and text.endswith("}"):
         return stub, "stub"
     escalated = ollama.route(text, session=session)
     if escalated:
-        return escalated, "ollama"
+        return _enrich_run_args(escalated, text), "ollama"
     return stub, "stub"
+
+
+def _enrich_run_args(routed: dict[str, Any], text: str) -> dict[str, Any]:
+    """Fill month_end on project_status when the user named a month but the router omitted it."""
+    if routed.get("kind") != "run" or routed.get("verb") != "project_status":
+        return routed
+    args = dict(routed.get("args") or {})
+    if not args.get("month_end"):
+        me = _guess_month_end(text.lower())
+        if me:
+            args["month_end"] = me
+            routed = {**routed, "args": args}
+    return routed
 
 
 def _stub_route(text: str, *, session: dict[str, Any]) -> dict[str, Any]:
@@ -223,6 +306,11 @@ def _stub_route(text: str, *, session: dict[str, Any]) -> dict[str, Any]:
     low = text.lower().strip()
     focus = session.get("last_focus") if isinstance(session.get("last_focus"), dict) else {}
     focus_projects = focus.get("projects") or []
+
+    # Chip shortcuts (UI labels / ids).
+    chip = _chip_route(low, text, session=session, focus=focus)
+    if chip:
+        return chip
 
     # Chip / lane shortcuts (UI sends these labels).
     if low in {
@@ -327,7 +415,11 @@ def _stub_route(text: str, *, session: dict[str, Any]) -> dict[str, Any]:
                     },
                 }
         if "breakdown" in low or "break down" in low:
-            opts = _result_options("project_status", {"projects": focus_projects}) if focus_projects else None
+            opts = (
+                _result_options("project_status", {"projects": focus_projects}, session=session)
+                if focus_projects
+                else None
+            )
             return {
                 "kind": "clarify",
                 "reply": (
@@ -391,11 +483,14 @@ def _stub_route(text: str, *, session: dict[str, Any]) -> dict[str, Any]:
                 ),
             }
         args: dict[str, Any] = {"casino_id": casino_id}
-        m = re.search(r"\b(PC-\d+|IMS-\d+|\d{3,5})\b", text, re.I)
-        if m:
-            args["project_ref"] = m.group(1)
+        pref = _project_number_from_text(text)
+        if pref:
+            args["project_ref"] = pref
         if any(w in low for w in ("complete", "completed", "finished", "done")):
             args["status_filter"] = "completed"
+        month_end = _guess_month_end(low)
+        if month_end:
+            args["month_end"] = month_end
         return {"kind": "run", "verb": "project_status", "args": args}
 
     if any(
@@ -479,6 +574,72 @@ def _ambiguous_clarify(meta: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _chip_route(
+    low: str,
+    text: str,
+    *,
+    session: dict[str, Any],
+    focus: dict[str, Any],
+) -> dict[str, Any] | None:
+    """Map chip labels to verbs without falling through to Ollama."""
+    casino_id = focus.get("casino_id") or session.get("casino_id")
+
+    if low in {"which is most recent?", "which is most recent", "most recent?"}:
+        projects = focus.get("projects") or []
+        if projects and focus.get("casino_id"):
+            top = projects[0]
+            ref = top.get("project_number") or top.get("project_id")
+            args: dict[str, Any] = {
+                "casino_id": focus["casino_id"],
+                "project_ref": str(ref),
+                "limit": 1,
+            }
+            if focus.get("month_end"):
+                args["month_end"] = focus["month_end"]
+            return {"kind": "run", "verb": "project_status", "args": args}
+        return None
+
+    if low.startswith("did ") and "performance come in" in low:
+        me = focus.get("month_end") or _guess_month_end(low)
+        m = re.search(r"\b(20\d{2}-\d{2}-\d{2})\b", text)
+        if m:
+            me = m.group(1)
+        if not casino_id:
+            return {
+                "kind": "unsupported",
+                "reply": "Select a casino first, then ask about a month.",
+            }
+        if not me:
+            return {
+                "kind": "clarify",
+                "reply": "Which month-end (YYYY-MM-DD)? Example: 2026-08-31.",
+                "options": None,
+            }
+        return {
+            "kind": "run",
+            "verb": "performance_index",
+            "args": {"casino_id": casino_id, "month_end": me},
+        }
+
+    if low in {
+        "show all projects (no month filter)",
+        "list projects again",
+        "list projects for this casino",
+        "back to project status",
+    }:
+        if not casino_id:
+            return {
+                "kind": "unsupported",
+                "reply": "Select a casino, or name the property in your question.",
+            }
+        return {"kind": "run", "verb": "project_status", "args": {"casino_id": casino_id}}
+
+    if "come in" in low and ("mean" in low or "what does" in low or "what's" in low):
+        return {"kind": "run", "verb": "explain_topic", "args": {"topic_id": "report_received"}}
+
+    return None
+
+
 def _is_explain_ask(low: str) -> bool:
     return any(
         p in low
@@ -510,10 +671,9 @@ def _project_ref_from_text(text: str, focus_projects: list[dict[str, Any]]) -> s
     m = re.search(r"\b(PC-\d+|IMS-\d+)\b", text, re.I)
     if m:
         return m.group(1)
-    m = re.search(r"\b(\d{3,5})\b", text)
-    if not m:
+    num = _project_number_from_text(text)
+    if not num:
         return None
-    num = m.group(1)
     # Prefer matching a project from the last list.
     for p in focus_projects:
         if str(p.get("project_number") or "") == num:
@@ -521,6 +681,18 @@ def _project_ref_from_text(text: str, focus_projects: list[dict[str, Any]]) -> s
         if str(p.get("project_id") or "").endswith(num):
             return str(p.get("project_id"))
     return num
+
+
+def _project_number_from_text(text: str) -> str | None:
+    """Bare project numbers — skip years like 2026."""
+    for m in re.finditer(r"\b(PC-\d+|IMS-\d+|\d{3,5})\b", text, re.I):
+        g = m.group(1)
+        if re.fullmatch(r"20\d{2}", g):
+            continue
+        if g.upper().startswith("PC-") or g.upper().startswith("IMS-"):
+            return g
+        return g
+    return None
 
 
 def _guess_month_end(low: str) -> str | None:
@@ -583,14 +755,16 @@ def _format_reply(
         )
     if verb == "project_status":
         projects = data.get("projects") or []
+        month_label = data.get("month_label")
+        scope = f" in {month_label}" if month_label else ""
         if not projects:
             return (
-                f"{prefix}I don't see matching projects for this casino with that filter."
+                f"{prefix}I don't see matching projects for this casino{scope}."
             )
         if len(projects) == 1:
             p = projects[0]
             reply = (
-                f"{prefix}Most recent / match: "
+                f"{prefix}Most recent / match{scope}: "
                 f"{p.get('project_number') or p.get('project_id')}: "
                 f"{p.get('status') or 'unknown'} "
                 f"({p.get('project_name') or '—'})."
@@ -600,12 +774,15 @@ def _format_reply(
             return reply
         bits = []
         for p in projects[:5]:
+            dates = ""
+            if p.get("date_start") or p.get("date_end"):
+                dates = f" [{p.get('date_start') or '—'} → {p.get('date_end') or '—'}]"
             bits.append(
                 f"{p.get('project_number') or p.get('project_id')}: "
                 f"{p.get('status') or 'unknown'} "
-                f"({p.get('project_name') or '—'})"
+                f"({p.get('project_name') or '—'}){dates}"
             )
-        reply = f"{prefix}Here's what I find:\n- " + "\n- ".join(bits)
+        reply = f"{prefix}Here's what I find{scope}:\n- " + "\n- ".join(bits)
         if data.get("follow_up_prompt"):
             reply += f"\n\n{data['follow_up_prompt']}"
         return reply
