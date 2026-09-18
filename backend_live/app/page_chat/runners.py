@@ -182,9 +182,11 @@ def project_breakdown(casino_id: str, project_id: str) -> dict[str, Any]:
             c.casino_name
         FROM projects.project_catalog AS pc
         LEFT JOIN clients.casinos AS c ON c.reference_key = pc.casino_id
-        WHERE pc.reference_key = %s OR pc.ims_id = %s
+        WHERE pc.reference_key = %s
+           OR pc.ims_id = %s
+           OR CAST(pc.ims_project_number AS nvarchar(50)) = %s
         """,
-        (pid, pid),
+        (pid, pid, pid),
     )
     if not headers:
         raise HTTPException(status_code=404, detail=f"project not found: {pid}")

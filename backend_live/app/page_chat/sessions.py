@@ -68,7 +68,13 @@ def get_session(session_id: str) -> dict[str, Any] | None:
         return rec
 
 
-def append_exchange(session_id: str, user_text: str, assistant: dict[str, Any]) -> None:
+def append_exchange(
+    session_id: str,
+    user_text: str,
+    assistant: dict[str, Any],
+    *,
+    focus: dict[str, Any] | None = None,
+) -> None:
     with _lock:
         rec = _sessions.get(session_id)
         if not rec:
@@ -76,6 +82,20 @@ def append_exchange(session_id: str, user_text: str, assistant: dict[str, Any]) 
         rec["touched"] = time.time()
         rec["messages"].append({"role": "user", "content": user_text})
         rec["messages"].append({"role": "assistant", **assistant})
+        if focus is not None:
+            rec["last_focus"] = focus
+
+
+def set_focus(session_id: str, focus: dict[str, Any] | None) -> None:
+    with _lock:
+        rec = _sessions.get(session_id)
+        if not rec:
+            return
+        rec["touched"] = time.time()
+        if focus is None:
+            rec.pop("last_focus", None)
+        else:
+            rec["last_focus"] = focus
 
 
 def _first_name(user: dict[str, Any] | None) -> str:

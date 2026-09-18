@@ -129,13 +129,16 @@
     e.options.innerHTML = "";
     if (!options || !options.length) return;
     for (const opt of options) {
-      const label = opt.label || opt.id || String(opt);
-      const chipText =
-        opt.id === "project_status"
-          ? "Project / FSR status"
-          : opt.id === "performance_index"
-            ? "Did this month's report come in?"
-            : label;
+      const id = opt.id || "";
+      const label = opt.label || id || String(opt);
+      let chipText = label;
+      if (String(id).startsWith("breakdown:")) {
+        chipText = `Breakdown ${String(id).split(":")[1]}`;
+      } else if (id === "project_status") {
+        chipText = "Project / FSR status";
+      } else if (id === "performance_index") {
+        chipText = "Did this month's report come in?";
+      }
       const btn = document.createElement("button");
       btn.type = "button";
       btn.className = "dgs-page-chat-chip";
@@ -237,7 +240,8 @@
             ? String(data.router)
             : "";
       appendBubble("bot", data.reply || "(no reply)", meta || null);
-      if (data.kind === "clarify" && data.options) renderOptions(data.options);
+      if (data.options && data.options.length) renderOptions(data.options);
+      else if (data.kind === "clarify" && data.options) renderOptions(data.options);
       if (data.follow_up_prompt && data.kind === "result") {
         /* follow-up already in reply for project_status */
       }

@@ -163,6 +163,9 @@ def resolve_casino_id(
             return hit["casino_id"], meta
 
     session_id = (session.get("casino_id") or "").strip() or None
+    focus = session.get("last_focus") if isinstance(session.get("last_focus"), dict) else {}
+    focus_id = (focus.get("casino_id") or "").strip() or None
+
     mentions = mentioned_in_text(text)
     # Prefer mentions that are NOT the page selection when the user named someone else.
     others = [m for m in mentions if m["casino_id"] != session_id]
@@ -180,6 +183,14 @@ def resolve_casino_id(
         hit = mentions[0]
         meta["resolved_from"] = "utterance_same_as_session"
         return hit["casino_id"], meta
+
+    # Sticky focus from prior turn (e.g. Havasu list while page is Cocopah).
+    if focus_id:
+        meta["resolved_from"] = "focus"
+        meta["casino_name"] = focus.get("casino_name")
+        meta["casino_short"] = focus.get("casino_short")
+        meta["cross_casino"] = bool(session_id and focus_id != session_id)
+        return focus_id, meta
 
     if session_id:
         meta["resolved_from"] = "session"

@@ -111,16 +111,86 @@ def process_message(session_id: str, content: str, *, user: dict[str, Any] | Non
         "verb": verb,
         "args": args,
         "data": data,
-        "options": None,
+        "options": _result_options(verb, data),
         "follow_up_prompt": data.get("follow_up_prompt"),
         "router": router_source,
     }
+    focus = _focus_from_result(verb, args, data, cross_label=cross_label if cross else None)
     sessions.append_exchange(
         session_id,
         text,
         {k: out[k] for k in ("kind", "reply", "verb", "follow_up_prompt", "router")},
+        focus=focus,
     )
     return out
+
+
+def _focus_from_result(
+    verb: str,
+    args: dict[str, Any],
+    data: dict[str, Any],
+    *,
+    cross_label: str | None,
+) -> dict[str, Any] | None:
+    if verb == "project_status":
+        projects = data.get("projects") or []
+        return {
+            "verb": "project_status",
+            "casino_id": data.get("casino_id") or args.get("casino_id"),
+            "casino_short": cross_label,
+            "casino_name": data.get("casino_name") or cross_label,
+            "projects": [
+                {
+                    "project_id": p.get("project_id"),
+                    "project_number": p.get("project_number"),
+                    "status": p.get("status"),
+                    "offer_breakdown": bool(p.get("offer_breakdown")),
+                }
+                for p in projects[:10]
+            ],
+            "awaiting_breakdown": bool(data.get("follow_up_prompt")),
+        }
+    if verb == "project_breakdown":
+        return {
+            "verb": "project_breakdown",
+            "casino_id": data.get("casino_id") or args.get("casino_id"),
+            "casino_short": cross_label,
+            "casino_name": data.get("casino_name") or cross_label,
+            "projects": [
+                {
+                    "project_id": data.get("project_id"),
+                    "project_number": data.get("project_number"),
+                    "offer_breakdown": False,
+                }
+            ],
+            "awaiting_breakdown": False,
+        }
+    if verb in {"get_casino", "performance_index"}:
+        return {
+            "verb": verb,
+            "casino_id": data.get("casino_id") or args.get("casino_id"),
+            "casino_short": cross_label or data.get("casino_short"),
+            "casino_name": data.get("casino_name") or cross_label,
+            "projects": [],
+            "awaiting_breakdown": False,
+        }
+    return None
+
+
+def _result_options(verb: str, data: dict[str, Any]) -> list[dict[str, str]] | None:
+    if verb != "project_status":
+        return None
+    projects = data.get("projects") or []
+    if not projects:
+        return None
+    opts = []
+    for p in projects[:5]:
+        num = p.get("project_number") or p.get("project_id")
+        if not num:
+            continue
+        label = f"{num}: {p.get('status') or 'status?'}"
+        opts.append({"id": f"breakdown:{num}", "label": f"Breakdown {num}"})
+    return opts or None
 
 
 def _route(text: str, *, session: dict[str, Any]) -> tuple[dict[str, Any], str]:
@@ -151,38 +221,123 @@ def _stub_route(text: str, *, session: dict[str, Any]) -> dict[str, Any]:
             return {"kind": "run", "verb": verb, "args": args}
 
     low = text.lower().strip()
-    # Prefer a named property in the utterance over the page selection.
-    casino_id, meta = resolve.resolve_casino_id(text=text, args={}, session=session)
-    if meta.get("ambiguous"):
-        names = [
-            m.get("casino_short") or m.get("casino_name") or m.get("casino_id")
-            for m in meta["ambiguous"]
-        ]
+    focus = session.get("last_focus") if isinstance(session.get("last_focus"), dict) else {}
+    focus_projects = focus.get("projects") or []
+
+    # Chip / lane shortcuts (UI sends these labels).
+    if low in {
+        "project / fsr status",
+        "project / fsr work (completed or open)",
+        "project status",
+    }:
+        casino_id, meta = resolve.resolve_casino_id(text=text, args={}, session=session)
+        if meta.get("ambiguous"):
+            return _ambiguous_clarify(meta)
+        if not casino_id:
+            return {
+                "kind": "unsupported",
+                "reply": "Select a casino, or name the property in your question.",
+            }
+        return {"kind": "run", "verb": "project_status", "args": {"casino_id": casino_id}}
+
+    if low.startswith("did this month") or low.startswith("performance / participation"):
+        casino_id, meta = resolve.resolve_casino_id(text=text, args={}, session=session)
+        if not casino_id:
+            return {
+                "kind": "unsupported",
+                "reply": "Select a casino first, then ask about a month.",
+            }
         return {
             "kind": "clarify",
-            "reply": "Which casino did you mean: " + ", ".join(names) + "?",
+            "reply": (
+                "Which month-end should I check (YYYY-MM-DD)? "
+                "Example: 2026-08-31 for August 2026."
+            ),
             "options": None,
         }
 
-    # Affirmative after status → breakdown of first completed project in last result is hard
-    # without state; accept "breakdown" / "yes" with project_id in session messages later.
-    if low in {"yes", "y", "yeah", "sure", "please"} or "breakdown" in low:
-        # Try to find a PC-/IMS- token in the message
-        m = re.search(r"\b(PC-\d+|IMS-\d+)\b", text, re.I)
-        if m and casino_id:
+    # Definitions — never send these to the project stub / Ollama.
+    if _is_explain_ask(low):
+        topic = _guess_explain_topic(low)
+        if topic:
+            return {"kind": "run", "verb": "explain_topic", "args": {"topic_id": topic}}
+
+    # Prefer a named property in the utterance over the page selection / sticky focus.
+    casino_id, meta = resolve.resolve_casino_id(text=text, args={}, session=session)
+    if meta.get("ambiguous"):
+        return _ambiguous_clarify(meta)
+
+    # "Most recent / latest" after a project list.
+    if any(
+        p in low
+        for p in (
+            "most recent",
+            "latest",
+            "newest",
+            "which is the most",
+            "which one is most",
+            "which project is most",
+        )
+    ):
+        if focus_projects and focus.get("casino_id"):
+            top = focus_projects[0]
+            ref = top.get("project_number") or top.get("project_id")
+            return {
+                "kind": "run",
+                "verb": "project_status",
+                "args": {
+                    "casino_id": focus["casino_id"],
+                    "project_ref": str(ref),
+                    "limit": 1,
+                },
+            }
+        return {
+            "kind": "clarify",
+            "reply": "Ask about project status first, then I can tell you which is most recent.",
+            "options": CLARIFY_LANES,
+        }
+
+    # Affirmative / breakdown follow-ups — use sticky focus + bare project numbers.
+    yes = low in {"yes", "y", "yeah", "sure", "please", "ok", "okay", "yep"}
+    wants_breakdown = yes or "breakdown" in low or low.startswith("break down")
+    if wants_breakdown:
+        ref = _project_ref_from_text(text, focus_projects)
+        if ref and (casino_id or focus.get("casino_id")):
             return {
                 "kind": "run",
                 "verb": "project_breakdown",
-                "args": {"casino_id": casino_id, "project_id": m.group(1)},
+                "args": {
+                    "casino_id": casino_id or focus.get("casino_id"),
+                    "project_id": ref,
+                },
             }
-        if casino_id and "breakdown" in low:
+        if yes and focus.get("awaiting_breakdown") and focus_projects:
+            pick = next(
+                (p for p in focus_projects if p.get("offer_breakdown")),
+                focus_projects[0],
+            )
+            ref = pick.get("project_id") or pick.get("project_number")
+            if ref and focus.get("casino_id"):
+                return {
+                    "kind": "run",
+                    "verb": "project_breakdown",
+                    "args": {
+                        "casino_id": focus["casino_id"],
+                        "project_id": str(ref),
+                    },
+                }
+        if "breakdown" in low or "break down" in low:
+            opts = _result_options("project_status", {"projects": focus_projects}) if focus_projects else None
             return {
                 "kind": "clarify",
                 "reply": (
-                    "Which project should I break down? Reply with the project id "
-                    "(PC-#####) or ask about project status first."
+                    "Which project should I break down? Reply with the project number "
+                    "(e.g. 2952) or tap one below."
+                    if opts
+                    else "Which project should I break down? Reply with the project number "
+                    "(e.g. 2952) or ask about project status first."
                 ),
-                "options": CLARIFY_LANES,
+                "options": opts or CLARIFY_LANES,
             }
 
     if any(
@@ -312,6 +467,62 @@ def _stub_route(text: str, *, session: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _ambiguous_clarify(meta: dict[str, Any]) -> dict[str, Any]:
+    names = [
+        m.get("casino_short") or m.get("casino_name") or m.get("casino_id")
+        for m in meta.get("ambiguous") or []
+    ]
+    return {
+        "kind": "clarify",
+        "reply": "Which casino did you mean: " + ", ".join(names) + "?",
+        "options": None,
+    }
+
+
+def _is_explain_ask(low: str) -> bool:
+    return any(
+        p in low
+        for p in (
+            "what does",
+            "what is",
+            "what's",
+            "whats",
+            "mean in",
+            "meaning of",
+            "explain",
+        )
+    )
+
+
+def _guess_explain_topic(low: str) -> str | None:
+    if "breakdown" in low:
+        return "project_breakdown"
+    if "come in" in low or "came in" in low or "received" in low:
+        return "report_received"
+    if "performance" in low or "participation" in low or "index" in low:
+        return "performance_index"
+    if "completed" in low or "complete" in low:
+        return "project_completed"
+    return None
+
+
+def _project_ref_from_text(text: str, focus_projects: list[dict[str, Any]]) -> str | None:
+    m = re.search(r"\b(PC-\d+|IMS-\d+)\b", text, re.I)
+    if m:
+        return m.group(1)
+    m = re.search(r"\b(\d{3,5})\b", text)
+    if not m:
+        return None
+    num = m.group(1)
+    # Prefer matching a project from the last list.
+    for p in focus_projects:
+        if str(p.get("project_number") or "") == num:
+            return str(p.get("project_id") or num)
+        if str(p.get("project_id") or "").endswith(num):
+            return str(p.get("project_id"))
+    return num
+
+
 def _guess_month_end(low: str) -> str | None:
     # Explicit ISO
     m = re.search(r"\b(20\d{2})-(\d{2})-(\d{2})\b", low)
@@ -376,6 +587,17 @@ def _format_reply(
             return (
                 f"{prefix}I don't see matching projects for this casino with that filter."
             )
+        if len(projects) == 1:
+            p = projects[0]
+            reply = (
+                f"{prefix}Most recent / match: "
+                f"{p.get('project_number') or p.get('project_id')}: "
+                f"{p.get('status') or 'unknown'} "
+                f"({p.get('project_name') or '—'})."
+            )
+            if p.get("offer_breakdown") or data.get("follow_up_prompt"):
+                reply += "\n\nWant a breakdown of what was done?"
+            return reply
         bits = []
         for p in projects[:5]:
             bits.append(

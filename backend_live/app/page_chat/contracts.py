@@ -25,6 +25,7 @@ EXPLAIN_TOPICS: frozenset[str] = frozenset(
         "project_completed",
         "report_received",
         "performance_index",
+        "project_breakdown",
     }
 )
 
@@ -125,7 +126,9 @@ CONTRACTS: dict[str, dict[str, Any]] = {
         "notes": "Processed in SQL = come in. Unprocessed ⇒ not received. No finance $.",
     },
     "explain_topic": {
-        "args": {"topic_id": "project_completed | report_received | performance_index"},
+        "args": {
+            "topic_id": "project_completed | report_received | performance_index | project_breakdown"
+        },
         "result": {"topic_id": "…", "text": "…"},
         "notes": "Curated short blurbs — not model invention.",
     },
@@ -144,7 +147,13 @@ EXPLAIN_TEXT: dict[str, str] = {
     ),
     "performance_index": (
         "Performance index answers whether we have processed participation for a casino-month. "
-        "It does not show coin-in, win, or commission dollars."
+        "It does not show coin-in, win, or commission dollars. "
+        "'Come in' here means processed into Master_Revenue — not that an email arrived."
+    ),
+    "project_breakdown": (
+        "A project breakdown lists cabinets, serials, and what was done on that job "
+        "(install, convert, remove, theme) from the project printout. "
+        "It is not money, software settings, or a performance report."
     ),
 }
 
