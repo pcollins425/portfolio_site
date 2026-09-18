@@ -67,7 +67,7 @@
 
 .dgs-page-chat-panel {
   position: fixed;
-  z-index: 82;
+  z-index: 1602;
   display: flex;
   flex-direction: column;
   width: min(380px, calc(100vw - 24px));
