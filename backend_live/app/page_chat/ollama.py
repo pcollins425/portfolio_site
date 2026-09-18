@@ -140,6 +140,9 @@ def _system_prompt(session: dict[str, Any]) -> str:
         f"Clarify lane ids (optional hint): {lanes}\n"
         f"Session casino_id: {casino_id or '(none — ask user to select a casino)'}\n"
         f"Session casino_name: {casino_name or '(none)'}\n"
+        "If the user names a *different* casino than the session (e.g. 'Havasu Landing' "
+        "while session is Oaklawn), put casino_name in args (server resolves to CT-*). "
+        "Do not force the session casino when another property is named.\n"
         "Prefer kind=run when a verb is clear. Prefer clarify over guessing month_end."
     )
 

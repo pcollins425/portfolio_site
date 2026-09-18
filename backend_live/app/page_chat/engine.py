@@ -8,7 +8,7 @@ from typing import Any
 
 from fastapi import HTTPException
 
-from app.page_chat import ollama, runners, sessions
+from app.page_chat import ollama, resolve, runners, sessions
 from app.page_chat.contracts import CASINO_VERBS, CLARIFY_LANES, PAGE_CASINOS
 
 
@@ -49,9 +49,53 @@ def process_message(session_id: str, content: str, *, user: dict[str, Any] | Non
         return out
 
     verb = routed["verb"]
-    args = routed.get("args") or {}
+    args = dict(routed.get("args") or {})
     if verb not in CASINO_VERBS:
         raise HTTPException(status_code=400, detail=f"verb not allowed: {verb}")
+
+    if verb != "explain_topic":
+        cid, meta = resolve.resolve_casino_id(text=text, args=args, session=rec)
+        if meta.get("ambiguous"):
+            names = [
+                m.get("casino_short") or m.get("casino_name") or m.get("casino_id")
+                for m in meta["ambiguous"]
+            ]
+            out = {
+                "kind": "clarify",
+                "reply": "Which casino did you mean: " + ", ".join(names) + "?",
+                "options": None,
+                "verb": None,
+                "data": None,
+                "router": router_source,
+            }
+            sessions.append_exchange(session_id, text, out)
+            return out
+        if not cid:
+            out = {
+                "kind": "unsupported",
+                "reply": (
+                    "Select a casino on this page, or name the property in your question "
+                    "(e.g. Havasu Landing)."
+                ),
+                "options": None,
+                "verb": None,
+                "data": None,
+                "router": router_source,
+            }
+            sessions.append_exchange(session_id, text, out)
+            return out
+        args["casino_id"] = cid
+        session_cid = (rec.get("casino_id") or "").strip() or None
+        cross = bool(session_cid and cid != session_cid)
+        if cross and not (meta.get("casino_short") or meta.get("casino_name")):
+            hit = next((c for c in resolve.casinos_catalog() if c["casino_id"] == cid), None)
+            if hit:
+                meta["casino_short"] = hit.get("casino_short")
+                meta["casino_name"] = hit.get("casino_name")
+        cross_label = meta.get("casino_short") or meta.get("casino_name")
+    else:
+        cross = False
+        cross_label = None
 
     try:
         data = runners.run(verb, args, session=rec)
@@ -60,7 +104,7 @@ def process_message(session_id: str, content: str, *, user: dict[str, Any] | Non
     except Exception as exc:
         raise HTTPException(status_code=503, detail=f"runner error: {exc}") from exc
 
-    reply = _format_reply(verb, data)
+    reply = _format_reply(verb, data, cross_label=cross_label if cross else None)
     out = {
         "kind": "result",
         "reply": reply,
@@ -107,7 +151,18 @@ def _stub_route(text: str, *, session: dict[str, Any]) -> dict[str, Any]:
             return {"kind": "run", "verb": verb, "args": args}
 
     low = text.lower().strip()
-    casino_id = session.get("casino_id")
+    # Prefer a named property in the utterance over the page selection.
+    casino_id, meta = resolve.resolve_casino_id(text=text, args={}, session=session)
+    if meta.get("ambiguous"):
+        names = [
+            m.get("casino_short") or m.get("casino_name") or m.get("casino_id")
+            for m in meta["ambiguous"]
+        ]
+        return {
+            "kind": "clarify",
+            "reply": "Which casino did you mean: " + ", ".join(names) + "?",
+            "options": None,
+        }
 
     # Affirmative after status → breakdown of first completed project in last result is hard
     # without state; accept "breakdown" / "yes" with project_id in session messages later.
@@ -160,6 +215,8 @@ def _stub_route(text: str, *, session: dict[str, Any]) -> dict[str, Any]:
             "completed",
             "complete",
             "finished",
+            "uploaded",
+            "upload",
             "ims-",
             "pc-",
             "floor work",
@@ -173,7 +230,10 @@ def _stub_route(text: str, *, session: dict[str, Any]) -> dict[str, Any]:
         if not casino_id:
             return {
                 "kind": "unsupported",
-                "reply": "Select a casino first, then ask whether a project is completed.",
+                "reply": (
+                    "Select a casino first, or name the property "
+                    "(e.g. “Havasu Landing project”)."
+                ),
             }
         args: dict[str, Any] = {"casino_id": casino_id}
         m = re.search(r"\b(PC-\d+|IMS-\d+|\d{3,5})\b", text, re.I)
@@ -243,9 +303,10 @@ def _stub_route(text: str, *, session: dict[str, Any]) -> dict[str, Any]:
     return {
         "kind": "clarify",
         "reply": (
-            "I can help with this casino's **profile**, **project status** "
+            "I can help with a casino's **profile**, **project status** "
             "(and a serial/theme breakdown), or whether a month's performance "
-            "has been **processed**. Which do you want?"
+            "has been **processed**. Name the property if it isn't the one selected. "
+            "Which do you want?"
         ),
         "options": CLARIFY_LANES,
     }
@@ -297,16 +358,24 @@ def _guess_month_end(low: str) -> str | None:
     return None
 
 
-def _format_reply(verb: str, data: dict[str, Any]) -> str:
+def _format_reply(
+    verb: str,
+    data: dict[str, Any],
+    *,
+    cross_label: str | None = None,
+) -> str:
+    prefix = f"For {cross_label}: " if cross_label else ""
     if verb == "get_casino":
         return (
-            f"{data.get('casino_name')} ({data.get('casino_id')}) — "
+            f"{prefix}{data.get('casino_name')} ({data.get('casino_id')}) — "
             f"{data.get('tribe_name') or '—'}, {data.get('state') or '—'}."
         )
     if verb == "project_status":
         projects = data.get("projects") or []
         if not projects:
-            return "I don't see matching projects for this casino with that filter."
+            return (
+                f"{prefix}I don't see matching projects for this casino with that filter."
+            )
         bits = []
         for p in projects[:5]:
             bits.append(
@@ -314,7 +383,7 @@ def _format_reply(verb: str, data: dict[str, Any]) -> str:
                 f"{p.get('status') or 'unknown'} "
                 f"({p.get('project_name') or '—'})"
             )
-        reply = "Here's what I find:\n- " + "\n- ".join(bits)
+        reply = f"{prefix}Here's what I find:\n- " + "\n- ".join(bits)
         if data.get("follow_up_prompt"):
             reply += f"\n\n{data['follow_up_prompt']}"
         return reply
@@ -322,17 +391,19 @@ def _format_reply(verb: str, data: dict[str, Any]) -> str:
         lines = data.get("lines") or []
         if not lines:
             return (
-                f"Project {data.get('project_number') or data.get('project_id')} "
+                f"{prefix}Project {data.get('project_number') or data.get('project_id')} "
                 "has no printout lines I can summarize."
             )
         body = "\n".join(f"- {ln.get('summary')}" for ln in lines[:40])
         more = "" if len(lines) <= 40 else f"\n…and {len(lines) - 40} more lines."
         return (
-            f"Breakdown for project {data.get('project_number') or data.get('project_id')}:\n"
+            f"{prefix}Breakdown for project "
+            f"{data.get('project_number') or data.get('project_id')}:\n"
             f"{body}{more}"
         )
     if verb == "performance_index":
-        return str(data.get("label") or data.get("status"))
+        label = str(data.get("label") or data.get("status"))
+        return f"{prefix}{label}" if prefix else label
     if verb == "explain_topic":
         return str(data.get("text") or "")
     return "Done."

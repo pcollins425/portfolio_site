@@ -189,8 +189,10 @@ def project_breakdown(casino_id: str, project_id: str) -> dict[str, Any]:
     if not headers:
         raise HTTPException(status_code=404, detail=f"project not found: {pid}")
     h = headers[0]
-    if (db.json_value(h.get("casino_id")) or "").strip() != cid:
-        raise HTTPException(status_code=403, detail="project is not for this casino")
+    proj_casino = (db.json_value(h.get("casino_id")) or "").strip()
+    # Cross-property ask (user named another casino / PC id): follow the project's casino.
+    if proj_casino and cid != proj_casino:
+        cid = proj_casino
 
     pref = db.json_value(h.get("reference_key"))
     rows = db.query(
