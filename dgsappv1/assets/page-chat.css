@@ -9,14 +9,16 @@
   --dgs-pc-muted: #9aa6b8;
   --dgs-pc-user: #243049;
   --dgs-pc-bot: #161c28;
-  z-index: 80;
+  /* Above Leaflet panes (~400–1000) and casino detail sheet (~1200). */
+  z-index: 1600;
+  position: relative;
 }
 
 .dgs-page-chat-fab {
   position: fixed;
   right: 20px;
   bottom: 20px;
-  z-index: 81;
+  z-index: 1601;
   display: inline-flex;
   align-items: center;
   gap: 8px;
@@ -46,7 +48,7 @@
   left: 0;
   right: 0;
   bottom: 0;
-  z-index: 81;
+  z-index: 1601;
   display: none;
   align-items: center;
   justify-content: center;
