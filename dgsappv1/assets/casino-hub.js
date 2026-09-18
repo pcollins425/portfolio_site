@@ -452,6 +452,17 @@
     els.hubBody.hidden = true;
     els.hubLoading.hidden = false;
 
+    if (window.DGSPageChat) {
+      DGSPageChat.mount({
+        page: "casinos",
+        getContext: () => ({
+          casino_id: state.casinoId || (state.detail && state.detail.reference_key) || null,
+          casino_name:
+            (state.detail && (state.detail.casino_short || state.detail.casino_name)) || null,
+        }),
+      });
+    }
+
     if (document.referrer && new URL(document.referrer).origin === window.location.origin) {
       els.btnBack.hidden = false;
       els.btnBack.addEventListener("click", () => window.history.back());
@@ -461,6 +472,7 @@
       await loadHub();
       els.hubLoading.hidden = true;
       els.hubBody.hidden = false;
+      if (window.DGSPageChat) DGSPageChat.setContext();
     } catch (err) {
       els.hubLoading.hidden = true;
       showError(err.message || String(err));

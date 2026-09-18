@@ -1,0 +1,247 @@
+/* Page Ask AI — desktop FAB + phone bottom bar (clears system nav). */
+
+.dgs-page-chat {
+  --dgs-pc-accent: #3d8bfd;
+  --dgs-pc-bg: #12161e;
+  --dgs-pc-panel: #1a2130;
+  --dgs-pc-border: rgba(255, 255, 255, 0.1);
+  --dgs-pc-text: #e8edf5;
+  --dgs-pc-muted: #9aa6b8;
+  --dgs-pc-user: #243049;
+  --dgs-pc-bot: #161c28;
+  z-index: 80;
+}
+
+.dgs-page-chat-fab {
+  position: fixed;
+  right: 20px;
+  bottom: 20px;
+  z-index: 81;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 0 18px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--dgs-pc-accent);
+  color: #fff;
+  font: 600 14px/1.2 system-ui, sans-serif;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+  cursor: pointer;
+}
+
+.dgs-page-chat-fab:hover {
+  filter: brightness(1.06);
+}
+
+.dgs-page-chat-fab[hidden],
+.dgs-page-chat-bar[hidden],
+.dgs-page-chat-panel[hidden] {
+  display: none !important;
+}
+
+.dgs-page-chat-bar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 81;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 52px;
+  padding: 10px 16px calc(10px + env(safe-area-inset-bottom, 0px));
+  margin: 0;
+  border: 0;
+  border-top: 1px solid var(--dgs-pc-border);
+  background: rgba(18, 22, 30, 0.96);
+  color: var(--dgs-pc-text);
+  font: 600 15px/1.2 system-ui, sans-serif;
+  backdrop-filter: blur(8px);
+  cursor: pointer;
+}
+
+.dgs-page-chat-panel {
+  position: fixed;
+  z-index: 82;
+  display: flex;
+  flex-direction: column;
+  width: min(380px, calc(100vw - 24px));
+  height: min(560px, calc(100vh - 48px));
+  right: 16px;
+  bottom: 76px;
+  border: 1px solid var(--dgs-pc-border);
+  border-radius: 16px;
+  background: var(--dgs-pc-panel);
+  color: var(--dgs-pc-text);
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.45);
+  overflow: hidden;
+}
+
+.dgs-page-chat-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--dgs-pc-border);
+  background: var(--dgs-pc-bg);
+}
+
+.dgs-page-chat-title {
+  margin: 0;
+  font: 600 15px/1.3 system-ui, sans-serif;
+}
+
+.dgs-page-chat-sub {
+  margin: 2px 0 0;
+  font: 400 12px/1.3 system-ui, sans-serif;
+  color: var(--dgs-pc-muted);
+}
+
+.dgs-page-chat-close {
+  border: 0;
+  background: transparent;
+  color: var(--dgs-pc-muted);
+  font-size: 22px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 4px 8px;
+}
+
+.dgs-page-chat-msgs {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  -webkit-overflow-scrolling: touch;
+}
+
+.dgs-page-chat-bubble {
+  max-width: 92%;
+  padding: 10px 12px;
+  border-radius: 12px;
+  font: 400 13.5px/1.45 system-ui, sans-serif;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.dgs-page-chat-bubble--bot {
+  align-self: flex-start;
+  background: var(--dgs-pc-bot);
+  border: 1px solid var(--dgs-pc-border);
+}
+
+.dgs-page-chat-bubble--user {
+  align-self: flex-end;
+  background: var(--dgs-pc-user);
+}
+
+.dgs-page-chat-meta {
+  margin-top: 6px;
+  font-size: 11px;
+  color: var(--dgs-pc-muted);
+}
+
+.dgs-page-chat-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 0 14px 10px;
+}
+
+.dgs-page-chat-chip {
+  border: 1px solid var(--dgs-pc-border);
+  background: var(--dgs-pc-bg);
+  color: var(--dgs-pc-text);
+  border-radius: 999px;
+  padding: 7px 12px;
+  font: 500 12px/1.2 system-ui, sans-serif;
+  cursor: pointer;
+}
+
+.dgs-page-chat-chip:hover {
+  border-color: var(--dgs-pc-accent);
+}
+
+.dgs-page-chat-form {
+  display: flex;
+  gap: 8px;
+  padding: 12px;
+  border-top: 1px solid var(--dgs-pc-border);
+  background: var(--dgs-pc-bg);
+}
+
+.dgs-page-chat-input {
+  flex: 1;
+  min-width: 0;
+  border: 1px solid var(--dgs-pc-border);
+  border-radius: 10px;
+  background: #0e1219;
+  color: var(--dgs-pc-text);
+  padding: 10px 12px;
+  font: 400 14px/1.3 system-ui, sans-serif;
+}
+
+.dgs-page-chat-input:focus {
+  outline: 1px solid var(--dgs-pc-accent);
+  border-color: var(--dgs-pc-accent);
+}
+
+.dgs-page-chat-send {
+  border: 0;
+  border-radius: 10px;
+  background: var(--dgs-pc-accent);
+  color: #fff;
+  font: 600 13px/1 system-ui, sans-serif;
+  padding: 0 14px;
+  cursor: pointer;
+}
+
+.dgs-page-chat-send:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+body.dgs-page-chat-open {
+  /* phone: avoid content sitting under open sheet */
+}
+
+@media (max-width: 1366px) {
+  body.dgs-casinos-v2.dgs-page-chat-mounted .dgs-v2-main {
+    padding-bottom: calc(56px + var(--dgs-v2-system-nav-clear, 72px));
+  }
+}
+
+@media (max-width: 1366px) {
+  .dgs-page-chat-fab {
+    display: none !important;
+  }
+
+  .dgs-page-chat-bar {
+    display: flex;
+    bottom: var(--dgs-v2-system-nav-clear, calc(28px + env(safe-area-inset-bottom, 0px) + 72px));
+    padding-bottom: 10px;
+  }
+
+  .dgs-page-chat-panel {
+    left: 0;
+    right: 0;
+    bottom: 0;
+    width: 100%;
+    height: min(78vh, 640px);
+    border-radius: 16px 16px 0 0;
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+}
+
+@media (min-width: 1367px) {
+  .dgs-page-chat-bar {
+    display: none !important;
+  }
+}

@@ -159,4 +159,5 @@ def contracts_public() -> dict[str, Any]:
         "session": "New session per Casinos / Casino Hub visit",
         "auth": "Signed-in user with Casinos browse (v1)",
         "ollama_model": "llama3.2:3b",
+        "router": "stub keywords first; Ollama on clarify/unsupported NL",
     }

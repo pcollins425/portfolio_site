@@ -1,4 +1,4 @@
-"""Page-chat turn engine — stub router (rules + explicit verb JSON); Ollama later."""
+"""Page-chat turn engine — Script stub → Ollama escalate (no Cursor in v1)."""
 
 from __future__ import annotations
 
@@ -8,7 +8,7 @@ from typing import Any
 
 from fastapi import HTTPException
 
-from app.page_chat import runners, sessions
+from app.page_chat import ollama, runners, sessions
 from app.page_chat.contracts import CASINO_VERBS, CLARIFY_LANES, PAGE_CASINOS
 
 
@@ -23,7 +23,7 @@ def process_message(session_id: str, content: str, *, user: dict[str, Any] | Non
     if not text:
         raise HTTPException(status_code=400, detail="content is required")
 
-    routed = _stub_route(text, session=rec)
+    routed, router_source = _route(text, session=rec)
     if routed.get("kind") == "clarify":
         out = {
             "kind": "clarify",
@@ -31,6 +31,7 @@ def process_message(session_id: str, content: str, *, user: dict[str, Any] | Non
             "options": routed["options"],
             "verb": None,
             "data": None,
+            "router": router_source,
         }
         sessions.append_exchange(session_id, text, out)
         return out
@@ -42,6 +43,7 @@ def process_message(session_id: str, content: str, *, user: dict[str, Any] | Non
             "options": None,
             "verb": None,
             "data": None,
+            "router": router_source,
         }
         sessions.append_exchange(session_id, text, out)
         return out
@@ -67,16 +69,32 @@ def process_message(session_id: str, content: str, *, user: dict[str, Any] | Non
         "data": data,
         "options": None,
         "follow_up_prompt": data.get("follow_up_prompt"),
+        "router": router_source,
     }
-    sessions.append_exchange(session_id, text, {k: out[k] for k in ("kind", "reply", "verb", "follow_up_prompt")})
+    sessions.append_exchange(
+        session_id,
+        text,
+        {k: out[k] for k in ("kind", "reply", "verb", "follow_up_prompt", "router")},
+    )
     return out
 
 
-def _stub_route(text: str, *, session: dict[str, Any]) -> dict[str, Any]:
-    """v1: explicit JSON verb, yes→breakdown, keywords, else clarify.
+def _route(text: str, *, session: dict[str, Any]) -> tuple[dict[str, Any], str]:
+    """Script-first; escalate ambiguous stub outcomes to Ollama."""
+    stub = _stub_route(text, session=session)
+    if stub.get("kind") == "run":
+        return stub, "stub"
+    # Explicit JSON already handled inside stub; only escalate clarify/unsupported NL.
+    if text.startswith("{") and text.endswith("}"):
+        return stub, "stub"
+    escalated = ollama.route(text, session=session)
+    if escalated:
+        return escalated, "ollama"
+    return stub, "stub"
 
-    Replace with Ollama llama3.2:3b → {verb,args}|clarify when wired.
-    """
+
+def _stub_route(text: str, *, session: dict[str, Any]) -> dict[str, Any]:
+    """Deterministic keywords + explicit verb JSON."""
     # Explicit machine path for tests / power users
     if text.startswith("{") and text.endswith("}"):
         try:
@@ -112,7 +130,21 @@ def _stub_route(text: str, *, session: dict[str, Any]) -> dict[str, Any]:
                 "options": CLARIFY_LANES,
             }
 
-    if any(w in low for w in ("who is", "tell me about", "profile", "what's on this casino", "whats on this casino")):
+    if any(
+        w in low
+        for w in (
+            "who is",
+            "tell me about",
+            "profile",
+            "what's on this casino",
+            "whats on this casino",
+            "general manager",
+            " gm ",
+            "tribe",
+            "address",
+            "where is",
+        )
+    ):
         if not casino_id:
             return {
                 "kind": "unsupported",
@@ -120,7 +152,24 @@ def _stub_route(text: str, *, session: dict[str, Any]) -> dict[str, Any]:
             }
         return {"kind": "run", "verb": "get_casino", "args": {"casino_id": casino_id}}
 
-    if any(w in low for w in ("project", "fsr", "completed", "complete", "finished", "ims-", "pc-")):
+    if any(
+        w in low
+        for w in (
+            "project",
+            "fsr",
+            "completed",
+            "complete",
+            "finished",
+            "ims-",
+            "pc-",
+            "floor work",
+            "floorjob",
+            "floor job",
+            "jobs",
+            "install",
+            "conversion",
+        )
+    ):
         if not casino_id:
             return {
                 "kind": "unsupported",

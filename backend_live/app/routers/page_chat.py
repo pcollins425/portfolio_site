@@ -8,7 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
 from app.auth_deps import require_demo_user
-from app.page_chat import contracts, engine, sessions
+from app.page_chat import contracts, engine, ollama, sessions
 from app.page_chat.contracts import PAGE_CASINOS
 
 router = APIRouter(prefix="/api/page-chat", tags=["page-chat"])
@@ -27,12 +27,14 @@ class SendMessageBody(BaseModel):
 @router.get("/health")
 def health(user: Annotated[dict[str, Any] | None, Depends(require_demo_user)] = None):
     _assert_signed_in(user)
+    ollama_status = ollama.ping()
     return {
         "ok": True,
         "page": PAGE_CASINOS,
-        "ollama_model": "llama3.2:3b",
-        "router": "stub",
-        "escalation": "script_only_v1",
+        "ollama_model": ollama.model_name(),
+        "ollama": ollama_status,
+        "router": "stub_then_ollama",
+        "escalation": "script → ollama → cursor(not wired)",
     }
 
 

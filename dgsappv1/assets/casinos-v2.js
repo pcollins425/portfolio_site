@@ -660,6 +660,7 @@
       const u = new URL(window.location.href);
       u.searchParams.set("id", referenceKey);
       window.history.replaceState({}, "", u.pathname + u.search);
+      if (window.DGSPageChat) DGSPageChat.setContext();
     } catch (err) {
       state.detail = null;
       setDetailEmpty(true);
@@ -800,6 +801,17 @@
 
   async function init() {
     showError(null);
+    if (window.DGSPageChat) {
+      DGSPageChat.mount({
+        page: "casinos",
+        getContext: () => ({
+          casino_id: state.selectedKey || (state.detail && state.detail.reference_key) || null,
+          casino_name:
+            (state.detail && (state.detail.casino_short || state.detail.casino_name)) ||
+            null,
+        }),
+      });
+    }
     const requested = (bootParams.get("filter") || bootParams.get("lease_filter") || "all").trim().toLowerCase();
     setLeaseFilter(requested, { push: false });
     els.tbody.innerHTML = `<tr><td colspan="10" class="dgs-v2-lines-status">Loading…</td></tr>`;
