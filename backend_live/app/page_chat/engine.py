@@ -358,6 +358,19 @@ def _stub_route(text: str, *, session: dict[str, Any]) -> dict[str, Any]:
             ),
         }
 
+    # Dollar / trend performance — not in Casino allowlist (index only).
+    if _is_performance_detail_ask(low):
+        month_end = _guess_month_end(low) or _default_reporting_month_end()
+        return {
+            "kind": "unsupported",
+            "reply": (
+                "I can't compare months or show win / coin-in / commission from Ask AI. "
+                "I can only say whether a month is **processed** in Master_Revenue "
+                f"(try “Did {_month_label(month_end)} come in?”). "
+                "Finance numbers stay on the Finance views."
+            ),
+        }
+
     # Definitions — never send these to the project stub / Ollama.
     if _is_explain_ask(low):
         topic = _guess_explain_topic(low)
@@ -461,12 +474,16 @@ def _stub_route(text: str, *, session: dict[str, Any]) -> dict[str, Any]:
             "where is",
         )
     ):
-        if not casino_id:
+        # "Tell me about the performance for August" is not a profile ask.
+        if _looks_like_performance_status_ask(low) or _is_performance_detail_ask(low):
+            pass  # fall through to performance handlers below
+        elif not casino_id:
             return {
                 "kind": "unsupported",
                 "reply": "Select a casino (or Casino Hub) so I know which property you mean.",
             }
-        return {"kind": "run", "verb": "get_casino", "args": {"casino_id": casino_id}}
+        else:
+            return {"kind": "run", "verb": "get_casino", "args": {"casino_id": casino_id}}
 
     if any(
         w in low
@@ -781,7 +798,80 @@ def _is_generate_report_ask(low: str) -> bool:
         return True
     if "send" in low and "report" in low and "come in" not in low:
         return True
+    if re.search(r"\breports?\b", low) and any(
+        w in low for w in ("give me", "can you give", "do you have", "available")
+    ):
+        # "what reports can you give" / "do you have reports" — not "did the report come in"
+        if "come in" in low or "came in" in low or "processed" in low:
+            return False
+        if "performance" in low and ("come in" in low or "month" in low):
+            return False
+        return True
     return False
+
+
+def _is_performance_detail_ask(low: str) -> bool:
+    """Trend / $ / narrative performance — out of Casino Ask AI scope."""
+    if any(
+        w in low
+        for w in (
+            "compared",
+            "compare",
+            "comparison",
+            "versus",
+            " vs ",
+            "trend",
+            "trending",
+            "past three",
+            "last three",
+            "previous three",
+            "month over month",
+            "mom",
+            "how is the performance",
+            "how's the performance",
+            "how was the performance",
+            "how did",
+            "coin-in",
+            "coin in",
+            "cipd",
+            "commission",
+            "actual win",
+            "theo",
+            "win index",
+            "actual index",
+            "twd",
+            "adw",
+        )
+    ):
+        return True
+    if "performance" in low and any(
+        w in low for w in ("how is", "how's", "how was", "better", "worse", "up", "down")
+    ):
+        return True
+    return False
+
+
+def _looks_like_performance_status_ask(low: str) -> bool:
+    if any(w in low for w in ("come in", "came in", "processed", "participation")):
+        return True
+    if "performance" in low and (
+        _guess_month_end(low)
+        or "this month" in low
+        or "report" in low
+        or "month" in low
+    ):
+        return True
+    if "report" in low and _guess_month_end(low):
+        return True
+    return False
+
+
+def _month_label(month_end: str) -> str:
+    try:
+        y, m, _ = month_end.split("-")
+        return f"{calendar.month_name[int(m)]} {y}"
+    except Exception:
+        return month_end
 
 
 def _format_reply(
