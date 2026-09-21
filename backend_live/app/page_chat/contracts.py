@@ -45,12 +45,20 @@ EXPLAIN_TOPICS: frozenset[str] = frozenset(
     }
 )
 
-# Human labels for clarify options (Ollama / stub).
+# Human labels for clarify options shown in the UI (live verbs only).
 CLARIFY_LANES: list[dict[str, str]] = [
     {
         "id": "project_status",
         "label": "Project / FSR work (completed or open)",
     },
+    {
+        "id": "performance_index",
+        "label": "Performance / participation report for a month (processed in SQL or not)",
+    },
+]
+
+# Specced lanes — publish for design; do not show until runners ship.
+CLARIFY_LANES_PLANNED: list[dict[str, str]] = [
     {
         "id": "last_project",
         "label": "Most recent project (by start date) + optional breakdown",
@@ -58,10 +66,6 @@ CLARIFY_LANES: list[dict[str, str]] = [
     {
         "id": "scheduled_projects",
         "label": "Upcoming / scheduled project work for this casino",
-    },
-    {
-        "id": "performance_index",
-        "label": "Performance / participation report for a month (processed in SQL or not)",
     },
     {
         "id": "preview_report",
@@ -443,6 +447,7 @@ def contracts_public() -> dict[str, Any]:
         "verbs": sorted(CASINO_VERBS),
         "verbs_planned": sorted(CASINO_VERBS_PLANNED),
         "clarify_lanes": CLARIFY_LANES,
+        "clarify_lanes_planned": CLARIFY_LANES_PLANNED,
         "report_templates": REPORT_TEMPLATES,
         "contracts": CONTRACTS,
         "unmet_request_log": UNMET_REQUEST_LOG,

@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import calendar
 import json
 import re
+from datetime import date
 from typing import Any
 
 from fastapi import HTTPException
@@ -330,18 +332,30 @@ def _stub_route(text: str, *, session: dict[str, Any]) -> dict[str, Any]:
 
     if low.startswith("did this month") or low.startswith("performance / participation"):
         casino_id, meta = resolve.resolve_casino_id(text=text, args={}, session=session)
+        if meta.get("ambiguous"):
+            return _ambiguous_clarify(meta)
         if not casino_id:
             return {
                 "kind": "unsupported",
                 "reply": "Select a casino first, then ask about a month.",
             }
+        month_end = _guess_month_end(low) or _default_reporting_month_end()
         return {
-            "kind": "clarify",
+            "kind": "run",
+            "verb": "performance_index",
+            "args": {"casino_id": casino_id, "month_end": month_end},
+        }
+
+    # Generate / email reports — not live yet (planned verbs).
+    if _is_generate_report_ask(low):
+        return {
+            "kind": "unsupported",
             "reply": (
-                "Which month-end should I check (YYYY-MM-DD)? "
-                "Example: 2026-08-31 for August 2026."
+                "I can't generate or email reports yet — that path is still planned. "
+                "Right now I can check whether a participation month is **processed** "
+                "in SQL (e.g. “Did August come in for The Heights?”), look up **project "
+                "status**, or a **project breakdown**."
             ),
-            "options": None,
         }
 
     # Definitions — never send these to the project stub / Ollama.
@@ -514,18 +528,9 @@ def _stub_route(text: str, *, session: dict[str, Any]) -> dict[str, Any]:
                 "kind": "unsupported",
                 "reply": "Select a casino first, then ask if a month has come in / been processed.",
             }
-        month_end = _guess_month_end(low)
-        if not month_end:
-            return {
-                "kind": "clarify",
-                "reply": (
-                    "Which month-end should I check (YYYY-MM-DD)? "
-                    "Example: 2026-08-31 for August 2026."
-                ),
-                "options": CLARIFY_LANES,
-            }
-        # Ambiguous "come in" without project/performance cue → still prefer performance if month present
-        if "project" in low or "fsr" in low:
+        month_end = _guess_month_end(low) or _default_reporting_month_end()
+        # Ambiguous "come in" without project/performance cue → still prefer performance
+        if ("project" in low or "fsr" in low) and "report" not in low:
             return {
                 "kind": "clarify",
                 "reply": (
@@ -541,6 +546,16 @@ def _stub_route(text: str, *, session: dict[str, Any]) -> dict[str, Any]:
         }
 
     if "come in" in low or "came in" in low:
+        casino_id2, meta2 = resolve.resolve_casino_id(text=text, args={}, session=session)
+        if meta2.get("ambiguous"):
+            return _ambiguous_clarify(meta2)
+        if casino_id2:
+            month_end = _default_reporting_month_end()
+            return {
+                "kind": "run",
+                "verb": "performance_index",
+                "args": {"casino_id": casino_id2, "month_end": month_end},
+            }
         return {
             "kind": "clarify",
             "reply": (
@@ -600,7 +615,7 @@ def _chip_route(
         return None
 
     if low.startswith("did ") and "performance come in" in low:
-        me = focus.get("month_end") or _guess_month_end(low)
+        me = focus.get("month_end") or _guess_month_end(low) or _default_reporting_month_end()
         m = re.search(r"\b(20\d{2}-\d{2}-\d{2})\b", text)
         if m:
             me = m.group(1)
@@ -609,16 +624,24 @@ def _chip_route(
                 "kind": "unsupported",
                 "reply": "Select a casino first, then ask about a month.",
             }
-        if not me:
-            return {
-                "kind": "clarify",
-                "reply": "Which month-end (YYYY-MM-DD)? Example: 2026-08-31.",
-                "options": None,
-            }
         return {
             "kind": "run",
             "verb": "performance_index",
             "args": {"casino_id": casino_id, "month_end": me},
+        }
+
+    # Planned clarify chips — honest not-ready (in case an old UI still shows them).
+    if low in {
+        "most recent project (by start date) + optional breakdown",
+        "upcoming / scheduled project work for this casino",
+        "generate / email a pre-built report (i'll ask for missing params)",
+    }:
+        return {
+            "kind": "unsupported",
+            "reply": (
+                "That option isn't live yet. I can do **project status**, "
+                "**project breakdown**, or **performance month processed** today."
+            ),
         }
 
     if low in {
@@ -733,12 +756,32 @@ def _guess_month_end(low: str) -> str | None:
             if year is None:
                 # default current-ish — prefer requiring year in clarify; use 2026 as pilot default
                 year = 2026
-            # month-end day
-            import calendar
-
             last = calendar.monthrange(year, num)[1]
             return f"{year:04d}-{num:02d}-{last:02d}"
     return None
+
+
+def _default_reporting_month_end(*, today: date | None = None) -> str:
+    """Prior calendar month-end — what ops usually mean by 'this month's report' mid-cycle."""
+    today = today or date.today()
+    if today.month == 1:
+        y, m = today.year - 1, 12
+    else:
+        y, m = today.year, today.month - 1
+    last = calendar.monthrange(y, m)[1]
+    return f"{y:04d}-{m:02d}-{last:02d}"
+
+
+def _is_generate_report_ask(low: str) -> bool:
+    if "generate" in low and "report" in low:
+        return True
+    if "what reports" in low or "which reports" in low:
+        return True
+    if "email" in low and "report" in low:
+        return True
+    if "send" in low and "report" in low and "come in" not in low:
+        return True
+    return False
 
 
 def _format_reply(
