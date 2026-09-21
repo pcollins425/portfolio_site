@@ -2,13 +2,14 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>Assistant — DGS Application</title>
   <link rel="stylesheet" href="assets/dgs.css" />
+  <link rel="stylesheet" href="assets/dgs-v2.css" />
   <script src="https://cdn.jsdelivr.net/npm/marked@15.0.12/marked.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/dompurify@3.2.6/purify.min.js"></script>
 </head>
-<body class="dgs-app">
+<body class="dgs-app dgs-assistant-v2">
   <aside class="dgs-sidebar" id="dgs-sidebar">
     <div class="dgs-sidebar-brand">
       <div class="dgs-brand-text">
@@ -26,23 +27,21 @@
 
   <div id="dgs-nav-flyout" class="dgs-nav-flyout" hidden></div>
 
-  <div class="dgs-main assistant-page">
-    <header class="page-header assistant-header">
-      <p class="page-eyebrow">Department workspace</p>
-      <div class="assistant-header__row">
-        <div>
-          <h1>Assistant</h1>
-          <p class="subtitle">Chat · workspace files · session history · secrets</p>
-        </div>
-        <div class="assistant-header__actions">
-          <span class="assistant-workspace-badge" id="workspace-badge">—</span>
-          <button type="button" id="btn-secrets" class="btn">Secrets</button>
-          <button type="button" id="btn-new-session" class="btn btn-primary">New conversation</button>
-        </div>
+  <div class="dgs-main dgs-v2-main assistant-page">
+    <header class="dgs-v2-page-header assistant-header">
+      <div>
+        <p class="dgs-v2-eyebrow">Workspace</p>
+        <h1>Assistant</h1>
+        <p class="dgs-v2-subtitle">Chat · workspace files · session history · secrets</p>
+      </div>
+      <div class="assistant-header__actions">
+        <span class="assistant-workspace-badge" id="workspace-badge">—</span>
+        <button type="button" id="btn-secrets" class="dgs-v2-btn">Secrets</button>
+        <button type="button" id="btn-new-session" class="dgs-v2-btn dgs-v2-btn--primary">New conversation</button>
       </div>
     </header>
 
-    <div id="error-box" class="error-box" hidden></div>
+    <div id="error-box" class="dgs-v2-error" hidden></div>
 
     <div class="assistant-panels">
       <section class="assistant-panel assistant-sessions" aria-label="Sessions">
@@ -63,7 +62,7 @@
         <div class="assistant-messages" id="chat-messages"></div>
         <div class="assistant-composer">
           <textarea id="chat-input" rows="3" placeholder="Ask a question, give a command, or paste a task…"></textarea>
-          <button type="button" id="btn-send" class="btn btn-primary assistant-send">Send</button>
+          <button type="button" id="btn-send" class="dgs-v2-btn dgs-v2-btn--primary assistant-send">Send</button>
         </div>
         <p class="assistant-composer-hint">Enter to send · Shift+Enter for new line</p>
       </section>
@@ -86,11 +85,11 @@
   <aside class="assistant-secrets-drawer" id="secrets-drawer" aria-hidden="true">
     <div class="assistant-secrets-drawer__head">
       <div>
-        <p class="page-eyebrow">Workspace config</p>
+        <p class="dgs-v2-eyebrow">Workspace config</p>
         <h2>Secrets</h2>
-        <p class="subtitle">Saved to <code>.env</code> in the workspace</p>
+        <p class="dgs-v2-subtitle">Saved to <code>.env</code> in the workspace</p>
       </div>
-      <button type="button" id="btn-close-secrets" class="icon-btn" aria-label="Close secrets">×</button>
+      <button type="button" id="btn-close-secrets" class="dgs-v2-btn assistant-secrets-close" aria-label="Close secrets">×</button>
     </div>
     <p class="assistant-secrets-note">Values are masked after save. Not echoed in chat transcripts.</p>
     <div class="assistant-secrets-list" id="secrets-list"></div>
@@ -99,8 +98,8 @@
       <input id="secret-new-value" type="password" placeholder="Paste value…" autocomplete="off" />
     </div>
     <div class="assistant-secrets-actions">
-      <button type="button" id="btn-secrets-cancel" class="btn">Cancel</button>
-      <button type="button" id="btn-secrets-save" class="btn btn-primary">Save to .env</button>
+      <button type="button" id="btn-secrets-cancel" class="dgs-v2-btn">Cancel</button>
+      <button type="button" id="btn-secrets-save" class="dgs-v2-btn dgs-v2-btn--primary">Save to .env</button>
     </div>
   </aside>
 
