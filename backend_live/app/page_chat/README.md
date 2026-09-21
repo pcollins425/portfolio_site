@@ -41,7 +41,11 @@ curl -s -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
 
 ## Verbs
 
-`get_casino` · `project_status` · `project_breakdown` · `performance_index` · `explain_topic`
+**Live:** `get_casino` · `project_status` · `project_breakdown` · `performance_index` · `explain_topic`
+
+**Planned (contracts only — not in runners yet):** `last_project` · `scheduled_projects` · `list_report_templates` · `preview_report` · `send_report`
+
+Also published: `report_templates`, `unmet_request_log` (side-effect schema for unsupported asks).
 
 See `GET /api/page-chat/contracts` or `app/page_chat/contracts.py`.
 
