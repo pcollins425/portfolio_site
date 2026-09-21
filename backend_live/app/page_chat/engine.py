@@ -151,7 +151,10 @@ def _focus_from_result(
                 {
                     "project_id": p.get("project_id"),
                     "project_number": p.get("project_number"),
+                    "project_name": p.get("project_name"),
                     "status": p.get("status"),
+                    "date_start": p.get("date_start"),
+                    "date_end": p.get("date_end"),
                     "offer_breakdown": bool(p.get("offer_breakdown")),
                 }
                 for p in projects[:10]
@@ -346,15 +349,14 @@ def _stub_route(text: str, *, session: dict[str, Any]) -> dict[str, Any]:
             "args": {"casino_id": casino_id, "month_end": month_end},
         }
 
-    # Generate / email reports — not live yet (planned verbs).
-    if _is_generate_report_ask(low):
+    # Reporting capability / generate — not live yet.
+    if _is_reporting_capability_ask(low):
         return {
             "kind": "unsupported",
             "reply": (
-                "I can't generate or email reports yet — that path is still planned. "
-                "Right now I can check whether a participation month is **processed** "
-                "in SQL (e.g. “Did August come in for The Heights?”), look up **project "
-                "status**, or a **project breakdown**."
+                "Ask AI doesn't generate reports. For a casino I can tell you whether a "
+                "participation month is **processed** in SQL (e.g. “Did August come in?”), "
+                "plus **project status** and a **breakdown**. No win / coin-in / commission."
             ),
         }
 
@@ -382,18 +384,45 @@ def _stub_route(text: str, *, session: dict[str, Any]) -> dict[str, Any]:
     if meta.get("ambiguous"):
         return _ambiguous_clarify(meta)
 
-    # "Most recent / latest" after a project list.
+    # "Most recent / latest / last project" after a project list — or as the ask.
     if any(
         p in low
         for p in (
             "most recent",
             "latest",
             "newest",
+            "last project",
+            "when was the last",
+            "when was last",
             "which is the most",
             "which one is most",
             "which project is most",
         )
     ):
+        cid = casino_id or focus.get("casino_id")
+        if focus_projects and focus.get("casino_id") and "last project" not in low and "when was" not in low:
+            top = focus_projects[0]
+            ref = top.get("project_number") or top.get("project_id")
+            return {
+                "kind": "run",
+                "verb": "project_status",
+                "args": {
+                    "casino_id": focus["casino_id"],
+                    "project_ref": str(ref),
+                    "limit": 1,
+                },
+            }
+        if cid and (
+            "last project" in low
+            or "when was the last" in low
+            or "when was last" in low
+            or "most recent project" in low
+        ):
+            return {
+                "kind": "run",
+                "verb": "project_status",
+                "args": {"casino_id": cid, "limit": 1},
+            }
         if focus_projects and focus.get("casino_id"):
             top = focus_projects[0]
             ref = top.get("project_number") or top.get("project_id")
@@ -409,6 +438,35 @@ def _stub_route(text: str, *, session: dict[str, Any]) -> dict[str, Any]:
         return {
             "kind": "clarify",
             "reply": "Ask about project status first, then I can tell you which is most recent.",
+            "options": CLARIFY_LANES,
+        }
+
+    # Date follow-up after a project list ("What was the date?").
+    if _is_project_date_ask(low):
+        top = (focus_projects or [None])[0]
+        if top and (top.get("date_start") or top.get("date_end")):
+            num = top.get("project_number") or top.get("project_id") or "that project"
+            start = top.get("date_start") or "—"
+            end = top.get("date_end")
+            reply = (
+                f"Project {num}: start **{start}**, end **{end}**."
+                if end
+                else f"Project {num}: start **{start}** (no end date on file)."
+            )
+            opts = None
+            if num and num != "that project":
+                opts = [{"id": f"breakdown:{num}", "label": f"Breakdown {num}"}]
+            return {"kind": "clarify", "reply": reply, "options": opts}
+        cid = casino_id or focus.get("casino_id")
+        if cid:
+            return {
+                "kind": "run",
+                "verb": "project_status",
+                "args": {"casino_id": cid, "limit": 1},
+            }
+        return {
+            "kind": "clarify",
+            "reply": "Which project’s dates? Ask for project status first, or name a project number.",
             "options": CLARIFY_LANES,
         }
 
@@ -474,8 +532,13 @@ def _stub_route(text: str, *, session: dict[str, Any]) -> dict[str, Any]:
             "where is",
         )
     ):
-        # "Tell me about the performance for August" is not a profile ask.
-        if _looks_like_performance_status_ask(low) or _is_performance_detail_ask(low):
+        # "Tell me about the performance …" is not a profile ask.
+        if (
+            "performance" in low
+            or "participation" in low
+            or _looks_like_performance_status_ask(low)
+            or _is_performance_detail_ask(low)
+        ):
             pass  # fall through to performance handlers below
         elif not casino_id:
             return {
@@ -532,12 +595,18 @@ def _stub_route(text: str, *, session: dict[str, Any]) -> dict[str, Any]:
             "received",
             "performance",
             "participation",
-            "report",
+            "processed",
+        )
+    ) or re.search(r"\breports?\b", low) or any(
+        w in low
+        for w in (
             "august",
             "july",
             "june",
             "september",
-            "processed",
+            "october",
+            "november",
+            "december",
         )
     ):
         if not casino_id:
@@ -547,7 +616,7 @@ def _stub_route(text: str, *, session: dict[str, Any]) -> dict[str, Any]:
             }
         month_end = _guess_month_end(low) or _default_reporting_month_end()
         # Ambiguous "come in" without project/performance cue → still prefer performance
-        if ("project" in low or "fsr" in low) and "report" not in low:
+        if ("project" in low or "fsr" in low) and not re.search(r"\breports?\b", low):
             return {
                 "kind": "clarify",
                 "reply": (
@@ -810,6 +879,43 @@ def _is_generate_report_ask(low: str) -> bool:
     return False
 
 
+def _is_reporting_capability_ask(low: str) -> bool:
+    """'What reporting do you have' — capability, not processed-month check."""
+    if "reporting" in low and any(
+        w in low for w in ("what", "have", "do you", "available", "can you", "give")
+    ):
+        return True
+    return _is_generate_report_ask(low)
+
+
+def _is_project_date_ask(low: str) -> bool:
+    if low in {
+        "what was the date",
+        "what was the date?",
+        "what were the dates",
+        "what were the dates?",
+        "when was that",
+        "when was that?",
+        "what date",
+        "what dates",
+        "start date",
+        "end date",
+        "when did it start",
+        "when did it end",
+        "when did that start",
+        "when did that end",
+    }:
+        return True
+    if "date" in low and any(
+        w in low for w in ("what", "when", "which", "start", "end", "was", "were")
+    ):
+        # Avoid "update" / "candidate" noise
+        if "candidate" in low or "update" in low:
+            return False
+        return True
+    return False
+
+
 def _is_performance_detail_ask(low: str) -> bool:
     """Trend / $ / narrative performance — out of Casino Ask AI scope."""
     if any(
@@ -854,14 +960,9 @@ def _is_performance_detail_ask(low: str) -> bool:
 def _looks_like_performance_status_ask(low: str) -> bool:
     if any(w in low for w in ("come in", "came in", "processed", "participation")):
         return True
-    if "performance" in low and (
-        _guess_month_end(low)
-        or "this month" in low
-        or "report" in low
-        or "month" in low
-    ):
+    if "performance" in low:
         return True
-    if "report" in low and _guess_month_end(low):
+    if re.search(r"\breports?\b", low) and _guess_month_end(low):
         return True
     return False
 
@@ -896,11 +997,17 @@ def _format_reply(
             )
         if len(projects) == 1:
             p = projects[0]
+            dates = ""
+            if p.get("date_start") or p.get("date_end"):
+                dates = (
+                    f" · start {p.get('date_start') or '—'}"
+                    f" · end {p.get('date_end') or '—'}"
+                )
             reply = (
                 f"{prefix}Most recent / match{scope}: "
                 f"{p.get('project_number') or p.get('project_id')}: "
                 f"{p.get('status') or 'unknown'} "
-                f"({p.get('project_name') or '—'})."
+                f"({p.get('project_name') or '—'}){dates}."
             )
             if p.get("offer_breakdown") or data.get("follow_up_prompt"):
                 reply += "\n\nWant a breakdown of what was done?"
