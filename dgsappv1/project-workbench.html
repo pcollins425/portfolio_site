@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Project Workbench — DGS Application</title>
+  <link rel="stylesheet" href="assets/dgs.css" />
+  <link rel="stylesheet" href="assets/dgs-v2.css" />
+  <style>
+    body.dgs-pwb.dgs-app {
+      height: 100vh;
+      overflow: hidden;
+      color-scheme: dark;
+    }
+    body.dgs-pwb .dgs-v2-main {
+      display: flex;
+      flex-direction: column;
+      padding: 20px 24px 28px;
+      gap: 14px;
+      background: var(--dgs-v2-bg, #0e1117);
+      color: var(--dgs-v2-text, #c5cdd9);
+      flex: 1;
+      min-height: 0;
+      overflow: hidden;
+    }
+    .pwb-toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+    }
+    .pwb-toolbar input, .pwb-toolbar select {
+      background: #12161e;
+      color: #e8ecf2;
+      border: 1px solid rgba(255,255,255,.15);
+      border-radius: 6px;
+      padding: 8px 10px;
+      font: inherit;
+      min-width: 140px;
+    }
+    .pwb-toolbar input[type="search"] { flex: 1; min-width: 180px; }
+    .pwb-layout {
+      display: grid;
+      grid-template-columns: minmax(280px, 360px) 1fr;
+      gap: 14px;
+      flex: 1;
+      min-height: 0;
+    }
+    @media (max-width: 980px) {
+      .pwb-layout { grid-template-columns: 1fr; overflow-y: auto; }
+    }
+    .pwb-panel {
+      border: 1px solid rgba(255,255,255,.1);
+      border-radius: 10px;
+      background: rgba(0,0,0,.22);
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    .pwb-panel-h {
+      padding: 10px 14px;
+      border-bottom: 1px solid rgba(255,255,255,.08);
+      font-size: .85rem;
+      color: #9aa3b2;
+      display: flex;
+      justify-content: space-between;
+      gap: 8px;
+    }
+    .pwb-list, .pwb-detail {
+      overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
+      flex: 1;
+      min-height: 0;
+    }
+    .pwb-item {
+      display: block;
+      width: 100%;
+      text-align: left;
+      border: 0;
+      border-bottom: 1px solid rgba(255,255,255,.06);
+      background: transparent;
+      color: inherit;
+      padding: 12px 14px;
+      cursor: pointer;
+      font: inherit;
+    }
+    .pwb-item:hover { background: rgba(255,255,255,.04); }
+    .pwb-item.active { background: rgba(25, 103, 210, .18); }
+    .pwb-item .rk { font-weight: 600; color: #e8ecf2; }
+    .pwb-item .meta { font-size: .8rem; color: #9aa3b2; margin-top: 4px; }
+    .pwb-badge {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 999px;
+      font-size: .72rem;
+      background: rgba(255,255,255,.08);
+      margin-right: 4px;
+    }
+    .pwb-badge.draft { background: rgba(255,255,255,.08); }
+    .pwb-badge.pre_check { background: rgba(250,180,40,.2); color: #f0c14b; }
+    .pwb-badge.blocked { background: rgba(220,80,80,.2); color: #f07178; }
+    .pwb-badge.ready { background: rgba(46,160,67,.2); color: #3dd68c; }
+    .pwb-detail { padding: 14px 16px 24px; }
+    .pwb-detail h2 { margin: 0 0 6px; font-size: 1.15rem; color: #e8ecf2; }
+    .pwb-actions { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0 18px; }
+    .pwb-section { margin: 18px 0 8px; font-size: .8rem; color: #9aa3b2; text-transform: uppercase; letter-spacing: .04em; }
+    .pwb-table { width: 100%; border-collapse: collapse; font-size: .86rem; }
+    .pwb-table th, .pwb-table td {
+      border-bottom: 1px solid rgba(255,255,255,.08);
+      padding: 8px 6px;
+      text-align: left;
+      vertical-align: top;
+    }
+    .pwb-table th { color: #9aa3b2; font-weight: 500; }
+    .pwb-table input, .pwb-table select {
+      width: 100%;
+      max-width: 180px;
+      background: #12161e;
+      color: #e8ecf2;
+      border: 1px solid rgba(255,255,255,.15);
+      border-radius: 5px;
+      padding: 5px 7px;
+      font: inherit;
+    }
+    .pwb-table .theme-cell { min-width: 160px; }
+    .pwb-empty { color: #9aa3b2; padding: 28px 12px; }
+    .pwb-tbd { color: #f0c14b; }
+    .pwb-theme-results {
+      position: absolute;
+      z-index: 20;
+      background: #161b24;
+      border: 1px solid rgba(255,255,255,.18);
+      border-radius: 6px;
+      max-height: 200px;
+      overflow: auto;
+      min-width: 220px;
+      box-shadow: 0 8px 24px rgba(0,0,0,.45);
+    }
+    .pwb-theme-results button {
+      display: block;
+      width: 100%;
+      text-align: left;
+      border: 0;
+      background: transparent;
+      color: #e8ecf2;
+      padding: 8px 10px;
+      font: inherit;
+      cursor: pointer;
+    }
+    .pwb-theme-results button:hover { background: rgba(25,103,210,.25); }
+    .pwb-rel { position: relative; }
+  </style>
+</head>
+<body class="dgs-app dgs-pwb">
+  <aside class="dgs-sidebar" id="dgs-sidebar">
+    <div class="dgs-sidebar-brand">
+      <div class="dgs-brand-text">
+        <span class="dgs-brand-eyebrow">Dynamic Gaming Solutions</span>
+        <span class="dgs-brand-title">DGS Application</span>
+      </div>
+      <button type="button" id="dgs-rail-toggle" class="dgs-rail-toggle" aria-expanded="true" title="Collapse navigation">◧</button>
+    </div>
+    <nav class="dgs-sidebar-nav" id="dgs-app-nav" aria-label="Application"></nav>
+    <div class="dgs-sidebar-account" id="sidebar-account" hidden>
+      <span class="dgs-sidebar-user" id="user-label"></span>
+      <button type="button" id="btn-sign-out" class="dgs-sidebar-signout">Sign out</button>
+    </div>
+  </aside>
+
+  <div id="dgs-nav-flyout" class="dgs-nav-flyout" hidden></div>
+
+  <div class="dgs-main dgs-v2-main">
+    <header class="dgs-v2-page-header">
+      <div>
+        <p class="dgs-v2-eyebrow">Operations</p>
+        <h1>Project Workbench</h1>
+        <p class="dgs-v2-subtitle">Proposals — draft units + Pre-Check readiness</p>
+      </div>
+    </header>
+
+    <div id="error-box" class="dgs-v2-error" hidden></div>
+
+    <div class="pwb-toolbar">
+      <input type="search" id="q" placeholder="Search ref / casino" />
+      <select id="stage-filter">
+        <option value="">All stages</option>
+        <option value="draft">draft</option>
+        <option value="pre_check">pre_check</option>
+        <option value="final_approved">final_approved</option>
+        <option value="worksheet_issued">worksheet_issued</option>
+        <option value="done">done</option>
+      </select>
+      <button type="button" class="dgs-v2-btn" id="btn-refresh">Refresh</button>
+    </div>
+
+    <div class="pwb-layout">
+      <div class="pwb-panel">
+        <div class="pwb-panel-h"><span>Proposals</span><span id="list-count"></span></div>
+        <div class="pwb-list" id="list-root"></div>
+      </div>
+      <div class="pwb-panel">
+        <div class="pwb-panel-h"><span>Detail</span><span id="write-hint"></span></div>
+        <div class="pwb-detail" id="detail-root">
+          <p class="pwb-empty">Select a proposal.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="assets/auth.js"></script>
+  <script src="assets/shell.js"></script>
+  <script src="assets/project-workbench.js"></script>
+  <script>
+    DGS.boot("project_workbench", () => ProjectWorkbench.init());
+  </script>
+</body>
+</html>

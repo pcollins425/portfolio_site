@@ -37,6 +37,7 @@
       label: "Operations",
       items: [
         { id: "projects", label: "Projects", href: "projects.html" },
+        { id: "project_workbench", label: "Project Workbench", href: "project-workbench.html" },
         { id: "software_vault", label: "Software Vault", href: "software-vault.html" },
       ],
     },

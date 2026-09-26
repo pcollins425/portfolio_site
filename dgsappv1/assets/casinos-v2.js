@@ -82,6 +82,7 @@
     mapLink: document.getElementById("map-external-link"),
     slotMasterLink: document.getElementById("slot-master-link"),
     casinoHubLink: document.getElementById("casino-hub-link"),
+    workbenchLink: document.getElementById("workbench-link"),
     imsViewAll: document.getElementById("ims-view-all"),
     imsPreviewList: document.getElementById("ims-preview-list"),
     detailBody: document.getElementById("detail-body"),
@@ -239,6 +240,10 @@
 
   function projectsImsHref(casinoId) {
     return pageUrl("projects.html", { view: "ims", casino: casinoId });
+  }
+
+  function workbenchHref(casinoId) {
+    return pageUrl("project-workbench.html", { casino: casinoId });
   }
 
   function imsProjectHref(casinoId, project) {
@@ -545,6 +550,10 @@
         els.casinoHubLink.href = "#";
         els.casinoHubLink.hidden = true;
       }
+      if (els.workbenchLink) {
+        els.workbenchLink.href = "#";
+        els.workbenchLink.hidden = true;
+      }
       return;
     }
     const n = Number(d.active_machines) || 0;
@@ -554,6 +563,11 @@
       els.casinoHubLink.hidden = false;
       els.casinoHubLink.href = casinoHubHref(d.reference_key);
       els.casinoHubLink.textContent = "Casino hub";
+    }
+    if (els.workbenchLink) {
+      els.workbenchLink.hidden = false;
+      els.workbenchLink.href = workbenchHref(d.reference_key);
+      els.workbenchLink.textContent = "Workbench";
     }
   }
 
