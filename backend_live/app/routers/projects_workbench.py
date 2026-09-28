@@ -25,7 +25,6 @@ STAGES = frozenset(
 CHECK_STATUSES = frozenset(
     {"pending", "in_progress", "blocker", "ready", "na"}
 )
-OPS = frozenset({"convert", "install", "remove", "move"})
 # Readiness rows created when a draft is sent. Owner is the department,
 # not a person. Admin may clear every row while Compliance and Ops
 # accounts are still the testing stand-in.
@@ -37,6 +36,17 @@ CHECK_OWNERS = (
     ("parts", "ops"),
     ("serials", "ops"),
 )
+
+
+def _canon_op(raw: str) -> str:
+    code = (raw or "").strip().upper()
+    rows = _query(
+        "SELECT action_code FROM projects.action_types WHERE action_code = %s",
+        (code,),
+    )
+    if not rows:
+        raise HTTPException(status_code=400, detail=f"Unknown action: {raw}")
+    return str(rows[0]["action_code"])
 
 
 def _db() -> str:
@@ -258,6 +268,16 @@ def workbench_permissions(
         "can_edit_ops": _is_admin(user) or perms.can_edit_ops(user),
         "area": perms.WORKBENCH_AREA,
         "tbd_theme_id": _tbd_theme_id(),
+        "action_types": [
+            _row(r)
+            for r in _query(
+                """
+                SELECT action_code, action_name
+                FROM projects.action_types
+                ORDER BY index_key
+                """
+            )
+        ],
     }
 
 
@@ -354,6 +374,7 @@ def proposal_detail(
             ut.display_name AS unverified_theme_name,
             ut.reference_key AS unverified_reference_key,
             cab.cabinet_name,
+            act.action_name,
             CASE
                 WHEN u.unverified_theme_id IS NOT NULL THEN 0
                 WHEN u.proposed_theme_id = %s THEN 1
@@ -372,6 +393,7 @@ def proposal_detail(
         LEFT JOIN vendors.themes pt ON pt.reference_key = u.proposed_theme_id
         LEFT JOIN projects.unverified_theme ut ON ut.uuid = u.unverified_theme_id
         LEFT JOIN vendors.cabinets cab ON cab.reference_key = u.cabinet_id
+        LEFT JOIN projects.action_types act ON act.action_code = u.op
         WHERE u.proposal_id = %s
         ORDER BY u.sort_order, u.reference_key
         """,
@@ -475,15 +497,13 @@ def patch_unit(
     params: list[Any] = [_actor(user)]
 
     if body.op is not None:
-        op = body.op.strip().lower()
-        if op not in OPS:
-            raise HTTPException(status_code=400, detail=f"Invalid op: {op}")
+        op = _canon_op(body.op)
         sets.append("op = %s")
         params.append(op)
     effective_op = (
-        body.op.strip().lower() if body.op is not None else str(row.get("op") or "")
+        _canon_op(body.op) if body.op is not None else str(row.get("op") or "")
     )
-    if effective_op == "remove" and (
+    if effective_op == "REMOVE" and (
         body.proposed_theme_id is not None or body.unverified_theme_id is not None
     ):
         raise HTTPException(
@@ -667,7 +687,7 @@ def _ensure_precheck(proposal_id: str, actor: str) -> None:
         op = str(unit.get("op") or "")
         proposed = str(unit.get("proposed_theme_id") or "")
         unverified = unit.get("unverified_theme_id")
-        if op != "remove" and proposed == tbd and not unverified:
+        if op != "REMOVE" and proposed == tbd and not unverified:
             continue
         unit_id = str(unit["uuid"])
         for check_type, owner in CHECK_OWNERS:

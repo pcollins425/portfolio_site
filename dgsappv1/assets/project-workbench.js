@@ -7,6 +7,7 @@
     canEditCompliance: false,
     canEditOps: false,
     tbdThemeId: null,
+    actionTypes: [],
     items: [],
     activeRef: null,
     detail: null,
@@ -217,7 +218,7 @@
           : esc(u.proposed_theme_id || "");
         const sw = softwareBadge(u);
         const hasCab = !!(u.cabinet_id && String(u.cabinet_id).trim());
-        const themeEditor = u.op === "remove"
+        const themeEditor = u.op === "REMOVE"
           ? `<span class="pwb-removed">removed from floor</span>`
           : editUnits
           ? `<div class="pwb-rel theme-cell">
@@ -242,14 +243,19 @@
           <td>${
             editUnits
               ? `<select data-unit="${esc(u.uuid)}" data-field="op">
-                  ${["convert", "install", "remove", "move"]
+                  ${(STATE.actionTypes.length
+                    ? STATE.actionTypes
+                    : [{ action_code: u.op, action_name: u.action_name || u.op }]
+                  )
                     .map(
-                      (o) =>
-                        `<option value="${o}"${u.op === o ? " selected" : ""}>${o}</option>`
+                      (a) =>
+                        `<option value="${esc(a.action_code)}"${
+                          u.op === a.action_code ? " selected" : ""
+                        }>${esc(a.action_name)}</option>`
                     )
                     .join("")}
                 </select>`
-              : esc(u.op)
+              : esc(u.action_name || u.op)
           }</td>
           <td>${
             editUnits
@@ -607,6 +613,7 @@
       STATE.canEditCompliance = !!perms.can_edit_compliance;
       STATE.canEditOps = !!perms.can_edit_ops;
       STATE.tbdThemeId = perms.tbd_theme_id;
+      STATE.actionTypes = perms.action_types || [];
       document.getElementById("btn-refresh").addEventListener("click", () => loadList());
       document.getElementById("stage-filter").addEventListener("change", () => loadList());
       let t = null;
