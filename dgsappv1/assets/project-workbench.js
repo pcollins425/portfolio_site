@@ -118,12 +118,6 @@
     return "";
   }
 
-  function softwareTag(state) {
-    if (state === "confirmed") return "cabinet confirmed";
-    if (state === "need_software") return "needs software";
-    return "";
-  }
-
   function renderDetail() {
     const root = document.getElementById("detail-root");
     const hint = document.getElementById("write-hint");
@@ -364,22 +358,19 @@
       const items = data.items || [];
       if (!items.length) {
         box.hidden = false;
-        box.innerHTML = `<button type="button" disabled>No catalog matches</button>`;
+        box.innerHTML = `<button type="button" disabled>No confirmed themes for this cabinet</button>`;
         return;
       }
       box.hidden = false;
       box.innerHTML = items
-        .map((t) => {
-          const tag = softwareTag(t.software_state);
-          const locked = t.software_state === "need_software";
-          return `<button type="button" data-tid="${esc(t.reference_key)}"${
-            locked ? " disabled" : ""
-          }>${esc(t.theme_name)} <span style="color:#9aa3b2">${esc(t.reference_key)}${
-            tag ? " · " + esc(tag) : ""
-          }</span></button>`;
-        })
+        .map(
+          (t) =>
+            `<button type="button" data-tid="${esc(t.reference_key)}">${esc(
+              t.theme_name
+            )} <span style="color:#9aa3b2">${esc(t.reference_key)}</span></button>`
+        )
         .join("");
-      box.querySelectorAll("button[data-tid]:not([disabled])").forEach((btn) => {
+      box.querySelectorAll("button[data-tid]").forEach((btn) => {
         btn.addEventListener("click", async () => {
           box.hidden = true;
           await patchUnit(input.dataset.unit, {

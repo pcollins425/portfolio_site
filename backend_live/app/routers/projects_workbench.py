@@ -557,8 +557,8 @@ def theme_search(
 ):
     """Catalog theme picker. Excludes TBD.
 
-    cabinet_id locks each hit to confirmed software for that cabinet:
-    software_state confirmed | need_software. Confirmed hits sort first.
+    With cabinet_id, only themes that have confirmed software on that
+    cabinet are returned. Unconfirmed titles are not options.
     """
     _assert_read(user)
     tbd = _tbd_theme_id()
@@ -577,26 +577,16 @@ def theme_search(
     confirmed = _CONFIRMED_SOFTWARE.format(
         theme="t.reference_key", cabinet="%s"
     )
-    state_sql = (
-        f"CASE WHEN {confirmed} THEN N'confirmed' ELSE N'need_software' END"
-        if cab
-        else "CAST(NULL AS nvarchar(20))"
-    )
-    order_sql = (
-        f"CASE WHEN {confirmed} THEN 0 ELSE 1 END, t.theme_name"
-        if cab
-        else "t.theme_name"
-    )
-    params: list[Any] = []
+    cab_filter = f"AND {confirmed}" if cab else ""
+    params: list[Any] = [tbd, like, like]
     if cab:
-        params.extend([cab, cab])
-    params.extend([tbd, like, like])
+        params.append(cab)
     rows = _query(
         f"""
         SELECT TOP ({int(limit)})
             t.reference_key, t.theme_name, t.vendor_id, t.cabinet_id,
             v.vendor_name, c.cabinet_name,
-            {state_sql} AS software_state
+            N'confirmed' AS software_state
         FROM vendors.themes t
         LEFT JOIN vendors.vendors v ON v.reference_key = t.vendor_id
         LEFT JOIN vendors.cabinets c ON c.reference_key = t.cabinet_id
@@ -606,7 +596,8 @@ def theme_search(
                 t.theme_name LIKE %s
              OR t.reference_key LIKE %s
           )
-        ORDER BY {order_sql}
+          {cab_filter}
+        ORDER BY t.theme_name
         """,
         tuple(params),
     )
