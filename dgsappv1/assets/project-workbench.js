@@ -337,6 +337,13 @@
       el.addEventListener("focus", () => {
         if (el.value.trim()) themeSearch(el);
       });
+      el.addEventListener("keydown", (ev) => {
+        if (ev.key !== "Enter") return;
+        ev.preventDefault();
+        const box = el.parentElement.querySelector(".pwb-theme-results");
+        const add = box && box.querySelector("button[data-add-temp]");
+        if (add) add.click();
+      });
     });
     root.querySelectorAll("select[data-check][data-field=status]").forEach((el) => {
       el.addEventListener("change", () => patchCheck(el.dataset.check, { status: el.value }));
