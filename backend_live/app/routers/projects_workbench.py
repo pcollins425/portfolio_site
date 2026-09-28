@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 from datetime import date, datetime
 from decimal import Decimal
 from typing import Annotated, Any, Literal
@@ -95,6 +96,33 @@ EXISTS (
       )
 )
 """
+
+
+def _name_key(name: str) -> str:
+    return re.sub(r"[^a-z0-9]+", "", (name or "").lower())
+
+
+def _catalog_theme_for_key(name_key: str, sample: str) -> dict | None:
+    """Catalog theme whose normalized name equals name_key, if any."""
+    token = ""
+    for part in re.split(r"[^A-Za-z0-9]+", sample or ""):
+        if len(part) >= 3:
+            token = part
+            break
+    if not token or not name_key:
+        return None
+    rows = _query(
+        """
+        SELECT TOP (80) reference_key, theme_name
+        FROM vendors.themes
+        WHERE theme_name LIKE %s
+        """,
+        (f"%{token}%",),
+    )
+    for row in rows:
+        if _name_key(row.get("theme_name") or "") == name_key:
+            return row
+    return None
 
 
 def _pair_confirmed(theme_id: str, cabinet_id: str) -> bool:
@@ -256,13 +284,21 @@ def proposal_detail(
         SELECT
             u.uuid, u.reference_key, u.sort_order, u.op, u.serial,
             u.asset_id, u.cabinet_id, u.current_theme_id, u.proposed_theme_id,
+            u.unverified_theme_id,
             u.zone, u.bank, u.location, u.bank_group,
             u.flag_reasons_json, u.rejected_themes_json,
             ct.theme_name AS current_theme_name,
             pt.theme_name AS proposed_theme_name,
+            ut.display_name AS unverified_theme_name,
+            ut.reference_key AS unverified_reference_key,
             cab.cabinet_name,
-            CASE WHEN u.proposed_theme_id = %s THEN 1 ELSE 0 END AS is_tbd,
             CASE
+                WHEN u.unverified_theme_id IS NOT NULL THEN 0
+                WHEN u.proposed_theme_id = %s THEN 1
+                ELSE 0
+            END AS is_tbd,
+            CASE
+                WHEN u.unverified_theme_id IS NOT NULL THEN N'unverified'
                 WHEN u.proposed_theme_id = %s THEN N'tbd'
                 WHEN """ + _CONFIRMED_SOFTWARE.format(
                     theme="u.proposed_theme_id", cabinet="u.cabinet_id"
@@ -272,6 +308,7 @@ def proposal_detail(
         FROM projects.proposal_unit u
         LEFT JOIN vendors.themes ct ON ct.reference_key = u.current_theme_id
         LEFT JOIN vendors.themes pt ON pt.reference_key = u.proposed_theme_id
+        LEFT JOIN projects.unverified_theme ut ON ut.uuid = u.unverified_theme_id
         LEFT JOIN vendors.cabinets cab ON cab.reference_key = u.cabinet_id
         WHERE u.proposal_id = %s
         ORDER BY u.sort_order, u.reference_key
@@ -326,10 +363,16 @@ class UnitPatch(BaseModel):
     op: str | None = None
     serial: str | None = None
     proposed_theme_id: str | None = None
+    unverified_theme_id: str | None = None
     current_theme_id: str | None = None
     zone: str | None = None
     bank: str | None = None
     location: str | None = None
+
+
+class TempThemeBody(BaseModel):
+    display_name: str = Field(min_length=3, max_length=200)
+    unit_id: str = Field(min_length=30, max_length=40)
 
 
 class CheckPatch(BaseModel):
@@ -377,6 +420,36 @@ def patch_unit(
     if body.serial is not None:
         sets.append("serial = %s")
         params.append(body.serial.strip() or None)
+    if body.unverified_theme_id is not None and body.proposed_theme_id is not None:
+        raise HTTPException(
+            status_code=400,
+            detail="Assign a catalog theme or a temp theme, not both",
+        )
+    if body.unverified_theme_id is not None:
+        uid = body.unverified_theme_id.strip()
+        hit = _query(
+            """
+            SELECT uuid, status
+            FROM projects.unverified_theme
+            WHERE uuid = %s
+            """,
+            (uid,),
+        )
+        if not hit or (hit[0].get("status") or "") != "unverified":
+            raise HTTPException(status_code=400, detail="Unknown temp theme")
+        cab_rows = _query(
+            "SELECT cabinet_id FROM projects.proposal_unit WHERE uuid = %s",
+            (unit_id.strip(),),
+        )
+        if not cab_rows or not (cab_rows[0].get("cabinet_id") or "").strip():
+            raise HTTPException(
+                status_code=400,
+                detail="Add a cabinet before assigning a theme",
+            )
+        sets.append("unverified_theme_id = %s")
+        params.append(uid)
+        sets.append("proposed_theme_id = %s")
+        params.append(_tbd_theme_id())
     if body.proposed_theme_id is not None:
         tid = body.proposed_theme_id.strip()
         exists = _query(
@@ -400,6 +473,7 @@ def patch_unit(
                 status_code=400,
                 detail="No confirmed software for this cabinet and theme",
             )
+        sets.append("unverified_theme_id = NULL")
         sets.append("proposed_theme_id = %s")
         params.append(tid)
     if body.current_theme_id is not None:
@@ -601,8 +675,135 @@ def theme_search(
         """,
         tuple(params),
     )
+    temp_rows = _query(
+        """
+        SELECT TOP (20)
+            uuid, reference_key, display_name
+        FROM projects.unverified_theme
+        WHERE status = N'unverified'
+          AND display_name LIKE %s
+        ORDER BY display_name
+        """,
+        (like,),
+    )
+    key = _name_key(search)
+    existing_temp = _query(
+        """
+        SELECT TOP 1 uuid
+        FROM projects.unverified_theme
+        WHERE name_key = %s AND status = N'unverified'
+        """,
+        (key,),
+    )
+    catalog_hit = _catalog_theme_for_key(key, search) if len(key) >= 4 else None
+    add_temp = bool(cab) and len(key) >= 4 and not existing_temp and not catalog_hit
     return {
         "items": [_row(r) for r in rows],
+        "temp_items": [_row(r) for r in temp_rows],
+        "add_temp": add_temp,
         "tbd_theme_id": tbd,
         "cabinet_id": cab or None,
     }
+
+
+def _assign_unverified(unit_id: str, theme_uuid: str, user: dict[str, Any] | None) -> dict:
+    rows = _query(
+        """
+        SELECT u.uuid, u.proposal_id, u.cabinet_id, p.stage, p.reference_key
+        FROM projects.proposal_unit u
+        JOIN projects.proposal p ON p.uuid = u.proposal_id
+        WHERE u.uuid = %s
+        """,
+        (unit_id,),
+    )
+    if not rows:
+        raise HTTPException(status_code=404, detail="Unit not found")
+    row = rows[0]
+    if row["stage"] not in ("draft", "pre_check"):
+        raise HTTPException(status_code=400, detail="Units locked at this stage")
+    if not (row.get("cabinet_id") or "").strip():
+        raise HTTPException(
+            status_code=400,
+            detail="Add a cabinet before assigning a theme",
+        )
+    _execute(
+        """
+        UPDATE projects.proposal_unit
+        SET unverified_theme_id = %s,
+            proposed_theme_id = %s,
+            update_date = SYSUTCDATETIME(),
+            update_by = %s
+        WHERE uuid = %s
+        """,
+        (theme_uuid, _tbd_theme_id(), _actor(user), unit_id),
+    )
+    _refresh_readiness(str(row["proposal_id"]))
+    return proposal_detail(str(row["reference_key"]), user)
+
+
+@router.post("/unverified-themes")
+def create_unverified_theme(
+    body: TempThemeBody,
+    user: Annotated[dict[str, Any] | None, Depends(require_demo_user)] = None,
+):
+    """Create or reuse a shared temp theme and assign it to the unit."""
+    _assert_write(user)
+    display = " ".join(body.display_name.split())
+    key = _name_key(display)
+    if len(key) < 4:
+        raise HTTPException(status_code=400, detail="Temp theme name is too short")
+    catalog_hit = _catalog_theme_for_key(key, display)
+    if catalog_hit:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "That name is already in the catalog "
+                f"({catalog_hit['reference_key']}). "
+                "It is hidden here because this cabinet has no confirmed software for it."
+            ),
+        )
+    existing = _query(
+        """
+        SELECT uuid, status, promoted_theme_id, display_name
+        FROM projects.unverified_theme
+        WHERE name_key = %s
+        """,
+        (key,),
+    )
+    if existing:
+        row = existing[0]
+        if (row.get("status") or "") == "promoted" and row.get("promoted_theme_id"):
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    "That temp name was already promoted to "
+                    f"{row['promoted_theme_id']}"
+                ),
+            )
+        theme_uuid = str(row["uuid"])
+    else:
+        seq = _query(
+            """
+            SELECT ISNULL(MAX(TRY_CONVERT(int, SUBSTRING(reference_key, 4, 10))), 0) + 1 AS n
+            FROM projects.unverified_theme
+            WHERE reference_key LIKE N'UV-[0-9]%'
+            """
+        )
+        ref = f"UV-{int(seq[0]['n']):06d}"
+        _execute(
+            """
+            INSERT INTO projects.unverified_theme (
+                reference_key, display_name, name_key, status, update_by
+            )
+            VALUES (%s, %s, %s, N'unverified', %s)
+            """,
+            (ref, display, key, _actor(user)),
+        )
+        created = _query(
+            "SELECT uuid FROM projects.unverified_theme WHERE name_key = %s",
+            (key,),
+        )
+        if not created:
+            raise HTTPException(status_code=500, detail="Temp theme was not saved")
+        theme_uuid = str(created[0]["uuid"])
+    return _assign_unverified(body.unit_id.strip(), theme_uuid, user)

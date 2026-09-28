@@ -108,6 +108,9 @@
   }
 
   function softwareBadge(u) {
+    if (u.software_state === "unverified" || u.unverified_theme_id) {
+      return `<div class="pwb-sw temp">Temp</div>`;
+    }
     if (Number(u.is_tbd) || u.software_state === "tbd") return "";
     if (u.software_state === "confirmed") {
       return `<div class="pwb-sw confirmed">Cabinet confirmed</div>`;
@@ -140,9 +143,15 @@
 
     const unitsRows = (d.units || [])
       .map((u) => {
-        const themeLabel = Number(u.is_tbd)
-          ? `<span class="pwb-tbd">TBD</span>`
-          : esc(u.proposed_theme_name || u.proposed_theme_id || "—");
+        const isTemp = !!(u.unverified_theme_id);
+        const themeLabel = isTemp
+          ? `<span class="pwb-temp">${esc(u.unverified_theme_name || "Temp")}</span>`
+          : Number(u.is_tbd)
+            ? `<span class="pwb-tbd">TBD</span>`
+            : esc(u.proposed_theme_name || u.proposed_theme_id || "—");
+        const themeIdLine = isTemp
+          ? esc(u.unverified_reference_key || "")
+          : esc(u.proposed_theme_id || "");
         const sw = softwareBadge(u);
         const hasCab = !!(u.cabinet_id && String(u.cabinet_id).trim());
         const themeEditor = editable
@@ -150,14 +159,16 @@
               <input data-unit="${esc(u.uuid)}" data-field="theme_q" data-cabinet="${esc(
                 u.cabinet_id || ""
               )}" placeholder="${
-                hasCab ? "Search catalog theme…" : "Add a cabinet first"
+                hasCab ? "Search theme…" : "Add a cabinet first"
               }" value="${
-                Number(u.is_tbd) ? "" : esc(u.proposed_theme_name || "")
+                isTemp
+                  ? esc(u.unverified_theme_name || "")
+                  : Number(u.is_tbd)
+                    ? ""
+                    : esc(u.proposed_theme_name || "")
               }" ${hasCab ? "" : "disabled"} />
               <div class="pwb-theme-results" hidden></div>
-              <div style="margin-top:4px;font-size:.75rem;color:#9aa3b2">${themeLabel} · ${esc(
-                u.proposed_theme_id || ""
-              )}</div>
+              <div style="margin-top:4px;font-size:.75rem;color:#9aa3b2">${themeLabel} · ${themeIdLine}</div>
               ${sw}
             </div>`
           : `<span class="${Number(u.is_tbd) ? "pwb-tbd" : ""}">${themeLabel}</span>${sw}`;
@@ -356,13 +367,13 @@
         )}&limit=20`
       );
       const items = data.items || [];
-      if (!items.length) {
+      const temps = data.temp_items || [];
+      if (!items.length && !temps.length && !data.add_temp) {
         box.hidden = false;
         box.innerHTML = `<button type="button" disabled>No confirmed themes for this cabinet</button>`;
         return;
       }
-      box.hidden = false;
-      box.innerHTML = items
+      const confirmedHtml = items
         .map(
           (t) =>
             `<button type="button" data-tid="${esc(t.reference_key)}">${esc(
@@ -370,12 +381,52 @@
             )} <span style="color:#9aa3b2">${esc(t.reference_key)}</span></button>`
         )
         .join("");
+      const tempHtml = temps
+        .map(
+          (t) =>
+            `<button type="button" data-temp="${esc(t.uuid)}">Temp · ${esc(
+              t.display_name
+            )} <span style="color:#9aa3b2">${esc(t.reference_key)}</span></button>`
+        )
+        .join("");
+      const addHtml = data.add_temp
+        ? `<button type="button" data-add-temp="${esc(q)}">Add temp theme “${esc(q)}”</button>`
+        : "";
+      box.hidden = false;
+      box.innerHTML = confirmedHtml + tempHtml + addHtml;
       box.querySelectorAll("button[data-tid]").forEach((btn) => {
         btn.addEventListener("click", async () => {
           box.hidden = true;
           await patchUnit(input.dataset.unit, {
             proposed_theme_id: btn.getAttribute("data-tid"),
           });
+        });
+      });
+      box.querySelectorAll("button[data-temp]").forEach((btn) => {
+        btn.addEventListener("click", async () => {
+          box.hidden = true;
+          await patchUnit(input.dataset.unit, {
+            unverified_theme_id: btn.getAttribute("data-temp"),
+          });
+        });
+      });
+      box.querySelectorAll("button[data-add-temp]").forEach((btn) => {
+        btn.addEventListener("click", async () => {
+          box.hidden = true;
+          try {
+            showError("");
+            STATE.detail = await api("/api/projects-workbench/unverified-themes", {
+              method: "POST",
+              body: JSON.stringify({
+                display_name: btn.getAttribute("data-add-temp"),
+                unit_id: input.dataset.unit,
+              }),
+            });
+            await loadList();
+            renderDetail();
+          } catch (err) {
+            showError(err.message || String(err));
+          }
         });
       });
     } catch (e) {
