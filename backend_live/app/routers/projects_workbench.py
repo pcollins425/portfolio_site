@@ -97,6 +97,17 @@ EXISTS (
 """
 
 
+def _pair_confirmed(theme_id: str, cabinet_id: str) -> bool:
+    rows = _query(
+        f"""
+        SELECT CASE WHEN {_CONFIRMED_SOFTWARE.format(theme="%s", cabinet="%s")}
+                    THEN 1 ELSE 0 END AS ok
+        """,
+        (theme_id, cabinet_id),
+    )
+    return bool(rows and rows[0].get("ok"))
+
+
 def _tbd_theme_id() -> str:
     rows = _query(
         """
@@ -378,10 +389,16 @@ def patch_unit(
             "SELECT cabinet_id FROM projects.proposal_unit WHERE uuid = %s",
             (unit_id.strip(),),
         )
-        if not cab or not (cab[0].get("cabinet_id") or "").strip():
+        cab_id = (cab[0].get("cabinet_id") or "").strip() if cab else ""
+        if not cab_id:
             raise HTTPException(
                 status_code=400,
                 detail="Add a cabinet before assigning a theme",
+            )
+        if not _pair_confirmed(tid, cab_id):
+            raise HTTPException(
+                status_code=400,
+                detail="No confirmed software for this cabinet and theme",
             )
         sets.append("proposed_theme_id = %s")
         params.append(tid)
