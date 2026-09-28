@@ -26,6 +26,17 @@ CHECK_STATUSES = frozenset(
     {"pending", "in_progress", "blocker", "ready", "na"}
 )
 OPS = frozenset({"convert", "install", "remove", "move"})
+# Readiness rows created when a draft is sent. Owner is the department,
+# not a person. Admin may clear every row while Compliance and Ops
+# accounts are still the testing stand-in.
+CHECK_OWNERS = (
+    ("par", "compliance"),
+    ("lab", "compliance"),
+    ("software", "compliance"),
+    ("cabinet", "ops"),
+    ("parts", "ops"),
+    ("serials", "ops"),
+)
 
 
 def _db() -> str:
@@ -70,6 +81,23 @@ def _assert_write(user: dict[str, Any] | None) -> None:
         return
     if not perms.can_write(user.get("permissions") or {}):
         raise HTTPException(status_code=403, detail="No write access to Project Workbench")
+
+
+def _is_admin(user: dict[str, Any] | None) -> bool:
+    if user is None:
+        return True
+    return perms.is_admin(user)
+
+
+def _can_edit_check(user: dict[str, Any] | None, owner_role: str) -> bool:
+    if _is_admin(user):
+        return True
+    owner = (owner_role or "").strip().lower()
+    if owner == "compliance":
+        return perms.can_edit_compliance(user)
+    if owner == "ops":
+        return perms.can_edit_ops(user)
+    return False
 
 
 def _actor(user: dict[str, Any] | None) -> str:
@@ -225,6 +253,9 @@ def workbench_permissions(
     return {
         "can_read": perms.can_read(perms_map) if user else True,
         "can_write": perms.can_write(perms_map) if user else True,
+        "is_admin": _is_admin(user),
+        "can_edit_compliance": _is_admin(user) or perms.can_edit_compliance(user),
+        "can_edit_ops": _is_admin(user) or perms.can_edit_ops(user),
         "area": perms.WORKBENCH_AREA,
         "tbd_theme_id": _tbd_theme_id(),
     }
@@ -413,7 +444,7 @@ class CheckPatch(BaseModel):
 
 
 class StageBody(BaseModel):
-    stage: Literal["draft", "pre_check"]
+    stage: Literal["draft", "pre_check", "final_approved"]
     reason: str | None = Field(None, max_length=2000)
 
 
@@ -423,7 +454,6 @@ def patch_unit(
     body: UnitPatch,
     user: Annotated[dict[str, Any] | None, Depends(require_demo_user)] = None,
 ):
-    _assert_write(user)
     rows = _query(
         """
         SELECT u.uuid, u.proposal_id, u.op, p.stage, p.reference_key
@@ -436,8 +466,10 @@ def patch_unit(
     if not rows:
         raise HTTPException(status_code=404, detail="Unit not found")
     row = rows[0]
-    if row["stage"] not in ("draft", "pre_check"):
-        raise HTTPException(status_code=400, detail="Units locked at this stage")
+    if row["stage"] != "draft":
+        raise HTTPException(status_code=400, detail="Proposal edits belong to Draft")
+    if not _is_admin(user):
+        _assert_write(user)
 
     sets: list[str] = ["update_date = SYSUTCDATETIME()", "update_by = %s"]
     params: list[Any] = [_actor(user)]
@@ -568,10 +600,9 @@ def patch_check(
     body: CheckPatch,
     user: Annotated[dict[str, Any] | None, Depends(require_demo_user)] = None,
 ):
-    _assert_write(user)
     rows = _query(
         """
-        SELECT c.uuid, c.proposal_id, p.stage, p.reference_key
+        SELECT c.uuid, c.proposal_id, c.owner_role, p.stage, p.reference_key
         FROM projects.proposal_readiness_check c
         JOIN projects.proposal p ON p.uuid = c.proposal_id
         WHERE c.uuid = %s
@@ -581,8 +612,10 @@ def patch_check(
     if not rows:
         raise HTTPException(status_code=404, detail="Check not found")
     row = rows[0]
-    if row["stage"] not in ("draft", "pre_check"):
-        raise HTTPException(status_code=400, detail="Checks locked at this stage")
+    if row["stage"] != "pre_check":
+        raise HTTPException(status_code=400, detail="Readiness edits belong to Pre-Check")
+    if not _can_edit_check(user, str(row.get("owner_role") or "")):
+        raise HTTPException(status_code=403, detail="This check belongs to another role")
 
     sets: list[str] = ["update_date = SYSUTCDATETIME()", "update_by = %s"]
     params: list[Any] = [_actor(user)]
@@ -596,6 +629,8 @@ def patch_check(
         sets.append("notes = %s")
         params.append(body.notes.strip() or None)
     if body.owner_role is not None:
+        if not _is_admin(user):
+            raise HTTPException(status_code=403, detail="Only admin can reassign a check")
         role = body.owner_role.strip().lower()
         if role not in ("ops", "compliance"):
             raise HTTPException(status_code=400, detail="owner_role must be ops|compliance")
@@ -613,42 +648,130 @@ def patch_check(
     return proposal_detail(str(row["reference_key"]), user)
 
 
+def _ensure_precheck(proposal_id: str, actor: str) -> None:
+    """Add missing readiness rows for units that already have a theme.
+
+    A TBD line with no temp name waits until Draft names it. Existing rows
+    are left alone, including status and notes.
+    """
+    tbd = _tbd_theme_id()
+    units = _query(
+        """
+        SELECT uuid, op, proposed_theme_id, unverified_theme_id
+        FROM projects.proposal_unit
+        WHERE proposal_id = %s
+        """,
+        (proposal_id,),
+    )
+    for unit in units:
+        op = str(unit.get("op") or "")
+        proposed = str(unit.get("proposed_theme_id") or "")
+        unverified = unit.get("unverified_theme_id")
+        if op != "remove" and proposed == tbd and not unverified:
+            continue
+        unit_id = str(unit["uuid"])
+        for check_type, owner in CHECK_OWNERS:
+            _execute(
+                """
+                INSERT INTO projects.proposal_readiness_check (
+                    uuid, proposal_id, proposal_unit_id, check_type,
+                    status, owner_role, update_by
+                )
+                SELECT NEWID(), %s, %s, %s, N'pending', %s, %s
+                WHERE NOT EXISTS (
+                    SELECT 1
+                    FROM projects.proposal_readiness_check
+                    WHERE proposal_unit_id = %s AND check_type = %s
+                )
+                """,
+                (proposal_id, unit_id, check_type, owner, actor, unit_id, check_type),
+            )
+
+
+def _stage_allowed(user: dict[str, Any] | None, current: str, target: str) -> None:
+    if target == "pre_check" and current == "draft":
+        if not (_is_admin(user) or perms.can_write((user or {}).get("permissions") or {})):
+            if user is not None:
+                raise HTTPException(status_code=403, detail="No write access to Project Workbench")
+        return
+    if target == "draft" and current == "pre_check":
+        if not (
+            _is_admin(user)
+            or perms.can_edit_compliance(user)
+            or perms.can_edit_ops(user)
+        ):
+            raise HTTPException(
+                status_code=403,
+                detail="Return to Draft is a Pre-Check action",
+            )
+        return
+    if target == "final_approved" and current == "pre_check":
+        if not _is_admin(user):
+            raise HTTPException(
+                status_code=403,
+                detail="Approving Final is limited to admin while stage accounts are in testing",
+            )
+        return
+    raise HTTPException(
+        status_code=400,
+        detail=f"Cannot move {current} → {target}",
+    )
+
+
 @router.post("/proposals/{ref}/stage")
 def set_stage(
     ref: str,
     body: StageBody,
     user: Annotated[dict[str, Any] | None, Depends(require_demo_user)] = None,
 ):
-    _assert_write(user)
     p = _get_proposal(ref)
     current = str(p["stage"])
     target = body.stage
     if current == target:
         return proposal_detail(str(p["reference_key"]), user)
 
-    allowed = {
-        ("draft", "pre_check"),
-        ("pre_check", "draft"),
-    }
-    if (current, target) not in allowed:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Cannot move {current} → {target} (slice-1 allows draft↔pre_check only)",
-        )
+    _stage_allowed(user, current, target)
     if target == "draft" and current == "pre_check":
         if not (body.reason or "").strip():
             raise HTTPException(status_code=400, detail="Return to draft requires a reason")
 
     actor = _actor(user)
     pid = str(p["uuid"])
-    _execute(
-        """
-        UPDATE projects.proposal
-        SET stage = %s, update_date = SYSUTCDATETIME(), update_by = %s
-        WHERE uuid = %s
-        """,
-        (target, actor, pid),
-    )
+    if target == "pre_check":
+        _ensure_precheck(pid, actor)
+        _refresh_readiness(pid)
+        fresh = _get_proposal(ref)
+        p = fresh
+
+    if target == "final_approved":
+        _refresh_readiness(pid)
+        gate = _get_proposal(ref)
+        if str(gate.get("computed_version_readiness") or "") != "ready":
+            raise HTTPException(
+                status_code=400,
+                detail="Final needs every check Ready or N/A, and no TBD theme",
+            )
+        _execute(
+            """
+            UPDATE projects.proposal
+            SET stage = %s,
+                locked_at = SYSUTCDATETIME(),
+                locked_by = %s,
+                update_date = SYSUTCDATETIME(),
+                update_by = %s
+            WHERE uuid = %s
+            """,
+            (target, actor, actor, pid),
+        )
+    else:
+        _execute(
+            """
+            UPDATE projects.proposal
+            SET stage = %s, update_date = SYSUTCDATETIME(), update_by = %s
+            WHERE uuid = %s
+            """,
+            (target, actor, pid),
+        )
     detail = {"reason": (body.reason or "").strip() or None}
     _execute(
         """
@@ -785,8 +908,8 @@ def _assign_unverified(unit_id: str, theme_uuid: str, user: dict[str, Any] | Non
     if not rows:
         raise HTTPException(status_code=404, detail="Unit not found")
     row = rows[0]
-    if row["stage"] not in ("draft", "pre_check"):
-        raise HTTPException(status_code=400, detail="Units locked at this stage")
+    if row["stage"] != "draft":
+        raise HTTPException(status_code=400, detail="Proposal edits belong to Draft")
     if not (row.get("cabinet_id") or "").strip():
         raise HTTPException(
             status_code=400,

@@ -3,12 +3,28 @@
 
   const STATE = {
     canWrite: false,
+    isAdmin: false,
+    canEditCompliance: false,
+    canEditOps: false,
     tbdThemeId: null,
     items: [],
     activeRef: null,
     detail: null,
     casinoFilter: null,
   };
+
+  const STAGES = [
+    ["draft", "Draft"],
+    ["pre_check", "Pre-Check"],
+    ["final_approved", "Final"],
+    ["worksheet_issued", "Worksheet"],
+    ["done", "Done"],
+  ];
+
+  function stageLabel(stage) {
+    const hit = STAGES.find((row) => row[0] === stage);
+    return hit ? hit[1] : String(stage || "");
+  }
 
   function apiBase() {
     return window.DGSAuth ? DGSAuth.apiBase() : "";
@@ -61,7 +77,7 @@
   }
 
   function badgeStage(stage) {
-    return `<span class="pwb-badge ${esc(stage)}">${esc(stage)}</span>`;
+    return `<span class="pwb-badge ${esc(stage)}">${esc(stageLabel(stage))}</span>`;
   }
 
   function badgeReady(row) {
@@ -103,8 +119,21 @@
     });
   }
 
-  function canEditStage(stage) {
-    return STATE.canWrite && (stage === "draft" || stage === "pre_check");
+  function canEditUnits(stage) {
+    return stage === "draft" && (STATE.isAdmin || STATE.canWrite);
+  }
+
+  function canEditCheck(check) {
+    if (!STATE.detail || !STATE.detail.proposal) return false;
+    if (STATE.detail.proposal.stage !== "pre_check") return false;
+    if (STATE.isAdmin) return true;
+    if (check.owner_role === "compliance") return STATE.canEditCompliance;
+    if (check.owner_role === "ops") return STATE.canEditOps;
+    return false;
+  }
+
+  function canReturn() {
+    return STATE.isAdmin || STATE.canEditCompliance || STATE.canEditOps;
   }
 
   function softwareBadge(u) {
@@ -121,25 +150,59 @@
     return "";
   }
 
+  function accessHint(stage) {
+    if (STATE.isAdmin) return `admin · ${stageLabel(stage)}`;
+    if (stage === "draft" && STATE.canWrite) return "draft edit";
+    if (stage === "pre_check" && (STATE.canEditCompliance || STATE.canEditOps)) return "pre-check edit";
+    return "read-only";
+  }
+
+  function stageRail(current) {
+    const idx = STAGES.findIndex((row) => row[0] === current);
+    return `<ol class="pwb-stages">${STAGES.map(([key, label], i) => {
+      const cls = i < idx ? "done" : i === idx ? "current" : "upcoming";
+      return `<li class="${cls}">${esc(label)}</li>`;
+    }).join("")}</ol>`;
+  }
+
   function renderDetail() {
     const root = document.getElementById("detail-root");
     const hint = document.getElementById("write-hint");
-    hint.textContent = STATE.canWrite ? "write on" : "read-only";
     const d = STATE.detail;
     if (!d || !d.proposal) {
+      hint.textContent = STATE.isAdmin ? "admin" : STATE.canWrite ? "draft edit" : "read-only";
       root.innerHTML = `<p class="pwb-empty">Select a proposal.</p>`;
       return;
     }
     const p = d.proposal;
-    const editable = canEditStage(p.stage);
+    hint.textContent = accessHint(p.stage);
+    const editUnits = canEditUnits(p.stage);
+    const showChecks = p.stage !== "draft";
+    const blocked = (p.computed_version_readiness || "") !== "ready";
 
     let actions = "";
-    if (STATE.canWrite && p.stage === "draft") {
+    if (editUnits) {
       actions += `<button type="button" class="dgs-v2-btn dgs-v2-btn--primary" id="btn-send-precheck">Send to Pre-Check</button>`;
     }
-    if (STATE.canWrite && p.stage === "pre_check") {
+    if (p.stage === "pre_check" && canReturn()) {
       actions += `<button type="button" class="dgs-v2-btn" id="btn-return-draft">Return to draft…</button>`;
     }
+    if (p.stage === "pre_check" && STATE.isAdmin) {
+      actions += `<button type="button" class="dgs-v2-btn dgs-v2-btn--primary" id="btn-approve-final"${
+        blocked ? " disabled" : ""
+      } title="${
+        blocked ? "Every check must be Ready or N/A, and no unit can still be TBD" : "Lock this version as Final"
+      }">Approve Final</button>`;
+    }
+
+    const laterNote =
+      p.stage === "final_approved"
+        ? "Final is locked. The worksheet stage is next, and issuing it is not on this screen yet."
+        : p.stage === "worksheet_issued"
+          ? "The worksheet has been issued. This record stays read-only."
+          : p.stage === "done"
+            ? "This project is done. The record stays read-only."
+            : "";
 
     const unitsRows = (d.units || [])
       .map((u) => {
@@ -156,7 +219,7 @@
         const hasCab = !!(u.cabinet_id && String(u.cabinet_id).trim());
         const themeEditor = u.op === "remove"
           ? `<span class="pwb-removed">removed from floor</span>`
-          : editable
+          : editUnits
           ? `<div class="pwb-rel theme-cell">
               <input data-unit="${esc(u.uuid)}" data-field="theme_q" data-cabinet="${esc(
                 u.cabinet_id || ""
@@ -177,7 +240,7 @@
         return `<tr>
           <td>${esc(u.sort_order)}</td>
           <td>${
-            editable
+            editUnits
               ? `<select data-unit="${esc(u.uuid)}" data-field="op">
                   ${["convert", "install", "remove", "move"]
                     .map(
@@ -189,28 +252,28 @@
               : esc(u.op)
           }</td>
           <td>${
-            editable
+            editUnits
               ? `<input data-unit="${esc(u.uuid)}" data-field="serial" value="${esc(u.serial || "")}" />`
               : esc(u.serial || "")
           }</td>
           <td>${esc(u.cabinet_name || u.cabinet_id || "—")}</td>
           <td>${themeEditor}</td>
           <td>${
-            editable
+            editUnits
               ? `<input data-unit="${esc(u.uuid)}" data-field="zone" value="${esc(
                   u.zone || ""
                 )}" style="max-width:70px" />`
               : esc(u.zone || "")
           }</td>
           <td>${
-            editable
+            editUnits
               ? `<input data-unit="${esc(u.uuid)}" data-field="bank" value="${esc(
                   u.bank || ""
                 )}" style="max-width:70px" />`
               : esc(u.bank || "")
           }</td>
           <td>${
-            editable
+            editUnits
               ? `<input data-unit="${esc(u.uuid)}" data-field="location" value="${esc(
                   u.location || ""
                 )}" style="max-width:70px" />`
@@ -222,7 +285,8 @@
 
     const checkRows = (d.checks || [])
       .map((c) => {
-        const statusSelect = editable
+        const editCheck = canEditCheck(c);
+        const statusSelect = editCheck
           ? `<select data-check="${esc(c.uuid)}" data-field="status">
               ${["pending", "in_progress", "blocker", "ready", "na"]
                 .map(
@@ -238,7 +302,7 @@
           <td>${esc(c.owner_role)}</td>
           <td>${statusSelect}</td>
           <td>${
-            editable
+            editCheck
               ? `<input data-check="${esc(c.uuid)}" data-field="notes" value="${esc(
                   c.notes || ""
                 )}" style="max-width:220px" />`
@@ -248,29 +312,34 @@
       })
       .join("");
 
+    const checksBlock = showChecks
+      ? `<div class="pwb-section">Pre-Check readiness</div>
+      <table class="pwb-table">
+        <thead><tr>
+          <th>Unit</th><th>Check</th><th>Owner</th><th>Status</th><th>Notes</th>
+        </tr></thead>
+        <tbody>${checkRows || `<tr><td colspan="5" class="pwb-empty">No checks yet. Send from Draft creates them for units that already have a theme.</td></tr>`}</tbody>
+      </table>`
+      : "";
+
     root.innerHTML = `
       <h2>${esc(p.reference_key)}</h2>
       <div class="meta" style="color:#9aa3b2;font-size:.9rem">
         ${esc(p.casino_short || p.casino_name)} · ${esc(p.kind)} · v${esc(p.version_num)}
       </div>
-      <div style="margin-top:8px">${badgeStage(p.stage)} ${badgeReady(p)}</div>
+      ${stageRail(p.stage)}
+      <div style="margin-top:8px">${badgeStage(p.stage)} ${p.stage === "draft" ? "" : badgeReady(p)}</div>
+      ${laterNote ? `<p class="pwb-stage-note">${esc(laterNote)}</p>` : ""}
       <div class="pwb-actions">${actions}</div>
 
-      <div class="pwb-section">Units</div>
+      <div class="pwb-section">${p.stage === "draft" ? "Units" : "Units on this proposal"}</div>
       <table class="pwb-table">
         <thead><tr>
           <th>#</th><th>Op</th><th>Serial</th><th>Cabinet</th><th>Proposed theme</th><th>Zone</th><th>Bank</th><th>Loc</th>
         </tr></thead>
         <tbody>${unitsRows || `<tr><td colspan="8" class="pwb-empty">No units</td></tr>`}</tbody>
       </table>
-
-      <div class="pwb-section">Pre-Check readiness</div>
-      <table class="pwb-table">
-        <thead><tr>
-          <th>Unit</th><th>Check</th><th>Owner</th><th>Status</th><th>Notes</th>
-        </tr></thead>
-        <tbody>${checkRows || `<tr><td colspan="5" class="pwb-empty">No checks</td></tr>`}</tbody>
-      </table>
+      ${checksBlock}
     `;
 
     const send = document.getElementById("btn-send-precheck");
@@ -281,6 +350,28 @@
           STATE.detail = await api(
             `/api/projects-workbench/proposals/${encodeURIComponent(p.reference_key)}/stage`,
             { method: "POST", body: JSON.stringify({ stage: "pre_check" }) }
+          );
+          await loadList();
+          renderDetail();
+        } catch (e) {
+          showError(e.message || String(e));
+        }
+      });
+    }
+    const approve = document.getElementById("btn-approve-final");
+    if (approve) {
+      approve.addEventListener("click", async () => {
+        if (
+          !confirm(
+            "Approve Final?\n\nThis locks the version. Draft edits and Pre-Check edits both close."
+          )
+        )
+          return;
+        try {
+          showError("");
+          STATE.detail = await api(
+            `/api/projects-workbench/proposals/${encodeURIComponent(p.reference_key)}/stage`,
+            { method: "POST", body: JSON.stringify({ stage: "final_approved" }) }
           );
           await loadList();
           renderDetail();
@@ -512,6 +603,9 @@
         return;
       }
       STATE.canWrite = !!perms.can_write;
+      STATE.isAdmin = !!perms.is_admin;
+      STATE.canEditCompliance = !!perms.can_edit_compliance;
+      STATE.canEditOps = !!perms.can_edit_ops;
       STATE.tbdThemeId = perms.tbd_theme_id;
       document.getElementById("btn-refresh").addEventListener("click", () => loadList());
       document.getElementById("stage-filter").addEventListener("change", () => loadList());
