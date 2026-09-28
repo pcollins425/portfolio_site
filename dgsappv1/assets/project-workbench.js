@@ -377,16 +377,19 @@
       const temps = data.temp_items || [];
       if (!items.length && !temps.length && !data.add_temp) {
         box.hidden = false;
-        box.innerHTML = `<button type="button" disabled>No confirmed themes for this cabinet</button>`;
+        box.innerHTML = `<button type="button" disabled>No matching themes</button>`;
         return;
       }
       const confirmedHtml = items
-        .map(
-          (t) =>
-            `<button type="button" data-tid="${esc(t.reference_key)}">${esc(
-              t.theme_name
-            )} <span style="color:#9aa3b2">${esc(t.reference_key)}</span></button>`
-        )
+        .map((t) => {
+          const needs = t.software_state === "need_software";
+          const note = needs
+            ? ` <span style="color:#f0c14b">Needs software</span>`
+            : "";
+          return `<button type="button" data-tid="${esc(t.reference_key)}">${esc(
+            t.theme_name
+          )} <span style="color:#9aa3b2">${esc(t.reference_key)}</span>${note}</button>`;
+        })
         .join("");
       const tempHtml = temps
         .map(

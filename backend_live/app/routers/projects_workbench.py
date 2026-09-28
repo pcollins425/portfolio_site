@@ -125,17 +125,6 @@ def _catalog_theme_for_key(name_key: str, sample: str) -> dict | None:
     return None
 
 
-def _pair_confirmed(theme_id: str, cabinet_id: str) -> bool:
-    rows = _query(
-        f"""
-        SELECT CASE WHEN {_CONFIRMED_SOFTWARE.format(theme="%s", cabinet="%s")}
-                    THEN 1 ELSE 0 END AS ok
-        """,
-        (theme_id, cabinet_id),
-    )
-    return bool(rows and rows[0].get("ok"))
-
-
 def _tbd_theme_id() -> str:
     rows = _query(
         """
@@ -468,11 +457,6 @@ def patch_unit(
                 status_code=400,
                 detail="Add a cabinet before assigning a theme",
             )
-        if not _pair_confirmed(tid, cab_id):
-            raise HTTPException(
-                status_code=400,
-                detail="No confirmed software for this cabinet and theme",
-            )
         sets.append("unverified_theme_id = NULL")
         sets.append("proposed_theme_id = %s")
         params.append(tid)
@@ -631,8 +615,11 @@ def theme_search(
 ):
     """Catalog theme picker. Excludes TBD.
 
-    With cabinet_id, only themes that have confirmed software on that
-    cabinet are returned. Unconfirmed titles are not options.
+    Matches are catalog themes. software_state is confirmed when this
+    cabinet already has a non-revoked software row with par or paytable
+    settings, and need_software otherwise. Assigning need_software does
+    not create a theme or software row. Pre-Check rejects it by setting
+    the software readiness check to blocker.
     """
     _assert_read(user)
     tbd = _tbd_theme_id()
@@ -648,19 +635,22 @@ def theme_search(
         if not known:
             raise HTTPException(status_code=400, detail="Unknown cabinet_id")
     like = f"%{search}%"
-    confirmed = _CONFIRMED_SOFTWARE.format(
-        theme="t.reference_key", cabinet="%s"
-    )
-    cab_filter = f"AND {confirmed}" if cab else ""
+    state_sql = "N'need_software'"
+    order_sql = "t.theme_name"
     params: list[Any] = [tbd, like, like]
     if cab:
-        params.append(cab)
+        confirmed = _CONFIRMED_SOFTWARE.format(
+            theme="t.reference_key", cabinet="%s"
+        )
+        state_sql = f"CASE WHEN {confirmed} THEN N'confirmed' ELSE N'need_software' END"
+        order_sql = f"CASE WHEN {confirmed} THEN 0 ELSE 1 END, t.theme_name"
+        params.extend([cab, cab])
     rows = _query(
         f"""
         SELECT TOP ({int(limit)})
             t.reference_key, t.theme_name, t.vendor_id, t.cabinet_id,
             v.vendor_name, c.cabinet_name,
-            N'confirmed' AS software_state
+            {state_sql} AS software_state
         FROM vendors.themes t
         LEFT JOIN vendors.vendors v ON v.reference_key = t.vendor_id
         LEFT JOIN vendors.cabinets c ON c.reference_key = t.cabinet_id
@@ -670,8 +660,7 @@ def theme_search(
                 t.theme_name LIKE %s
              OR t.reference_key LIKE %s
           )
-          {cab_filter}
-        ORDER BY t.theme_name
+        ORDER BY {order_sql}
         """,
         tuple(params),
     )
