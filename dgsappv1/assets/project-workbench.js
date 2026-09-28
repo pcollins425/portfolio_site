@@ -107,6 +107,23 @@
     return STATE.canWrite && (stage === "draft" || stage === "pre_check");
   }
 
+  function softwareBadge(u) {
+    if (Number(u.is_tbd) || u.software_state === "tbd") return "";
+    if (u.software_state === "confirmed") {
+      return `<div class="pwb-sw confirmed">Cabinet confirmed</div>`;
+    }
+    if (u.software_state === "need_software") {
+      return `<div class="pwb-sw need_software">Needs software</div>`;
+    }
+    return "";
+  }
+
+  function softwareTag(state) {
+    if (state === "confirmed") return "cabinet confirmed";
+    if (state === "need_software") return "needs software";
+    return "";
+  }
+
   function renderDetail() {
     const root = document.getElementById("detail-root");
     const hint = document.getElementById("write-hint");
@@ -132,17 +149,24 @@
         const themeLabel = Number(u.is_tbd)
           ? `<span class="pwb-tbd">TBD</span>`
           : esc(u.proposed_theme_name || u.proposed_theme_id || "—");
+        const sw = softwareBadge(u);
+        const hasCab = !!(u.cabinet_id && String(u.cabinet_id).trim());
         const themeEditor = editable
           ? `<div class="pwb-rel theme-cell">
-              <input data-unit="${esc(u.uuid)}" data-field="theme_q" placeholder="Search theme…" value="${
+              <input data-unit="${esc(u.uuid)}" data-field="theme_q" data-cabinet="${esc(
+                u.cabinet_id || ""
+              )}" placeholder="${
+                hasCab ? "Search catalog theme…" : "Add a cabinet first"
+              }" value="${
                 Number(u.is_tbd) ? "" : esc(u.proposed_theme_name || "")
-              }" />
+              }" ${hasCab ? "" : "disabled"} />
               <div class="pwb-theme-results" hidden></div>
               <div style="margin-top:4px;font-size:.75rem;color:#9aa3b2">${themeLabel} · ${esc(
                 u.proposed_theme_id || ""
               )}</div>
+              ${sw}
             </div>`
-          : `<span class="${Number(u.is_tbd) ? "pwb-tbd" : ""}">${themeLabel}</span>`;
+          : `<span class="${Number(u.is_tbd) ? "pwb-tbd" : ""}">${themeLabel}</span>${sw}`;
         return `<tr>
           <td>${esc(u.sort_order)}</td>
           <td>${
@@ -162,6 +186,7 @@
               ? `<input data-unit="${esc(u.uuid)}" data-field="serial" value="${esc(u.serial || "")}" />`
               : esc(u.serial || "")
           }</td>
+          <td>${esc(u.cabinet_name || u.cabinet_id || "—")}</td>
           <td>${themeEditor}</td>
           <td>${
             editable
@@ -227,9 +252,9 @@
       <div class="pwb-section">Units</div>
       <table class="pwb-table">
         <thead><tr>
-          <th>#</th><th>Op</th><th>Serial</th><th>Proposed theme</th><th>Zone</th><th>Bank</th><th>Loc</th>
+          <th>#</th><th>Op</th><th>Serial</th><th>Cabinet</th><th>Proposed theme</th><th>Zone</th><th>Bank</th><th>Loc</th>
         </tr></thead>
-        <tbody>${unitsRows || `<tr><td colspan="7" class="pwb-empty">No units</td></tr>`}</tbody>
+        <tbody>${unitsRows || `<tr><td colspan="8" class="pwb-empty">No units</td></tr>`}</tbody>
       </table>
 
       <div class="pwb-section">Pre-Check readiness</div>
@@ -319,6 +344,12 @@
   async function themeSearch(input) {
     const box = input.parentElement.querySelector(".pwb-theme-results");
     const q = input.value.trim();
+    const cab = (input.dataset.cabinet || "").trim();
+    if (!cab) {
+      box.hidden = true;
+      box.innerHTML = "";
+      return;
+    }
     if (!q) {
       box.hidden = true;
       box.innerHTML = "";
@@ -326,22 +357,26 @@
     }
     try {
       const data = await api(
-        `/api/projects-workbench/themes?q=${encodeURIComponent(q)}&limit=20`
+        `/api/projects-workbench/themes?q=${encodeURIComponent(q)}&cabinet_id=${encodeURIComponent(
+          cab
+        )}&limit=20`
       );
       const items = data.items || [];
       if (!items.length) {
         box.hidden = false;
-        box.innerHTML = `<button type="button" disabled>No matches</button>`;
+        box.innerHTML = `<button type="button" disabled>No catalog matches</button>`;
         return;
       }
       box.hidden = false;
       box.innerHTML = items
-        .map(
-          (t) =>
-            `<button type="button" data-tid="${esc(t.reference_key)}">${esc(
-              t.theme_name
-            )} <span style="color:#9aa3b2">${esc(t.reference_key)}</span></button>`
-        )
+        .map((t) => {
+          const tag = softwareTag(t.software_state);
+          return `<button type="button" data-tid="${esc(t.reference_key)}">${esc(
+            t.theme_name
+          )} <span style="color:#9aa3b2">${esc(t.reference_key)}${
+            tag ? " · " + esc(tag) : ""
+          }</span></button>`;
+        })
         .join("");
       box.querySelectorAll("button[data-tid]").forEach((btn) => {
         btn.addEventListener("click", async () => {

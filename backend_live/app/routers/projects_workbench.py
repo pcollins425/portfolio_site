@@ -77,6 +77,26 @@ def _actor(user: dict[str, Any] | None) -> str:
     return str(user.get("email") or user.get("name") or user.get("employee_id") or "unknown")[:50]
 
 
+# Confirmed software = a non-revoked vendors.software row for this theme+cabinet
+# whose settings JSON actually carries options (PAR rtp_by_par or a paytable id).
+# A catalog theme with no such row can still be proposed; the UI alerts that
+# software is needed before the cabinet is confirmed for that theme.
+_CONFIRMED_SOFTWARE = """
+EXISTS (
+    SELECT 1
+    FROM vendors.software s
+    WHERE s.theme_id = {theme}
+      AND s.cabinet_id = {cabinet}
+      AND ISNULL(s.revoked, 0) = 0
+      AND ISJSON(s.settings) = 1
+      AND (
+            EXISTS (SELECT 1 FROM OPENJSON(s.settings, '$.rtp_by_par'))
+         OR NULLIF(JSON_VALUE(s.settings, '$.paytable_id'), N'') IS NOT NULL
+      )
+)
+"""
+
+
 def _tbd_theme_id() -> str:
     rows = _query(
         """
@@ -230,7 +250,14 @@ def proposal_detail(
             ct.theme_name AS current_theme_name,
             pt.theme_name AS proposed_theme_name,
             cab.cabinet_name,
-            CASE WHEN u.proposed_theme_id = %s THEN 1 ELSE 0 END AS is_tbd
+            CASE WHEN u.proposed_theme_id = %s THEN 1 ELSE 0 END AS is_tbd,
+            CASE
+                WHEN u.proposed_theme_id = %s THEN N'tbd'
+                WHEN """ + _CONFIRMED_SOFTWARE.format(
+                    theme="u.proposed_theme_id", cabinet="u.cabinet_id"
+                ) + """ THEN N'confirmed'
+                ELSE N'need_software'
+            END AS software_state
         FROM projects.proposal_unit u
         LEFT JOIN vendors.themes ct ON ct.reference_key = u.current_theme_id
         LEFT JOIN vendors.themes pt ON pt.reference_key = u.proposed_theme_id
@@ -238,7 +265,7 @@ def proposal_detail(
         WHERE u.proposal_id = %s
         ORDER BY u.sort_order, u.reference_key
         """,
-        (tbd, pid),
+        (tbd, tbd, pid),
     )
     checks = _query(
         """
@@ -347,6 +374,15 @@ def patch_unit(
         )
         if not exists:
             raise HTTPException(status_code=400, detail="Unknown proposed_theme_id")
+        cab = _query(
+            "SELECT cabinet_id FROM projects.proposal_unit WHERE uuid = %s",
+            (unit_id.strip(),),
+        )
+        if not cab or not (cab[0].get("cabinet_id") or "").strip():
+            raise HTTPException(
+                status_code=400,
+                detail="Add a cabinet before assigning a theme",
+            )
         sets.append("proposed_theme_id = %s")
         params.append(tid)
     if body.current_theme_id is not None:
@@ -498,21 +534,52 @@ def set_stage(
 @router.get("/themes")
 def theme_search(
     q: str = Query("", max_length=120),
+    cabinet_id: str = Query("", max_length=40),
     limit: int = Query(30, ge=1, le=100),
     user: Annotated[dict[str, Any] | None, Depends(require_demo_user)] = None,
 ):
-    """Theme picker — excludes TBD sentinel."""
+    """Catalog theme picker. Excludes TBD.
+
+    cabinet_id locks each hit to confirmed software for that cabinet:
+    software_state confirmed | need_software. Confirmed hits sort first.
+    """
     _assert_read(user)
     tbd = _tbd_theme_id()
     search = q.strip()
+    cab = cabinet_id.strip()
     if not search:
-        return {"items": [], "tbd_theme_id": tbd}
+        return {"items": [], "tbd_theme_id": tbd, "cabinet_id": cab or None}
+    if cab:
+        known = _query(
+            "SELECT TOP 1 reference_key FROM vendors.cabinets WHERE reference_key = %s",
+            (cab,),
+        )
+        if not known:
+            raise HTTPException(status_code=400, detail="Unknown cabinet_id")
     like = f"%{search}%"
+    confirmed = _CONFIRMED_SOFTWARE.format(
+        theme="t.reference_key", cabinet="%s"
+    )
+    state_sql = (
+        f"CASE WHEN {confirmed} THEN N'confirmed' ELSE N'need_software' END"
+        if cab
+        else "CAST(NULL AS nvarchar(20))"
+    )
+    order_sql = (
+        f"CASE WHEN {confirmed} THEN 0 ELSE 1 END, t.theme_name"
+        if cab
+        else "t.theme_name"
+    )
+    params: list[Any] = []
+    if cab:
+        params.extend([cab, cab])
+    params.extend([tbd, like, like])
     rows = _query(
         f"""
         SELECT TOP ({int(limit)})
             t.reference_key, t.theme_name, t.vendor_id, t.cabinet_id,
-            v.vendor_name, c.cabinet_name
+            v.vendor_name, c.cabinet_name,
+            {state_sql} AS software_state
         FROM vendors.themes t
         LEFT JOIN vendors.vendors v ON v.reference_key = t.vendor_id
         LEFT JOIN vendors.cabinets c ON c.reference_key = t.cabinet_id
@@ -522,8 +589,12 @@ def theme_search(
                 t.theme_name LIKE %s
              OR t.reference_key LIKE %s
           )
-        ORDER BY t.theme_name
+        ORDER BY {order_sql}
         """,
-        (tbd, like, like),
+        tuple(params),
     )
-    return {"items": [_row(r) for r in rows], "tbd_theme_id": tbd}
+    return {
+        "items": [_row(r) for r in rows],
+        "tbd_theme_id": tbd,
+        "cabinet_id": cab or None,
+    }
