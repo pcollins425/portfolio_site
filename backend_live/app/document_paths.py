@@ -123,16 +123,52 @@ def is_registered_document_path(rel_path: str) -> bool:
     return bool(row.get("ok"))
 
 
+def compliance_root() -> Path | None:
+    """Analytics ``Compliance`` folder (Lab Letters, Par Sheets, Slicks)."""
+    for key in ("COMPLIANCE_ROOT",):
+        val = (os.environ.get(key) or "").strip()
+        if val:
+            p = Path(val)
+            if p.is_dir():
+                return p.resolve()
+    for candidate in (r"Z:\Compliance", "/mnt/z/Compliance"):
+        p = Path(candidate)
+        try:
+            if p.is_dir():
+                return p.resolve()
+        except OSError:
+            continue
+    return None
+
+
+def resolve_compliance_file(rel_path: str) -> Path:
+    """``Compliance/...`` lives at the Analytics Compliance root, not under contract documents."""
+    rel = normalize_relative_path(rel_path)
+    if not (rel == "Compliance" or rel.startswith("Compliance/")):
+        raise ValueError("not a compliance path")
+    root = compliance_root()
+    if root is None:
+        raise FileNotFoundError("COMPLIANCE_ROOT not configured")
+    tail = PurePosixPath(rel).parts[1:]
+    full = (root.joinpath(*tail) if tail else root).resolve()
+    if not str(full).startswith(str(root)):
+        raise ValueError("invalid document path")
+    return full
+
+
 def resolve_document_file(rel_path: str) -> Path:
     rel = normalize_relative_path(rel_path)
     if not is_registered_document_path(rel):
         raise FileNotFoundError(rel_path)
-    root = docs_root()
-    if root is None:
-        raise FileNotFoundError("DOCS_ROOT not configured")
-    full = (root / Path(*PurePosixPath(rel).parts)).resolve()
-    if not str(full).startswith(str(root)):
-        raise FileNotFoundError(rel_path)
+    if rel == "Compliance" or rel.startswith("Compliance/"):
+        full = resolve_compliance_file(rel)
+    else:
+        root = docs_root()
+        if root is None:
+            raise FileNotFoundError("DOCS_ROOT not configured")
+        full = (root / Path(*PurePosixPath(rel).parts)).resolve()
+        if not str(full).startswith(str(root)):
+            raise FileNotFoundError(rel_path)
     if not full.is_file():
         raise FileNotFoundError(rel_path)
     return full

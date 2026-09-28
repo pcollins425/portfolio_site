@@ -176,14 +176,26 @@ def _docs_subpath() -> str:
     return _env("NAS_DOCS_SUBPATH", "Paul Collins/contract documents").strip("/")
 
 
-def _docs_smb_uri(rel_path: str) -> str:
-    from app.document_paths import normalize_relative_path
-
+def _share_uri() -> str:
     share = _env("NAS_MEDIA_SHARE").replace("\\", "/")
     if not share.startswith("//"):
         share = f"//{share.lstrip('/')}"
-    subpath = _docs_subpath()
+    return share.rstrip("/")
+
+
+def _is_compliance_rel(rel_path: str) -> bool:
+    """Analytics Compliance is a share-root folder, not under contract documents."""
+    return rel_path == "Compliance" or rel_path.startswith("Compliance/")
+
+
+def _docs_smb_uri(rel_path: str) -> str:
+    from app.document_paths import normalize_relative_path
+
+    share = _share_uri()
     rel = normalize_relative_path(rel_path)
+    if _is_compliance_rel(rel):
+        return f"{share}/{rel}"
+    subpath = _docs_subpath()
     if subpath:
         return f"{share}/{subpath}/{rel}"
     return f"{share}/{rel}"
@@ -236,11 +248,12 @@ def docs_smb_ensure_parent(rel_path: str) -> None:
     parts = rel.split("/")
     if len(parts) <= 1:
         return
-    share = _env("NAS_MEDIA_SHARE").replace("\\", "/")
-    if not share.startswith("//"):
-        share = f"//{share.lstrip('/')}"
-    subpath = _docs_subpath()
-    base = f"{share}/{subpath}" if subpath else share
+    share = _share_uri()
+    if _is_compliance_rel(rel):
+        base = share
+    else:
+        subpath = _docs_subpath()
+        base = f"{share}/{subpath}" if subpath else share
 
     def _mkdirs() -> None:
         for i in range(1, len(parts)):

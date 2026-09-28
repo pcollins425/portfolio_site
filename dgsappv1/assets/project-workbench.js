@@ -178,16 +178,57 @@
       .join("");
   }
 
-  function checkCell(check) {
-    if (!check) return `<td class="pwb-check">—</td>`;
+  function hubHref(query) {
+    const q = new URLSearchParams();
+    Object.entries(query).forEach(([key, value]) => {
+      if (value) q.set(key, value);
+    });
+    const href = `theme-hub.html?${q}`;
+    return window.DGS && DGS.withApi ? DGS.withApi(href) : href;
+  }
+
+  function themeHubLink(unit) {
+    if (unit.unverified_theme_id || Number(unit.is_tbd) || !unit.proposed_theme_id) return "";
+    return `<a class="pwb-hub-link" href="${hubHref({ id: unit.proposed_theme_id })}">Theme hub</a>`;
+  }
+
+  function addDocLink(unit, type, byUnit) {
+    const checks = byUnit[unit.uuid] || {};
+    const check = checks[type];
+    if (!check || !canEditCheck(check)) return "";
+    if (check.status === "ready" || check.status === "na") return "";
+    if (unit.op === "REMOVE") return "";
+    if (unit.unverified_theme_id || Number(unit.is_tbd) || !unit.proposed_theme_id) {
+      return `<span class="pwb-add-doc">Catalog theme required</span>`;
+    }
+    const pending = ["par", "lab"].filter((kind) => {
+      const row = checks[kind];
+      return row && row.status !== "ready" && row.status !== "na";
+    });
+    if (!pending.includes(type)) return "";
+    const label = pending.length > 1 ? "Add par and lab" : `Add ${type}`;
+    const href = hubHref({
+      id: unit.proposed_theme_id,
+      add: pending.join(","),
+      proposal: STATE.detail.proposal.reference_key,
+      unit: unit.uuid,
+      cabinet: unit.cabinet_id || "",
+      return: `project-workbench.html?ref=${STATE.detail.proposal.reference_key}`,
+    });
+    return `<a class="pwb-add-doc" href="${href}">${esc(label)}</a>`;
+  }
+
+  function checkCell(check, extra) {
+    const more = extra || "";
+    if (!check) return `<td class="pwb-check">—${more}</td>`;
     const title = esc(check.notes || "");
     if (!canEditCheck(check)) {
       const label = check.status === "na" ? "n/a" : check.status === "in_progress" ? "started" : check.status;
-      return `<td class="pwb-check" title="${title}">${esc(label)}</td>`;
+      return `<td class="pwb-check" title="${title}">${esc(label)}${more}</td>`;
     }
     return `<td class="pwb-check"><select class="pwb-check-select" data-check="${esc(
       check.uuid
-    )}" data-field="status" title="${title}">${checkStatusOptions(check.status)}</select></td>`;
+    )}" data-field="status" title="${title}">${checkStatusOptions(check.status)}</select>${more}</td>`;
   }
 
   function stageRail(current) {
@@ -274,8 +315,9 @@
               <div class="pwb-theme-results" hidden></div>
               <div style="margin-top:4px;font-size:.75rem;color:#9aa3b2">${themeLabel} · ${themeIdLine}</div>
               ${sw}
+              ${themeHubLink(u)}
             </div>`
-          : `<span class="${Number(u.is_tbd) ? "pwb-tbd" : ""}">${themeLabel}</span>${sw}`;
+          : `<span class="${Number(u.is_tbd) ? "pwb-tbd" : ""}">${themeLabel}</span>${sw}${themeHubLink(u)}`;
         return `<tr>
           <td>${esc(u.sort_order)}</td>
           <td>${
@@ -325,7 +367,12 @@
           }</td>
           ${
             showChecks
-              ? CHECKS.map(([type]) => checkCell((byUnit[u.uuid] || {})[type])).join("")
+              ? CHECKS.map(([type]) =>
+                  checkCell(
+                    (byUnit[u.uuid] || {})[type],
+                    type === "par" || type === "lab" ? addDocLink(u, type, byUnit) : ""
+                  )
+                ).join("")
               : ""
           }
         </tr>`;

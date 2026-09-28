@@ -125,7 +125,15 @@ EXISTS (
     SELECT 1
     FROM vendors.software s
     WHERE s.theme_id = {theme}
-      AND s.cabinet_id = {cabinet}
+      AND (
+            s.cabinet_id = {cabinet}
+         OR EXISTS (
+                SELECT 1
+                FROM vendors.software_cabinet sc
+                WHERE sc.software_ref = s.reference_key
+                  AND sc.cabinet_id = {cabinet}
+            )
+      )
       AND ISNULL(s.revoked, 0) = 0
       AND ISJSON(s.settings) = 1
       AND (
@@ -572,7 +580,7 @@ def patch_unit(
             SELECT CASE WHEN {_CONFIRMED_SOFTWARE.format(theme="%s", cabinet="%s")}
                         THEN 1 ELSE 0 END AS ok
             """,
-            (tid, cab_id),
+            (tid, cab_id, cab_id),
         )
         on_cabinet = bool(confirmed and confirmed[0].get("ok"))
         if not on_cabinet and not _same_vendor_group(theme_vendor, cab_vendor):
@@ -715,6 +723,12 @@ def _apply_inline_defaults(proposal_id: str, actor: str) -> None:
            OR s.cabinet_id LIKE N'%%,' + u.cabinet_id
            OR s.cabinet_id LIKE N'%%, ' + u.cabinet_id + N',%%'
            OR s.cabinet_id LIKE N'%%,' + u.cabinet_id + N',%%'
+           OR EXISTS (
+                SELECT 1
+                FROM vendors.software_cabinet sc
+                WHERE sc.software_ref = s.reference_key
+                  AND sc.cabinet_id = u.cabinet_id
+           )
         )
     """
     settings_ok = """
@@ -767,9 +781,56 @@ def _apply_inline_defaults(proposal_id: str, actor: str) -> None:
           AND EXISTS (
                 SELECT 1
                 FROM vendors.software s
+                JOIN vendors.theme_document td
+                  ON td.software_ref = s.reference_key
+                 AND td.doc_kind = N'lab'
+                 AND td.theme_id = s.theme_id
+                JOIN projects.proposal p ON p.uuid = c.proposal_id
+                JOIN clients.casinos cas ON cas.reference_key = p.casino_id
                 WHERE s.theme_id = u.proposed_theme_id
                   AND {on_cabinet}
-                  AND NULLIF(LTRIM(RTRIM(s.lab_letter_media_path)), N'') IS NOT NULL
+                  AND td.jurisdiction_code = CASE
+                        WHEN cas.tribe_id IN (N'TR-00116', N'TR-00278') THEN cas.tribe_id
+                        ELSE cas.state_id
+                      END
+          )
+        """,
+        (actor, proposal_id, tbd),
+    )
+    _execute(
+        """
+        UPDATE c
+        SET status = N'ready',
+            update_date = SYSUTCDATETIME(),
+            update_by = %s
+        FROM projects.proposal_readiness_check c
+        JOIN projects.proposal_unit u ON u.uuid = c.proposal_unit_id
+        JOIN projects.proposal p ON p.uuid = c.proposal_id
+        JOIN clients.casinos cas ON cas.reference_key = p.casino_id
+        WHERE c.proposal_id = %s
+          AND c.check_type = N'par'
+          AND c.status = N'pending'
+          AND u.op <> N'REMOVE'
+          AND u.unverified_theme_id IS NULL
+          AND u.proposed_theme_id <> %s
+          AND (
+                EXISTS (
+                    SELECT 1
+                    FROM vendors.theme_document td
+                    WHERE td.theme_id = u.proposed_theme_id
+                      AND td.doc_kind = N'par'
+                      AND td.jurisdiction_code IS NULL
+                )
+             OR EXISTS (
+                    SELECT 1
+                    FROM vendors.theme_document td
+                    WHERE td.theme_id = u.proposed_theme_id
+                      AND td.doc_kind = N'par'
+                      AND td.jurisdiction_code = CASE
+                            WHEN cas.tribe_id IN (N'TR-00116', N'TR-00278') THEN cas.tribe_id
+                            ELSE cas.state_id
+                          END
+                )
           )
         """,
         (actor, proposal_id, tbd),
@@ -1018,7 +1079,7 @@ def theme_search(
         order_sql = f"CASE WHEN {confirmed} THEN 0 ELSE 1 END, t.theme_name"
         vendor_sql = f"AND ({confirmed} OR t.vendor_id IN ({in_list}))"
         # Placeholder order matches the SQL text: state, WHERE id/name, vendor filter, ORDER BY.
-        params = [cab, tbd, like, like, cab, *group, cab]
+        params = [cab, cab, tbd, like, like, cab, cab, *group, cab, cab]
     else:
         params = [tbd, like, like]
     rows = _query(
