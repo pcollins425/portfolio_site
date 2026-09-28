@@ -98,6 +98,48 @@ EXISTS (
 """
 
 
+# Themes with no software on this cabinet may still be proposed, but only
+# inside the same vendor group. Scientific Games is one group: the current
+# DBA is Light & Wonder, and it still covers the SG Bally and SG WMS rows.
+_VENDOR_GROUPS = (
+    frozenset({"VT-007", "VT-009", "VT-024"}),
+)
+
+
+def _vendor_group(vendor_id: str) -> frozenset[str]:
+    vid = (vendor_id or "").strip()
+    for group in _VENDOR_GROUPS:
+        if vid in group:
+            return group
+    return frozenset({vid}) if vid else frozenset()
+
+
+def _cabinet_vendor_id(cabinet_id: str) -> str:
+    rows = _query(
+        "SELECT TOP 1 vendor_id FROM vendors.cabinets WHERE reference_key = %s",
+        (cabinet_id,),
+    )
+    if not rows:
+        return ""
+    return str(rows[0].get("vendor_id") or "").strip()
+
+
+def _theme_vendor_id(theme_id: str) -> str:
+    rows = _query(
+        "SELECT TOP 1 vendor_id FROM vendors.themes WHERE reference_key = %s",
+        (theme_id,),
+    )
+    if not rows:
+        return ""
+    return str(rows[0].get("vendor_id") or "").strip()
+
+
+def _same_vendor_group(theme_vendor_id: str, cabinet_vendor_id: str) -> bool:
+    theme_group = _vendor_group(theme_vendor_id)
+    cabinet_group = _vendor_group(cabinet_vendor_id)
+    return bool(theme_group and cabinet_group and theme_group == cabinet_group)
+
+
 def _name_key(name: str) -> str:
     return re.sub(r"[^a-z0-9]+", "", (name or "").lower())
 
@@ -457,6 +499,21 @@ def patch_unit(
                 status_code=400,
                 detail="Add a cabinet before assigning a theme",
             )
+        theme_vendor = _theme_vendor_id(tid)
+        cab_vendor = _cabinet_vendor_id(cab_id)
+        confirmed = _query(
+            f"""
+            SELECT CASE WHEN {_CONFIRMED_SOFTWARE.format(theme="%s", cabinet="%s")}
+                        THEN 1 ELSE 0 END AS ok
+            """,
+            (tid, cab_id),
+        )
+        on_cabinet = bool(confirmed and confirmed[0].get("ok"))
+        if not on_cabinet and not _same_vendor_group(theme_vendor, cab_vendor):
+            raise HTTPException(
+                status_code=400,
+                detail="That theme is outside this cabinet's vendor group",
+            )
         sets.append("unverified_theme_id = NULL")
         sets.append("proposed_theme_id = %s")
         params.append(tid)
@@ -617,9 +674,11 @@ def theme_search(
 
     Matches are catalog themes. software_state is confirmed when this
     cabinet already has a non-revoked software row with par or paytable
-    settings, and need_software otherwise. Assigning need_software does
-    not create a theme or software row. Pre-Check rejects it by setting
-    the software readiness check to blocker.
+    settings, and need_software otherwise. A need_software title is only
+    offered inside the cabinet's vendor group (same vendor, or the
+    Scientific Games group: SG Bally, SG WMS, Light & Wonder). Assigning
+    it does not create a theme or software row. Pre-Check rejects it by
+    setting the software readiness check to blocker.
     """
     _assert_read(user)
     tbd = _tbd_theme_id()
@@ -637,14 +696,21 @@ def theme_search(
     like = f"%{search}%"
     state_sql = "N'need_software'"
     order_sql = "t.theme_name"
-    params: list[Any] = [tbd, like, like]
+    vendor_sql = ""
+    params: list[Any] = []
     if cab:
         confirmed = _CONFIRMED_SOFTWARE.format(
             theme="t.reference_key", cabinet="%s"
         )
+        group = sorted(_vendor_group(_cabinet_vendor_id(cab)))
+        in_list = ", ".join(["%s"] * len(group))
         state_sql = f"CASE WHEN {confirmed} THEN N'confirmed' ELSE N'need_software' END"
         order_sql = f"CASE WHEN {confirmed} THEN 0 ELSE 1 END, t.theme_name"
-        params.extend([cab, cab])
+        vendor_sql = f"AND ({confirmed} OR t.vendor_id IN ({in_list}))"
+        # Placeholder order matches the SQL text: state, WHERE id/name, vendor filter, ORDER BY.
+        params = [cab, tbd, like, like, cab, *group, cab]
+    else:
+        params = [tbd, like, like]
     rows = _query(
         f"""
         SELECT TOP ({int(limit)})
@@ -660,6 +726,7 @@ def theme_search(
                 t.theme_name LIKE %s
              OR t.reference_key LIKE %s
           )
+          {vendor_sql}
         ORDER BY {order_sql}
         """,
         tuple(params),
