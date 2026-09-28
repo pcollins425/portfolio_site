@@ -360,6 +360,10 @@ def proposal_detail(
     _assert_read(user)
     p = _get_proposal(ref)
     pid = str(p["uuid"])
+    if str(p["stage"]) != "draft":
+        _apply_inline_defaults(pid, _actor(user))
+        _refresh_readiness(pid)
+        p = _get_proposal(ref)
     tbd = _tbd_theme_id()
     units = _query(
         """
@@ -622,7 +626,8 @@ def patch_check(
 ):
     rows = _query(
         """
-        SELECT c.uuid, c.proposal_id, c.owner_role, p.stage, p.reference_key
+        SELECT c.uuid, c.proposal_id, c.proposal_unit_id, c.check_type, c.owner_role,
+               p.stage, p.reference_key
         FROM projects.proposal_readiness_check c
         JOIN projects.proposal p ON p.uuid = c.proposal_id
         WHERE c.uuid = %s
@@ -664,8 +669,160 @@ def patch_check(
         f"UPDATE projects.proposal_readiness_check SET {', '.join(sets)} WHERE uuid = %s",
         tuple(params),
     )
+    if str(row.get("check_type") or "") == "par" and (
+        body.status is not None or body.notes is not None
+    ):
+        _propagate_theme_check(row, body, _actor(user))
     _refresh_readiness(str(row["proposal_id"]))
     return proposal_detail(str(row["reference_key"]), user)
+
+
+def _apply_inline_defaults(proposal_id: str, actor: str) -> None:
+    """Fill checks the line does not need someone to retype.
+
+    Serial and cabinet are already known on every action except INSTALL.
+    A removal has no proposed theme, so par, lab, and software do not apply.
+    Software is ready only when this theme has confirmed software on this
+    cabinet. Lab is ready only when that same cabinet's software has a lab
+    letter. Another cabinet's software does not cover either one.
+    Only pending rows are changed, so a person can still mark a blocker.
+    """
+    _ensure_precheck(proposal_id, actor)
+    tbd = _tbd_theme_id()
+    _execute(
+        """
+        UPDATE c
+        SET status = N'na',
+            update_date = SYSUTCDATETIME(),
+            update_by = %s
+        FROM projects.proposal_readiness_check c
+        JOIN projects.proposal_unit u ON u.uuid = c.proposal_unit_id
+        WHERE c.proposal_id = %s
+          AND c.status = N'pending'
+          AND (
+                (c.check_type IN (N'cabinet', N'serials') AND u.op <> N'INSTALL')
+             OR (c.check_type IN (N'par', N'lab', N'software') AND u.op = N'REMOVE')
+          )
+        """,
+        (actor, proposal_id),
+    )
+    on_cabinet = """
+        ISNULL(s.revoked, 0) = 0
+        AND (
+              s.cabinet_id = u.cabinet_id
+           OR s.cabinet_id LIKE u.cabinet_id + N',%%'
+           OR s.cabinet_id LIKE N'%%, ' + u.cabinet_id
+           OR s.cabinet_id LIKE N'%%,' + u.cabinet_id
+           OR s.cabinet_id LIKE N'%%, ' + u.cabinet_id + N',%%'
+           OR s.cabinet_id LIKE N'%%,' + u.cabinet_id + N',%%'
+        )
+    """
+    settings_ok = """
+        ISJSON(s.settings) = 1
+        AND (
+              EXISTS (SELECT 1 FROM OPENJSON(s.settings, '$.rtp_by_par'))
+           OR NULLIF(JSON_VALUE(s.settings, '$.paytable_id'), N'') IS NOT NULL
+        )
+    """
+    _execute(
+        f"""
+        UPDATE c
+        SET status = N'ready',
+            update_date = SYSUTCDATETIME(),
+            update_by = %s
+        FROM projects.proposal_readiness_check c
+        JOIN projects.proposal_unit u ON u.uuid = c.proposal_unit_id
+        WHERE c.proposal_id = %s
+          AND c.check_type = N'software'
+          AND c.status = N'pending'
+          AND u.op <> N'REMOVE'
+          AND u.unverified_theme_id IS NULL
+          AND u.proposed_theme_id <> %s
+          AND u.cabinet_id IS NOT NULL
+          AND EXISTS (
+                SELECT 1
+                FROM vendors.software s
+                WHERE s.theme_id = u.proposed_theme_id
+                  AND {on_cabinet}
+                  AND {settings_ok}
+          )
+        """,
+        (actor, proposal_id, tbd),
+    )
+    _execute(
+        f"""
+        UPDATE c
+        SET status = N'ready',
+            update_date = SYSUTCDATETIME(),
+            update_by = %s
+        FROM projects.proposal_readiness_check c
+        JOIN projects.proposal_unit u ON u.uuid = c.proposal_unit_id
+        WHERE c.proposal_id = %s
+          AND c.check_type = N'lab'
+          AND c.status = N'pending'
+          AND u.op <> N'REMOVE'
+          AND u.unverified_theme_id IS NULL
+          AND u.proposed_theme_id <> %s
+          AND u.cabinet_id IS NOT NULL
+          AND EXISTS (
+                SELECT 1
+                FROM vendors.software s
+                WHERE s.theme_id = u.proposed_theme_id
+                  AND {on_cabinet}
+                  AND NULLIF(LTRIM(RTRIM(s.lab_letter_media_path)), N'') IS NOT NULL
+          )
+        """,
+        (actor, proposal_id, tbd),
+    )
+
+
+def _propagate_theme_check(row: dict, body: CheckPatch, actor: str) -> None:
+    """Par is one confirmation for every line with that theme.
+
+    Lab is not. A lab belongs to the software assigned to that cabinet.
+    """
+    sets = ["c.update_date = SYSUTCDATETIME()", "c.update_by = %s"]
+    params: list[Any] = [actor]
+    if body.status is not None:
+        sets.append("c.status = %s")
+        params.append(body.status.strip().lower())
+    if body.notes is not None:
+        sets.append("c.notes = %s")
+        params.append(body.notes.strip() or None)
+    tbd = _tbd_theme_id()
+    params.extend(
+        [
+            str(row["proposal_unit_id"]),
+            str(row["proposal_id"]),
+            str(row["check_type"]),
+            tbd,
+        ]
+    )
+    _execute(
+        f"""
+        UPDATE c
+        SET {", ".join(sets)}
+        FROM projects.proposal_readiness_check c
+        JOIN projects.proposal_unit u ON u.uuid = c.proposal_unit_id
+        JOIN projects.proposal_unit src ON src.uuid = %s
+        WHERE c.proposal_id = %s
+          AND c.check_type = %s
+          AND u.op <> N'REMOVE'
+          AND (
+                (
+                    src.unverified_theme_id IS NOT NULL
+                    AND u.unverified_theme_id = src.unverified_theme_id
+                )
+             OR (
+                    src.unverified_theme_id IS NULL
+                    AND src.proposed_theme_id <> %s
+                    AND u.unverified_theme_id IS NULL
+                    AND u.proposed_theme_id = src.proposed_theme_id
+                )
+          )
+        """,
+        tuple(params),
+    )
 
 
 def _ensure_precheck(proposal_id: str, actor: str) -> None:
@@ -758,7 +915,7 @@ def set_stage(
     actor = _actor(user)
     pid = str(p["uuid"])
     if target == "pre_check":
-        _ensure_precheck(pid, actor)
+        _apply_inline_defaults(pid, actor)
         _refresh_readiness(pid)
         fresh = _get_proposal(ref)
         p = fresh

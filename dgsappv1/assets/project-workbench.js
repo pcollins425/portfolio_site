@@ -158,6 +158,38 @@
     return "read-only";
   }
 
+  const CHECKS = [
+    ["par", "Par"],
+    ["lab", "Lab"],
+    ["software", "Software"],
+    ["cabinet", "Cabinet"],
+    ["parts", "Parts"],
+    ["serials", "Serial"],
+  ];
+
+  function checkStatusOptions(current) {
+    return ["pending", "in_progress", "blocker", "ready", "na"]
+      .map(
+        (s) =>
+          `<option value="${s}"${current === s ? " selected" : ""}>${
+            s === "na" ? "n/a" : s === "in_progress" ? "started" : s
+          }</option>`
+      )
+      .join("");
+  }
+
+  function checkCell(check) {
+    if (!check) return `<td class="pwb-check">—</td>`;
+    const title = esc(check.notes || "");
+    if (!canEditCheck(check)) {
+      const label = check.status === "na" ? "n/a" : check.status === "in_progress" ? "started" : check.status;
+      return `<td class="pwb-check" title="${title}">${esc(label)}</td>`;
+    }
+    return `<td class="pwb-check"><select class="pwb-check-select" data-check="${esc(
+      check.uuid
+    )}" data-field="status" title="${title}">${checkStatusOptions(check.status)}</select></td>`;
+  }
+
   function stageRail(current) {
     const idx = STAGES.findIndex((row) => row[0] === current);
     return `<ol class="pwb-stages">${STAGES.map(([key, label], i) => {
@@ -204,6 +236,12 @@
           : p.stage === "done"
             ? "This project is done. The record stays read-only."
             : "";
+
+    const byUnit = {};
+    (d.checks || []).forEach((c) => {
+      if (!byUnit[c.proposal_unit_id]) byUnit[c.proposal_unit_id] = {};
+      byUnit[c.proposal_unit_id][c.check_type] = c;
+    });
 
     const unitsRows = (d.units || [])
       .map((u) => {
@@ -285,48 +323,19 @@
                 )}" style="max-width:70px" />`
               : esc(u.location || "")
           }</td>
+          ${
+            showChecks
+              ? CHECKS.map(([type]) => checkCell((byUnit[u.uuid] || {})[type])).join("")
+              : ""
+          }
         </tr>`;
       })
       .join("");
 
-    const checkRows = (d.checks || [])
-      .map((c) => {
-        const editCheck = canEditCheck(c);
-        const statusSelect = editCheck
-          ? `<select data-check="${esc(c.uuid)}" data-field="status">
-              ${["pending", "in_progress", "blocker", "ready", "na"]
-                .map(
-                  (s) =>
-                    `<option value="${s}"${c.status === s ? " selected" : ""}>${s}</option>`
-                )
-                .join("")}
-            </select>`
-          : esc(c.status);
-        return `<tr>
-          <td>${esc(c.sort_order)} · ${esc(c.serial || "—")}</td>
-          <td>${esc(c.check_type)}</td>
-          <td>${esc(c.owner_role)}</td>
-          <td>${statusSelect}</td>
-          <td>${
-            editCheck
-              ? `<input data-check="${esc(c.uuid)}" data-field="notes" value="${esc(
-                  c.notes || ""
-                )}" style="max-width:220px" />`
-              : esc(c.notes || "")
-          }</td>
-        </tr>`;
-      })
-      .join("");
-
-    const checksBlock = showChecks
-      ? `<div class="pwb-section">Pre-Check readiness</div>
-      <table class="pwb-table">
-        <thead><tr>
-          <th>Unit</th><th>Check</th><th>Owner</th><th>Status</th><th>Notes</th>
-        </tr></thead>
-        <tbody>${checkRows || `<tr><td colspan="5" class="pwb-empty">No checks yet. Send from Draft creates them for units that already have a theme.</td></tr>`}</tbody>
-      </table>`
+    const checkHeads = showChecks
+      ? CHECKS.map(([, label]) => `<th>${label}</th>`).join("")
       : "";
+    const colCount = showChecks ? 8 + CHECKS.length : 8;
 
     root.innerHTML = `
       <h2>${esc(p.reference_key)}</h2>
@@ -342,10 +351,10 @@
       <table class="pwb-table">
         <thead><tr>
           <th>#</th><th>Op</th><th>Serial</th><th>Cabinet</th><th>Proposed theme</th><th>Zone</th><th>Bank</th><th>Loc</th>
+          ${checkHeads}
         </tr></thead>
-        <tbody>${unitsRows || `<tr><td colspan="8" class="pwb-empty">No units</td></tr>`}</tbody>
+        <tbody>${unitsRows || `<tr><td colspan="${colCount}" class="pwb-empty">No units</td></tr>`}</tbody>
       </table>
-      ${checksBlock}
     `;
 
     const send = document.getElementById("btn-send-precheck");
