@@ -426,7 +426,7 @@ def patch_unit(
     _assert_write(user)
     rows = _query(
         """
-        SELECT u.uuid, u.proposal_id, p.stage, p.reference_key
+        SELECT u.uuid, u.proposal_id, u.op, p.stage, p.reference_key
         FROM projects.proposal_unit u
         JOIN projects.proposal p ON p.uuid = u.proposal_id
         WHERE u.uuid = %s
@@ -448,6 +448,16 @@ def patch_unit(
             raise HTTPException(status_code=400, detail=f"Invalid op: {op}")
         sets.append("op = %s")
         params.append(op)
+    effective_op = (
+        body.op.strip().lower() if body.op is not None else str(row.get("op") or "")
+    )
+    if effective_op == "remove" and (
+        body.proposed_theme_id is not None or body.unverified_theme_id is not None
+    ):
+        raise HTTPException(
+            status_code=400,
+            detail="A removal has no proposed theme",
+        )
     if body.serial is not None:
         sets.append("serial = %s")
         params.append(body.serial.strip() or None)

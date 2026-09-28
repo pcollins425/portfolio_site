@@ -154,7 +154,9 @@
           : esc(u.proposed_theme_id || "");
         const sw = softwareBadge(u);
         const hasCab = !!(u.cabinet_id && String(u.cabinet_id).trim());
-        const themeEditor = editable
+        const themeEditor = u.op === "remove"
+          ? `<span class="pwb-removed">removed from floor</span>`
+          : editable
           ? `<div class="pwb-rel theme-cell">
               <input data-unit="${esc(u.uuid)}" data-field="theme_q" data-cabinet="${esc(
                 u.cabinet_id || ""
