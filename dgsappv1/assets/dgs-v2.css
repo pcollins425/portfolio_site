@@ -28,6 +28,8 @@ body.dgs-casinos-v2.dgs-app,
 body.dgs-deals-v2.dgs-app,
 body.dgs-asset-hub.dgs-app,
 body.dgs-casino-hub.dgs-app,
+body.dgs-vendor-hub.dgs-app,
+body.dgs-theme-hub.dgs-app,
 body.dgs-warehouse-v2.dgs-app,
 body.dgs-slot-master-v2.dgs-app,
 body.dgs-software-vault-v2.dgs-app,
@@ -48,6 +50,8 @@ body.dgs-casinos-v2 .dgs-v2-main,
 body.dgs-deals-v2 .dgs-v2-main,
 body.dgs-asset-hub .dgs-v2-main,
 body.dgs-casino-hub .dgs-v2-main,
+body.dgs-vendor-hub .dgs-v2-main,
+body.dgs-theme-hub .dgs-v2-main,
 body.dgs-warehouse-v2 .dgs-v2-main,
 body.dgs-slot-master-v2 .dgs-v2-main,
 body.dgs-software-vault-v2 .dgs-v2-main,
@@ -809,7 +813,9 @@ body.dgs-dashboard-v2 .dgs-dashboard-mount .error-box {
 
 /* Asset hub — reference page (not in nav) */
 body.dgs-asset-hub .dgs-v2-hub-main,
-body.dgs-casino-hub .dgs-v2-hub-main {
+body.dgs-casino-hub .dgs-v2-hub-main,
+body.dgs-vendor-hub .dgs-v2-hub-main,
+body.dgs-theme-hub .dgs-v2-hub-main {
   padding: 0;
   gap: 0;
 }
@@ -976,31 +982,66 @@ body.dgs-slot-master-v2 .dgs-v2-sm-history-row a.dgs-v2-hub-serial-link:hover {
   text-decoration: underline;
 }
 
-body.dgs-vendors-v2 #vendor-hub-link {
-  margin-top: 10px;
-}
-
-body.dgs-vendor-hub .vh-cabinet-list {
+body.dgs-vendors-v2 .dgs-v2-image-caption--actions {
   display: flex;
-  flex-direction: column;
-  gap: 18px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
 }
 
-body.dgs-vendor-hub .vh-cabinet-name {
-  font-weight: 600;
-  margin-bottom: 6px;
+body.dgs-vendors-v2 #vendor-hub-link {
+  flex-shrink: 0;
 }
 
-body.dgs-vendor-hub .vh-cabinet-meta {
+body.dgs-vendor-hub .dgs-v2-hub-hero {
+  background: #141922;
+}
+
+body.dgs-vendor-hub .dgs-v2-hub-grid {
+  grid-auto-rows: minmax(0, 1fr);
+  overflow: hidden;
+}
+
+body.dgs-vendor-hub .dgs-v2-hub-tile {
+  min-height: 0;
+  overflow: hidden;
+}
+
+body.dgs-vendor-hub .vh-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+
+body.dgs-vendor-hub .vh-cab-btn {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  width: 100%;
+  text-align: left;
+  background: transparent;
+  color: inherit;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  padding: 8px 10px;
+  cursor: pointer;
+  font: inherit;
+}
+
+body.dgs-vendor-hub .vh-cab-btn.is-selected {
+  background: var(--dgs-v2-accent-bg);
+  border-color: var(--dgs-v2-accent-border);
+}
+
+body.dgs-vendor-hub .vh-cab-count {
   color: var(--dgs-v2-text-muted);
   font-size: 12px;
-  margin-bottom: 8px;
 }
 
 body.dgs-vendor-hub .vh-themes {
   display: flex;
-  flex-wrap: wrap;
-  gap: 6px 14px;
+  flex-direction: column;
+  gap: 6px;
   margin: 0;
   padding: 0;
   list-style: none;

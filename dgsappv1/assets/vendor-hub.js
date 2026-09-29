@@ -8,7 +8,11 @@
   const params = new URLSearchParams(window.location.search);
   const vendorId = (params.get("id") || "").trim();
 
-  const state = { mediaUrls: {} };
+  const state = {
+    mediaUrls: {},
+    data: null,
+    selectedKey: "",
+  };
 
   const els = {
     errorBox: document.getElementById("error-box"),
@@ -55,22 +59,74 @@
     return `<a class="dgs-v2-hub-serial-link" href="${esc(pageUrl("theme-hub.html", { id }))}">${esc(label)}</a>`;
   }
 
-  function themeList(themes, empty) {
-    if (!themes || !themes.length) return `<p class="dgs-v2-lines-status">${esc(empty)}</p>`;
-    return `<ul class="vh-themes">${themes.map((theme) => `<li>${themeLink(theme)}</li>`).join("")}</ul>`;
+  function themeList(themes) {
+    if (!themes.length) return `<p class="dgs-v2-lines-status">No themes for this cabinet.</p>`;
+    return `<ul class="vh-themes">${themes
+      .map((theme) => `<li>${themeLink(theme)}</li>`)
+      .join("")}</ul>`;
   }
 
-  function cabinetBlock(cabinet) {
-    const name = cabinet.cabinet_name || cabinet.reference_key || "Cabinet";
-    const version = cabinet.version_name ? `<div class="vh-cabinet-meta">${esc(cabinet.version_name)}</div>` : "";
-    const count = (cabinet.themes || []).length;
-    return `
-      <section class="vh-cabinet">
-        <div class="vh-cabinet-name">${esc(name)}</div>
-        ${version}
-        <div class="vh-cabinet-meta">${count.toLocaleString()} theme${count === 1 ? "" : "s"}</div>
-        ${themeList(cabinet.themes, "No themes on this cabinet.")}
-      </section>`;
+  function cabinetButtons(cabinets, looseCount) {
+    const rows = cabinets.map((cabinet) => {
+      const key = cabinet.reference_key || "";
+      const name = cabinet.cabinet_name || key || "Cabinet";
+      const count = (cabinet.themes || []).length;
+      const selected = key === state.selectedKey ? " is-selected" : "";
+      return `<button type="button" class="vh-cab-btn${selected}" data-cab="${esc(key)}">
+        <span>${esc(name)}</span>
+        <span class="vh-cab-count">${count.toLocaleString()}</span>
+      </button>`;
+    });
+    if (looseCount) {
+      const selected = state.selectedKey === "__loose__" ? " is-selected" : "";
+      rows.push(`<button type="button" class="vh-cab-btn${selected}" data-cab="__loose__">
+        <span>No cabinet</span>
+        <span class="vh-cab-count">${looseCount.toLocaleString()}</span>
+      </button>`);
+    }
+    return rows.join("") || `<p class="dgs-v2-lines-status">No cabinets on file.</p>`;
+  }
+
+  function selectedThemes(data) {
+    if (state.selectedKey === "__loose__") return data.themes_without_cabinet || [];
+    const cabinet = (data.cabinets || []).find((row) => row.reference_key === state.selectedKey);
+    return cabinet ? cabinet.themes || [] : [];
+  }
+
+  function selectedTitle(data) {
+    if (state.selectedKey === "__loose__") return "No cabinet";
+    const cabinet = (data.cabinets || []).find((row) => row.reference_key === state.selectedKey);
+    return (cabinet && cabinet.cabinet_name) || "Themes";
+  }
+
+  function bindCabinets() {
+    els.hubGrid.querySelectorAll(".vh-cab-btn").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        state.selectedKey = btn.dataset.cab || "";
+        paint();
+      });
+    });
+  }
+
+  function paint() {
+    const data = state.data;
+    if (!data) return;
+    const cabinets = data.cabinets || [];
+    const loose = data.themes_without_cabinet || [];
+    els.hubGrid.innerHTML = `
+      <article class="dgs-v2-hub-tile">
+        <div class="dgs-v2-hub-tile-head">
+          <div class="dgs-v2-section-label">Cabinets</div>
+        </div>
+        <div class="dgs-v2-hub-tile-body vh-scroll">${cabinetButtons(cabinets, loose.length)}</div>
+      </article>
+      <article class="dgs-v2-hub-tile">
+        <div class="dgs-v2-hub-tile-head">
+          <div class="dgs-v2-section-label">Themes · ${esc(selectedTitle(data))}</div>
+        </div>
+        <div class="dgs-v2-hub-tile-body vh-scroll">${themeList(selectedThemes(data))}</div>
+      </article>`;
+    bindCabinets();
   }
 
   async function loadMediaUrl(relPath) {
@@ -86,6 +142,7 @@
   }
 
   function render(data) {
+    state.data = data;
     const title = data.vendor_name || data.reference_key || "Vendor";
     els.captionTitle.textContent = title;
     els.captionId.textContent = data.reference_key || "—";
@@ -94,23 +151,10 @@
     const themeCount = cabinets.reduce((n, cab) => n + (cab.themes || []).length, 0) + loose.length;
     els.captionMeta.textContent = `${cabinets.length.toLocaleString()} cabinets · ${themeCount.toLocaleString()} themes`;
     els.btnBack.href = pageUrl("vendors-v2.html", { id: data.reference_key });
-
-    const blocks = cabinets.map(cabinetBlock).join("");
-    const looseBlock = loose.length
-      ? `<section class="vh-cabinet"><div class="vh-cabinet-name">Themes without a cabinet</div>${themeList(loose, "")}</section>`
-      : "";
-    els.hubGrid.innerHTML = `
-      <article class="dgs-v2-hub-tile dgs-v2-hub-tile--wide">
-        <div class="dgs-v2-hub-tile-head">
-          <div class="dgs-v2-section-label">Cabinets</div>
-        </div>
-        <div class="dgs-v2-hub-tile-body">
-          <div class="vh-cabinet-list">
-            ${blocks || `<p class="dgs-v2-lines-status">No cabinets on file.</p>`}
-            ${looseBlock}
-          </div>
-        </div>
-      </article>`;
+    if (!state.selectedKey) {
+      state.selectedKey = (cabinets[0] && cabinets[0].reference_key) || (loose.length ? "__loose__" : "");
+    }
+    paint();
 
     if (data.logo_media_path) {
       loadMediaUrl(data.logo_media_path).then((url) => {
