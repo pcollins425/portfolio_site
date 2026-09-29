@@ -11,7 +11,6 @@
   const state = {
     mediaUrls: {},
     data: null,
-    selectedKey: "",
   };
 
   const els = {
@@ -60,73 +59,64 @@
   }
 
   function themeList(themes) {
-    if (!themes.length) return `<p class="dgs-v2-lines-status">No themes for this cabinet.</p>`;
+    if (!themes.length) return `<p class="dgs-v2-lines-status">No themes on file.</p>`;
     return `<ul class="vh-themes">${themes
       .map((theme) => `<li>${themeLink(theme)}</li>`)
       .join("")}</ul>`;
   }
 
-  function cabinetButtons(cabinets, looseCount) {
-    const rows = cabinets.map((cabinet) => {
-      const key = cabinet.reference_key || "";
-      const name = cabinet.cabinet_name || key || "Cabinet";
-      const count = (cabinet.themes || []).length;
-      const selected = key === state.selectedKey ? " is-selected" : "";
-      return `<button type="button" class="vh-cab-btn${selected}" data-cab="${esc(key)}">
-        <span>${esc(name)}</span>
-        <span class="vh-cab-count">${count.toLocaleString()}</span>
-      </button>`;
-    });
-    if (looseCount) {
-      const selected = state.selectedKey === "__loose__" ? " is-selected" : "";
-      rows.push(`<button type="button" class="vh-cab-btn${selected}" data-cab="__loose__">
-        <span>No cabinet</span>
-        <span class="vh-cab-count">${looseCount.toLocaleString()}</span>
-      </button>`);
+  function cabinetRows(cabinets) {
+    if (!cabinets.length) return `<p class="dgs-v2-lines-status">No cabinets on file.</p>`;
+    return cabinets
+      .map((cabinet) => {
+        const name = cabinet.cabinet_name || cabinet.reference_key || "Cabinet";
+        const count = (cabinet.themes || []).length;
+        return `<div class="vh-cab-btn">
+          <span>${esc(name)}</span>
+          <span class="vh-cab-count">${count.toLocaleString()}</span>
+        </div>`;
+      })
+      .join("");
+  }
+
+  function allThemes(data) {
+    const seen = new Set();
+    const themes = [];
+    function add(theme) {
+      const id = theme && theme.reference_key;
+      if (!id || seen.has(id)) return;
+      seen.add(id);
+      themes.push(theme);
     }
-    return rows.join("") || `<p class="dgs-v2-lines-status">No cabinets on file.</p>`;
-  }
-
-  function selectedThemes(data) {
-    if (state.selectedKey === "__loose__") return data.themes_without_cabinet || [];
-    const cabinet = (data.cabinets || []).find((row) => row.reference_key === state.selectedKey);
-    return cabinet ? cabinet.themes || [] : [];
-  }
-
-  function selectedTitle(data) {
-    if (state.selectedKey === "__loose__") return "No cabinet";
-    const cabinet = (data.cabinets || []).find((row) => row.reference_key === state.selectedKey);
-    return (cabinet && cabinet.cabinet_name) || "Themes";
-  }
-
-  function bindCabinets() {
-    els.hubGrid.querySelectorAll(".vh-cab-btn").forEach((btn) => {
-      btn.addEventListener("click", () => {
-        state.selectedKey = btn.dataset.cab || "";
-        paint();
-      });
-    });
+    (data.cabinets || []).forEach((cabinet) => (cabinet.themes || []).forEach(add));
+    (data.themes_without_cabinet || []).forEach(add);
+    themes.sort((a, b) =>
+      String(a.theme_name || a.reference_key || "").localeCompare(
+        String(b.theme_name || b.reference_key || ""),
+        undefined,
+        { sensitivity: "base" }
+      )
+    );
+    return themes;
   }
 
   function paint() {
     const data = state.data;
     if (!data) return;
     const cabinets = data.cabinets || [];
-    const loose = data.themes_without_cabinet || [];
     els.hubGrid.innerHTML = `
       <article class="dgs-v2-hub-tile">
         <div class="dgs-v2-hub-tile-head">
           <div class="dgs-v2-section-label">Cabinets</div>
         </div>
-        <div class="dgs-v2-hub-tile-body vh-scroll">${cabinetButtons(cabinets, loose.length)}</div>
+        <div class="dgs-v2-hub-tile-body vh-scroll">${cabinetRows(cabinets)}</div>
       </article>
       <article class="dgs-v2-hub-tile">
         <div class="dgs-v2-hub-tile-head">
-          <div class="dgs-v2-section-label">Themes · ${esc(selectedTitle(data))}</div>
+          <div class="dgs-v2-section-label">Themes</div>
         </div>
-        <div class="dgs-v2-hub-tile-body vh-scroll">${themeList(selectedThemes(data))}</div>
+        <div class="dgs-v2-hub-tile-body vh-scroll">${themeList(allThemes(data))}</div>
       </article>`;
-    bindCabinets();
   }
 
   async function loadMediaUrl(relPath) {
@@ -147,13 +137,9 @@
     els.captionTitle.textContent = title;
     els.captionId.textContent = data.reference_key || "—";
     const cabinets = data.cabinets || [];
-    const loose = data.themes_without_cabinet || [];
-    const themeCount = cabinets.reduce((n, cab) => n + (cab.themes || []).length, 0) + loose.length;
+    const themeCount = allThemes(data).length;
     els.captionMeta.textContent = `${cabinets.length.toLocaleString()} cabinets · ${themeCount.toLocaleString()} themes`;
     els.btnBack.href = pageUrl("vendors-v2.html", { id: data.reference_key });
-    if (!state.selectedKey) {
-      state.selectedKey = (cabinets[0] && cabinets[0].reference_key) || (loose.length ? "__loose__" : "");
-    }
     paint();
 
     if (data.logo_media_path) {

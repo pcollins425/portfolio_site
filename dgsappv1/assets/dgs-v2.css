@@ -1024,13 +1024,7 @@ body.dgs-vendor-hub .vh-cab-btn {
   border: 1px solid transparent;
   border-radius: 8px;
   padding: 8px 10px;
-  cursor: pointer;
   font: inherit;
-}
-
-body.dgs-vendor-hub .vh-cab-btn.is-selected {
-  background: var(--dgs-v2-accent-bg);
-  border-color: var(--dgs-v2-accent-border);
 }
 
 body.dgs-vendor-hub .vh-cab-count {
