@@ -316,11 +316,11 @@ def casino_context(casino_id: str):
                 c.casino_name,
                 c.tribe_id,
                 t.tribe_name,
-                COALESCE(c.state_id, t.state_id) AS state_id,
+                c.state_id,
                 s.state AS state_name
             FROM clients.casinos AS c
             LEFT JOIN clients.tribes AS t ON t.reference_key = c.tribe_id
-            LEFT JOIN clients.states AS s ON s.reference_key = COALESCE(c.state_id, t.state_id)
+            LEFT JOIN clients.states AS s ON s.reference_key = c.state_id
             WHERE c.reference_key = %s
             """,
             (cid,),
@@ -351,8 +351,7 @@ def list_states():
                 COUNT(DISTINCT sm.reference_key) AS active_count
             FROM inventory.slot_master_migration AS sm
             INNER JOIN clients.casinos AS c ON c.reference_key = sm.casino_id
-            LEFT JOIN clients.tribes AS t ON t.reference_key = c.tribe_id
-            LEFT JOIN clients.states AS st ON st.reference_key = COALESCE(c.state_id, t.state_id)
+            LEFT JOIN clients.states AS st ON st.reference_key = c.state_id
             WHERE sm.is_active = 1
               AND st.reference_key IS NOT NULL
             GROUP BY st.reference_key, st.state
@@ -387,7 +386,7 @@ def list_tribes(state_id: str = Query(..., min_length=1, max_length=25)):
             FROM inventory.slot_master_migration AS sm
             INNER JOIN clients.casinos AS c ON c.reference_key = sm.casino_id
             INNER JOIN clients.tribes AS t ON t.reference_key = c.tribe_id
-            LEFT JOIN clients.states AS st ON st.reference_key = COALESCE(c.state_id, t.state_id)
+            LEFT JOIN clients.states AS st ON st.reference_key = c.state_id
             WHERE sm.is_active = 1
               AND st.reference_key = %s
             GROUP BY t.reference_key, t.tribe_name

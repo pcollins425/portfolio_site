@@ -1085,12 +1085,11 @@ def theme_search(
     rows = _query(
         f"""
         SELECT TOP ({int(limit)})
-            t.reference_key, t.theme_name, t.vendor_id, t.cabinet_id,
-            v.vendor_name, c.cabinet_name,
+            t.reference_key, t.theme_name, t.vendor_id,
+            v.vendor_name,
             {state_sql} AS software_state
         FROM vendors.themes t
         LEFT JOIN vendors.vendors v ON v.reference_key = t.vendor_id
-        LEFT JOIN vendors.cabinets c ON c.reference_key = t.cabinet_id
         WHERE t.reference_key <> %s
           AND (t.delete_request IS NULL OR LTRIM(RTRIM(t.delete_request)) = N'')
           AND (

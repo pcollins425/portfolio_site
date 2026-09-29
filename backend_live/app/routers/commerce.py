@@ -352,7 +352,21 @@ def vendor_detail(reference_key: str):
                 c.cabinet_name,
                 c.version_name,
                 c.image_media_path,
-                (SELECT COUNT(*) FROM vendors.themes t WHERE t.cabinet_id = c.reference_key) AS theme_count
+                (
+                    SELECT COUNT(DISTINCT x.theme_id)
+                    FROM (
+                        SELECT s.theme_id
+                        FROM vendors.software_cabinet AS sc
+                        INNER JOIN vendors.software AS s ON s.reference_key = sc.software_ref
+                        WHERE sc.cabinet_id = c.reference_key
+                          AND s.theme_id IS NOT NULL
+                        UNION
+                        SELECT s.theme_id
+                        FROM vendors.software AS s
+                        WHERE s.cabinet_id = c.reference_key
+                          AND s.theme_id IS NOT NULL
+                    ) AS x
+                ) AS theme_count
             FROM vendors.cabinets AS c
             WHERE c.vendor_id = %s
             ORDER BY c.cabinet_name
@@ -403,10 +417,6 @@ UNION
 SELECT s.cabinet_id, s.theme_id
 FROM vendors.software AS s
 WHERE s.cabinet_id IS NOT NULL AND s.theme_id IS NOT NULL
-UNION
-SELECT t.cabinet_id, t.reference_key
-FROM vendors.themes AS t
-WHERE t.cabinet_id IS NOT NULL
 """
 
 
@@ -603,12 +613,11 @@ def casinos_summary():
             SELECT
                 COUNT(*) AS total,
                 SUM(CASE WHEN c.licensed = 1 THEN 1 ELSE 0 END) AS licensed,
-                COUNT(DISTINCT COALESCE(c.state_id, t.state_id)) AS states,
+                COUNT(DISTINCT c.state_id) AS states,
                 (SELECT COUNT(DISTINCT sm.casino_id)
                  FROM inventory.slot_master_migration AS sm
                  WHERE sm.is_active = 1) AS active_casinos
             FROM clients.casinos AS c
-            LEFT JOIN clients.tribes AS t ON t.reference_key = c.tribe_id
             """
         )[0]
     except Exception as exc:
@@ -760,7 +769,7 @@ def casino_detail(reference_key: str):
                 c.casino_abbreviation,
                 c.tribe_id,
                 t.tribe_name,
-                COALESCE(c.state_id, t.state_id) AS state_id,
+                c.state_id,
                 s.state,
                 s.state_abbreviation,
                 c.sales,
@@ -799,7 +808,7 @@ def casino_detail(reference_key: str):
                 perf.performance_machines
             FROM clients.casinos AS c
             LEFT JOIN clients.tribes AS t ON t.reference_key = c.tribe_id
-            LEFT JOIN clients.states AS s ON s.reference_key = COALESCE(c.state_id, t.state_id)
+            LEFT JOIN clients.states AS s ON s.reference_key = c.state_id
             LEFT JOIN casino_perf_latest AS perf ON perf.casino_id = c.reference_key
             WHERE c.reference_key = %s
             """,
@@ -868,8 +877,7 @@ def casino_detail(reference_key: str):
                           AND UPPER(LTRIM(RTRIM(ISNULL(sm.action, N'')))) <> N'SOLD'
                     ) AS active_machines
                 FROM clients.casinos AS c
-                LEFT JOIN clients.tribes AS t ON t.reference_key = c.tribe_id
-                LEFT JOIN clients.states AS s ON s.reference_key = COALESCE(c.state_id, t.state_id)
+                LEFT JOIN clients.states AS s ON s.reference_key = c.state_id
                 WHERE c.tribe_id = %s
                   AND c.reference_key <> %s
                 ORDER BY s.state_abbreviation, c.casino_name

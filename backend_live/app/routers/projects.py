@@ -202,7 +202,7 @@ def ims_list(
             FROM projects.ims AS ims
             LEFT JOIN clients.casinos AS casinos ON casinos.reference_key = ims.casino_id
             LEFT JOIN clients.tribes AS tribes ON tribes.reference_key = casinos.tribe_id
-            LEFT JOIN clients.states AS states ON states.reference_key = COALESCE(casinos.state_id, tribes.state_id)
+            LEFT JOIN clients.states AS states ON states.reference_key = casinos.state_id
             LEFT JOIN projects.project_catalog AS pc ON pc.ims_id = ims.reference_key
             WHERE ims.casino_id = %s
             {search_sql}

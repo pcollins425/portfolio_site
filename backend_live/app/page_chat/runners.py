@@ -63,7 +63,7 @@ def get_casino(casino_id: str) -> dict[str, Any]:
             c.slot_director_name
         FROM clients.casinos AS c
         LEFT JOIN clients.tribes AS t ON t.reference_key = c.tribe_id
-        LEFT JOIN clients.states AS s ON s.reference_key = COALESCE(c.state_id, t.state_id)
+        LEFT JOIN clients.states AS s ON s.reference_key = c.state_id
         WHERE c.reference_key = %s
         """,
         (cid,),

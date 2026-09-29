@@ -175,11 +175,10 @@ def _casino_jurisdiction(casino_id: str) -> dict:
 def _theme(theme_id: str) -> dict:
     rows = _query(
         """
-        SELECT t.reference_key, t.theme_name, t.vendor_id, t.cabinet_id,
-               t.slick_media_path, v.vendor_name, c.cabinet_name
+        SELECT t.reference_key, t.theme_name, t.vendor_id,
+               t.slick_media_path, v.vendor_name
         FROM vendors.themes t
         LEFT JOIN vendors.vendors v ON v.reference_key = t.vendor_id
-        LEFT JOIN vendors.cabinets c ON c.reference_key = t.cabinet_id
         WHERE t.reference_key = %s
         """,
         (theme_id,),
