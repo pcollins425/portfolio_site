@@ -1035,19 +1035,21 @@ body.dgs-vendor-hub .vh-cab-count {
 body.dgs-vendor-hub .vh-themes {
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  margin: 0;
-  padding: 0;
-  list-style: none;
+  margin: -4px -6px 0;
 }
 
-body.dgs-vendor-hub a.dgs-v2-hub-serial-link {
-  color: var(--dgs-v2-accent);
+body.dgs-vendor-hub .vh-theme-row {
+  display: block;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--dgs-v2-border-soft);
+  color: var(--dgs-v2-text);
   text-decoration: none;
+  cursor: pointer;
 }
 
-body.dgs-vendor-hub a.dgs-v2-hub-serial-link:hover {
-  text-decoration: underline;
+body.dgs-vendor-hub a.vh-theme-row:hover {
+  background: rgba(110, 181, 255, 0.1);
+  color: var(--dgs-v2-text);
 }
 
 .dgs-v2-hub-tile-body {

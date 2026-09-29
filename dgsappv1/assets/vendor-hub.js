@@ -51,18 +51,16 @@
     els.errorBox.textContent = msg || "";
   }
 
-  function themeLink(theme) {
-    const id = theme.reference_key;
-    const label = theme.theme_name || id || "Theme";
-    if (!id) return esc(label);
-    return `<a class="dgs-v2-hub-serial-link" href="${esc(pageUrl("theme-hub.html", { id }))}">${esc(label)}</a>`;
-  }
-
   function themeList(themes) {
     if (!themes.length) return `<p class="dgs-v2-lines-status">No themes on file.</p>`;
-    return `<ul class="vh-themes">${themes
-      .map((theme) => `<li>${themeLink(theme)}</li>`)
-      .join("")}</ul>`;
+    return `<div class="vh-themes">${themes
+      .map((theme) => {
+        const id = theme.reference_key;
+        const label = theme.theme_name || id || "Theme";
+        if (!id) return `<div class="vh-theme-row">${esc(label)}</div>`;
+        return `<a class="vh-theme-row" href="${esc(pageUrl("theme-hub.html", { id }))}">${esc(label)}</a>`;
+      })
+      .join("")}</div>`;
   }
 
   function cabinetRows(cabinets) {
