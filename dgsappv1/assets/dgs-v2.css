@@ -1052,6 +1052,51 @@ body.dgs-vendor-hub a.vh-theme-row:hover {
   color: var(--dgs-v2-text);
 }
 
+/* Theme Hub cards are tall (tables + upload forms). Same failure as Casino Hub:
+   the 2-col grid sizes rows short and the next card paints on top. */
+body.dgs-theme-hub .dgs-v2-image-caption {
+  flex-shrink: 0;
+}
+
+body.dgs-theme-hub .dgs-v2-hub-grid {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 0;
+  gap: 12px;
+  min-height: 0;
+  min-width: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  align-content: stretch;
+  grid-template-columns: none;
+  grid-auto-rows: auto;
+}
+
+body.dgs-theme-hub .dgs-v2-hub-tile,
+body.dgs-theme-hub .dgs-v2-hub-tile--wide {
+  display: flex;
+  flex-direction: column;
+  flex: 0 0 auto;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  height: auto;
+  overflow: visible;
+  grid-column: auto;
+}
+
+body.dgs-theme-hub .dgs-v2-hub-tile-body {
+  min-width: 0;
+  overflow-x: auto;
+}
+
+body.dgs-theme-hub .th-form input,
+body.dgs-theme-hub .th-form select {
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
 .dgs-v2-hub-tile-body {
   font-size: 13px;
   color: var(--dgs-v2-text);
