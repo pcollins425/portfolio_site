@@ -775,6 +775,25 @@
     }
   }
 
+  function themeHubHref(themeId) {
+    const id = String(themeId || "").trim();
+    if (!id) return "";
+    const path = "theme-hub.html";
+    if (window.DGS && typeof DGS.withApi === "function") {
+      const url = new URL(DGS.withApi(path), window.location.href);
+      url.searchParams.set("id", id);
+      return url.pathname + url.search;
+    }
+    return `${path}?id=${encodeURIComponent(id)}`;
+  }
+
+  function themeHubLink(themeId, label) {
+    const text = printoutVal(label) || "—";
+    const href = themeHubHref(themeId);
+    if (!href || text === "—") return esc(text);
+    return `<a class="dgs-v2-hub-serial-link" href="${esc(href)}">${esc(text).replaceAll("\n", "<br>")}</a>`;
+  }
+
   function printoutSerialHtml(row) {
     const serial = printoutVal(row.serial_number);
     if (!serial) return "—";
@@ -797,6 +816,7 @@
               `<tr>${cols
                 .map((c) => {
                   if (c === "serial_number") return `<td>${printoutSerialHtml(r)}</td>`;
+                  if (c === "theme_name") return `<td>${themeHubLink(r.theme_id, r.theme_name)}</td>`;
                   return `<td>${esc(printoutVal(r[c])).replaceAll("\n", "<br>")}</td>`;
                 })
                 .join("")}</tr>`
@@ -817,7 +837,7 @@
           <span class="dgs-prj-printout-row-serial">${esc(printoutVal(r.serial_number) || "—")}</span>
           <span class="dgs-prj-printout-row-grid">
             <span><strong>Cabinet</strong><span class="dgs-prj-printout-row-val">${esc(printoutVal(r.cabinet_type) || "—")}</span></span>
-            <span><strong>Theme</strong><span class="dgs-prj-printout-row-val">${esc(printoutVal(r.theme_name) || "—")}</span></span>
+            <span><strong>Theme</strong><span class="dgs-prj-printout-row-val">${themeHubLink(r.theme_id, r.theme_name)}</span></span>
           </span>
           <span class="dgs-prj-printout-row-action">${esc(printoutVal(r.work_notes) || "—")}</span>
         </button>`
@@ -846,7 +866,11 @@
         const v = printoutVal(row[c]);
         if (!v) return "";
         const valueHtml =
-          c === "serial_number" ? printoutSerialHtml(row) : esc(v).replaceAll("\n", "<br>");
+          c === "serial_number"
+            ? printoutSerialHtml(row)
+            : c === "theme_name"
+              ? themeHubLink(row.theme_id, row.theme_name)
+              : esc(v).replaceAll("\n", "<br>");
         return `<div class="dgs-prj-printout-field"><dt>${esc(printoutLabel(c))}</dt><dd>${valueHtml}</dd></div>`;
       })
       .filter(Boolean)
@@ -990,6 +1014,7 @@
     els["printout-line-close"]?.addEventListener("click", closePrintoutLine);
     els["printout-line-backdrop"]?.addEventListener("click", closePrintoutLine);
     els["printout-list"]?.addEventListener("click", (e) => {
+      if (e.target.closest("a")) return;
       const row = e.target.closest(".dgs-prj-printout-row[data-idx]");
       if (!row) return;
       openPrintoutLine(Number(row.dataset.idx));

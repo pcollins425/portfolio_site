@@ -274,6 +274,25 @@
     return row.cabinet_name || "—";
   }
 
+  function themeHubHref(themeId) {
+    const id = String(themeId || "").trim();
+    if (!id) return "";
+    const path = "theme-hub.html";
+    if (window.DGS && typeof DGS.withApi === "function") {
+      const url = new URL(DGS.withApi(path), window.location.href);
+      url.searchParams.set("id", id);
+      return url.pathname + url.search;
+    }
+    return `${path}?id=${encodeURIComponent(id)}`;
+  }
+
+  function themeHubLink(themeId, label) {
+    const text = label || "—";
+    const href = themeHubHref(themeId);
+    if (!href) return esc(text);
+    return `<a class="dgs-v2-hub-serial-link" href="${esc(href)}">${esc(text)}</a>`;
+  }
+
   function machineRowHtml(row) {
     const serialLabel = row.serial || "—";
     const serialCell = row.asset_id
@@ -285,7 +304,7 @@
         <tr data-key="${esc(row.reference_key)}" class="${row.reference_key === state.selectedKey ? "selected" : ""}">
           <td class="mono">${serialCell}</td>
           <td class="dgs-v2-col--desktop">${esc(row.vendor_name)} · ${esc(row.cabinet_name)}</td>
-          <td>${esc(row.theme_name || "—")}</td>
+          <td>${themeHubLink(row.theme_id, row.theme_name)}</td>
           <td class="dgs-v2-col--desktop">${esc(row.zbl || "—")}</td>
           <td>${esc(row.Hold || "—")}</td>
           <td class="num dgs-v2-col--desktop">${fmtAdw(row.cipd)}</td>
@@ -379,7 +398,7 @@
       </div>
       <div class="dgs-v2-sm-fk-chip">
         <span class="dgs-v2-sm-fk-chip__label">Theme</span>
-        <span class="dgs-v2-sm-fk-chip__name">${esc(d.theme_name || "—")}</span>
+        <span class="dgs-v2-sm-fk-chip__name">${themeHubLink(d.theme_id, d.theme_name)}</span>
       </div>
       <div class="dgs-v2-sm-fk-chip">
         <span class="dgs-v2-sm-fk-chip__label">Hold</span>
@@ -452,13 +471,13 @@
         const title = row.project_name || row.action || "Unlinked stint";
         const status = active ? "Active" : "Inactive";
         const hold = row.hold != null && row.hold !== "" ? String(row.hold) : "—";
-        const subBits = [row.theme_name || "—", row.casino_name || "—", hold].join(" · ");
+        const subBits = [themeHubLink(row.theme_id, row.theme_name), esc(row.casino_name || "—"), esc(hold)].join(" · ");
         return `
         <button type="button" class="dgs-v2-sm-history-row${selected ? " selected" : ""}${active ? " is-active" : ""}" data-key="${esc(row.reference_key)}">
           <span class="dgs-v2-sm-history-row__dot" aria-hidden="true"></span>
           <span class="dgs-v2-sm-history-row__main">
             <span class="dgs-v2-sm-history-row__title">${esc(title)} <span class="dgs-v2-sm-history-row__badge">${esc(status)}</span></span>
-            <span class="dgs-v2-sm-history-row__sub">${esc(subBits)}</span>
+            <span class="dgs-v2-sm-history-row__sub">${subBits}</span>
           </span>
           <span class="dgs-v2-sm-history-row__date">${esc(fmtDate(row.event_date))}</span>
         </button>`;
@@ -466,7 +485,10 @@
       .join("");
 
     els.historyList.querySelectorAll(".dgs-v2-sm-history-row").forEach((btn) => {
-      btn.addEventListener("click", () => loadHistorySnapshot(btn.dataset.key));
+      btn.addEventListener("click", (event) => {
+        if (event.target.closest("a")) return;
+        loadHistorySnapshot(btn.dataset.key);
+      });
     });
   }
 
@@ -482,14 +504,14 @@
     const assetPart = d.asset_id
       ? AssetNav.hubLinkHtml(d.asset_id, d.asset_id)
       : null;
-    const subBits = [
-      d.casino_name || null,
-      d.theme_name || null,
-      `Hold ${hold}`,
-    ].filter(Boolean);
+    const bits = [];
+    if (d.casino_name) bits.push(esc(d.casino_name));
+    if (d.theme_name || d.theme_id) bits.push(themeHubLink(d.theme_id, d.theme_name));
+    bits.push(esc(`Hold ${hold}`));
+    const summary = bits.join(" · ");
     els.detailSubtitle.innerHTML = assetPart
-      ? `${esc(subBits.join(" · "))} · <span class="dgs-v2-sm-detail-ast">AST ${assetPart}</span>`
-      : esc(subBits.join(" · ") || "—");
+      ? `${summary} · <span class="dgs-v2-sm-detail-ast">AST ${assetPart}</span>`
+      : summary || "—";
     els.detailActiveBadge.hidden = !d.is_active;
     renderFkChips(d);
     renderSummaryStrip(d);

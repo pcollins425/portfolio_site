@@ -647,6 +647,44 @@ def catalog_detail(
     }
 
 
+def _theme_name_key(name: Any) -> str:
+    return " ".join(str(name or "").split()).casefold()
+
+
+def _theme_ids_by_name(names: list[Any]) -> dict[str, str]:
+    """Map a printout theme name to a catalog id when exactly one theme uses it."""
+    cleaned: list[str] = []
+    seen: set[str] = set()
+    for name in names:
+        text = " ".join(str(name or "").split())
+        key = text.casefold()
+        if not text or key in seen:
+            continue
+        seen.add(key)
+        cleaned.append(text)
+    if not cleaned:
+        return {}
+    marks = ", ".join(["%s"] * len(cleaned))
+    rows = _query(
+        f"""
+        SELECT LTRIM(RTRIM(theme_name)) AS theme_name,
+               MIN(reference_key) AS theme_id
+        FROM vendors.themes
+        WHERE LTRIM(RTRIM(theme_name)) IN ({marks})
+        GROUP BY LTRIM(RTRIM(theme_name))
+        HAVING COUNT(*) = 1
+        """,
+        tuple(cleaned),
+    )
+    out: dict[str, str] = {}
+    for row in rows:
+        theme_name = row.get("theme_name")
+        theme_id = row.get("theme_id")
+        if theme_name and theme_id:
+            out[_theme_name_key(theme_name)] = str(theme_id)
+    return out
+
+
 @router.get("/catalog/{reference_key}/printout")
 def catalog_printout(
     reference_key: str,
@@ -711,6 +749,13 @@ def catalog_printout(
             asset_id = by_serial.get(str(serial))
         row["asset_id"] = asset_id
         out_rows.append(row)
+
+    theme_ids = _theme_ids_by_name(
+        [row.get("theme_name") for row in out_rows if row.get("theme_name")]
+    )
+    for row in out_rows:
+        key = _theme_name_key(row.get("theme_name"))
+        row["theme_id"] = theme_ids.get(key)
 
     return {
         "reference_key": key,

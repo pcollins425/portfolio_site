@@ -12,7 +12,7 @@
     pageSize: 50,
     total: 0,
     search: "",
-    selectedKey: null,
+    selectedKey: (new URLSearchParams(window.location.search).get("id") || "").trim() || null,
     detail: null,
     mediaUrls: {},
   };
@@ -32,6 +32,7 @@
     cabinetRow: document.getElementById("cabinet-row"),
     cardTitle: document.getElementById("card-title"),
     cardMeta: document.getElementById("card-meta"),
+    vendorHubLink: document.getElementById("vendor-hub-link"),
     detailBody: document.getElementById("detail-body"),
     detailEmptyMsg: document.getElementById("detail-empty-msg"),
     detailContent: document.getElementById("detail-content"),
@@ -42,6 +43,29 @@
 
   function apiUrl(path) {
     return `${API_BASE}${path}`;
+  }
+
+  function vendorHubHref(vendorId) {
+    const id = String(vendorId || "").trim();
+    if (!id) return "#";
+    const path = "vendor-hub.html";
+    if (window.DGS && typeof DGS.withApi === "function") {
+      const url = new URL(DGS.withApi(path), window.location.href);
+      url.searchParams.set("id", id);
+      return url.pathname + url.search;
+    }
+    return `${path}?id=${encodeURIComponent(id)}`;
+  }
+
+  function setVendorHubLink(vendorId) {
+    if (!els.vendorHubLink) return;
+    if (!vendorId) {
+      els.vendorHubLink.hidden = true;
+      els.vendorHubLink.href = "#";
+      return;
+    }
+    els.vendorHubLink.hidden = false;
+    els.vendorHubLink.href = vendorHubHref(vendorId);
   }
 
   async function fetchJson(path) {
@@ -182,12 +206,14 @@
       els.cabinetRow.innerHTML = "";
       els.cardTitle.textContent = "—";
       els.cardMeta.textContent = "Choose a row from the list";
+      setVendorHubLink(null);
       return;
     }
 
     const title = d.vendor_name || d.reference_key || "Vendor";
     els.cardTitle.textContent = title;
     els.cardMeta.textContent = `${d.reference_key} · ${fmtNum(d.cabinets?.length || 0)} cabinets · ${d.is_manufacturer ? "Manufacturer" : "Vendor"}`;
+    setVendorHubLink(d.reference_key);
 
     const logoPath = d.logo_media_path;
     if (logoPath) {
@@ -264,7 +290,9 @@
     state.total = data.total || 0;
     renderList();
 
-    if (!state.selectedKey && state.items.length) {
+    if (state.selectedKey) {
+      await openDetail(state.selectedKey);
+    } else if (state.items.length) {
       await openDetail(state.items[0].reference_key);
     }
   }

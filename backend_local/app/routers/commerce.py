@@ -354,6 +354,120 @@ def vendor_detail(reference_key: str):
     }
 
 
+_VENDOR_THEME_LINKS = """
+SELECT sc.cabinet_id, s.theme_id
+FROM vendors.software_cabinet AS sc
+INNER JOIN vendors.software AS s ON s.reference_key = sc.software_ref
+WHERE s.theme_id IS NOT NULL
+UNION
+SELECT s.cabinet_id, s.theme_id
+FROM vendors.software AS s
+WHERE s.cabinet_id IS NOT NULL AND s.theme_id IS NOT NULL
+UNION
+SELECT t.cabinet_id, t.reference_key
+FROM vendors.themes AS t
+WHERE t.cabinet_id IS NOT NULL
+"""
+
+
+@vendors_router.get("/{reference_key}/hub")
+def vendor_hub(reference_key: str):
+    """Cabinets for one vendor, and the themes each cabinet carries."""
+    vid = reference_key.strip()
+    if not vid:
+        raise HTTPException(status_code=400, detail="reference_key is required")
+
+    try:
+        rows = _field_query(
+            """
+            SELECT reference_key, vendor_name, is_manufacturer, logo_media_path
+            FROM vendors.vendors
+            WHERE reference_key = %s
+            """,
+            (vid,),
+        )
+        if not rows:
+            raise HTTPException(status_code=404, detail=f"vendor not found: {vid!r}")
+        linked = _field_query(
+            f"""
+            SELECT
+                c.reference_key,
+                c.cabinet_name,
+                c.version_name,
+                c.image_media_path,
+                t.reference_key AS theme_id,
+                t.theme_name
+            FROM vendors.cabinets AS c
+            LEFT JOIN ({_VENDOR_THEME_LINKS}) AS links
+                ON links.cabinet_id = c.reference_key
+            LEFT JOIN vendors.themes AS t ON t.reference_key = links.theme_id
+            WHERE c.vendor_id = %s
+            ORDER BY c.cabinet_name, t.theme_name, c.reference_key
+            """,
+            (vid,),
+        )
+        loose = _field_query(
+            f"""
+            SELECT t.reference_key, t.theme_name
+            FROM vendors.themes AS t
+            WHERE t.vendor_id = %s
+              AND NOT EXISTS (
+                SELECT 1
+                FROM ({_VENDOR_THEME_LINKS}) AS links
+                INNER JOIN vendors.cabinets AS c ON c.reference_key = links.cabinet_id
+                WHERE links.theme_id = t.reference_key
+                  AND c.vendor_id = %s
+              )
+            ORDER BY t.theme_name, t.reference_key
+            """,
+            (vid, vid),
+        )
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=503, detail=f"database error: {exc}") from exc
+
+    r = rows[0]
+    cabinets: list[dict] = []
+    by_cab: dict[str, dict] = {}
+    for row in linked:
+        key = str(row.get("reference_key") or "")
+        cab = by_cab.get(key)
+        if cab is None:
+            cab = {
+                "reference_key": _json_value(row.get("reference_key")),
+                "cabinet_name": _json_value(row.get("cabinet_name")),
+                "version_name": _json_value(row.get("version_name")),
+                "image_media_path": _json_value(row.get("image_media_path")),
+                "themes": [],
+            }
+            by_cab[key] = cab
+            cabinets.append(cab)
+        theme_id = _json_value(row.get("theme_id"))
+        if theme_id:
+            cab["themes"].append(
+                {
+                    "reference_key": theme_id,
+                    "theme_name": _json_value(row.get("theme_name")),
+                }
+            )
+
+    return {
+        "reference_key": _json_value(r.get("reference_key")),
+        "vendor_name": _json_value(r.get("vendor_name")),
+        "is_manufacturer": bool(r.get("is_manufacturer")),
+        "logo_media_path": _json_value(r.get("logo_media_path")),
+        "cabinets": cabinets,
+        "themes_without_cabinet": [
+            {
+                "reference_key": _json_value(row.get("reference_key")),
+                "theme_name": _json_value(row.get("theme_name")),
+            }
+            for row in loose
+        ],
+    }
+
+
 # --- Casinos ---
 
 _PERF_VIEW = "[dashboard].[vw_performance_report]"
