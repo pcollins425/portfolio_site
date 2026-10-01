@@ -8,7 +8,7 @@
   const NAV_GROUPS = [
     {
       id: "revenue",
-      label: "Revenue",
+      label: "Dashboards",
       items: [{ id: "dashboard", label: "Dashboard", href: "dashboard.html" }],
     },
     {
@@ -87,6 +87,7 @@
 
   const DASHBOARD_NAV = [
     { route: "/executive", label: "Executive" },
+    { route: "/market", label: "Market" },
     { route: "/analyst", label: "Analyst", requireArea: "dgs_analyst" },
     { route: "/commission", label: "Commission", requireArea: "dgs_commission" },
     { route: "/finance", label: "Finance", requireArea: "dgs_finance_dashboard" },

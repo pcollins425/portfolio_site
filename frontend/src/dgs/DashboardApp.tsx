@@ -4,12 +4,14 @@ import AnalystPage, { type AnalystSummary } from "../pages/AnalystPage";
 import CommissionPage, { type CommissionSummary } from "../pages/CommissionPage";
 import ExecutivePage from "../pages/ExecutivePage";
 import FinancePage from "../pages/FinancePage";
+import MarketPage from "../pages/MarketPage";
 import PerformancePage from "../pages/PerformancePage";
 import { DashboardMonthProvider } from "./MonthContext";
 import { useDashboardTheme } from "./ThemeContext";
 
 export type DashboardRoute =
   | "/executive"
+  | "/market"
   | "/analyst"
   | "/commission"
   | "/finance"
@@ -17,6 +19,7 @@ export type DashboardRoute =
 
 const ROUTES: DashboardRoute[] = [
   "/executive",
+  "/market",
   "/analyst",
   "/commission",
   "/finance",
@@ -62,6 +65,8 @@ function routePage(
       return (
         <CommissionPage summary={commissionSummary} onResolved={onCommissionResolved} />
       );
+    case "/market":
+      return <MarketPage />;
     case "/finance":
       return <FinancePage />;
     case "/performance":
@@ -192,7 +197,7 @@ export default function DashboardApp() {
     return () => window.removeEventListener("dgs-dashboard-route", onRoute);
   }, []);
 
-  const hidePeriod = route === "/analyst" || route === "/commission";
+  const hidePeriod = route === "/analyst" || route === "/commission" || route === "/market";
 
   return (
     <DashboardMonthProvider month={month} setMonth={setMonth} periods={periods}>
