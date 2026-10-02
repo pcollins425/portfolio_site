@@ -3,7 +3,7 @@
 from datetime import date
 import unittest
 
-from app.theme_performance import build_expectation
+from app.theme_performance import attach_unstamped_months, build_expectation
 
 
 def _month(year, month):
@@ -34,6 +34,75 @@ def _row(slot, when, index, days=30):
 
 
 class ThemePerformanceTests(unittest.TestCase):
+    def test_blank_slot_id_fills_the_life_back_to_install(self):
+        stints = [_stint("SMM-1", "TH-1", date(2024, 2, 13))]
+        stamped = [_row("SMM-1", _month(2026, m), 1.1) for m in range(4, 9)]
+        blanks = []
+        for year, month in (
+            [(2024, m) for m in range(2, 13) if m != 6]
+            + [(2025, m) for m in range(1, 13)]
+            + [(2026, m) for m in range(1, 4)]
+        ):
+            blanks.append(
+                {
+                    "slot_master_id": "SMM-1",
+                    "serial_number": "BB-11478",
+                    "casino_id": "CAS-1",
+                    "report_date": _month(year, month),
+                    "win_index": 1.2,
+                    "days_on_floor": 28,
+                    "mr_theme": "Devil's Lock",
+                }
+            )
+        blanks.append(
+            {
+                "slot_master_id": "SMM-1",
+                "serial_number": "BB-11478",
+                "casino_id": "CAS-1",
+                "report_date": _month(2024, 1),
+                "win_index": 9.0,
+                "days_on_floor": 30,
+                "mr_theme": "Devil's Lock",
+            }
+        )
+        blanks.append(
+            {
+                "slot_master_id": "SMM-1",
+                "serial_number": "BB-11478",
+                "casino_id": "CAS-1",
+                "report_date": _month(2024, 6),
+                "win_index": 0.2,
+                "days_on_floor": 30,
+                "mr_theme": "Other Game",
+            }
+        )
+        attached = attach_unstamped_months(stints, blanks, "TH-1", "Devil's Lock")
+        months = {row["report_date"] for row in attached}
+        self.assertIn(_month(2024, 2), months)
+        self.assertNotIn(_month(2024, 1), months)
+        self.assertNotIn(_month(2024, 6), months)
+        result = build_expectation(stints, stamped + attached, "TH-1")
+        self.assertEqual(result["months"][-1]["month"], 12)
+        self.assertEqual(result["months"][-1]["n"], 1)
+
+    def test_two_covering_stints_leave_a_blank_row_off(self):
+        stints = [
+            _stint("SMM-1", "TH-1", date(2024, 2, 13), asset="AST-1"),
+            _stint("SMM-2", "TH-1", date(2024, 2, 13), asset="AST-1"),
+        ]
+        blanks = [
+            {
+                "slot_master_id": slot,
+                "serial_number": "BB-11478",
+                "casino_id": "CAS-1",
+                "report_date": _month(2024, 3),
+                "win_index": 1.0,
+                "days_on_floor": 30,
+                "mr_theme": "Devil's Lock",
+            }
+            for slot in ("SMM-1", "SMM-2")
+        ]
+        self.assertEqual(attach_unstamped_months(stints, blanks, "TH-1", "Devil's Lock"), [])
     def test_short_opening_month_does_not_start_the_life(self):
         stints = [_stint("SMM-1", "TH-1", _month(2024, 1))]
         months = [

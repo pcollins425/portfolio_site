@@ -3,8 +3,11 @@
 A life is one placement: this theme, on one asset, at one casino, from the
 first full revenue month until it is converted off, removed, or still running.
 A month with 5 or fewer days on the floor does not start a life and does not
-count in the path. The line is the median Win Index of placements still on
-the theme in that month of life. The shade is the middle half.
+count in the path. Revenue stamped with a slot-master id belongs to that
+stint. Older rows often have a blank id; those count only when the serial,
+casino, and theme name match one stint that covers the month. The line is
+the median Win Index of placements still on the theme in that month of life.
+The shade is the middle half. The chart draws the first 12 months of each life.
 
 Warning is 0.71–0.99. Dead is 0.70 and under. A band's clock starts after two
 consecutive full months in that band. One soft month is variance. Recovering
@@ -15,6 +18,7 @@ only. A theme conversion or a remove stops the clock. The earlier one wins.
 from __future__ import annotations
 
 import math
+import re
 from collections import defaultdict
 from datetime import date, datetime
 from typing import Any
@@ -23,6 +27,62 @@ MIN_DAYS = 5
 CHART_MONTHS = 12
 ABOVE = 1.0
 DEAD = 0.70
+
+
+def attach_unstamped_months(stints: list[dict], blank_rows: list[dict], theme_id: str, theme_name: str) -> list[dict]:
+    """Give a blank slot-master id a home when one covering stint is obvious."""
+    windows: dict[str, tuple[date, date | None]] = {}
+    for stint in stints:
+        if str(stint.get("theme_id") or "").strip() != theme_id:
+            continue
+        slot = str(stint.get("slot_master_id") or "").strip()
+        start = _stint_start(stint)
+        if not slot or start is None:
+            continue
+        rmvl = _as_date(stint.get("rmvl_date"))
+        windows[slot] = (
+            date(start.year, start.month, 1),
+            date(rmvl.year, rmvl.month, 1) if rmvl else None,
+        )
+
+    want = _name_key(theme_name)
+    grouped: dict[tuple[str, str, date], list[dict]] = defaultdict(list)
+    for row in blank_rows:
+        if _name_key(str(row.get("mr_theme") or "")) != want:
+            continue
+        slot = str(row.get("slot_master_id") or "").strip()
+        window = windows.get(slot)
+        report = _as_date(row.get("report_date"))
+        if window is None or report is None:
+            continue
+        report_month = date(report.year, report.month, 1)
+        start_month, rmvl_month = window
+        if report_month < start_month:
+            continue
+        if rmvl_month is not None and report_month > rmvl_month:
+            continue
+        key = (
+            str(row.get("serial_number") or "").strip().upper(),
+            str(row.get("casino_id") or "").strip(),
+            report_month,
+        )
+        grouped[key].append(row)
+
+    attached = []
+    for hits in grouped.values():
+        slots = {str(hit.get("slot_master_id") or "").strip() for hit in hits}
+        if len(slots) != 1:
+            continue
+        hit = hits[0]
+        attached.append(
+            {
+                "slot_master_id": next(iter(slots)),
+                "report_date": hit.get("report_date"),
+                "win_index": hit.get("win_index"),
+                "days_on_floor": hit.get("days_on_floor"),
+            }
+        )
+    return attached
 
 
 def build_expectation(stints: list[dict], months: list[dict], theme_id: str) -> dict:
@@ -391,6 +451,10 @@ def _as_date(value: Any) -> date | None:
     if not text:
         return None
     return date.fromisoformat(text[:10])
+
+
+def _name_key(name: str) -> str:
+    return re.sub(r"[^a-z0-9]+", "", (name or "").lower())
 
 
 def _as_float(value: Any) -> float | None:

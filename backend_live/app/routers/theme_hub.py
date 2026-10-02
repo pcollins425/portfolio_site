@@ -25,7 +25,7 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Upload
 from app import dgs_projects_workbench_permissions as perms
 from app import document_paths, document_storage, mssql
 from app.auth_deps import require_demo_user
-from app.theme_performance import build_expectation
+from app.theme_performance import attach_unstamped_months, build_expectation
 from app.theme_performance import unavailable as performance_unavailable
 
 router = APIRouter(prefix="/api/theme-hub", tags=["theme-hub"])
@@ -325,7 +325,7 @@ def _installs(theme_id: str, theme_name: str) -> list[dict]:
     return placements
 
 
-def _performance(theme_id: str) -> dict:
+def _performance(theme_id: str, theme_name: str) -> dict:
     """Win Index by month of life for this catalog theme. Failure leaves the rest of the page up."""
     try:
         stint_rows = _query(
@@ -368,10 +368,35 @@ def _performance(theme_id: str) -> dict:
             """,
             (theme_id,),
         )
+        blank_rows = _query(
+            """
+            SELECT
+                sm.reference_key AS slot_master_id,
+                a.serial_number,
+                sm.casino_id,
+                CONVERT(date, mr.[date]) AS report_date,
+                mr.Days_on_Floor AS days_on_floor,
+                CAST(mr.WIN_Index AS float) AS win_index,
+                mr.Theme AS mr_theme
+            FROM inventory.slot_master_migration AS sm
+            INNER JOIN inventory.assets AS a ON a.reference_key = sm.asset_id
+            INNER JOIN clients.casinos AS c ON c.reference_key = sm.casino_id
+            INNER JOIN dashboard.vw_performance_report AS mr
+                ON mr.Serial_number = a.serial_number
+               AND (mr.Casino = c.casino_short OR mr.Casino = c.casino_name)
+            WHERE sm.theme_id = %s
+              AND (mr.slot_master_id IS NULL OR LTRIM(RTRIM(mr.slot_master_id)) = N'')
+              AND mr.[date] IS NOT NULL
+              AND mr.WIN_Index IS NOT NULL
+            """,
+            (theme_id,),
+        )
     except Exception:
         return performance_unavailable()
     stints = [{str(k).lower(): v for k, v in row.items()} for row in stint_rows]
     months = [{str(k).lower(): v for k, v in row.items()} for row in month_rows]
+    blanks = [{str(k).lower(): v for k, v in row.items()} for row in blank_rows]
+    months.extend(attach_unstamped_months(stints, blanks, theme_id, theme_name))
     return build_expectation(stints, months, theme_id)
 
 
@@ -671,7 +696,7 @@ def theme_detail(
     payload = {
         "theme": _row(theme),
         "can_write": _can_write(user),
-        "performance": _performance(theme_key),
+        "performance": _performance(theme_key, str(theme["theme_name"])),
         "software": _software_rows(theme_key),
         "documents": _documents(theme_key),
         "installs": _installs(theme_key, str(theme["theme_name"])),
