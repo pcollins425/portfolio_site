@@ -99,6 +99,147 @@
     return window.DGS && DGS.withApi ? DGS.withApi(safe) : safe;
   }
 
+  function performanceCard(perf) {
+    const summary = (perf && perf.summary) || ["Indexed performance could not be loaded."];
+    const summaryHtml = `<div class="th-perf-summary">${summary
+      .map((line) => `<p>${esc(line)}</p>`)
+      .join("")}</div>`;
+    if (!perf || !perf.available || !(perf.months || []).some((month) => month.n)) {
+      return tile("How this theme performs", summaryHtml);
+    }
+    return tile(
+      "How this theme performs",
+      `<p class="th-note">Win Index by month of life. The line is the median. The shade is the middle half of placements still on this theme.</p>
+       ${performanceChart(perf)}
+       ${summaryHtml}`
+    );
+  }
+
+  function performanceChart(perf) {
+    const months = perf.months || [];
+    const yMax = Number(perf.y_max) || 3;
+    const width = 920;
+    const height = 460;
+    const left = 52;
+    const right = 168;
+    const top = 16;
+    const bottom = 78;
+    const plotW = width - left - right;
+    const plotH = height - top - bottom;
+    const yOf = (value) => top + plotH * (1 - Number(value) / yMax);
+    const xOf = (month) => left + ((Number(month) - 1) / 11) * plotW;
+    const fadeFrom = perf.fade_from == null ? null : Number(perf.fade_from);
+    const fadeX = fadeFrom == null ? null : xOf(fadeFrom);
+    const parts = [];
+
+    parts.push(`<rect x="${left}" y="${yOf(yMax)}" width="${plotW}" height="${yOf(1) - yOf(yMax)}" fill="rgba(16,185,129,0.13)"/>`);
+    parts.push(`<rect x="${left}" y="${yOf(1)}" width="${plotW}" height="${yOf(0.7) - yOf(1)}" fill="rgba(245,158,11,0.14)"/>`);
+    parts.push(`<rect x="${left}" y="${yOf(0.7)}" width="${plotW}" height="${yOf(0) - yOf(0.7)}" fill="rgba(239,68,68,0.13)"/>`);
+
+    const steps = Math.round(yMax * 10);
+    const grid = [];
+    for (let i = 0; i <= steps; i += 1) {
+      const value = i / 10;
+      const major = Math.abs(value - 0.7) < 0.001 || Math.abs(value - 1) < 0.001 || i % 10 === 0;
+      grid.push(
+        `<line x1="${left}" y1="${yOf(value)}" x2="${left + plotW}" y2="${yOf(value)}" stroke="rgba(255,255,255,${major ? "0.22" : "0.1"})" stroke-width="1"/>`
+      );
+    }
+
+    const labeled = new Set([0, 0.5, 0.7, 1, 1.5, 2, 2.5, 3]);
+    for (let i = 0; i <= steps; i += 1) {
+      const value = i / 10;
+      const known = [...labeled].some((mark) => Math.abs(value - mark) < 0.001);
+      if (!known || value > yMax + 0.001) continue;
+      const text = Math.abs(value - 0.7) < 0.001 ? "0.70" : Math.abs(value - 1) < 0.001 ? "1.00" : value.toFixed(1);
+      parts.push(
+        `<text x="${left - 8}" y="${yOf(value) + 4}" text-anchor="end" fill="#8b96a8" font-size="12" font-family="Segoe UI, sans-serif">${text}</text>`
+      );
+    }
+
+    const zone = (y1, y2, label, fill) => {
+      parts.push(
+        `<text x="${left + plotW + 14}" y="${(y1 + y2) / 2 + 4}" fill="${fill}" font-size="13" font-weight="700" font-family="Segoe UI, sans-serif">${label}</text>`
+      );
+    };
+    zone(yOf(yMax), yOf(1), "Above house", "#a7d5c4");
+    zone(yOf(1), yOf(0.7), "Warning", "#d6c496");
+    zone(yOf(0.7), yOf(0), "Dead", "#d6aaaa");
+
+    const segments = [];
+    let current = [];
+    months.forEach((month) => {
+      if (month.median == null || !month.n) {
+        if (current.length) segments.push(current);
+        current = [];
+      } else {
+        current.push(month);
+      }
+    });
+    if (current.length) segments.push(current);
+
+    const maskId = "th-perf-fade";
+    if (fadeX != null) {
+      const offset = Math.max(0, Math.min(1, (fadeX - left) / plotW));
+      parts.push(
+        `<defs><linearGradient id="${maskId}-grad" x1="0" y1="0" x2="1" y2="0">
+          <stop offset="0" stop-color="#fff" stop-opacity="1"/>
+          <stop offset="${offset}" stop-color="#fff" stop-opacity="1"/>
+          <stop offset="1" stop-color="#fff" stop-opacity="0.28"/>
+        </linearGradient>
+        <mask id="${maskId}"><rect x="${left}" y="${top}" width="${plotW}" height="${plotH}" fill="url(#${maskId}-grad)"/></mask></defs>`
+      );
+    }
+    const maskAttr = fadeX == null ? "" : ` mask="url(#${maskId})"`;
+    const areas = [];
+    const strokes = [];
+    segments.forEach((segment) => {
+      if (segment.length >= 2) {
+        const high = segment.map((month) => `${xOf(month.month)},${yOf(month.high)}`).join(" ");
+        const low = segment
+          .slice()
+          .reverse()
+          .map((month) => `${xOf(month.month)},${yOf(month.low)}`)
+          .join(" ");
+        areas.push(`<polygon points="${high} ${low}" fill="rgba(214,224,236,0.34)"/>`);
+        const line = segment.map((month) => `${xOf(month.month)},${yOf(month.median)}`).join(" ");
+        strokes.push(
+          `<polyline points="${line}" fill="none" stroke="#f4f7fb" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>`
+        );
+      }
+      segment.forEach((month) => {
+        strokes.push(`<circle cx="${xOf(month.month)}" cy="${yOf(month.median)}" r="4" fill="#f4f7fb"/>`);
+      });
+    });
+    parts.push(`<g${maskAttr}>${areas.join("")}</g>`);
+    parts.push(grid.join(""));
+    parts.push(`<g${maskAttr}>${strokes.join("")}</g>`);
+
+    const countByMonth = {};
+    months.forEach((month) => {
+      countByMonth[month.month] = month.n;
+    });
+    for (let month = 1; month <= 12; month += 1) {
+      const faded = fadeFrom != null && month >= fadeFrom;
+      const fill = faded ? "rgba(139,150,168,0.55)" : "#8b96a8";
+      const count = countByMonth[month];
+      parts.push(
+        `<text x="${xOf(month)}" y="${top + plotH + 18}" text-anchor="middle" fill="${fill}" font-size="12" font-family="Segoe UI, sans-serif">${month}</text>`
+      );
+      parts.push(
+        `<text x="${xOf(month)}" y="${top + plotH + 34}" text-anchor="middle" fill="${fill}" font-size="11" font-family="Segoe UI, sans-serif">${count == null ? "" : count}</text>`
+      );
+    }
+    parts.push(
+      `<text x="${left + plotW / 2}" y="${height - 16}" text-anchor="middle" fill="#8b96a8" font-size="13" font-family="Segoe UI, sans-serif">Month of life</text>`
+    );
+    parts.push(
+      `<text x="${left}" y="${height - 16}" fill="#6b7280" font-size="11" font-family="Segoe UI, sans-serif">Placements still on the theme</text>`
+    );
+
+    return `<svg class="th-perf-chart" viewBox="0 0 ${width} ${height}" role="img" aria-label="Win Index by month of life">${parts.join("")}</svg>`;
+  }
+
   function tile(title, body) {
     return `<article class="dgs-v2-hub-tile dgs-v2-hub-tile--wide"><div class="dgs-v2-hub-tile-head"><div class="dgs-v2-section-label">${esc(
       title
@@ -337,6 +478,7 @@
       : "";
 
     els.grid.innerHTML = [
+      performanceCard(payload.performance),
       tile(
         "Associated software",
         `<table class="th-table"><thead><tr><th>Ref</th><th>Program</th><th>Cabinets</th><th></th></tr></thead><tbody>${

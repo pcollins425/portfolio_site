@@ -25,6 +25,8 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Upload
 from app import dgs_projects_workbench_permissions as perms
 from app import document_paths, document_storage, mssql
 from app.auth_deps import require_demo_user
+from app.theme_performance import build_expectation
+from app.theme_performance import unavailable as performance_unavailable
 
 router = APIRouter(prefix="/api/theme-hub", tags=["theme-hub"])
 
@@ -323,6 +325,56 @@ def _installs(theme_id: str, theme_name: str) -> list[dict]:
     return placements
 
 
+def _performance(theme_id: str) -> dict:
+    """Win Index by month of life for this catalog theme. Failure leaves the rest of the page up."""
+    try:
+        stint_rows = _query(
+            """
+            SELECT
+                sm.reference_key AS slot_master_id,
+                COALESCE(NULLIF(LTRIM(RTRIM(sm.asset_id)), N''), sm.reference_key) AS asset_id,
+                sm.casino_id,
+                sm.theme_id,
+                sm.action,
+                sm.rmvl_date,
+                sm.lastconver,
+                sm.golive001,
+                sm.date_instl
+            FROM inventory.slot_master_migration AS sm
+            WHERE sm.theme_id = %s
+               OR EXISTS (
+                    SELECT 1
+                    FROM inventory.slot_master_migration AS src
+                    WHERE src.asset_id = sm.asset_id
+                      AND src.casino_id = sm.casino_id
+                      AND src.theme_id = %s
+               )
+            """,
+            (theme_id, theme_id),
+        )
+        month_rows = _query(
+            """
+            SELECT
+                sm.reference_key AS slot_master_id,
+                CONVERT(date, mr.[date]) AS report_date,
+                mr.Days_on_Floor AS days_on_floor,
+                CAST(mr.WIN_Index AS float) AS win_index
+            FROM inventory.slot_master_migration AS sm
+            INNER JOIN dashboard.vw_performance_report AS mr
+                ON mr.slot_master_id = sm.reference_key
+            WHERE sm.theme_id = %s
+              AND mr.[date] IS NOT NULL
+              AND mr.WIN_Index IS NOT NULL
+            """,
+            (theme_id,),
+        )
+    except Exception:
+        return performance_unavailable()
+    stints = [{str(k).lower(): v for k, v in row.items()} for row in stint_rows]
+    months = [{str(k).lower(): v for k, v in row.items()} for row in month_rows]
+    return build_expectation(stints, months, theme_id)
+
+
 def _kits(theme_name: str) -> list[dict]:
     prefix = f"Kit: {theme_name}%"
     rows = _query(
@@ -619,6 +671,7 @@ def theme_detail(
     payload = {
         "theme": _row(theme),
         "can_write": _can_write(user),
+        "performance": _performance(theme_key),
         "software": _software_rows(theme_key),
         "documents": _documents(theme_key),
         "installs": _installs(theme_key, str(theme["theme_name"])),
