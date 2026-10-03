@@ -3,15 +3,21 @@
 
   var signedIn = false;
 
-  function dashboardUrl() {
+  function appDir() {
     var path = window.location.pathname;
-    if (/index\.html$/i.test(path)) path = path.replace(/index\.html$/i, "dashboard.html");
-    else if (path.endsWith("/")) path = path + "dashboard.html";
-    else path = path + "/dashboard.html";
+    var marker = "/dgsappv1/";
+    var at = path.indexOf(marker);
+    if (at !== -1) return path.slice(0, at + marker.length);
+    var guide = path.indexOf("/guide/");
+    if (guide !== -1) return path.slice(0, guide + 1);
+    return path.replace(/[^/]*$/, "");
+  }
+
+  function dashboardUrl() {
     return (
       window.location.origin +
-      path +
-      "?api=" +
+      appDir() +
+      "dashboard.html?api=" +
       encodeURIComponent(DGSAuth.apiBase())
     );
   }

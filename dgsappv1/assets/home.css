@@ -58,6 +58,11 @@ a {
   letter-spacing: 0.04em;
   text-transform: uppercase;
   color: var(--home-muted);
+  text-decoration: none;
+}
+
+a.home-mark:hover {
+  color: var(--home-heading);
 }
 
 .home-header-actions {
@@ -303,6 +308,63 @@ a {
   color: var(--home-heading);
   background: var(--home-accent-bg);
   border: 1px solid var(--home-accent-border);
+}
+
+.home-toc {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.home-toc a {
+  display: inline-block;
+  text-decoration: none;
+  color: var(--home-heading);
+  border: 1px solid var(--home-border);
+  border-radius: 999px;
+  padding: 8px 14px;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.home-toc a:hover {
+  border-color: var(--home-accent-border);
+  background: var(--home-accent-bg);
+}
+
+.home-back {
+  margin: 0 0 18px;
+  font-size: 14px;
+}
+
+.home-back a {
+  color: var(--home-muted);
+  text-decoration: none;
+  font-weight: 600;
+}
+
+.home-back a:hover {
+  color: var(--home-accent);
+}
+
+.home-hero.home-prose {
+  margin-bottom: 12px;
+}
+
+.home-prose p {
+  margin: 0 0 16px;
+  max-width: 68ch;
+}
+
+.home-prose p:last-child {
+  margin-bottom: 0;
+}
+
+.home-more {
+  margin-top: 28px;
 }
 
 .home-points {
