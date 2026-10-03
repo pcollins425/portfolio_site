@@ -266,6 +266,45 @@ a {
   font-size: 14px;
 }
 
+.home-entities .home-node {
+  flex: 1 1 120px;
+}
+
+.home-walk {
+  display: grid;
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  counter-reset: step;
+}
+
+.home-walk li {
+  counter-increment: step;
+  padding: 16px 18px 16px 58px;
+  background: var(--home-card);
+  border: 1px solid var(--home-border);
+  border-radius: 14px;
+  position: relative;
+}
+
+.home-walk li::before {
+  content: counter(step);
+  position: absolute;
+  left: 16px;
+  top: 16px;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  display: grid;
+  place-items: center;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--home-heading);
+  background: var(--home-accent-bg);
+  border: 1px solid var(--home-accent-border);
+}
+
 .home-points {
   display: grid;
   gap: 12px;
@@ -326,7 +365,7 @@ a {
     grid-template-columns: 1fr;
   }
 
-  .home-map {
+  .home-map:not(.home-entities) {
     flex-direction: column;
     align-items: stretch;
   }

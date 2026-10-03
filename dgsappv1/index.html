@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Electronic gaming operations</title>
-  <meta name="description" content="One record for every electronic gaming machine and electronic table game. Agreements, floors, cabinets, and parts point at that record. Your database stays on your servers." />
+  <meta name="description" content="Every vendor, cabinet, asset, casino, agreement, theme, and parts list is its own record. You follow those links the way you already ask the question. Your database stays on your servers." />
   <link rel="stylesheet" href="assets/home.css" />
 </head>
 <body class="home-page">
@@ -19,60 +19,40 @@
     <p id="home-error" class="home-error" hidden></p>
 
     <section class="home-hero">
-      <p class="home-eyebrow">Manufacturers, distributors, and parts desks</p>
-      <h1>Every machine is one record. Everything else points at it.</h1>
-      <p class="home-lead">One system for companies that build electronic gaming machines and electronic table games, place them in the field, or sell the parts that keep them running. The agreement, the warehouse, the floor, the cabinet, and the parts list all point at the same unit.</p>
+      <p class="home-eyebrow">Electronic gaming machines, table games, and parts</p>
+      <h1>Every record is its own entity.</h1>
+      <p class="home-lead">For companies that build electronic gaming machines and electronic table games, place them, or sell the parts that keep them running — including companies that do more than one of those. A vendor is a record. A cabinet and its specs are a record. A particular machine on a floor is a different record, even when it is that same cabinet. A casino, an agreement, a theme, and a parts list are records too.</p>
       <div class="home-hero-actions">
         <button type="button" class="home-btn" data-sign-in>Staff sign in</button>
         <p class="home-hint" id="home-hint">For people who already have access.</p>
       </div>
     </section>
 
-    <section class="home-section" aria-labelledby="desks-title">
-      <h2 id="desks-title">Three desks. The same machines.</h2>
-      <p>A manufacturer, a distributor, and a parts desk are three jobs looking at the same units. The system holds those units once, and each desk reads the records it needs.</p>
-      <div class="home-cards">
-        <article class="home-card">
-          <h3>Manufacturers</h3>
-          <p>Which cabinet and theme went to which floor, and which agreement covers that unit.</p>
-        </article>
-        <article class="home-card">
-          <h3>Distributors</h3>
-          <p>What is in the warehouse, what has been placed, and which agreement it sits on.</p>
-        </article>
-        <article class="home-card">
-          <h3>Parts</h3>
-          <p>Which parts belong to that cabinet and that unit, so the parts list stays tied to the machine.</p>
-        </article>
-      </div>
-    </section>
-
-    <section class="home-section" aria-labelledby="links-title">
-      <h2 id="links-title">Separate lists, linked on purpose.</h2>
-      <p>Machines, agreements, locations, cabinets, parts, and results each stay in their own list. A record in one list points at a record in another. That pointer is a reference: the agreement refers to a machine that exists, and the parts refer to the cabinet that machine is. This is a relational database — separate lists that stay related, because each link points at a real record.</p>
-      <figure class="home-map" aria-label="Agreement, floor, and results point at the machine. The machine points at the cabinet, and the cabinet points at parts.">
-        <div class="home-col">
-          <span class="home-node">Agreement</span>
-          <span class="home-node">Floor</span>
-          <span class="home-node">Results</span>
-        </div>
-        <span class="home-arrow" aria-hidden="true">→</span>
-        <span class="home-node home-node-core">Machine</span>
-        <span class="home-arrow" aria-hidden="true">→</span>
+    <section class="home-section" aria-labelledby="facts-title">
+      <h2 id="facts-title">The facts stay with the thing they describe.</h2>
+      <p>A cabinet’s specs stay the cabinet’s specs when a unit moves. A vendor stays that vendor when a new theme ships. What changes is the connection: this asset is at this casino, under this agreement, running this theme, built as this cabinet, from this vendor.</p>
+      <p>That connection is a reference. One record points at another real record. This is a relational database: separate entities, linked where the work needs the link, so a question can walk from one to the next.</p>
+      <figure class="home-map home-entities" aria-label="Vendor, cabinet, asset, casino, agreement, theme, and parts, each its own record.">
+        <span class="home-node">Vendor</span>
         <span class="home-node">Cabinet</span>
-        <span class="home-arrow" aria-hidden="true">→</span>
+        <span class="home-node">Asset</span>
+        <span class="home-node">Casino</span>
+        <span class="home-node">Agreement</span>
+        <span class="home-node">Theme</span>
         <span class="home-node">Parts</span>
-        <figcaption>Each box is its own list. The arrows are references.</figcaption>
+        <figcaption>Each name is its own record. You connect them where they need to meet.</figcaption>
       </figure>
     </section>
 
-    <section class="home-section" aria-labelledby="gets-title">
-      <h2 id="gets-title">What that gives you</h2>
-      <ul class="home-points">
-        <li><strong>Follow one path.</strong> Where the unit is, which agreement covers it, which parts it takes, and how it performed.</li>
-        <li><strong>Change it once.</strong> A move, a conversion, or a cabinet change is made on the record the other lists are pointing at.</li>
-        <li><strong>Ask a new question without a new copy.</strong> The links are already there. A new report follows them.</li>
-      </ul>
+    <section class="home-section" aria-labelledby="walk-title">
+      <h2 id="walk-title">You follow the question.</h2>
+      <p>Getting to the information follows the way someone already thinks. Each stop is the next question, and it opens the record that question is about.</p>
+      <ol class="home-walk">
+        <li>You look up a casino. From there you can see how it has performed, open the floor, and look at what has been there.</li>
+        <li>You pick a machine on that floor. From there you can see how that cabinet has performed, which theme is on it, and open the record for that specific asset.</li>
+        <li>From the asset you can see the cabinet it is, the agreement it sits on, and the parts that cabinet takes.</li>
+        <li>From the theme you can see where else it is installed.</li>
+      </ol>
     </section>
 
     <section class="home-section home-local" aria-labelledby="local-title">
