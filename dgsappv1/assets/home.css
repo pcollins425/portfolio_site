@@ -1,0 +1,360 @@
+/* Public front door. Same dark palette as the app shell, no sidebar. */
+
+:root {
+  --home-bg: #0e1117;
+  --home-card: #1a1f2a;
+  --home-card-2: #141922;
+  --home-border: rgba(255, 255, 255, 0.08);
+  --home-text: #c5cdd9;
+  --home-muted: #8b96a8;
+  --home-dim: #6b7280;
+  --home-heading: #f3f5f9;
+  --home-accent: #6eb5ff;
+  --home-accent-bg: rgba(110, 181, 255, 0.14);
+  --home-accent-border: rgba(110, 181, 255, 0.35);
+  --home-max: 1040px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body.home-page {
+  margin: 0;
+  min-height: 100vh;
+  background:
+    radial-gradient(900px 420px at 80% -10%, rgba(110, 181, 255, 0.08), transparent 60%),
+    var(--home-bg);
+  color: var(--home-text);
+  font: 16px/1.55 Inter, "Segoe UI", system-ui, -apple-system, sans-serif;
+}
+
+a {
+  color: var(--home-accent);
+}
+
+.home-header {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px 28px;
+  background: rgba(14, 17, 23, 0.9);
+  border-bottom: 1px solid var(--home-border);
+  backdrop-filter: blur(10px);
+}
+
+.home-mark {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--home-muted);
+}
+
+.home-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.home-main {
+  width: min(var(--home-max), calc(100% - 40px));
+  margin: 0 auto;
+  padding: 64px 0 40px;
+}
+
+.home-hero {
+  max-width: 760px;
+  margin-bottom: 72px;
+}
+
+.home-eyebrow {
+  margin: 0 0 14px;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--home-accent);
+}
+
+.home-hero h1 {
+  margin: 0 0 16px;
+  font-size: clamp(2rem, 4.4vw, 3.15rem);
+  line-height: 1.12;
+  letter-spacing: -0.02em;
+  color: var(--home-heading);
+  font-weight: 600;
+}
+
+.home-lead {
+  margin: 0 0 28px;
+  font-size: 1.125rem;
+  color: var(--home-text);
+  max-width: 62ch;
+}
+
+.home-hero-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 14px 18px;
+}
+
+.home-hint {
+  margin: 0;
+  font-size: 14px;
+  color: var(--home-muted);
+}
+
+.home-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  padding: 11px 18px;
+  font: inherit;
+  font-size: 15px;
+  font-weight: 600;
+  text-decoration: none;
+  cursor: pointer;
+  color: #0e1117;
+  background: var(--home-accent);
+}
+
+.home-btn:hover {
+  filter: brightness(1.06);
+}
+
+.home-btn:focus-visible,
+.home-btn-quiet:focus-visible {
+  outline: 2px solid var(--home-accent);
+  outline-offset: 3px;
+}
+
+.home-btn-quiet {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 10px;
+  padding: 10px 16px;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  color: var(--home-heading);
+  background: transparent;
+  border: 1px solid var(--home-border);
+}
+
+.home-btn-quiet:hover {
+  border-color: var(--home-accent-border);
+  background: var(--home-accent-bg);
+}
+
+.home-error {
+  margin: 0 0 22px;
+  padding: 12px 14px;
+  border-radius: 10px;
+  background: rgba(220, 38, 38, 0.12);
+  color: #fecaca;
+  font-size: 14px;
+}
+
+.home-section {
+  margin: 0 0 72px;
+}
+
+.home-section h2 {
+  margin: 0 0 12px;
+  font-size: 1.65rem;
+  line-height: 1.2;
+  letter-spacing: -0.02em;
+  color: var(--home-heading);
+}
+
+.home-section > p {
+  margin: 0 0 22px;
+  max-width: 68ch;
+}
+
+.home-cards {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 14px;
+}
+
+.home-card {
+  margin: 0;
+  padding: 20px 18px 22px;
+  background: var(--home-card);
+  border: 1px solid var(--home-border);
+  border-radius: 14px;
+}
+
+.home-card h3 {
+  margin: 0 0 8px;
+  font-size: 1.05rem;
+  color: var(--home-heading);
+}
+
+.home-card p {
+  margin: 0;
+  color: var(--home-text);
+  font-size: 15px;
+}
+
+.home-map {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  margin: 8px 0 0;
+  padding: 22px 18px;
+  background: var(--home-card-2);
+  border: 1px solid var(--home-border);
+  border-radius: 16px;
+}
+
+.home-col {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  flex: 1 1 140px;
+}
+
+.home-node {
+  display: block;
+  text-align: center;
+  padding: 12px 10px;
+  border-radius: 12px;
+  background: var(--home-card);
+  border: 1px solid var(--home-border);
+  color: var(--home-heading);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.home-node-core {
+  flex: 1.15 1 150px;
+  background: var(--home-accent-bg);
+  border-color: var(--home-accent-border);
+  font-size: 16px;
+}
+
+.home-arrow {
+  flex: 0 0 auto;
+  color: var(--home-dim);
+  text-align: center;
+  font-size: 18px;
+  line-height: 1;
+}
+
+.home-map figcaption {
+  flex: 1 0 100%;
+  margin: 6px 0 0;
+  color: var(--home-muted);
+  font-size: 14px;
+}
+
+.home-points {
+  display: grid;
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.home-points li {
+  padding: 16px 18px;
+  background: var(--home-card);
+  border: 1px solid var(--home-border);
+  border-radius: 14px;
+}
+
+.home-points strong {
+  color: var(--home-heading);
+  font-weight: 600;
+}
+
+.home-local {
+  padding: 28px 26px;
+  background: var(--home-card);
+  border: 1px solid var(--home-accent-border);
+  border-radius: 16px;
+}
+
+.home-local h2 {
+  margin-top: 0;
+}
+
+.home-local p:last-child {
+  margin-bottom: 0;
+}
+
+.home-footer {
+  width: min(var(--home-max), calc(100% - 40px));
+  margin: 0 auto;
+  padding: 8px 0 48px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  border-top: 1px solid var(--home-border);
+  padding-top: 28px;
+}
+
+.home-footer p {
+  margin: 0;
+  color: var(--home-muted);
+  font-size: 14px;
+  max-width: 52ch;
+}
+
+@media (max-width: 860px) {
+  .home-cards {
+    grid-template-columns: 1fr;
+  }
+
+  .home-map {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .home-arrow {
+    transform: rotate(90deg);
+  }
+}
+
+@media (max-width: 640px) {
+  .home-main,
+  .home-footer {
+    width: min(var(--home-max), calc(100% - 28px));
+  }
+
+  .home-header {
+    padding: 14px 16px;
+  }
+
+  .home-main {
+    padding-top: 40px;
+  }
+
+  .home-hero {
+    margin-bottom: 52px;
+  }
+
+  .home-section {
+    margin-bottom: 52px;
+  }
+}
