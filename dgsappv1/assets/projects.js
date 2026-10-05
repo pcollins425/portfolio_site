@@ -356,6 +356,12 @@
     }
   }
 
+  function projectLabel(p) {
+    const named = p.matching_catalog && p.matching_catalog.project_name;
+    if (named && !p.property) return named;
+    return [p.property, p.project_no].filter(Boolean).join(" ") || p.proj_desc || "Project";
+  }
+
   function dayCell(dayNum, { other = false, dateKey, projects = [], today = false, selected = false } = {}) {
     const cell = document.createElement("div");
     cell.className = "dgs-prj-cal-day";
@@ -377,7 +383,7 @@
         const chip = document.createElement("div");
         chip.className = "dgs-prj-cal-chip";
         if (p.matching_catalog) chip.classList.add("has-details");
-        const label = [p.property, p.project_no].filter(Boolean).join(" ") || p.proj_desc || "Project";
+        const label = projectLabel(p);
         chip.textContent = label;
         chip.title = label;
         box.appendChild(chip);
@@ -413,7 +419,7 @@
     if (state.calSearch) {
       const q = state.calSearch;
       list = list.filter((p) =>
-        [p.property, p.project_no, p.proj_desc, p.proj_type, p.tech]
+        [p.property, p.project_no, p.proj_desc, p.proj_type, p.tech, p.matching_catalog && p.matching_catalog.project_name]
           .map((v) => String(v ?? "").toLowerCase())
           .some((v) => v.includes(q))
       );
@@ -443,7 +449,7 @@
 
     els["cal-list-body"].innerHTML = list
       .map((p) => {
-        const title = [p.property, p.project_no].filter(Boolean).join(" ") || p.proj_desc || "Project";
+        const title = projectLabel(p);
         const noCasino = !p.casino_id;
         const badge = p.matching_catalog
           ? `<span class="dgs-prj-badge">Details Available</span>`
@@ -488,8 +494,7 @@
   }
 
   function openCalDrawer(p) {
-    els["cal-detail-title"].textContent =
-      [p.property, p.project_no].filter(Boolean).join(" ") || "Project";
+    els["cal-detail-title"].textContent = projectLabel(p);
 
     let html = "";
     if (p.matching_catalog) {
