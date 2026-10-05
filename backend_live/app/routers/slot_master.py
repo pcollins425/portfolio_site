@@ -581,7 +581,7 @@ def asset_history(asset_id: str):
                 sm.rmvl_date,
                 th.theme_name,
                 c.casino_name,
-                CONVERT(date, COALESCE(sm.rmvl_date, sm.lastconver, sm.golive001, sm.date_instl)) AS event_date,
+                CONVERT(date, COALESCE(ims.start_date, pc.date_start)) AS event_date,
                 COALESCE(
                     NULLIF(LTRIM(RTRIM(pc.project_name)), N''),
                     NULLIF(LTRIM(RTRIM(ims.description)), N''),
@@ -592,10 +592,12 @@ def asset_history(asset_id: str):
             LEFT JOIN vendors.themes AS th ON th.reference_key = sm.theme_id
             LEFT JOIN clients.casinos AS c ON c.reference_key = sm.casino_id
             LEFT JOIN projects.ims AS ims ON ims.reference_key = sm.project_id
-            LEFT JOIN projects.project_catalog AS pc ON pc.ims_id = ims.reference_key
+            LEFT JOIN projects.project_catalog AS pc
+                ON pc.ims_id = sm.project_id
+                OR pc.reference_key = sm.project_id
             WHERE sm.asset_id = %s
             ORDER BY
-                COALESCE(sm.rmvl_date, sm.lastconver, sm.golive001, sm.date_instl) DESC,
+                COALESCE(ims.start_date, pc.date_start) DESC,
                 sm.index_key DESC
             """,
             (aid,),
