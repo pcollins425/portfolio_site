@@ -4,11 +4,12 @@ from __future__ import annotations
 
 from typing import Annotated, Any
 
-from fastapi import Depends, HTTPException
+from fastapi import Depends, HTTPException, Request
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from app import auth_service
 from app import emaint_demo_permissions as perms
+from app import view_as
 
 _bearer = HTTPBearer(auto_error=False)
 
@@ -31,6 +32,7 @@ def _optional_user(
 
 
 def require_demo_user(
+    request: Request,
     credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(_bearer)],
 ) -> dict[str, Any] | None:
     if not auth_service.auth_required():
@@ -38,7 +40,8 @@ def require_demo_user(
     user = _optional_user(credentials)
     if not user:
         raise HTTPException(status_code=401, detail="Sign in required")
-    return user
+    target = request.headers.get(view_as.HEADER)
+    return view_as.apply(user, target)
 
 
 def require_table_read(

@@ -11,6 +11,7 @@ from pydantic import BaseModel, Field
 
 from app import mssql
 from app import permission_catalog as cat
+from app import view_as
 from app.auth_deps import require_demo_user
 
 router = APIRouter(prefix="/api/admin", tags=["admin-employees"])
@@ -344,6 +345,11 @@ def patch_employee(
             raise HTTPException(status_code=403, detail="; ".join(errs))
         new_override_blob = cat.serialize_permissions(current)
 
+    new_override_blob = view_as.retain_private_overrides(
+        row.get("override_permissions"),
+        new_override_blob,
+    )
+
     new_active = body.active if body.active is not None else bool(row.get("active"))
     hypo = _apply_employee_hypothesis(
         _all_employee_perm_rows(),
@@ -422,26 +428,27 @@ def reset_overrides(
         raise HTTPException(status_code=404, detail="Employee not found")
 
     role_blob = row.get("role_permissions")
+    kept_override = view_as.retain_private_overrides(row.get("override_permissions"), "")
     hypo = _apply_employee_hypothesis(
         _all_employee_perm_rows(),
         ref,
-        override_blob="",
+        override_blob=kept_override,
         active=bool(row.get("active")),
     )
     _ensure_not_last_admin(cat.EMPLOYEES_AREA, hypothetical=hypo)
 
-    combined = cat.serialize_permissions(cat.parse_permissions_blob(role_blob))
+    combined = cat.serialize_permissions(cat.merge_permissions(role_blob, kept_override))
     _exec(
         """
         UPDATE employees.employee_roles
         SET
-            override_permissions = NULL,
+            override_permissions = %s,
             combined_permissions = %s,
             update_date = %s,
             update_by = %s
         WHERE reference_key = %s
         """,
-        (combined or None, datetime.now(), _actor_name(user), ref),
+        (kept_override or None, combined or None, datetime.now(), _actor_name(user), ref),
     )
     return _employee_payload(_employee_row(ref))  # type: ignore[arg-type]
 

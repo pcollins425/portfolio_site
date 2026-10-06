@@ -2,6 +2,7 @@
   "use strict";
 
   const AUTH_TOKEN_KEY = "emaint_demo_token";
+  const VIEW_AS_KEY = "dgs_view_as";
   const PRODUCTION_API = "https://api.collinsmediallc.com";
   const LOCAL_API = "http://127.0.0.1:9002";
   const params = new URLSearchParams(window.location.search);
@@ -9,6 +10,8 @@
   const state = {
     authRequired: false,
     user: null,
+    canViewAs: false,
+    viewAs: null,
   };
 
   function isLocalFrontend() {
@@ -64,19 +67,33 @@
     return `login.html?api=${encodeURIComponent(apiBase())}&return_to=${encodeURIComponent(dest)}`;
   }
 
+  function viewAsId() {
+    return (sessionStorage.getItem(VIEW_AS_KEY) || "").trim();
+  }
+
+  function setViewAs(id) {
+    const next = (id || "").trim();
+    if (next) sessionStorage.setItem(VIEW_AS_KEY, next);
+    else sessionStorage.removeItem(VIEW_AS_KEY);
+    window.location.reload();
+  }
+
   function authHeaders(extra) {
     const headers = Object.assign({}, extra || {});
     const token = getToken();
     if (token) headers.Authorization = `Bearer ${token}`;
+    const preview = viewAsId();
+    if (preview) headers["X-DGS-View-As"] = preview;
     return headers;
   }
 
   async function apiGet(path) {
     const res = await fetch(`${apiBase()}${path}`, { headers: authHeaders() });
-    if (res.status === 401) throw new Error("Sign in required");
     if (!res.ok) {
       const body = await res.text();
-      throw new Error(body || res.statusText);
+      const err = new Error(res.status === 401 ? "Sign in required" : body || res.statusText);
+      err.status = res.status;
+      throw err;
     }
     return res.json();
   }
@@ -100,7 +117,10 @@
 
   function signOut() {
     setToken(null);
+    sessionStorage.removeItem(VIEW_AS_KEY);
     state.user = null;
+    state.canViewAs = false;
+    state.viewAs = null;
     window.location.replace(loginPageUrl());
   }
 
@@ -125,9 +145,17 @@
     try {
       const me = await apiGet("/api/auth/me");
       state.user = me.user;
+      state.canViewAs = me.can_view_as === true;
+      state.viewAs = me.view_as || null;
+      if (viewAsId() && !state.viewAs) sessionStorage.removeItem(VIEW_AS_KEY);
       renderAccount();
       return true;
-    } catch (_err) {
+    } catch (err) {
+      if (viewAsId() && (err.status === 403 || err.status === 404)) {
+        sessionStorage.removeItem(VIEW_AS_KEY);
+        window.location.reload();
+        return false;
+      }
       setToken(null);
       window.location.replace(loginPageUrl());
       return false;
@@ -164,5 +192,9 @@
     loginPageUrl,
     getUser: () => state.user,
     isAuthRequired: () => state.authRequired,
+    viewAsId,
+    setViewAs,
+    getCanViewAs: () => state.canViewAs,
+    getViewAs: () => state.viewAs,
   };
 })();

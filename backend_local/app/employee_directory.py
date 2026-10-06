@@ -60,6 +60,34 @@ def list_directory(q: str = "", limit: int = 80) -> list[dict[str, str]]:
     return [_row(r) for r in rows]
 
 
+def list_view_as(limit: int = 300) -> list[dict[str, str]]:
+    """Active staff for the dev-view picker. Includes role so the label shows why the chrome differs."""
+    limit = max(1, min(int(limit), 400))
+    rows = mssql.query(
+        f"""
+        SELECT TOP {limit}
+            er.reference_key AS employee_id,
+            er.name,
+            er.email,
+            r.role AS role_name
+        FROM employees.employee_roles er
+        LEFT JOIN employees.roles r ON r.reference_key = er.role_id
+        WHERE {_ACTIVE_WITH_EMAIL}
+        ORDER BY er.name
+        """,
+        (),
+        database=_catalog(),
+        profile="dashboard",
+        load_env=False,
+    )
+    people: list[dict[str, str]] = []
+    for row in rows:
+        item = _row(row)
+        item["role"] = (row.get("role_name") or "").strip()
+        people.append(item)
+    return people
+
+
 def by_id(employee_id: str) -> dict[str, str] | None:
     eid = (employee_id or "").strip()
     if not eid:

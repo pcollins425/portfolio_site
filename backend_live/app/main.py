@@ -2,11 +2,13 @@ from __future__ import annotations
 
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
 from app import settings as app_settings
-from app.routers import admin_employees, analyst, assistant, assets, auth, commerce, commission_contract, contracts, documents, emaint_demo, employees, expenses, field, hubspot_webhook, market, master_revenue, media, page_chat, parts_bom, parts_catalog, parts_inventory, parts_shop_accounts, performance_intake, projects, projects_workbench, slot_master, software_vault, theme_hub, warehouse_inventory
+from app import view_as
+from app.routers import admin_employees, analyst, assistant, assets, auth, commerce, commission_contract, contracts, documents, emaint_demo, employees, expenses, field, hubspot_webhook, market, master_revenue, media, page_chat, parts_bom, parts_catalog, parts_inventory, parts_shop_accounts, performance_intake, projects, projects_workbench, slot_master, software_vault, theme_hub, view_as as view_as_router, warehouse_inventory
 from app.routers.v1 import health as v1_health
 
 app_settings.load_local_env()
@@ -33,6 +35,15 @@ async def _lifespan(app: FastAPI):
 
 app = FastAPI(title="Portfolio API (live)", version="0.1.0", lifespan=_lifespan)
 
+
+@app.middleware("http")
+async def dev_view_readonly(request: Request, call_next):
+    detail = view_as.reject_write(request.method, request.headers.get(view_as.HEADER))
+    if detail:
+        return JSONResponse(status_code=403, content={"detail": detail})
+    return await call_next(request)
+
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -46,6 +57,7 @@ app.include_router(analyst.router)
 app.include_router(commission_contract.router)
 app.include_router(field.router)
 app.include_router(auth.router)
+app.include_router(view_as_router.router)
 app.include_router(employees.router)
 app.include_router(admin_employees.router)
 app.include_router(emaint_demo.router)

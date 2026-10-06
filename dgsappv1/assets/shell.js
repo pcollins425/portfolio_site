@@ -81,6 +81,12 @@
           href: "assistant.html",
           requireAnyOf: ["dgs_assistant"],
         },
+        {
+          id: "mail_intake",
+          label: "Mail Intake",
+          href: "mail-intake.html",
+          requireAnyOf: ["dgs_mail_intake"],
+        },
       ],
     },
   ];
@@ -613,8 +619,101 @@
     setDashboardRoute(initial);
   }
 
+  function optionLabel(person) {
+    const name = person.name || person.email || person.employee_id;
+    return person.role ? `${name} · ${person.role}` : name;
+  }
+
+  async function renderDevView() {
+    const existing = document.getElementById("dgs-dev-view");
+    if (!window.DGSAuth || !DGSAuth.getCanViewAs || !DGSAuth.getCanViewAs()) {
+      if (existing) existing.remove();
+      document.body.classList.remove("dgs-dev-view-on");
+      return;
+    }
+    let bar = existing;
+    if (!bar) {
+      bar = document.createElement("div");
+      bar.id = "dgs-dev-view";
+      bar.className = "dgs-dev-view";
+      bar.innerHTML = `
+        <span class="dgs-dev-view-kicker">Dev view</span>
+        <label class="dgs-dev-view-field">
+          <span class="dgs-dev-view-caption">View as</span>
+          <select id="dgs-dev-view-select"></select>
+        </label>
+        <span class="dgs-dev-view-note" id="dgs-dev-view-note"></span>
+      `;
+      document.body.prepend(bar);
+      bar.querySelector("#dgs-dev-view-select").addEventListener("change", (event) => {
+        DGSAuth.setViewAs(event.target.value);
+      });
+    }
+    document.body.classList.add("dgs-dev-view-on");
+    const syncOffset = () => {
+      document.documentElement.style.setProperty("--dgs-dev-view-h", `${bar.offsetHeight}px`);
+    };
+    syncOffset();
+    if (!bar.dataset.dgsOffsetWired) {
+      bar.dataset.dgsOffsetWired = "1";
+      window.addEventListener("resize", syncOffset);
+    }
+    const select = bar.querySelector("#dgs-dev-view-select");
+    const note = bar.querySelector("#dgs-dev-view-note");
+    const current = DGSAuth.getViewAs && DGSAuth.getViewAs();
+    const actor = DGSAuth.getUser && DGSAuth.getUser();
+    const myself = (actor && actor.name) || "Myself";
+    select.innerHTML = "";
+    const mine = document.createElement("option");
+    mine.value = "";
+    mine.textContent = myself;
+    select.appendChild(mine);
+    if (current && current.employee_id) {
+      const held = document.createElement("option");
+      held.value = current.employee_id;
+      held.textContent = optionLabel(current);
+      held.selected = true;
+      select.appendChild(held);
+      note.textContent = "Read-only. Switch back to yourself to make changes.";
+      bar.classList.add("is-previewing");
+    } else {
+      note.textContent = "";
+      bar.classList.remove("is-previewing");
+    }
+    try {
+      const res = await fetch(`${DGSAuth.apiBase()}/api/dev/view-as/directory`, {
+        headers: DGSAuth.authHeaders(),
+      });
+      if (!res.ok) throw new Error("directory unavailable");
+      const data = await res.json();
+      const people = (data && data.employees) || [];
+      const selected = select.value;
+      select.innerHTML = "";
+      select.appendChild(mine);
+      people.forEach((person) => {
+        const opt = document.createElement("option");
+        opt.value = person.employee_id;
+        opt.textContent = optionLabel(person);
+        if (person.email) opt.title = person.email;
+        select.appendChild(opt);
+      });
+      select.value = selected;
+      if (select.value !== selected && current && current.employee_id) {
+        const held = document.createElement("option");
+        held.value = current.employee_id;
+        held.textContent = optionLabel(current);
+        select.appendChild(held);
+        select.value = current.employee_id;
+      }
+    } catch (_err) {
+      /* picker still has the current person; exit stays available */
+    }
+    syncOffset();
+  }
+
   async function boot(activeId, onReady) {
     if (window.DGSAuth && !(await DGSAuth.ensureAuth())) return;
+    await renderDevView();
     // Rail collapse is desktop-only; mobile top nav hides the sidebar ≤900px.
     document.body.classList.toggle("dgs-rail-collapsed", isRailCollapsed());
     if (usesMobileTopNav()) {
@@ -626,7 +725,12 @@
     if (window.DGSAuth) DGSAuth.renderAccount();
     if (usesMobileTopNav()) syncMobileTopNav(activeId);
     if (!pageAccessAllowed(activeId)) {
-      showAccessDenied();
+      const preview = window.DGSAuth && DGSAuth.getViewAs && DGSAuth.getViewAs();
+      showAccessDenied(
+        preview && preview.name
+          ? `${preview.name} does not have access to this area.`
+          : undefined
+      );
       return;
     }
     if (typeof onReady === "function") onReady();

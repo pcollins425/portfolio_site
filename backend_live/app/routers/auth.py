@@ -5,11 +5,12 @@ from __future__ import annotations
 from typing import Annotated, Any
 from urllib.parse import quote
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import RedirectResponse
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from app import auth_service
+from app import view_as
 from app.auth_deps import _optional_user
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
@@ -67,11 +68,18 @@ async def google_callback(
 
 @router.get("/me")
 def auth_me(
+    request: Request,
     credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(_bearer)],
 ) -> dict[str, Any]:
     if not auth_service.auth_required():
-        return {"auth_required": False, "user": None}
+        return {"auth_required": False, "user": None, "can_view_as": False, "view_as": None}
     user = _optional_user(credentials)
     if not user:
         raise HTTPException(status_code=401, detail="Sign in required")
-    return {"auth_required": True, "user": user}
+    user = view_as.apply(user, request.headers.get(view_as.HEADER))
+    return {
+        "auth_required": True,
+        "user": view_as.public_user(user),
+        "can_view_as": bool(user.get("can_view_as")),
+        "view_as": user.get("view_as"),
+    }

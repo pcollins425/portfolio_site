@@ -157,6 +157,34 @@ def _employee_by_email(email: str) -> dict[str, Any] | None:
     return rows[0] if rows else None
 
 
+def employee_by_id(employee_id: str) -> dict[str, Any] | None:
+    eid = (employee_id or "").strip()
+    if not eid or len(eid) > 25:
+        return None
+    rows = mssql.query(
+        """
+        SELECT TOP 1
+            er.reference_key AS employee_id,
+            er.name,
+            er.email,
+            er.active,
+            er.override_permissions,
+            r.role AS role_name,
+            r.permissions AS role_permissions
+        FROM employees.employee_roles er
+        LEFT JOIN employees.roles r ON r.reference_key = er.role_id
+        WHERE er.reference_key = %s
+          AND er.active = 1
+          AND NULLIF(LTRIM(RTRIM(er.email)), N'') IS NOT NULL
+        """,
+        (eid,),
+        database=_catalog(),
+        profile="dashboard",
+        load_env=False,
+    )
+    return rows[0] if rows else None
+
+
 def effective_permissions(employee: dict[str, Any]) -> dict[str, str]:
     return perms.merge_permissions(
         employee.get("role_permissions"),

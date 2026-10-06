@@ -190,6 +190,9 @@ def levels_actor_may_grant(actor_level: str | None) -> frozenset[str]:
 
 def can_grant(actor_effective: dict[str, str], area: str, requested_level: str | None) -> bool:
     """True if actor may set ``area`` to ``requested_level`` (None/empty/NONE = clear)."""
+    # Dev view is seeded on one person. The Employees screen cannot hand it out or clear it.
+    if (area or "").strip() == "dgs_view_as":
+        return False
     req = (requested_level or LEVEL_NONE).strip().upper()
     if req in ("", LEVEL_NONE, "OFF"):
         return True
