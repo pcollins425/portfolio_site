@@ -2098,12 +2098,19 @@ body.dgs-dev-view-on .dgs-sidebar {
 
 .dgs-dev-view select {
   max-width: min(420px, 70vw);
-  background: rgba(0, 0, 0, 0.25);
-  color: inherit;
-  border: 1px solid rgba(255, 255, 255, 0.2);
+  color-scheme: light;
+  background: #ffffff;
+  color: #142033;
+  border: 1px solid #8b96a8;
   border-radius: 8px;
-  padding: 4px 8px;
+  padding: 5px 8px;
   font: inherit;
+  font-weight: 600;
+}
+
+.dgs-dev-view select option {
+  background: #ffffff;
+  color: #142033;
 }
 
 .dgs-dev-view-note {
