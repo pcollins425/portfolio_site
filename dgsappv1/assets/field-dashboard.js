@@ -44,39 +44,37 @@
       root.innerHTML = `
         <div class="dgs-field-dash">
           <p class="dgs-field-note">${mine ? "Your projects and assigned work orders." : "Every upcoming project and open work order."}</p>
-          <section>
-            <h2>Upcoming projects <span>${projects.length}</span></h2>
-            ${table(
-              ["Start", "End", "Casino", "Project", "Type", "Lead", "Assisting", "Description"],
-              projects.map((row) => [
-                row.start_date,
-                row.end_date,
-                row.casino_name,
-                row.project_number,
-                row.project_type,
-                row.lead_tech,
-                row.assistant_techs,
-                row.description,
-              ]),
-              "No upcoming projects."
-            )}
-          </section>
-          <section>
-            <h2>Open work orders <span>${orders.length}</span></h2>
-            ${table(
-              ["Scheduled", "WO", "Property", "Status", "Assigned", "Type", "Description"],
-              orders.map((row) => [
-                row.sch_date,
-                row.wo,
-                row.property,
-                row.stattype,
-                row.assignto,
-                row.wo_type,
-                row.brief_desc,
-              ]),
-              "No open work orders."
-            )}
-          </section>
+          <div class="dgs-field-pair">
+            <section class="dgs-field-panel">
+              <h2>Upcoming projects <span>${projects.length}</span></h2>
+              ${table(
+                ["Start", "Casino", "Project", "Lead", "Description"],
+                projects.map((row) => [
+                  row.start_date,
+                  row.casino_name,
+                  row.project_number,
+                  row.lead_tech,
+                  row.description,
+                ]),
+                "No upcoming projects."
+              )}
+            </section>
+            <section class="dgs-field-panel">
+              <h2>Open work orders <span>${orders.length}</span></h2>
+              ${table(
+                ["Scheduled", "WO", "Property", "Status", "Assigned", "Description"],
+                orders.map((row) => [
+                  row.sch_date,
+                  row.wo,
+                  row.property,
+                  row.stattype,
+                  row.assignto,
+                  row.brief_desc,
+                ]),
+                "No open work orders."
+              )}
+            </section>
+          </div>
         </div>`;
     } catch (err) {
       root.innerHTML = `<p class="error-box">${esc(err.message || err)}</p>`;
