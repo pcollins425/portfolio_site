@@ -23,6 +23,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from app import mssql
 from app import dgs_projects_permissions as perms
 from app.auth_deps import require_demo_user
+from app.casino_scope import assigned_employee_id, blob_includes, sql_params, sql_predicate
 
 router = APIRouter(prefix="/api/projects", tags=["projects"])
 
@@ -81,6 +82,44 @@ def _query(sql: str, params=None) -> list[dict]:
         profile="field",
         load_env=False,
     )
+
+
+def _tech_scope(user: dict[str, Any] | None, alias: str) -> tuple[str, tuple]:
+    employee_id = assigned_employee_id(user)
+    if not employee_id:
+        return "", ()
+    return " AND " + sql_predicate(alias), sql_params(employee_id)
+
+
+def _reject_hidden_casino(user: dict[str, Any] | None, casino_id: str) -> None:
+    employee_id = assigned_employee_id(user)
+    if not employee_id:
+        return
+    rows = _query(
+        "SELECT techs FROM clients.casinos WHERE reference_key = %s",
+        (casino_id,),
+    )
+    blob = rows[0]["techs"] if rows else None
+    if not blob_includes(blob, employee_id):
+        raise HTTPException(status_code=404, detail=f"casino not found: {casino_id!r}")
+
+
+def _reject_hidden_catalog(user: dict[str, Any] | None, catalog_key: str) -> None:
+    employee_id = assigned_employee_id(user)
+    if not employee_id:
+        return
+    rows = _query(
+        """
+        SELECT c.techs
+        FROM projects.project_catalog AS pc
+        LEFT JOIN clients.casinos AS c ON c.reference_key = pc.casino_id
+        WHERE pc.reference_key = %s
+        """,
+        (catalog_key,),
+    )
+    blob = rows[0]["techs"] if rows else None
+    if not rows or not blob_includes(blob, employee_id):
+        raise HTTPException(status_code=404, detail=f"project not found: {catalog_key!r}")
 
 
 def _json_value(v: Any):
@@ -145,6 +184,7 @@ def ims_list(
     _assert_calendar(user)
 
     cid = casino_id.strip()
+    _reject_hidden_casino(user, cid)
     search = q.strip()
     search_sql = ""
     search_params: list[Any] = [cid]
@@ -285,9 +325,10 @@ def projects_calendar(
     if (window_end - window_start).days > 190:
         raise HTTPException(status_code=400, detail="window too large (max ~6 months)")
 
+    scope_sql, scope_params = _tech_scope(user, "casinos")
     try:
         rows = _query(
-            """
+            f"""
             SELECT
                 ims.reference_key,
                 CAST(ims.project_number AS nvarchar(50)) AS project_number,
@@ -319,6 +360,7 @@ def projects_calendar(
             LEFT JOIN projects.project_catalog pc ON pc.ims_id = ims.reference_key
             WHERE COALESCE(ims.start_date, '1900-01-01') <= %s
               AND COALESCE(ims.end_date, '2099-12-31') >= %s
+            {scope_sql}
 
             UNION ALL
 
@@ -353,13 +395,16 @@ def projects_calendar(
             WHERE pc.ims_id IS NULL
               AND COALESCE(pc.date_start, '1900-01-01') <= %s
               AND COALESCE(pc.date_end, '2099-12-31') >= %s
+            {scope_sql}
             ORDER BY start_date, project_number
             """,
             (
                 window_end.isoformat(),
                 window_start.isoformat(),
+                *scope_params,
                 window_end.isoformat(),
                 window_start.isoformat(),
+                *scope_params,
             ),
         )
     except Exception as exc:
@@ -461,6 +506,9 @@ def catalog_list(
     if casino:
         search_sql += " AND pc.casino_id = %s "
         search_params.append(casino)
+    scope_sql, scope_params = _tech_scope(user, "c")
+    search_sql += scope_sql
+    search_params.extend(scope_params)
 
     try:
         total = int(
@@ -547,6 +595,7 @@ def catalog_detail(
     key = reference_key.strip()
     if not key:
         raise HTTPException(status_code=400, detail="reference_key is required")
+    _reject_hidden_catalog(user, key)
 
     try:
         header_rows = _query(
@@ -696,6 +745,7 @@ def catalog_printout(
     key = reference_key.strip()
     if not key:
         raise HTTPException(status_code=400, detail="reference_key is required")
+    _reject_hidden_catalog(user, key)
 
     select_list = ", ".join(f"[{c}]" for c in PRINTOUT_COLUMNS)
     try:

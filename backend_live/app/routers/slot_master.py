@@ -14,6 +14,7 @@ from pydantic import BaseModel, Field
 from app import auth_service, mssql
 from app import slot_master_permissions as sm_perms
 from app.auth_deps import require_demo_user
+from app.casino_scope import assigned_employee_id, blob_includes, sql_params, sql_predicate
 
 router = APIRouter(prefix="/api/slot-master", tags=["slot-master"])
 
@@ -124,6 +125,26 @@ class RowPatchBody(BaseModel):
 
 def _catalog() -> str:
     return (os.environ.get("MSSQL_DATABASE") or "dgs_application_db").strip()
+
+
+def _tech_scope(user: dict[str, Any] | None, alias: str = "c") -> tuple[str, tuple]:
+    employee_id = assigned_employee_id(user)
+    if not employee_id:
+        return "", ()
+    return " AND " + sql_predicate(alias), sql_params(employee_id)
+
+
+def _reject_hidden_casino(user: dict[str, Any] | None, casino_id: str | None) -> None:
+    employee_id = assigned_employee_id(user)
+    if not employee_id:
+        return
+    rows = _field_query(
+        "SELECT techs FROM clients.casinos WHERE reference_key = %s",
+        (casino_id,),
+    )
+    blob = rows[0]["techs"] if rows else None
+    if not blob_includes(blob, employee_id):
+        raise HTTPException(status_code=404, detail=f"casino not found: {casino_id!r}")
 
 
 def _field_query(sql: str, params=None):
@@ -303,11 +324,15 @@ def slot_master_permissions(
 
 
 @router.get("/casino-context/{casino_id}")
-def casino_context(casino_id: str):
+def casino_context(
+    casino_id: str,
+    user: Annotated[dict[str, Any] | None, Depends(require_demo_user)] = None,
+):
     """Resolve state/tribe for deep-links like slot_master.html?casino=CT-…"""
     cid = casino_id.strip()
     if not cid:
         raise HTTPException(status_code=400, detail="casino_id is required")
+    _reject_hidden_casino(user, cid)
     try:
         rows = _field_query(
             """
@@ -341,10 +366,13 @@ def casino_context(casino_id: str):
 
 
 @router.get("/states")
-def list_states():
+def list_states(
+    user: Annotated[dict[str, Any] | None, Depends(require_demo_user)] = None,
+):
+    scope_sql, scope_params = _tech_scope(user)
     try:
         rows = _field_query(
-            """
+            f"""
             SELECT
                 st.reference_key AS state_id,
                 st.state AS state_name,
@@ -354,9 +382,11 @@ def list_states():
             LEFT JOIN clients.states AS st ON st.reference_key = c.state_id
             WHERE sm.is_active = 1
               AND st.reference_key IS NOT NULL
+            {scope_sql}
             GROUP BY st.reference_key, st.state
             ORDER BY st.state
-            """
+            """,
+            scope_params or None,
         )
     except Exception as exc:
         raise HTTPException(status_code=503, detail=f"database error: {exc}") from exc
@@ -374,11 +404,15 @@ def list_states():
 
 
 @router.get("/tribes")
-def list_tribes(state_id: str = Query(..., min_length=1, max_length=25)):
+def list_tribes(
+    state_id: str = Query(..., min_length=1, max_length=25),
+    user: Annotated[dict[str, Any] | None, Depends(require_demo_user)] = None,
+):
     sid = state_id.strip()
+    scope_sql, scope_params = _tech_scope(user)
     try:
         rows = _field_query(
-            """
+            f"""
             SELECT
                 t.reference_key AS tribe_id,
                 t.tribe_name,
@@ -389,10 +423,11 @@ def list_tribes(state_id: str = Query(..., min_length=1, max_length=25)):
             LEFT JOIN clients.states AS st ON st.reference_key = c.state_id
             WHERE sm.is_active = 1
               AND st.reference_key = %s
+            {scope_sql}
             GROUP BY t.reference_key, t.tribe_name
             ORDER BY t.tribe_name
             """,
-            (sid,),
+            (sid, *scope_params),
         )
     except Exception as exc:
         raise HTTPException(status_code=503, detail=f"database error: {exc}") from exc
@@ -411,11 +446,15 @@ def list_tribes(state_id: str = Query(..., min_length=1, max_length=25)):
 
 
 @router.get("/casinos")
-def list_casinos(tribe_id: str = Query(..., min_length=1, max_length=25)):
+def list_casinos(
+    tribe_id: str = Query(..., min_length=1, max_length=25),
+    user: Annotated[dict[str, Any] | None, Depends(require_demo_user)] = None,
+):
     tid = tribe_id.strip()
+    scope_sql, scope_params = _tech_scope(user)
     try:
         rows = _field_query(
-            """
+            f"""
             SELECT
                 c.reference_key AS casino_id,
                 c.casino_name,
@@ -424,10 +463,11 @@ def list_casinos(tribe_id: str = Query(..., min_length=1, max_length=25)):
             INNER JOIN clients.casinos AS c ON c.reference_key = sm.casino_id
             WHERE sm.is_active = 1
               AND c.tribe_id = %s
+            {scope_sql}
             GROUP BY c.reference_key, c.casino_name
             ORDER BY c.casino_name
             """,
-            (tid,),
+            (tid, *scope_params),
         )
     except Exception as exc:
         raise HTTPException(status_code=503, detail=f"database error: {exc}") from exc
@@ -451,8 +491,10 @@ def list_machines(
     q: str = Query("", max_length=120),
     page: int = Query(1, ge=1),
     page_size: int = Query(100, ge=1, le=500),
+    user: Annotated[dict[str, Any] | None, Depends(require_demo_user)] = None,
 ):
     cid = casino_id.strip()
+    _reject_hidden_casino(user, cid)
     search = q.strip()
     like = f"%{search}%" if search else None
 
@@ -557,7 +599,10 @@ def list_machines(
 
 
 @router.get("/assets/{asset_id}/history")
-def asset_history(asset_id: str):
+def asset_history(
+    asset_id: str,
+    user: Annotated[dict[str, Any] | None, Depends(require_demo_user)] = None,
+):
     aid = asset_id.strip()
     try:
         rows = _field_query(
@@ -581,6 +626,7 @@ def asset_history(asset_id: str):
                 sm.rmvl_date,
                 th.theme_name,
                 c.casino_name,
+                c.techs,
                 CONVERT(date, COALESCE(ims.start_date, pc.date_start)) AS event_date,
                 COALESCE(
                     NULLIF(LTRIM(RTRIM(pc.project_name)), N''),
@@ -604,6 +650,10 @@ def asset_history(asset_id: str):
         )
     except Exception as exc:
         raise HTTPException(status_code=503, detail=f"database error: {exc}") from exc
+
+    employee_id = assigned_employee_id(user)
+    if employee_id:
+        rows = [r for r in rows if blob_includes(r.get("techs"), employee_id)]
 
     return {
         "asset_id": aid,
@@ -638,7 +688,10 @@ def asset_history(asset_id: str):
 
 
 @router.get("/machines/{reference_key}")
-def machine_detail(reference_key: str):
+def machine_detail(
+    reference_key: str,
+    user: Annotated[dict[str, Any] | None, Depends(require_demo_user)] = None,
+):
     key = reference_key.strip()
     try:
         row = _fetch_machine(key)
@@ -646,6 +699,7 @@ def machine_detail(reference_key: str):
         raise HTTPException(status_code=503, detail=f"database error: {exc}") from exc
     if not row:
         raise HTTPException(status_code=404, detail=f"machine not found: {key!r}")
+    _reject_hidden_casino(user, row.get("casino_id"))
     return _detail_row(row)
 
 
@@ -668,6 +722,7 @@ def patch_machine(
     row = _fetch_machine(key)
     if not row:
         raise HTTPException(status_code=404, detail=f"machine not found: {key!r}")
+    _reject_hidden_casino(user, row.get("casino_id"))
 
     set_parts: list[str] = []
     params: list[Any] = []

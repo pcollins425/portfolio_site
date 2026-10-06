@@ -6,14 +6,24 @@ import math
 import os
 from datetime import date, datetime
 from decimal import Decimal
+from typing import Annotated, Any
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 
 from app import mssql
+from app.auth_deps import require_demo_user
+from app.casino_scope import assigned_employee_id, sql_params, sql_predicate
 
 casinos_router = APIRouter(prefix="/api/commerce/casinos", tags=["commerce-casinos"])
 vendors_router = APIRouter(prefix="/api/commerce/vendors", tags=["commerce-vendors"])
 deals_router = APIRouter(prefix="/api/commerce/deals", tags=["commerce-deals"])
+
+
+def _tech_scope(user: dict[str, Any] | None, alias: str = "c") -> tuple[str, tuple]:
+    employee_id = assigned_employee_id(user)
+    if not employee_id:
+        return "", ()
+    return sql_predicate(alias), sql_params(employee_id)
 
 
 def _catalog() -> str:
@@ -606,19 +616,30 @@ EXISTS (
 
 
 @casinos_router.get("/summary")
-def casinos_summary():
+def casinos_summary(
+    user: Annotated[dict[str, Any] | None, Depends(require_demo_user)] = None,
+):
+    scope_sql, scope_params = _tech_scope(user, "c")
+    active_sql, active_params = _tech_scope(user, "c2")
+    where = f"WHERE {scope_sql}" if scope_sql else ""
+    active_and = f"AND {active_sql}" if active_sql else ""
+    params = (active_params + scope_params) or None
     try:
         row = _field_query(
-            """
+            f"""
             SELECT
                 COUNT(*) AS total,
                 SUM(CASE WHEN c.licensed = 1 THEN 1 ELSE 0 END) AS licensed,
                 COUNT(DISTINCT c.state_id) AS states,
                 (SELECT COUNT(DISTINCT sm.casino_id)
                  FROM inventory.slot_master_migration AS sm
-                 WHERE sm.is_active = 1) AS active_casinos
+                 INNER JOIN clients.casinos AS c2 ON c2.reference_key = sm.casino_id
+                 WHERE sm.is_active = 1
+                 {active_and}) AS active_casinos
             FROM clients.casinos AS c
-            """
+            {where}
+            """,
+            params,
         )[0]
     except Exception as exc:
         raise HTTPException(status_code=503, detail=f"database error: {exc}") from exc
@@ -642,6 +663,7 @@ def list_casinos(
     ),
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=1, le=200),
+    user: Annotated[dict[str, Any] | None, Depends(require_demo_user)] = None,
 ):
     clauses = []
     params: list = []
@@ -667,11 +689,21 @@ def list_casinos(
     elif filt == "prospecting":
         clauses.append(f"NOT {_LEASED_CABINET_EXISTS}")
 
+    scope_sql, scope_params = _tech_scope(user, "c")
+    if scope_sql:
+        clauses.append(scope_sql)
+        params.extend(scope_params)
+
     where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
 
     try:
         count_row = _field_query(
-            f"SELECT COUNT(*) AS n FROM clients.casino_view AS cv {where}",
+            f"""
+            SELECT COUNT(*) AS n
+            FROM clients.casino_view AS cv
+            INNER JOIN clients.casinos AS c ON c.reference_key = cv.reference_key
+            {where}
+            """,
             tuple(params) if params else None,
         )[0]
         total = int(count_row["n"])
@@ -752,11 +784,16 @@ def list_casinos(
 
 
 @casinos_router.get("/{reference_key}")
-def casino_detail(reference_key: str):
+def casino_detail(
+    reference_key: str,
+    user: Annotated[dict[str, Any] | None, Depends(require_demo_user)] = None,
+):
     cid = reference_key.strip()
     if not cid:
         raise HTTPException(status_code=400, detail="reference_key is required")
 
+    scope_sql, scope_params = _tech_scope(user, "c")
+    scope_and = f" AND {scope_sql}" if scope_sql else ""
     try:
         rows = _field_query(
             f"""
@@ -811,8 +848,9 @@ def casino_detail(reference_key: str):
             LEFT JOIN clients.states AS s ON s.reference_key = c.state_id
             LEFT JOIN casino_perf_latest AS perf ON perf.casino_id = c.reference_key
             WHERE c.reference_key = %s
+            {scope_and}
             """,
-            (cid,),
+            (cid, *scope_params),
         )
         if not rows:
             raise HTTPException(status_code=404, detail=f"casino not found: {cid!r}")
