@@ -100,7 +100,7 @@ def field_dashboard(
             wo.brief_desc,
             ven.vendor_name,
             cab.cabinet_name,
-            th.theme_name
+            COALESCE(th.theme_name, comp.comp_desc, wo.comp_desc) AS theme_name
         FROM projects.work_orders AS wo
         LEFT JOIN inventory.compinfo_landing AS comp ON comp.compid = wo.compid
         LEFT JOIN vendors.vendors AS ven ON ven.reference_key = comp.vendor_id

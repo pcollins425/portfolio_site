@@ -2202,14 +2202,21 @@ body.dgs-dashboard-v2 .dgs-dashboard-mount:has(.dgs-field-pair) {
   overflow-wrap: anywhere;
 }
 .dgs-field-table .dgs-field-date {
-  width: 6.5rem;
+  width: 6.8rem;
+}
+.dgs-field-table .dgs-field-num {
+  width: 5.8rem;
+}
+.dgs-field-table td.dgs-field-date,
+.dgs-field-table td.dgs-field-num {
   white-space: nowrap;
   overflow-wrap: normal;
 }
-.dgs-field-table .dgs-field-num {
-  width: 4.6rem;
-  white-space: nowrap;
+.dgs-field-table th.dgs-field-date,
+.dgs-field-table th.dgs-field-num {
+  white-space: normal;
   overflow-wrap: normal;
+  line-height: 1.25;
 }
 .dgs-field-table th {
   color: #8b96a8;
