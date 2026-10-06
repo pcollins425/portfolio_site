@@ -5,6 +5,9 @@
     new URLSearchParams(window.location.search).get("api")?.replace(/\/$/, "") ||
     "https://api.collinsmediallc.com";
 
+  // Compact = phone + tablet (incl. landscape). Desk layout only above 1366px.
+  const COMPACT_MQ = window.matchMedia("(max-width: 1366px)");
+
   const state = {
     summary: null,
     items: [],
@@ -15,6 +18,7 @@
     selectedKey: (new URLSearchParams(window.location.search).get("id") || "").trim() || null,
     detail: null,
     mediaUrls: {},
+    phoneDetailOpen: false,
   };
 
   const els = {
@@ -28,6 +32,10 @@
     clearSearch: document.getElementById("clear-search"),
     tbody: document.getElementById("vendors-tbody"),
     listStatus: document.getElementById("list-status"),
+    detailPanel: document.getElementById("detail-panel"),
+    detailBackdrop: document.getElementById("vendors-detail-backdrop"),
+    detailClose: document.getElementById("detail-close"),
+    detailBar: document.querySelector(".dgs-v2-detail-bar"),
     vendorLogo: document.getElementById("vendor-logo"),
     cabinetRow: document.getElementById("cabinet-row"),
     cardTitle: document.getElementById("card-title"),
@@ -40,6 +48,43 @@
     cabinetsTbody: document.getElementById("cabinets-tbody"),
     cabinetsStatus: document.getElementById("cabinets-status"),
   };
+
+  function isCompact() {
+    return COMPACT_MQ.matches;
+  }
+
+  function openPhoneDetail() {
+    if (!isCompact() || !els.detailPanel) return;
+    state.phoneDetailOpen = true;
+    document.body.classList.add("vendors-detail-open");
+    els.detailPanel.classList.add("dgs-v2-detail--sheet");
+    els.detailPanel.setAttribute("aria-hidden", "false");
+    if (els.detailBackdrop) els.detailBackdrop.hidden = false;
+    if (els.detailBar) els.detailBar.hidden = false;
+  }
+
+  function closePhoneDetail() {
+    state.phoneDetailOpen = false;
+    document.body.classList.remove("vendors-detail-open");
+    if (els.detailPanel) {
+      els.detailPanel.classList.remove("dgs-v2-detail--sheet");
+      if (isCompact()) els.detailPanel.setAttribute("aria-hidden", "true");
+      else els.detailPanel.setAttribute("aria-hidden", "false");
+    }
+    if (els.detailBackdrop) els.detailBackdrop.hidden = true;
+    if (els.detailBar) els.detailBar.hidden = true;
+  }
+
+  function onViewportChange() {
+    if (!isCompact()) {
+      closePhoneDetail();
+      if (els.detailPanel) els.detailPanel.setAttribute("aria-hidden", "false");
+      return;
+    }
+    if (!state.phoneDetailOpen && els.detailPanel) {
+      els.detailPanel.setAttribute("aria-hidden", "true");
+    }
+  }
 
   function apiUrl(path) {
     return `${API_BASE}${path}`;
@@ -141,9 +186,9 @@
       .map(
         (row) => `
         <tr data-key="${esc(row.reference_key)}" class="${row.reference_key === state.selectedKey ? "selected" : ""}">
-          <td class="mono">${esc(row.reference_key)}</td>
+          <td class="mono dgs-v2-col--desktop">${esc(row.reference_key)}</td>
           <td>${esc(row.vendor_name || "—")}</td>
-          <td>${row.is_manufacturer ? "Yes" : "—"}</td>
+          <td class="dgs-v2-col--desktop">${row.is_manufacturer ? "Yes" : "—"}</td>
           <td>${fmtNum(row.cabinet_count)}</td>
           <td>${fmtNum(row.theme_count)}</td>
         </tr>`
@@ -261,6 +306,8 @@
     els.vendorLogo.innerHTML = placeholderBox("Loading…");
     els.cabinetRow.innerHTML = "";
 
+    if (isCompact()) openPhoneDetail();
+
     try {
       state.detail = await fetchJson(`/api/commerce/vendors/${encodeURIComponent(referenceKey)}`);
       setDetailEmpty(false);
@@ -292,13 +339,20 @@
 
     if (state.selectedKey) {
       await openDetail(state.selectedKey);
-    } else if (state.items.length) {
+    } else if (!isCompact() && state.items.length) {
       await openDetail(state.items[0].reference_key);
     }
   }
 
   async function init() {
     showError(null);
+    onViewportChange();
+    COMPACT_MQ.addEventListener("change", onViewportChange);
+    if (els.detailClose) els.detailClose.addEventListener("click", () => closePhoneDetail());
+    if (els.detailBackdrop) els.detailBackdrop.addEventListener("click", () => closePhoneDetail());
+    document.addEventListener("keydown", (e) => {
+      if (e.key === "Escape" && state.phoneDetailOpen) closePhoneDetail();
+    });
     els.tbody.innerHTML = `<tr><td colspan="5" class="dgs-v2-lines-status">Loading…</td></tr>`;
     try {
       await Promise.all([loadSummary(), loadList()]);
@@ -312,6 +366,7 @@
     state.search = els.searchInput.value.trim();
     state.page = 1;
     state.selectedKey = null;
+    closePhoneDetail();
     revokeMediaUrls();
     loadList().catch((err) => showError(err.message || String(err)));
   }
@@ -322,6 +377,7 @@
     state.search = "";
     state.page = 1;
     state.selectedKey = null;
+    closePhoneDetail();
     revokeMediaUrls();
     loadList().catch((err) => showError(err.message || String(err)));
   });

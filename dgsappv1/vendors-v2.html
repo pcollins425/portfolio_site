@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>Vendors — DGS Application</title>
   <link rel="stylesheet" href="assets/dgs.css" />
   <link rel="stylesheet" href="assets/dgs-v2.css" />
@@ -30,14 +30,14 @@
       <div>
         <p class="dgs-v2-eyebrow">Commerce</p>
         <h1>Vendors</h1>
-        <p class="dgs-v2-subtitle">vendors-v2.html · <code>vendors.vendors</code> · read-only browse</p>
+        <p class="dgs-v2-subtitle dgs-v2-desktop-only">vendors-v2.html · <code>vendors.vendors</code> · read-only browse</p>
       </div>
-      <div class="dgs-v2-pilot-note">Split layout · vendor logos from NAS</div>
+      <div class="dgs-v2-pilot-note dgs-v2-desktop-only">Split layout · vendor logos from NAS</div>
     </header>
 
     <div id="error-box" class="dgs-v2-error" hidden></div>
 
-    <div class="dgs-v2-metrics" id="stat-row" aria-label="Summary statistics">
+    <div class="dgs-v2-metrics dgs-v2-desktop-only" id="stat-row" aria-label="Summary statistics">
       <div class="dgs-v2-metric">
         <div class="dgs-v2-metric-label">Vendors</div>
         <div class="dgs-v2-metric-value" id="stat-total">—</div>
@@ -67,9 +67,9 @@
           <table class="dgs-v2-grid" id="vendors-table">
             <thead>
               <tr>
-                <th>ID</th>
+                <th class="dgs-v2-col--desktop">ID</th>
                 <th>Vendor</th>
-                <th>Mfr</th>
+                <th class="dgs-v2-col--desktop">Mfr</th>
                 <th>Cabinets</th>
                 <th>Themes</th>
               </tr>
@@ -80,7 +80,13 @@
         <div class="dgs-v2-list-status" id="list-status"></div>
       </section>
 
-      <aside class="dgs-v2-detail" id="detail-panel">
+      <div id="vendors-detail-backdrop" class="dgs-v2-detail-backdrop" hidden></div>
+
+      <aside class="dgs-v2-detail" id="detail-panel" aria-hidden="false">
+        <div class="dgs-v2-detail-bar dgs-v2-phone-only" hidden>
+          <span class="dgs-v2-detail-bar-title">Vendor</span>
+          <button type="button" id="detail-close" class="dgs-v2-drawer-close" aria-label="Close detail">×</button>
+        </div>
         <div class="dgs-v2-image-card" id="image-card">
           <div class="dgs-v2-image-hero">
             <div class="dgs-v2-vendor-logo" id="vendor-logo">
