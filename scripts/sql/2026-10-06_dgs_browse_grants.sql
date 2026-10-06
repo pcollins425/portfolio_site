@@ -25,3 +25,18 @@ SET permissions = RTRIM(permissions) + N', dgs_projects_calendar: READ_ONLY, dgs
     update_by = 'dgs browse grants'
 WHERE reference_key = N'RT-030'
   AND CHARINDEX(N'dgs_projects_calendar:', ISNULL(permissions, N'')) = 0;
+
+/* Field dashboard: techs see their own rows. Paul can see every row and grant it. */
+UPDATE employees.roles
+SET permissions = RTRIM(permissions) + N', dgs_tech_dashboard: READ_ONLY',
+    update_date = GETDATE(),
+    update_by = 'dgs browse grants'
+WHERE reference_key = N'RT-030'
+  AND CHARINDEX(N'dgs_tech_dashboard:', ISNULL(permissions, N'')) = 0;
+
+UPDATE employees.employee_roles
+SET override_permissions = RTRIM(override_permissions) + N', dgs_tech_dashboard: READ_ONLY',
+    update_date = GETDATE(),
+    update_by = 'dgs browse grants'
+WHERE reference_key = N'EMP-000040'
+  AND CHARINDEX(N'dgs_tech_dashboard:', ISNULL(override_permissions, N'')) = 0;

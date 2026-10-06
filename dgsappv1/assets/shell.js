@@ -108,6 +108,7 @@
     { route: "/commission", label: "Commission", requireArea: "dgs_commission" },
     { route: "/finance", label: "Finance", requireArea: "dgs_finance_dashboard" },
     { route: "/performance", label: "Performance", requireArea: "dgs_performance" },
+    { route: "/field", label: "Field", requireArea: "dgs_tech_dashboard" },
   ];
 
   const READ_LEVELS = {
@@ -586,6 +587,16 @@
       normalized = allowed[0] || "/executive";
     }
     renderDashboardSubnav(normalized);
+    if (normalized === "/field") {
+      const root = document.getElementById("dashboard-root");
+      if (window.DGSField) DGSField.load(root);
+      if (window.history.replaceState) {
+        const u = new URL(window.location.href);
+        u.searchParams.set("view", "field");
+        window.history.replaceState({}, "", u.pathname + u.search);
+      }
+      return;
+    }
     loadDashboardBundle()
       .then(() => {
         window.dispatchEvent(new CustomEvent("dgs-dashboard-route", { detail: normalized }));

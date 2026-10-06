@@ -2133,3 +2133,52 @@ body.dgs-hide-deals #casino-deals,
 body.dgs-hide-workbench #workbench-link {
   display: none !important;
 }
+
+.dgs-field-dash {
+  display: grid;
+  gap: 1.5rem;
+}
+.dgs-field-dash h2 {
+  margin: 0 0 0.6rem;
+  font-size: 1rem;
+  font-weight: 650;
+  color: #f3f5f9;
+}
+.dgs-field-dash h2 span {
+  margin-left: 0.4rem;
+  color: #8b96a8;
+  font-variant-numeric: tabular-nums;
+}
+.dgs-field-note,
+.dgs-field-empty {
+  margin: 0;
+  color: #8b96a8;
+}
+.dgs-field-scroll {
+  overflow-x: auto;
+}
+.dgs-field-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.92rem;
+}
+.dgs-field-table th,
+.dgs-field-table td {
+  padding: 0.45rem 0.65rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  text-align: left;
+  vertical-align: top;
+  white-space: nowrap;
+}
+.dgs-field-table th {
+  color: #8b96a8;
+  font-size: 0.75rem;
+  font-weight: 650;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.dgs-field-table td:last-child,
+.dgs-field-table th:last-child {
+  white-space: normal;
+  min-width: 16rem;
+}
