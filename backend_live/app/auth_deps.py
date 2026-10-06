@@ -9,6 +9,7 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from app import auth_service
 from app import emaint_demo_permissions as perms
+from app import permission_catalog as cat
 from app import view_as
 
 _bearer = HTTPBearer(auto_error=False)
@@ -42,6 +43,24 @@ def require_demo_user(
         raise HTTPException(status_code=401, detail="Sign in required")
     target = request.headers.get(view_as.HEADER)
     return view_as.apply(user, target)
+
+
+def require_area_read(area: str):
+    """Close a route unless the effective permission map grants ``area``.
+
+    Auth off (user is None) stays open. The Technician role is not consulted.
+    """
+
+    def _dependency(
+        user: Annotated[dict[str, Any] | None, Depends(require_demo_user)],
+    ) -> dict[str, Any] | None:
+        if user is None:
+            return None
+        if not cat.has_area_read(user.get("permissions") or {}, area):
+            raise HTTPException(status_code=403, detail="Not available for this account")
+        return user
+
+    return _dependency
 
 
 def require_table_read(

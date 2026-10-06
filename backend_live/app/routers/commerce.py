@@ -11,12 +11,18 @@ from typing import Annotated, Any
 from fastapi import APIRouter, Depends, HTTPException, Query
 
 from app import mssql
-from app.auth_deps import require_demo_user
+from app import dgs_org_access as org
+from app import permission_catalog as cat
+from app.auth_deps import require_area_read, require_demo_user
 from app.casino_scope import assigned_employee_id, sql_params, sql_predicate
 
 casinos_router = APIRouter(prefix="/api/commerce/casinos", tags=["commerce-casinos"])
 vendors_router = APIRouter(prefix="/api/commerce/vendors", tags=["commerce-vendors"])
-deals_router = APIRouter(prefix="/api/commerce/deals", tags=["commerce-deals"])
+deals_router = APIRouter(
+    prefix="/api/commerce/deals",
+    tags=["commerce-deals"],
+    dependencies=[Depends(require_area_read(cat.DEALS_AREA))],
+)
 
 
 def _tech_scope(user: dict[str, Any] | None, alias: str = "c") -> tuple[str, tuple]:
@@ -773,6 +779,15 @@ def list_casinos(
                 "actual_index": perf.get("avg_actual_index") if perf else None,
             }
         )
+    if not org.has_read(user, cat.PERFORMANCE_AREA):
+        for item in items:
+            item["last_report"] = None
+            item["performance"] = None
+            item["cipd"] = None
+            item["tdw"] = None
+            item["avg_adw"] = None
+            item["win_index"] = None
+            item["actual_index"] = None
     return {
         "items": items,
         "total": total,
@@ -968,7 +983,7 @@ def casino_detail(
             }
         )
 
-    return {
+    payload = {
         "reference_key": _json_value(r.get("reference_key")),
         "casino_name": _json_value(r.get("casino_name")),
         "legal_title": _json_value(r.get("legal_title")),
@@ -1025,6 +1040,24 @@ def casino_detail(
         "performance": performance,
         "hubspot": hubspot,
     }
+    if not org.has_read(user, cat.PERFORMANCE_AREA):
+        payload["performance"] = None
+        for key in (
+            "signed_master_agreement",
+            "executed_on",
+            "expiration",
+            "agreement_type",
+            "main_house_average",
+            "smoking_adw",
+            "high_limit_adw",
+            "loss_passed",
+        ):
+            payload[key] = None
+    if not org.has_read(user, cat.DEALS_AREA):
+        deals = (payload.get("hubspot") or {}).get("deals")
+        if isinstance(deals, list):
+            payload["hubspot"]["deals"] = []
+    return payload
 
 
 # --- HubSpot deals (Commerce board / catalog) ---

@@ -19,7 +19,7 @@
         { id: "warehouse", label: "Warehouse", href: "warehouse.html" },
         { id: "parts_inventory", label: "Parts", href: "parts-inventory.html" },
         { id: "slot_master", label: "Slot Master", href: "slot_master.html" },
-        { id: "contracts", label: "Contracts", href: "contracts-v2.html" },
+        { id: "contracts", label: "Contracts", href: "contracts-v2.html", requireAnyOf: ["dgs_contracts"] },
         { id: "assets", label: "Assets", href: "assets-v2.html" },
       ],
     },
@@ -29,7 +29,7 @@
       items: [
         { id: "vendors", label: "Vendors", href: "vendors-v2.html" },
         { id: "casinos", label: "Casinos", href: "casinos-v2.html" },
-        { id: "deals", label: "Deals", href: "deals-v2.html" },
+        { id: "deals", label: "Deals", href: "deals-v2.html", requireAnyOf: ["dgs_deals"] },
       ],
     },
     {
@@ -37,8 +37,18 @@
       label: "Operations",
       items: [
         { id: "projects", label: "Projects", href: "projects.html" },
-        { id: "project_workbench", label: "Project Workbench", href: "project-workbench.html" },
-        { id: "software_vault", label: "Software Vault", href: "software-vault.html" },
+        {
+          id: "project_workbench",
+          label: "Project Workbench",
+          href: "project-workbench.html",
+          requireAnyOf: ["dgs_projects_workbench"],
+        },
+        {
+          id: "software_vault",
+          label: "Software Vault",
+          href: "software-vault.html",
+          requireAnyOf: ["dgs_software_vault"],
+        },
       ],
     },
     {
@@ -92,12 +102,12 @@
   ];
 
   const DASHBOARD_NAV = [
-    { route: "/executive", label: "Executive" },
-    { route: "/market", label: "Market" },
+    { route: "/executive", label: "Executive", requireArea: "dgs_performance" },
+    { route: "/market", label: "Market", requireArea: "dgs_performance" },
     { route: "/analyst", label: "Analyst", requireArea: "dgs_analyst" },
     { route: "/commission", label: "Commission", requireArea: "dgs_commission" },
     { route: "/finance", label: "Finance", requireArea: "dgs_finance_dashboard" },
-    { route: "/performance", label: "Performance" },
+    { route: "/performance", label: "Performance", requireArea: "dgs_performance" },
   ];
 
   const READ_LEVELS = {
@@ -173,7 +183,8 @@
 
   function pageAccessAllowed(activeId) {
     const item = findNavItem(activeId);
-    if (!item || !item.requireAnyOf) return true;
+    if (!item) return true;
+    if (!item.requireAnyOf) return true;
     return hasAnyAreaRead(item.requireAnyOf);
   }
 
@@ -594,6 +605,16 @@
   }
 
   function initDashboardPage() {
+    const allowed = visibleDashboardNav();
+    if (!allowed.length) {
+      const nav = document.getElementById("dgs-dashboard-nav");
+      const root = document.getElementById("dashboard-root");
+      if (nav) nav.hidden = true;
+      if (root) {
+        root.innerHTML = '<p class="dgs-v2-pilot-note">No dashboard views for this account.</p>';
+      }
+      return;
+    }
     const initial =
       "/" +
       (params.get("view") ||
@@ -720,6 +741,9 @@
       wireMobileTopNav(activeId);
       syncMobileTopNav(activeId);
     }
+    document.body.classList.toggle("dgs-hide-performance", !hasAreaRead("dgs_performance"));
+    document.body.classList.toggle("dgs-hide-deals", !hasAreaRead("dgs_deals"));
+    document.body.classList.toggle("dgs-hide-workbench", !hasAreaRead("dgs_projects_workbench"));
     renderAppSidebar(activeId);
     wireRailToggle(activeId);
     if (window.DGSAuth) DGSAuth.renderAccount();

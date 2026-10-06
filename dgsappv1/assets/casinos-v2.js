@@ -310,12 +310,12 @@
           <td class="dgs-v2-col--desktop">${esc(row.tribe_name || "—")}</td>
           <td>${esc(row.casino_name || row.casino_short || "—")}</td>
           <td class="num">${fmtNum(row.active_machines)}</td>
-          <td class="mono dgs-v2-col--desktop">${esc(fmtMonth(row.last_report) || "—")}</td>
-          <td class="num dgs-v2-col--desktop">${fmtAdw(row.cipd)}</td>
-          <td class="num dgs-v2-col--desktop">${fmtAdw(row.tdw)}</td>
-          <td class="num dgs-v2-col--desktop">${fmtAdw(row.avg_adw)}</td>
-          <td class="num ${winCls}">${fmtWinIndex(row.win_index)}</td>
-          <td class="num ${actCls}">${fmtWinIndex(row.actual_index)}</td>
+          <td class="mono dgs-v2-col--desktop dgs-finance-col">${esc(fmtMonth(row.last_report) || "—")}</td>
+          <td class="num dgs-v2-col--desktop dgs-finance-col">${fmtAdw(row.cipd)}</td>
+          <td class="num dgs-v2-col--desktop dgs-finance-col">${fmtAdw(row.tdw)}</td>
+          <td class="num dgs-v2-col--desktop dgs-finance-col">${fmtAdw(row.avg_adw)}</td>
+          <td class="num dgs-finance-col ${winCls}">${fmtWinIndex(row.win_index)}</td>
+          <td class="num dgs-finance-col ${actCls}">${fmtWinIndex(row.actual_index)}</td>
         </tr>`;
   }
 

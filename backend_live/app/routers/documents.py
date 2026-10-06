@@ -6,8 +6,13 @@ import io
 import mimetypes
 import os
 
-from fastapi import APIRouter, HTTPException
+from typing import Annotated, Any
+
+from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import FileResponse, StreamingResponse
+
+from app import dgs_org_access as org
+from app.auth_deps import require_demo_user
 
 from app.document_paths import is_registered_document_path, normalize_relative_path, resolve_document_file
 from app.document_storage import display_root, file_exists, read_bytes, storage_mode
@@ -56,7 +61,11 @@ def documents_health():
 
 
 @router.get("/{document_path:path}")
-def get_document(document_path: str):
+def get_document(
+    document_path: str,
+    user: Annotated[dict[str, Any] | None, Depends(require_demo_user)] = None,
+):
+    org.assert_contracts_read(user)
     try:
         rel = normalize_relative_path(document_path)
     except ValueError as exc:

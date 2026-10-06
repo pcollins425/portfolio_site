@@ -307,11 +307,11 @@
           <td>${themeHubLink(row.theme_id, row.theme_name)}</td>
           <td class="dgs-v2-col--desktop">${esc(row.zbl || "—")}</td>
           <td>${esc(row.Hold || "—")}</td>
-          <td class="num dgs-v2-col--desktop">${fmtAdw(row.cipd)}</td>
-          <td class="num dgs-v2-col--desktop">${fmtAdw(row.tdw)}</td>
-          <td class="num dgs-v2-col--desktop">${fmtAdw(row.adw)}</td>
-          <td class="num ${winCls}">${fmtWinIndex(row.win_index)}</td>
-          <td class="num ${actCls}">${fmtWinIndex(row.actual_index)}</td>
+          <td class="num dgs-v2-col--desktop dgs-finance-col">${fmtAdw(row.cipd)}</td>
+          <td class="num dgs-v2-col--desktop dgs-finance-col">${fmtAdw(row.tdw)}</td>
+          <td class="num dgs-v2-col--desktop dgs-finance-col">${fmtAdw(row.adw)}</td>
+          <td class="num dgs-finance-col ${winCls}">${fmtWinIndex(row.win_index)}</td>
+          <td class="num dgs-finance-col ${actCls}">${fmtWinIndex(row.actual_index)}</td>
         </tr>`;
   }
 

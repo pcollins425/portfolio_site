@@ -11,6 +11,7 @@ sys.path.insert(0, str(ROOT))
 from app.casino_scope import (  # noqa: E402
     assigned_employee_id,
     blob_includes,
+    is_technician,
     sql_params,
     sql_predicate,
 )
@@ -21,6 +22,17 @@ def test_only_technicians_are_scoped():
     assert assigned_employee_id(tech) == "EMP-000105"
     assert assigned_employee_id({"role": "Sales", "employee_id": "EMP-000101"}) is None
     assert assigned_employee_id(None) is None
+
+
+def test_dev_view_of_a_tech_is_a_technician():
+    actor = {
+        "role": "Admin",
+        "employee_id": "EMP-000040",
+        "view_as": {"employee_id": "EMP-000112", "role": "Technician"},
+    }
+    assert is_technician(actor) is True
+    assert is_technician({"role": "Technician", "employee_id": "EMP-000105"}) is True
+    assert is_technician({"role": "Sales", "employee_id": "EMP-000101"}) is False
 
 
 def test_dev_view_uses_the_previewed_tech():

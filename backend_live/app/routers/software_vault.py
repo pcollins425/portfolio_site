@@ -10,12 +10,18 @@ from datetime import date, datetime
 from decimal import Decimal
 from typing import Any
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
 from app import mssql
+from app import permission_catalog as cat
+from app.auth_deps import require_area_read
 
-router = APIRouter(prefix="/api/software-vault", tags=["software-vault"])
+router = APIRouter(
+    prefix="/api/software-vault",
+    tags=["software-vault"],
+    dependencies=[Depends(require_area_read(cat.SOFTWARE_VAULT_AREA))],
+)
 
 
 def _catalog() -> str:

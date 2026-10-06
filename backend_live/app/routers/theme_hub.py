@@ -24,6 +24,8 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Upload
 
 from app import dgs_projects_workbench_permissions as perms
 from app import document_paths, document_storage, mssql
+from app import dgs_org_access as org
+from app import permission_catalog as cat
 from app.auth_deps import require_demo_user
 from app.theme_performance import attach_unstamped_months, build_expectation
 from app.theme_performance import unavailable as performance_unavailable
@@ -696,7 +698,9 @@ def theme_detail(
     payload = {
         "theme": _row(theme),
         "can_write": _can_write(user),
-        "performance": _performance(theme_key, str(theme["theme_name"])),
+        "performance": None
+        if not org.has_read(user, cat.PERFORMANCE_AREA)
+        else _performance(theme_key, str(theme["theme_name"])),
         "software": _software_rows(theme_key),
         "documents": _documents(theme_key),
         "installs": _installs(theme_key, str(theme["theme_name"])),

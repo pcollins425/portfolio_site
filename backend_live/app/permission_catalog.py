@@ -35,6 +35,11 @@ COMMISSION_AREA = "dgs_commission"
 EXPENSES_AREA = "expenses"
 EXPENSES_MASS_EDIT_AREA = "dgs_expenses_mass_edit"
 FINANCE_DASHBOARD_AREA = "dgs_finance_dashboard"
+PERFORMANCE_AREA = "dgs_performance"
+CONTRACTS_AREA = "dgs_contracts"
+DEALS_AREA = "dgs_deals"
+SOFTWARE_VAULT_AREA = "dgs_software_vault"
+WORKBENCH_AREA = "dgs_projects_workbench"
 ASSISTANT_AREA = "dgs_assistant"
 ASSISTANT_SECRETS_AREA = "dgs_assistant_secrets"
 
@@ -69,6 +74,11 @@ PERMISSION_CATALOG: tuple[CatalogArea, ...] = (
     CatalogArea(EXPENSES_AREA, "Expenses · Browse", "finance"),
     CatalogArea(EXPENSES_MASS_EDIT_AREA, "Expenses · Mass Edit", "finance"),
     CatalogArea(FINANCE_DASHBOARD_AREA, "Finance · Dashboard billing", "finance"),
+    CatalogArea(PERFORMANCE_AREA, "Performance & finance figures", "finance"),
+    CatalogArea(CONTRACTS_AREA, "Contracts", "finance"),
+    CatalogArea(DEALS_AREA, "Deals", "finance"),
+    CatalogArea(SOFTWARE_VAULT_AREA, "Software Vault", "dgs_app"),
+    CatalogArea(WORKBENCH_AREA, "Projects · Workbench", "dgs_app"),
     CatalogArea(ASSISTANT_AREA, "Assistant", "workspace"),
     CatalogArea(ASSISTANT_SECRETS_AREA, "Assistant · Secrets", "workspace"),
     CatalogArea("emaint_demo_projects", "Ops · Projects", "dgs_app"),

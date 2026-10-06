@@ -2122,3 +2122,14 @@ body.dgs-dev-view-on .dgs-sidebar {
     flex-basis: 100%;
   }
 }
+
+/* Hidden when the account has no grant for that area. */
+body.dgs-hide-performance .dgs-finance-col,
+body.dgs-hide-performance .dgs-finance-block,
+body.dgs-hide-performance .dgs-v2-metrics--perf,
+body.dgs-hide-performance #perf-note,
+body.dgs-hide-performance #agreement-fields,
+body.dgs-hide-deals #casino-deals,
+body.dgs-hide-workbench #workbench-link {
+  display: none !important;
+}

@@ -15,10 +15,13 @@ TECHNICIAN_ROLE = "Technician"
 _EMP_KEY = re.compile(r"\bEMP-\d{6}\b")
 
 
-def assigned_employee_id(user: dict[str, Any] | None) -> str | None:
-    """EMP key to filter on, or None when this request sees every casino."""
+def effective_person(user: dict[str, Any] | None) -> tuple[str, str]:
+    """Role and employee id for the person this request is showing.
+
+    Dev view uses the previewed person. Otherwise it is the signed-in user.
+    """
     if not user:
-        return None
+        return "", ""
     view = user.get("view_as")
     if isinstance(view, dict) and (view.get("employee_id") or "").strip():
         role = view.get("role")
@@ -26,9 +29,18 @@ def assigned_employee_id(user: dict[str, Any] | None) -> str | None:
     else:
         role = user.get("role")
         employee_id = user.get("employee_id")
-    role_name = (role or "").strip()
-    emp = (employee_id or "").strip()
-    if role_name != TECHNICIAN_ROLE or not _EMP_KEY.fullmatch(emp):
+    return (role or "").strip(), (employee_id or "").strip()
+
+
+def is_technician(user: dict[str, Any] | None) -> bool:
+    role, _employee_id = effective_person(user)
+    return role == TECHNICIAN_ROLE
+
+
+def assigned_employee_id(user: dict[str, Any] | None) -> str | None:
+    """EMP key to filter on, or None when this request sees every casino."""
+    role, emp = effective_person(user)
+    if role != TECHNICIAN_ROLE or not _EMP_KEY.fullmatch(emp):
         return None
     return emp
 

@@ -477,8 +477,9 @@
         </form>`
       : "";
 
+    const hidePerf = document.body.classList.contains("dgs-hide-performance");
     els.grid.innerHTML = [
-      performanceCard(payload.performance),
+      hidePerf ? "" : performanceCard(payload.performance),
       tile(
         "Associated software",
         `<table class="th-table"><thead><tr><th>Ref</th><th>Program</th><th>Cabinets</th><th></th></tr></thead><tbody>${

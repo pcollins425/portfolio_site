@@ -13,7 +13,10 @@ from app import mssql
 from app.auth_deps import require_demo_user
 from app.commission_rules import parse_rules, reporting_waived
 
-router = APIRouter(prefix="/api", tags=["master-revenue"])
+router = APIRouter(
+    prefix="/api",
+    tags=["master-revenue"],
+)
 
 _MV = "[dashboard].[vw_performance_report]"
 
@@ -132,8 +135,12 @@ def periods(limit: int = Query(36, ge=1, le=120)):
 
 
 @router.get("/executive")
-def executive(month: str | None = Query(None, description="YYYY-MM or YYYY-MM-DD month-end slice")):
+def executive(
+    month: str | None = Query(None, description="YYYY-MM or YYYY-MM-DD month-end slice"),
+    user: Annotated[dict[str, Any] | None, Depends(require_demo_user)] = None,
+):
     """Executive pulse: revenue KPIs + trailing-12 ops series (no casino bars)."""
+    org.assert_performance_read(user)
     period_rows = _distinct_periods(24)
     try:
         latest_d, prev_d = _resolve_target_period(month, period_rows)
@@ -822,7 +829,10 @@ def _executive_ops_series(month_ends: list[date]) -> list[dict[str, Any]]:
 
 
 @router.get("/analyst/trends")
-def analyst_trends():
+def analyst_trends(
+    user: Annotated[dict[str, Any] | None, Depends(require_demo_user)] = None,
+):
+    org.assert_performance_read(user)
     rows = _revenue_query(
         f"""
 SELECT
@@ -848,8 +858,11 @@ ORDER BY d DESC
 
 
 @router.get("/analyst/sanity")
-def analyst_sanity():
+def analyst_sanity(
+    user: Annotated[dict[str, Any] | None, Depends(require_demo_user)] = None,
+):
     """Deprecated placeholder — use GET /api/analyst/queue."""
+    org.assert_performance_read(user)
     return {"source": "live", "flags": [], "deprecated": True, "use": "/api/analyst/queue"}
 
 
@@ -1541,7 +1554,11 @@ ORDER BY d DESC
 
 
 @router.get("/performance/themes-top")
-def performance_themes_top(month: str | None = Query(None, description="YYYY-MM or YYYY-MM-DD month-end slice")):
+def performance_themes_top(
+    month: str | None = Query(None, description="YYYY-MM or YYYY-MM-DD month-end slice"),
+    user: Annotated[dict[str, Any] | None, Depends(require_demo_user)] = None,
+):
+    org.assert_performance_read(user)
     periods = _distinct_periods(24)
     try:
         latest_d, _ = _resolve_target_period(month, periods)

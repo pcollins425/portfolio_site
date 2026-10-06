@@ -14,6 +14,8 @@ from pydantic import BaseModel, Field
 from app import auth_service, mssql
 from app import slot_master_permissions as sm_perms
 from app.auth_deps import require_demo_user
+from app import dgs_org_access as org
+from app import permission_catalog as cat
 from app.casino_scope import assigned_employee_id, blob_includes, sql_params, sql_predicate
 
 router = APIRouter(prefix="/api/slot-master", tags=["slot-master"])
@@ -229,6 +231,17 @@ def _machine_row(r: dict) -> dict:
         "win_index": _json_value(r.get("win_index")),
         "actual_index": _json_value(r.get("actual_index")),
     }
+
+
+_PERF_KEYS = ("last_report", "cipd", "tdw", "adw", "win_index", "actual_index")
+
+
+def _hide_performance(row: dict, user: dict[str, Any] | None) -> dict:
+    if not org.has_read(user, cat.PERFORMANCE_AREA):
+        for key in _PERF_KEYS:
+            if key in row:
+                row[key] = None
+    return row
 
 
 def _detail_row(r: dict) -> dict:
@@ -580,7 +593,7 @@ def list_machines(
         raise HTTPException(status_code=503, detail=f"database error: {exc}") from exc
 
     total_pages = max(1, math.ceil(total_items / page_size)) if total_items else 1
-    items = [_machine_row(r) for r in item_rows]
+    items = [_hide_performance(_machine_row(r), user) for r in item_rows]
     last_report = next((row.get("last_report") for row in items if row.get("last_report")), None)
 
     return {
@@ -700,7 +713,7 @@ def machine_detail(
     if not row:
         raise HTTPException(status_code=404, detail=f"machine not found: {key!r}")
     _reject_hidden_casino(user, row.get("casino_id"))
-    return _detail_row(row)
+    return _hide_performance(_detail_row(row), user)
 
 
 @router.patch("/machines/{reference_key}")

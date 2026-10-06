@@ -362,14 +362,16 @@
   }
 
   function renderTiles(d) {
+    const hidePerf = document.body.classList.contains("dgs-hide-performance");
+    const hideDeals = document.body.classList.contains("dgs-hide-deals");
     els.hubGrid.innerHTML = [
       renderProfileTile(d),
-      renderPerformanceTile(d),
-      renderAgreementTile(d),
+      hidePerf ? "" : renderPerformanceTile(d),
+      hidePerf ? "" : renderAgreementTile(d),
       renderFloorTile(d),
       renderImsTile(d),
       renderContactsTile(d),
-      renderDealsTile(d),
+      hideDeals ? "" : renderDealsTile(d),
     ].join("");
   }
 

@@ -23,6 +23,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from app import mssql
 from app import dgs_projects_permissions as perms
 from app.auth_deps import require_demo_user
+from app import dgs_org_access as org
 from app.casino_scope import assigned_employee_id, blob_includes, sql_params, sql_predicate
 
 router = APIRouter(prefix="/api/projects", tags=["projects"])
@@ -745,6 +746,7 @@ def catalog_printout(
     key = reference_key.strip()
     if not key:
         raise HTTPException(status_code=400, detail="reference_key is required")
+    org.assert_performance_read(user)
     _reject_hidden_catalog(user, key)
 
     select_list = ", ".join(f"[{c}]" for c in PRINTOUT_COLUMNS)

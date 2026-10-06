@@ -76,3 +76,32 @@ def assert_assistant_secrets_write(user: dict[str, Any] | None) -> None:
         return
     if not cat.has_area_write(_perms(user), cat.ASSISTANT_SECRETS_AREA):
         raise HTTPException(status_code=403, detail="No dgs_assistant_secrets write access")
+
+
+def has_read(user: dict[str, Any] | None, area: str) -> bool:
+    """Auth off stays open. A missing grant is closed."""
+    if _skip(user):
+        return True
+    return cat.has_area_read(_perms(user), area)
+
+
+def assert_area_read(user: dict[str, Any] | None, area: str) -> None:
+    if has_read(user, area):
+        return
+    raise HTTPException(status_code=403, detail="Not available for this account")
+
+
+def assert_performance_read(user: dict[str, Any] | None) -> None:
+    assert_area_read(user, cat.PERFORMANCE_AREA)
+
+
+def assert_contracts_read(user: dict[str, Any] | None) -> None:
+    assert_area_read(user, cat.CONTRACTS_AREA)
+
+
+def assert_deals_read(user: dict[str, Any] | None) -> None:
+    assert_area_read(user, cat.DEALS_AREA)
+
+
+def assert_software_vault_read(user: dict[str, Any] | None) -> None:
+    assert_area_read(user, cat.SOFTWARE_VAULT_AREA)

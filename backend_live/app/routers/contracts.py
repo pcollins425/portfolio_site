@@ -8,13 +8,18 @@ from datetime import date, datetime
 from decimal import Decimal
 from typing import Annotated, Any
 
-from fastapi import APIRouter, File, Form, HTTPException, Query, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
 
 from app import mssql
-from app.auth_deps import require_demo_user
+from app import permission_catalog as cat
+from app.auth_deps import require_area_read, require_demo_user
 from app.contract_documents_service import list_contract_documents, upload_contract_document
 
-router = APIRouter(prefix="/api/contracts", tags=["contracts"])
+router = APIRouter(
+    prefix="/api/contracts",
+    tags=["contracts"],
+    dependencies=[Depends(require_area_read(cat.CONTRACTS_AREA))],
+)
 
 
 def _catalog() -> str:

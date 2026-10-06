@@ -14,9 +14,14 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException
 
 from app import mssql
-from app.auth_deps import require_demo_user
+from app import permission_catalog as cat
+from app.auth_deps import require_area_read, require_demo_user
 
-router = APIRouter(prefix="/api/market", tags=["market"])
+router = APIRouter(
+    prefix="/api/market",
+    tags=["market"],
+    dependencies=[Depends(require_area_read(cat.PERFORMANCE_AREA))],
+)
 
 # Absence of these vendors is not an open market. They stay on the agreement
 # list and still count in the floor charts when a machine is actually there.
