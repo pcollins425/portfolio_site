@@ -1268,6 +1268,126 @@ body.dgs-theme-hub .th-form select {
   box-sizing: border-box;
 }
 
+/* Theme Hub compact ≤1366 — identity bar + stacked cards. Same band as Casino Hub. */
+
+@media (max-width: 1366px) {
+  body.dgs-theme-hub .dgs-v2-desktop-only {
+    display: none !important;
+  }
+
+  body.dgs-theme-hub.dgs-app {
+    height: 100dvh;
+    max-height: 100dvh;
+    overflow: hidden;
+  }
+
+  body.dgs-theme-hub .dgs-v2-hub-main {
+    display: flex;
+    flex-direction: column;
+    flex: 1 1 0%;
+    min-height: 0;
+    max-height: 100%;
+    overflow: hidden;
+    padding: 0;
+  }
+
+  body.dgs-theme-hub .dgs-v2-hub-body,
+  body.dgs-theme-hub.th-add-only .dgs-v2-hub-body {
+    display: flex;
+    flex: 1 1 0%;
+    flex-direction: column;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  body.dgs-theme-hub .dgs-v2-hub-media {
+    width: 100%;
+    min-width: 0;
+    max-width: none;
+    flex: 0 0 auto;
+    border-right: none;
+    border-bottom: 1px solid var(--dgs-v2-border);
+  }
+
+  body.dgs-theme-hub .dgs-v2-hub-media-inner {
+    min-height: 0;
+  }
+
+  body.dgs-theme-hub .dgs-v2-image-caption {
+    padding: 12px 14px;
+  }
+
+  body.dgs-theme-hub .dgs-v2-image-caption .title,
+  body.dgs-theme-hub .dgs-v2-image-caption .meta {
+    overflow-wrap: anywhere;
+  }
+
+  body.dgs-theme-hub .dgs-v2-hub-cells {
+    flex: 1 1 0%;
+    min-height: 0;
+    padding: 0 12px;
+    gap: 0;
+    overflow-x: hidden;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: var(--dgs-v2-system-nav-clear);
+  }
+
+  body.dgs-theme-hub .dgs-v2-hub-header {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    flex-shrink: 0;
+    padding: 12px 0 10px;
+    margin: 0;
+    background: var(--dgs-v2-bg);
+    border-bottom: 1px solid var(--dgs-v2-border-soft);
+  }
+
+  body.dgs-theme-hub .dgs-v2-hub-header h1 {
+    font-size: 20px;
+  }
+
+  body.dgs-theme-hub .dgs-v2-hub-grid {
+    flex: none;
+    overflow: visible;
+    padding-top: 10px;
+  }
+
+  body.dgs-theme-hub .dgs-v2-hub-tile,
+  body.dgs-theme-hub .dgs-v2-hub-tile--wide {
+    padding: 14px;
+    border-radius: 14px;
+  }
+
+  body.dgs-theme-hub .th-table {
+    min-width: 640px;
+  }
+
+  body.dgs-theme-hub .th-form fieldset {
+    min-width: 0;
+    max-width: 100%;
+    box-sizing: border-box;
+  }
+
+  body.dgs-theme-hub .th-form .dgs-v2-btn {
+    width: 100%;
+    min-height: 40px;
+  }
+}
+
+@media (max-width: 900px) {
+  body.dgs-theme-hub:not(.th-add-only) .dgs-v2-hub-header {
+    display: none;
+  }
+}
+
+@media (min-width: 901px) and (max-width: 1366px) {
+  body.dgs-theme-hub .dgs-v2-hub-cells {
+    padding-bottom: var(--dgs-v2-system-nav-clear-tablet);
+  }
+}
+
 .dgs-v2-hub-tile-body {
   font-size: 13px;
   color: var(--dgs-v2-text);
