@@ -69,15 +69,9 @@ def field_dashboard(
     projects = _query(
         f"""
         SELECT TOP 200
-            ims.reference_key,
             CAST(ims.project_number AS nvarchar(50)) AS project_number,
             ims.start_date,
-            ims.end_date,
-            ims.status,
-            ims.project_type,
             ims.description,
-            ims.lead_tech,
-            ims.assistant_techs,
             casinos.casino_name
         FROM projects.ims AS ims
         LEFT JOIN clients.casinos AS casinos ON casinos.reference_key = ims.casino_id
@@ -100,16 +94,21 @@ def field_dashboard(
         f"""
         SELECT TOP 400
             wo.wo,
+            wo.date_wo,
             wo.property,
-            wo.assignto,
+            wo.compid,
             wo.brief_desc,
-            wo.sch_date,
-            wo.stattype,
-            wo.wo_type
+            ven.vendor_name,
+            cab.cabinet_name,
+            th.theme_name
         FROM projects.work_orders AS wo
+        LEFT JOIN inventory.compinfo_landing AS comp ON comp.compid = wo.compid
+        LEFT JOIN vendors.vendors AS ven ON ven.reference_key = comp.vendor_id
+        LEFT JOIN vendors.cabinets AS cab ON cab.reference_key = comp.cabinet_id
+        LEFT JOIN vendors.themes AS th ON th.reference_key = comp.theme_id
         WHERE {_OPEN_WO}
         {wo_sql}
-        ORDER BY wo.sch_date DESC, wo.wo DESC
+        ORDER BY wo.date_wo DESC, wo.wo DESC
         """,
         wo_params or None,
     )
@@ -117,28 +116,23 @@ def field_dashboard(
         "scope": "mine" if mine else "all",
         "projects": [
             {
-                "reference_key": _text(row.get("reference_key")),
                 "project_number": _text(row.get("project_number")),
                 "start_date": _day(row.get("start_date")),
-                "end_date": _day(row.get("end_date")),
-                "status": _text(row.get("status")),
-                "project_type": _text(row.get("project_type")),
                 "description": _text(row.get("description")),
-                "lead_tech": _text(row.get("lead_tech")),
-                "assistant_techs": _text(row.get("assistant_techs")),
-                "casino_name": _text(row.get("casino_name")),
+                "property": _text(row.get("casino_name")),
             }
             for row in projects
         ],
         "work_orders": [
             {
+                "date_wo": _day(row.get("date_wo")),
                 "wo": _text(row.get("wo")),
                 "property": _text(row.get("property")),
-                "assignto": _text(row.get("assignto")),
-                "brief_desc": _text(row.get("brief_desc")),
-                "sch_date": _day(row.get("sch_date")),
-                "stattype": _text(row.get("stattype")),
-                "wo_type": _text(row.get("wo_type")),
+                "serial": _text(row.get("compid")),
+                "vendor": _text(row.get("vendor_name")),
+                "cabinet": _text(row.get("cabinet_name")),
+                "theme": _text(row.get("theme_name")),
+                "description": _text(row.get("brief_desc")),
             }
             for row in work_orders
         ],

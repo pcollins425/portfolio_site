@@ -2163,7 +2163,8 @@ body.dgs-dashboard-v2 .dgs-dashboard-mount:has(.dgs-field-pair) {
 .dgs-field-scroll {
   flex: 1;
   min-height: 0;
-  overflow: auto;
+  overflow-x: hidden;
+  overflow-y: auto;
 }
 @media (max-width: 1100px) {
   .dgs-field-pair {
@@ -2187,16 +2188,28 @@ body.dgs-dashboard-v2 .dgs-dashboard-mount:has(.dgs-field-pair) {
 }
 .dgs-field-table {
   width: 100%;
+  table-layout: fixed;
   border-collapse: collapse;
-  font-size: 0.92rem;
+  font-size: 0.8rem;
 }
 .dgs-field-table th,
 .dgs-field-table td {
-  padding: 0.45rem 0.65rem;
+  padding: 0.4rem 0.45rem;
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
   text-align: left;
   vertical-align: top;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.dgs-field-table .dgs-field-date {
+  width: 6.5rem;
   white-space: nowrap;
+  overflow-wrap: normal;
+}
+.dgs-field-table .dgs-field-num {
+  width: 4.6rem;
+  white-space: nowrap;
+  overflow-wrap: normal;
 }
 .dgs-field-table th {
   color: #8b96a8;
@@ -2204,9 +2217,4 @@ body.dgs-dashboard-v2 .dgs-dashboard-mount:has(.dgs-field-pair) {
   font-weight: 650;
   letter-spacing: 0.04em;
   text-transform: uppercase;
-}
-.dgs-field-table td:last-child,
-.dgs-field-table th:last-child {
-  white-space: normal;
-  min-width: 8rem;
 }

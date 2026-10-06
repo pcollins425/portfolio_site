@@ -10,18 +10,21 @@
       .replace(/"/g, "&quot;");
   }
 
-  function cell(value) {
+  function cell(value, cls) {
     const text = value == null || value === "" ? "—" : value;
-    return `<td>${esc(text)}</td>`;
+    const attr = cls ? ` class="${cls}"` : "";
+    return `<td${attr}>${esc(text)}</td>`;
   }
 
   function table(headers, rows, empty) {
     if (!rows.length) {
       return `<p class="dgs-field-empty">${esc(empty)}</p>`;
     }
-    const head = headers.map((label) => `<th>${esc(label)}</th>`).join("");
+    const head = headers
+      .map((col) => `<th${col.cls ? ` class="${col.cls}"` : ""}>${esc(col.label)}</th>`)
+      .join("");
     const body = rows
-      .map((row) => `<tr>${row.map(cell).join("")}</tr>`)
+      .map((row) => `<tr>${row.map((value, i) => cell(value, headers[i].cls)).join("")}</tr>`)
       .join("");
     return `<div class="dgs-field-scroll"><table class="dgs-field-table"><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table></div>`;
   }
@@ -45,12 +48,16 @@
           <section class="dgs-field-panel">
             <h2>Upcoming projects <span>${projects.length}</span></h2>
             ${table(
-              ["Start", "Casino", "Project", "Lead", "Description"],
+              [
+                { label: "Start Date", cls: "dgs-field-date" },
+                { label: "Project Number", cls: "dgs-field-num" },
+                { label: "Property" },
+                { label: "Description" },
+              ],
               projects.map((row) => [
                 row.start_date,
-                row.casino_name,
                 row.project_number,
-                row.lead_tech,
+                row.property,
                 row.description,
               ]),
               "No upcoming projects."
@@ -59,14 +66,25 @@
           <section class="dgs-field-panel">
             <h2>Open work orders <span>${orders.length}</span></h2>
             ${table(
-              ["Scheduled", "WO", "Property", "Status", "Assigned", "Description"],
+              [
+                { label: "Work Order Date", cls: "dgs-field-date" },
+                { label: "WO #", cls: "dgs-field-num" },
+                { label: "Property" },
+                { label: "Serial" },
+                { label: "Vendor" },
+                { label: "Cabinet" },
+                { label: "Theme" },
+                { label: "Description" },
+              ],
               orders.map((row) => [
-                row.sch_date,
+                row.date_wo,
                 row.wo,
                 row.property,
-                row.stattype,
-                row.assignto,
-                row.brief_desc,
+                row.serial,
+                row.vendor,
+                row.cabinet,
+                row.theme,
+                row.description,
               ]),
               "No open work orders."
             )}
