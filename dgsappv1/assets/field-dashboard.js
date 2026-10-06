@@ -23,7 +23,7 @@
     const body = rows
       .map((row) => `<tr>${row.map(cell).join("")}</tr>`)
       .join("");
-    return `<table class="dgs-field-table"><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table>`;
+    return `<div class="dgs-field-scroll"><table class="dgs-field-table"><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table></div>`;
   }
 
   async function load(root) {
