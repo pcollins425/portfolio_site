@@ -176,15 +176,6 @@
     return !document.body.classList.contains("dgs-no-mobile-top-nav");
   }
 
-  function activePageTitle(activeId) {
-    for (const group of visibleNavGroups()) {
-      for (const item of group.items) {
-        if (item.id === activeId) return item.label;
-      }
-    }
-    return "DGS Application";
-  }
-
   function closeMobileMenu() {
     const menu = document.getElementById("dgs-mobile-menu");
     const btn = document.getElementById("dgs-mobile-menu-btn");
@@ -217,7 +208,6 @@
         </button>
         <div class="dgs-mobile-topbar-brand">
           <span class="dgs-mobile-topbar-eyebrow">DGS Application</span>
-          <span class="dgs-mobile-topbar-title" id="dgs-mobile-page-title"></span>
         </div>
       </div>
       <div id="dgs-mobile-menu" class="dgs-mobile-menu" hidden></div>`;
@@ -231,9 +221,7 @@
 
   function renderMobileTopNav(activeId) {
     const menu = document.getElementById("dgs-mobile-menu");
-    const title = document.getElementById("dgs-mobile-page-title");
     if (!menu) return;
-    if (title) title.textContent = activePageTitle(activeId);
 
     menu.innerHTML = visibleNavGroups()
       .map(
