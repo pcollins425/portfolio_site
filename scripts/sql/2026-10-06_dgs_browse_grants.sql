@@ -17,3 +17,11 @@ SET permissions = CASE
     update_by = 'dgs browse grants'
 WHERE reference_key <> N'RT-030'
   AND CHARINDEX(N'dgs_performance:', ISNULL(permissions, N'')) = 0;
+
+/* Technician sees the schedule and catalog. Printout stays behind dgs_performance. */
+UPDATE employees.roles
+SET permissions = RTRIM(permissions) + N', dgs_projects_calendar: READ_ONLY, dgs_projects_catalog: READ_ONLY',
+    update_date = GETDATE(),
+    update_by = 'dgs browse grants'
+WHERE reference_key = N'RT-030'
+  AND CHARINDEX(N'dgs_projects_calendar:', ISNULL(permissions, N'')) = 0;

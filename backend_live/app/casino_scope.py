@@ -61,3 +61,27 @@ def sql_predicate(alias: str = "c") -> str:
 
 def sql_params(employee_id: str) -> tuple[str, str]:
     return (f"% {employee_id}", f"% {employee_id},%")
+
+
+def like_contains(value: str) -> str:
+    """Substring LIKE pattern. Brackets escape ``%``, ``_``, and ``[``."""
+    escaped = value.replace("[", "[[]").replace("%", "[%]").replace("_", "[_]")
+    return f"%{escaped}%"
+
+
+def columns_contain_any(columns: list[str], needles: list[str]) -> tuple[str, tuple[str, ...]]:
+    """SQL that is true when any column contains any needle as a substring."""
+    if not columns or not needles:
+        return "1 = 0", ()
+    parts: list[str] = []
+    params: list[str] = []
+    for column in columns:
+        for needle in needles:
+            text = needle.strip()
+            if not text:
+                continue
+            parts.append(f"{column} LIKE %s")
+            params.append(like_contains(text))
+    if not parts:
+        return "1 = 0", ()
+    return "(" + " OR ".join(parts) + ")", tuple(params)

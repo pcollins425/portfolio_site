@@ -11,7 +11,9 @@ sys.path.insert(0, str(ROOT))
 from app.casino_scope import (  # noqa: E402
     assigned_employee_id,
     blob_includes,
+    columns_contain_any,
     is_technician,
+    like_contains,
     sql_params,
     sql_predicate,
 )
@@ -63,3 +65,14 @@ def test_sql_predicate_bounds_the_token():
     sql = sql_predicate("casinos")
     assert "casinos.techs LIKE %s" in sql
     assert sql_params("EMP-000105") == ("% EMP-000105", "% EMP-000105,%")
+
+
+def test_name_match_escapes_like_wildcards():
+    assert like_contains("100%") == "%100[%]%"
+    sql, params = columns_contain_any(
+        ["ims.lead_tech", "ims.assistant_techs"],
+        ["Chelsie Wolf"],
+    )
+    assert sql.count("LIKE %s") == 2
+    assert params == ("%Chelsie Wolf%", "%Chelsie Wolf%")
+    assert columns_contain_any([], ["Chelsie Wolf"]) == ("1 = 0", ())

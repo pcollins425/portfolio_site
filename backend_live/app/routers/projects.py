@@ -24,7 +24,24 @@ from app import mssql
 from app import dgs_projects_permissions as perms
 from app.auth_deps import require_demo_user
 from app import dgs_org_access as org
-from app.casino_scope import assigned_employee_id, blob_includes, sql_params, sql_predicate
+from app.casino_scope import (
+    assigned_employee_id,
+    columns_contain_any,
+    sql_params,
+    sql_predicate,
+)
+
+# eMaint stores a free-text name, not an EMP key. These are the forms that
+# do not match ``first_name + last_name`` for the current route techs.
+_PROJECT_NAME_ALIASES: dict[str, tuple[str, ...]] = {
+    "EMP-000090": ("DQ Danzy",),
+    "EMP-000091": ("Don Buning",),
+    "EMP-000103": ("Jim Click",),
+    "EMP-000111": ("Ricky Garrison",),
+    "EMP-000113": ("Dom Carratini", "Domingo Carattini"),
+    "EMP-000115": ("Lorent Pritchard",),
+    "EMP-000088": ("Ardy Socatero", "Ardy Socotero"),
+}
 
 router = APIRouter(prefix="/api/projects", tags=["projects"])
 
@@ -85,23 +102,97 @@ def _query(sql: str, params=None) -> list[dict]:
     )
 
 
-def _tech_scope(user: dict[str, Any] | None, alias: str) -> tuple[str, tuple]:
+def _project_needles(user: dict[str, Any] | None) -> list[str]:
+    """Names to look for in lead_tech / assistant_techs / assigned_to."""
+    employee_id = assigned_employee_id(user)
+    if not employee_id:
+        return []
+    rows = _query(
+        """
+        SELECT first_name, last_name
+        FROM employees.employee_roles
+        WHERE reference_key = %s
+        """,
+        (employee_id,),
+    )
+    needles: list[str] = []
+    if rows:
+        first = str(rows[0].get("first_name") or "").strip()
+        last = str(rows[0].get("last_name") or "").strip()
+        if first and last:
+            needles.append(f"{first} {last}")
+    for alias in _PROJECT_NAME_ALIASES.get(employee_id, ()):
+        if alias not in needles:
+            needles.append(alias)
+    return needles
+
+
+def _house_or_named(
+    user: dict[str, Any] | None,
+    casino_alias: str,
+    name_columns: list[str],
+) -> tuple[str, tuple]:
+    """House tech sees the casino's projects. A named lead or assistant sees that project."""
     employee_id = assigned_employee_id(user)
     if not employee_id:
         return "", ()
-    return " AND " + sql_predicate(alias), sql_params(employee_id)
+    named_sql, named_params = columns_contain_any(name_columns, _project_needles(user))
+    sql = f" AND ({sql_predicate(casino_alias)} OR {named_sql})"
+    return sql, sql_params(employee_id) + named_params
+
+
+def _catalog_scope(user: dict[str, Any] | None) -> tuple[str, tuple]:
+    """Catalog row is visible to the house tech, the IMS crew, or assigned_to."""
+    employee_id = assigned_employee_id(user)
+    if not employee_id:
+        return "", ()
+    needles = _project_needles(user)
+    crew_sql, crew_params = columns_contain_any(
+        ["ims.lead_tech", "ims.assistant_techs"],
+        needles,
+    )
+    assigned_sql, assigned_params = columns_contain_any(["pc.assigned_to"], needles)
+    sql = f""" AND (
+        {sql_predicate("c")}
+        OR EXISTS (
+            SELECT 1
+            FROM projects.ims AS ims
+            WHERE ims.reference_key = pc.ims_id
+              AND {crew_sql}
+        )
+        OR {assigned_sql}
+    )"""
+    return sql, sql_params(employee_id) + crew_params + assigned_params
 
 
 def _reject_hidden_casino(user: dict[str, Any] | None, casino_id: str) -> None:
     employee_id = assigned_employee_id(user)
     if not employee_id:
         return
-    rows = _query(
-        "SELECT techs FROM clients.casinos WHERE reference_key = %s",
-        (casino_id,),
+    needles = _project_needles(user)
+    crew_sql, crew_params = columns_contain_any(
+        ["ims.lead_tech", "ims.assistant_techs"],
+        needles,
     )
-    blob = rows[0]["techs"] if rows else None
-    if not blob_includes(blob, employee_id):
+    assigned_sql, assigned_params = columns_contain_any(["pc.assigned_to"], needles)
+    rows = _query(
+        f"""
+        SELECT CASE
+            WHEN EXISTS (
+                SELECT 1 FROM clients.casinos AS c
+                WHERE c.reference_key = %s AND {sql_predicate("c")}
+            ) OR EXISTS (
+                SELECT 1 FROM projects.ims AS ims
+                WHERE ims.casino_id = %s AND {crew_sql}
+            ) OR EXISTS (
+                SELECT 1 FROM projects.project_catalog AS pc
+                WHERE pc.casino_id = %s AND {assigned_sql}
+            ) THEN 1 ELSE 0
+        END AS ok
+        """,
+        (casino_id, *sql_params(employee_id), casino_id, *crew_params, casino_id, *assigned_params),
+    )
+    if not rows or not rows[0].get("ok"):
         raise HTTPException(status_code=404, detail=f"casino not found: {casino_id!r}")
 
 
@@ -109,17 +200,18 @@ def _reject_hidden_catalog(user: dict[str, Any] | None, catalog_key: str) -> Non
     employee_id = assigned_employee_id(user)
     if not employee_id:
         return
+    scope_sql, scope_params = _catalog_scope(user)
     rows = _query(
-        """
-        SELECT c.techs
+        f"""
+        SELECT pc.reference_key
         FROM projects.project_catalog AS pc
         LEFT JOIN clients.casinos AS c ON c.reference_key = pc.casino_id
         WHERE pc.reference_key = %s
+        {scope_sql}
         """,
-        (catalog_key,),
+        (catalog_key, *scope_params),
     )
-    blob = rows[0]["techs"] if rows else None
-    if not rows or not blob_includes(blob, employee_id):
+    if not rows:
         raise HTTPException(status_code=404, detail=f"project not found: {catalog_key!r}")
 
 
@@ -200,6 +292,13 @@ def ims_list(
             )
         """
         search_params.extend([like, like, like, like])
+    scope_sql, scope_params = _house_or_named(
+        user,
+        "casinos",
+        ["ims.lead_tech", "ims.assistant_techs"],
+    )
+    search_sql += scope_sql
+    search_params.extend(scope_params)
 
     try:
         total = int(
@@ -326,7 +425,16 @@ def projects_calendar(
     if (window_end - window_start).days > 190:
         raise HTTPException(status_code=400, detail="window too large (max ~6 months)")
 
-    scope_sql, scope_params = _tech_scope(user, "casinos")
+    ims_scope_sql, ims_scope_params = _house_or_named(
+        user,
+        "casinos",
+        ["ims.lead_tech", "ims.assistant_techs"],
+    )
+    catalog_scope_sql, catalog_scope_params = _house_or_named(
+        user,
+        "casinos",
+        ["pc.assigned_to"],
+    )
     try:
         rows = _query(
             f"""
@@ -361,7 +469,7 @@ def projects_calendar(
             LEFT JOIN projects.project_catalog pc ON pc.ims_id = ims.reference_key
             WHERE COALESCE(ims.start_date, '1900-01-01') <= %s
               AND COALESCE(ims.end_date, '2099-12-31') >= %s
-            {scope_sql}
+            {ims_scope_sql}
 
             UNION ALL
 
@@ -396,16 +504,16 @@ def projects_calendar(
             WHERE pc.ims_id IS NULL
               AND COALESCE(pc.date_start, '1900-01-01') <= %s
               AND COALESCE(pc.date_end, '2099-12-31') >= %s
-            {scope_sql}
+            {catalog_scope_sql}
             ORDER BY start_date, project_number
             """,
             (
                 window_end.isoformat(),
                 window_start.isoformat(),
-                *scope_params,
+                *ims_scope_params,
                 window_end.isoformat(),
                 window_start.isoformat(),
-                *scope_params,
+                *catalog_scope_params,
             ),
         )
     except Exception as exc:
@@ -507,7 +615,7 @@ def catalog_list(
     if casino:
         search_sql += " AND pc.casino_id = %s "
         search_params.append(casino)
-    scope_sql, scope_params = _tech_scope(user, "c")
+    scope_sql, scope_params = _catalog_scope(user)
     search_sql += scope_sql
     search_params.extend(scope_params)
 
