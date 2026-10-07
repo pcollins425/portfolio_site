@@ -68,15 +68,15 @@ BEGIN
     )
     VALUES (
         NEWID(), GETDATE(), GETDATE(), N'dgs_org_access_roles seed',
-        N'DGS App Workspace pack: Assistant + secrets.',
+        N'DGS App Workspace pack: Assistant + secrets + Mail Intake.',
         N'DGS App — Workspace',
-        N'dgs_assistant: UPDATES_ONLY, dgs_assistant_secrets: UPDATES_ONLY'
+        N'dgs_assistant: UPDATES_ONLY, dgs_assistant_secrets: UPDATES_ONLY, dgs_mail_intake: UPDATES_ONLY'
     );
 END
 ELSE
 BEGIN
     UPDATE [employees].[roles]
-    SET [permissions] = N'dgs_assistant: UPDATES_ONLY, dgs_assistant_secrets: UPDATES_ONLY',
+    SET [permissions] = N'dgs_assistant: UPDATES_ONLY, dgs_assistant_secrets: UPDATES_ONLY, dgs_mail_intake: UPDATES_ONLY',
         [update_date] = GETDATE(),
         [update_by] = N'dgs_org_access_roles seed'
     WHERE [role] = N'DGS App — Workspace';
@@ -94,6 +94,7 @@ INSERT INTO @tokens (token) VALUES
     (N'dgs_finance_dashboard: ALL_CHANGES'),
     (N'dgs_assistant: ALL_CHANGES'),
     (N'dgs_assistant_secrets: ALL_CHANGES'),
+    (N'dgs_mail_intake: ALL_CHANGES'),
     (N'employees: ADDS_AND_UPDATES'),
     (N'roles: ADDS_AND_UPDATES');
 

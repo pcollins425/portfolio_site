@@ -1223,6 +1223,77 @@ body.dgs-vendor-hub a.vh-theme-row:hover {
   color: var(--dgs-v2-text);
 }
 
+body.dgs-vendor-hub button.dgs-v2-btn {
+  appearance: none;
+}
+
+body.dgs-vendor-hub .vh-agree-tile {
+  grid-column: 1 / -1;
+}
+
+body.dgs-vendor-hub .vh-agree-body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+body.dgs-vendor-hub .vh-agree-picks,
+body.dgs-vendor-hub .vh-agree-cols {
+  display: flex;
+  gap: 12px;
+  min-height: 0;
+}
+
+body.dgs-vendor-hub .vh-agree-cols {
+  align-items: flex-start;
+}
+
+body.dgs-vendor-hub .vh-agree-docs,
+body.dgs-vendor-hub .vh-agree-casinos {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+body.dgs-vendor-hub .vh-agree-pick,
+body.dgs-vendor-hub .vh-doc-row {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  width: 100%;
+  text-align: left;
+  background: transparent;
+  color: inherit;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  padding: 8px 10px;
+  font: inherit;
+  cursor: pointer;
+}
+
+body.dgs-vendor-hub .vh-agree-pick.is-active,
+body.dgs-vendor-hub .vh-doc-row.is-active {
+  background: rgba(110, 181, 255, 0.12);
+}
+
+body.dgs-vendor-hub .vh-doc-title {
+  display: block;
+  color: var(--dgs-v2-text-muted);
+  font-size: 12px;
+}
+
+body.dgs-vendor-hub .vh-clause {
+  margin: 8px 10px;
+  color: var(--dgs-v2-text-muted);
+  font-size: 13px;
+}
+
+@media (max-width: 900px) {
+  body.dgs-vendor-hub .vh-agree-cols {
+    flex-direction: column;
+  }
+}
+
 /* Vendor Hub compact ≤1366.
    Not a stacked document like Theme Hub. Cabinets and Themes stay two
    scrolling lists. Phone stacks them. A wide tablet keeps them side by side. */

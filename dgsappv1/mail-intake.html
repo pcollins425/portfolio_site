@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Mail Intake — DGS Application</title>
+  <link rel="stylesheet" href="assets/dgs.css" />
+  <link rel="stylesheet" href="assets/dgs-v2.css" />
+  <style>
+    body.dgs-mail-intake.dgs-app { height: 100vh; overflow: hidden; color-scheme: dark; }
+    body.dgs-mail-intake .dgs-v2-main {
+      display: flex; flex-direction: column; padding: 20px 24px 28px; gap: 14px;
+      background: var(--dgs-v2-bg, #0e1117); color: var(--dgs-v2-text, #c5cdd9);
+      flex: 1; min-height: 0; overflow: hidden;
+    }
+    .mi-toolbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+    .mi-toolbar select, .mi-toolbar input {
+      background: #12161e; color: #e8ecf2; border: 1px solid rgba(255,255,255,.15);
+      border-radius: 6px; padding: 7px 10px; font: inherit; min-width: 140px;
+    }
+    .mi-toolbar input[type="search"] { min-width: 200px; flex: 1; }
+    .mi-toolbar .dgs-v2-btn, .mi-toolbar button {
+      padding: 7px 12px; border-radius: 6px; cursor: pointer; border: 1px solid rgba(255,255,255,.15);
+      background: rgba(255,255,255,.06); color: #e8ecf2; font: inherit;
+    }
+    .mi-toolbar .dgs-v2-btn-primary { background: #1967d2; border-color: #1967d2; color: #fff; }
+    .mi-toolbar .dgs-v2-btn-primary:disabled { opacity: .45; cursor: not-allowed; }
+    .mi-meta { color: #9aa3b2; font-size: .85rem; }
+    .mi-table-wrap { flex: 1; min-height: 0; overflow: auto; border: 1px solid rgba(255,255,255,.1); border-radius: 8px; }
+    table.mi-table { width: 100%; border-collapse: collapse; font-size: .88rem; }
+    table.mi-table th, table.mi-table td {
+      padding: 8px 10px; text-align: left; border-bottom: 1px solid rgba(255,255,255,.06); vertical-align: top;
+    }
+    table.mi-table th { position: sticky; top: 0; background: #141820; z-index: 1; color: #9aa3b2; font-weight: 600; }
+    table.mi-table tr:hover td { background: rgba(255,255,255,.03); }
+    table.mi-table tr.is-selected td { background: rgba(25, 103, 210, .18); }
+    table.mi-table tr { cursor: pointer; }
+    .mi-chip {
+      display: inline-block; padding: 1px 8px; border-radius: 999px; font-size: .72rem;
+      background: rgba(255,255,255,.08); white-space: nowrap;
+    }
+    .mi-chip.acct { background: rgba(25,103,210,.25); color: #8ab4f8; }
+    .mi-chip.paulc { background: rgba(156, 89, 182, .25); color: #d7a8ef; }
+    .mi-chip.unset { background: rgba(250,180,40,.2); color: #f0c14b; }
+    .mi-chip.revenue { background: rgba(46,160,67,.22); color: #3dd68c; }
+    .mi-chip.fsr { background: rgba(66,133,244,.22); color: #8ab4f8; }
+    .mi-chip.ignore { background: rgba(140,140,140,.25); color: #b0b0b0; }
+    .mi-subject { color: #e8ecf2; }
+    .mi-from { color: #9aa3b2; font-size: .8rem; }
+    #detail-backdrop {
+      position: fixed; inset: 0; background: rgba(0,0,0,.45); z-index: 40;
+      pointer-events: none;
+    }
+    #detail-drawer {
+      position: fixed; top: 0; right: 0; bottom: 0; width: min(440px, 100vw);
+      background: #12161e; border-left: 1px solid rgba(255,255,255,.12);
+      z-index: 50; padding: 18px 20px; overflow-y: auto; display: none;
+    }
+    body.detail-open #detail-drawer { display: block; }
+    .mi-drawer-h { display: flex; justify-content: space-between; gap: 12px; align-items: flex-start; margin-bottom: 12px; }
+    .mi-drawer-h h2 { margin: 0; font-size: 1.05rem; color: #e8ecf2; }
+    .mi-field { margin: 0 0 12px; }
+    .mi-field dt { color: #9aa3b2; font-size: .75rem; margin-bottom: 2px; }
+    .mi-field dd { margin: 0; color: #e8ecf2; word-break: break-word; }
+    .mi-job {
+      border: 1px solid rgba(255,255,255,.1); border-radius: 8px; padding: 10px 12px; margin-bottom: 8px;
+      background: rgba(0,0,0,.2); font-size: .82rem;
+    }
+  </style>
+</head>
+<body class="dgs-app dgs-mail-intake">
+  <aside class="dgs-sidebar" id="dgs-sidebar">
+    <div class="dgs-sidebar-brand">
+      <div class="dgs-brand-text">
+        <span class="dgs-brand-eyebrow">Dynamic Gaming Solutions</span>
+        <span class="dgs-brand-title">DGS Application</span>
+      </div>
+      <button type="button" id="dgs-rail-toggle" class="dgs-rail-toggle" aria-expanded="true" title="Collapse navigation">◧</button>
+    </div>
+    <nav class="dgs-sidebar-nav" id="dgs-app-nav" aria-label="Application"></nav>
+    <div class="dgs-sidebar-account" id="sidebar-account" hidden>
+      <span class="dgs-sidebar-user" id="user-label"></span>
+      <button type="button" id="btn-sign-out" class="dgs-sidebar-signout">Sign out</button>
+    </div>
+  </aside>
+  <div id="dgs-nav-flyout" class="dgs-nav-flyout" hidden></div>
+
+  <div class="dgs-main dgs-v2-main">
+    <header class="dgs-v2-page-header">
+      <div>
+        <p class="dgs-v2-eyebrow">Workspace</p>
+        <h1>Mail Intake</h1>
+        <p class="dgs-v2-subtitle">accounting@ + paulc@ — designate Revenue / FSR, then process</p>
+      </div>
+    </header>
+    <div id="error-box" class="dgs-v2-error" hidden></div>
+    <div class="mi-toolbar">
+      <select id="filter-designation" aria-label="Designation filter">
+        <option value="unset" selected>Unset</option>
+        <option value="">All designations</option>
+        <option value="revenue">Revenue</option>
+        <option value="fsr">FSR</option>
+        <option value="ignore">Ignore</option>
+      </select>
+      <select id="filter-mailbox" aria-label="Mailbox filter">
+        <option value="">All mailboxes</option>
+        <option value="accounting@dynamicgamingsolutions.com">accounting@</option>
+        <option value="paulc@dynamicgamingsolutions.com">paulc@</option>
+      </select>
+      <input type="search" id="search-input" placeholder="Search subject / from / id" />
+      <button type="button" id="btn-refresh">Refresh</button>
+      <button type="button" class="dgs-v2-btn-primary" id="btn-desig-revenue">Revenue</button>
+      <button type="button" class="dgs-v2-btn-primary" id="btn-desig-fsr">FSR</button>
+      <button type="button" id="btn-desig-ignore">Ignore</button>
+      <button type="button" id="btn-desig-unset">Clear</button>
+      <button type="button" class="dgs-v2-btn-primary" id="btn-process">Process (dry-run)</button>
+      <button type="button" id="btn-apply">Apply</button>
+    </div>
+    <p class="mi-meta" id="list-status">Loading…</p>
+    <div class="mi-table-wrap">
+      <table class="mi-table">
+        <thead>
+          <tr>
+            <th style="width:36px"><input type="checkbox" id="chk-all" aria-label="Select all" /></th>
+            <th>Mailbox</th>
+            <th>When</th>
+            <th>From / Subject</th>
+            <th>Atts</th>
+            <th>Designation</th>
+            <th>Process</th>
+          </tr>
+        </thead>
+        <tbody id="mail-tbody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div id="detail-backdrop" hidden></div>
+  <aside id="detail-drawer" aria-label="Message detail">
+    <div class="mi-drawer-h">
+      <h2 id="detail-title">Detail</h2>
+      <button type="button" id="btn-close-drawer">×</button>
+    </div>
+    <div id="detail-body"></div>
+  </aside>
+
+  <script src="assets/auth.js"></script>
+  <script src="assets/shell.js"></script>
+  <script src="assets/mail-intake.js"></script>
+  <script>
+    DGS.boot({ page: "mail_intake" }).then(() => {
+      if (window.DGSMailIntake) DGSMailIntake.init();
+    });
+  </script>
+</body>
+</html>

@@ -104,18 +104,48 @@ def docs_root() -> Path | None:
     return None
 
 
+def lab_letter_serve_path(stored: str) -> str:
+    """Analytics path for a ``vendors.lab_letter`` file.
+
+    The index stores the Q: path (``Lab Letters/...``). The app reads the
+    Analytics copy under ``Compliance/Lab Letters/...``.
+    """
+    rel = normalize_relative_path(stored)
+    if rel.startswith("Lab Letters/"):
+        rel = f"Compliance/{rel}"
+    if not rel.startswith("Compliance/Lab Letters/"):
+        raise ValueError("not a lab letter path")
+    return rel
+
+
 def is_registered_document_path(rel_path: str) -> bool:
+    lab_match = False
+    stored = None
+    try:
+        if rel_path.startswith("Compliance/Lab Letters/"):
+            stored = lab_letter_serve_path(rel_path)[len("Compliance/") :]
+            lab_match = True
+    except ValueError:
+        lab_match = False
     row = mssql.query(
         """
         SELECT CASE
             WHEN EXISTS (
                 SELECT 1 FROM inventory.document
                 WHERE nas_rel_path = %s
+            ) OR EXISTS (
+                SELECT 1 FROM vendors.distribution_document
+                WHERE REPLACE(nas_rel_path, N'\\', N'/') = %s
+            ) OR (
+                %s = 1 AND EXISTS (
+                    SELECT 1 FROM vendors.lab_letter
+                    WHERE REPLACE(nas_rel_path, N'\\', N'/') IN (%s, %s)
+                )
             ) THEN 1
             ELSE 0
         END AS ok
         """,
-        (rel_path,),
+        (rel_path, rel_path, 1 if lab_match else 0, stored or rel_path, rel_path),
         database=catalog(),
         profile="field",
         load_env=False,

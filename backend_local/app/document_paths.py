@@ -111,11 +111,14 @@ def is_registered_document_path(rel_path: str) -> bool:
             WHEN EXISTS (
                 SELECT 1 FROM inventory.document
                 WHERE nas_rel_path = %s
+            ) OR EXISTS (
+                SELECT 1 FROM vendors.distribution_document
+                WHERE REPLACE(nas_rel_path, N'\\', N'/') = %s
             ) THEN 1
             ELSE 0
         END AS ok
         """,
-        (rel_path,),
+        (rel_path, rel_path),
         database=catalog(),
         profile="field",
         load_env=False,

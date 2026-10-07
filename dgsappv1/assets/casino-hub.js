@@ -361,6 +361,39 @@
     return tileWide(`Deals (${open.length} open)`, `${openHtml}${closedHtml}`);
   }
 
+  function renderDistributionTile(d) {
+    const rows = Array.isArray(d.distribution_agreements) ? d.distribution_agreements : [];
+    if (!rows.length) return "";
+    const grouped = new Map();
+    rows.forEach((row) => {
+      const key = row.agreement_id || row.agreement_number;
+      if (!grouped.has(key)) {
+        grouped.set(key, { ...row, classes: [], cabinet_limit: row.cabinet_limit || "" });
+      }
+      const item = grouped.get(key);
+      if (row.product_class && !item.classes.includes(row.product_class)) item.classes.push(row.product_class);
+      if (row.cabinet_limit) item.cabinet_limit = row.cabinet_limit;
+    });
+    const html = [...grouped.values()].map((row) => {
+      const href = pageUrl("vendor-hub.html", {
+        id: row.vendor_id,
+        view: "agreements",
+        agreement: row.agreement_id,
+      });
+      const meta = [
+        row.agreement_number,
+        row.classes.length ? `Class ${row.classes.join(" · ")}` : "",
+        row.cabinet_limit,
+      ].filter(Boolean).join(" · ");
+      return `
+        <a class="dgs-v2-casino-hub-person dgs-v2-casino-hub-person--link" href="${esc(href)}">
+          <div class="dgs-v2-casino-hub-person-name">${esc(row.vendor_name || "Vendor")}</div>
+          <div class="dgs-v2-casino-hub-person-meta">${esc(meta)}</div>
+        </a>`;
+    }).join("");
+    return tile("Vendor distribution", `<div class="dgs-v2-casino-hub-people">${html}</div>`);
+  }
+
   function renderTiles(d) {
     const hidePerf = document.body.classList.contains("dgs-hide-performance");
     const hideDeals = document.body.classList.contains("dgs-hide-deals");
@@ -368,6 +401,7 @@
       renderProfileTile(d),
       hidePerf ? "" : renderPerformanceTile(d),
       hidePerf ? "" : renderAgreementTile(d),
+      renderDistributionTile(d),
       renderFloorTile(d),
       renderImsTile(d),
       renderContactsTile(d),
@@ -443,6 +477,15 @@
     const n = Number(state.detail.active_machines) || 0;
     els.btnSlotMaster.href = slotMasterHref(state.detail.reference_key);
     els.btnSlotMaster.textContent = n ? `Slot Master (${fmtNum(n)})` : "Slot Master";
+
+    try {
+      const dist = await fetchJson(
+        `/api/commerce/casinos/${encodeURIComponent(state.casinoId)}/distribution-agreements`
+      );
+      state.detail.distribution_agreements = dist.agreements || [];
+    } catch (_err) {
+      state.detail.distribution_agreements = [];
+    }
 
     renderCaption(state.detail);
     renderTiles(state.detail);

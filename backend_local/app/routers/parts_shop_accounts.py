@@ -1,4 +1,4 @@
-"""Parts storefront company accounts + tax exemptions (casino_next opt-in)."""
+"""Parts storefront company accounts + tax exemptions (opt-in from clients.casinos)."""
 
 from __future__ import annotations
 
@@ -438,7 +438,7 @@ def search_casinos(q: str = Query("", max_length=80), _staff: str = Depends(requ
             CASE WHEN pc.company_id IS NULL THEN 0 ELSE 1 END AS already_enabled,
             pc.company_id,
             pc.shop_enabled
-        FROM clients.casinos_next AS c
+        FROM clients.casinos AS c
         LEFT JOIN inventory.parts_company AS pc ON pc.casino_id = c.reference_key
         WHERE c.reference_key LIKE %s
            OR c.casino_short LIKE %s
@@ -513,13 +513,13 @@ def enable_company(body: StaffEnableCompanyIn, _staff: str = Depends(require_sta
     rows = _field_query(
         """
         SELECT reference_key, casino_short, casino_name
-        FROM clients.casinos_next
+        FROM clients.casinos
         WHERE reference_key = %s
         """,
         (casino_id,),
     )
     if not rows:
-        raise HTTPException(status_code=404, detail=f"casino not found in casinos_next: {casino_id}")
+        raise HTTPException(status_code=404, detail=f"casino not found in casinos: {casino_id}")
     cas = rows[0]
     existing = _field_query(
         "SELECT company_id FROM inventory.parts_company WHERE casino_id = %s",

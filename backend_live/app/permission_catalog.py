@@ -43,6 +43,7 @@ WORKBENCH_AREA = "dgs_projects_workbench"
 TECH_DASHBOARD_AREA = "dgs_tech_dashboard"
 ASSISTANT_AREA = "dgs_assistant"
 ASSISTANT_SECRETS_AREA = "dgs_assistant_secrets"
+MAIL_INTAKE_AREA = "dgs_mail_intake"
 
 
 @dataclass(frozen=True)
@@ -83,6 +84,7 @@ PERMISSION_CATALOG: tuple[CatalogArea, ...] = (
     CatalogArea(TECH_DASHBOARD_AREA, "Dashboard · Field", "dgs_app"),
     CatalogArea(ASSISTANT_AREA, "Assistant", "workspace"),
     CatalogArea(ASSISTANT_SECRETS_AREA, "Assistant · Secrets", "workspace"),
+    CatalogArea(MAIL_INTAKE_AREA, "Mail Intake", "workspace"),
     CatalogArea("emaint_demo_projects", "Ops · Projects", "dgs_app"),
     CatalogArea("emaint_demo_work_orders", "Ops · Work Orders", "dgs_app"),
     CatalogArea("emaint_demo_field_techs", "Ops · Field Techs", "dgs_app"),

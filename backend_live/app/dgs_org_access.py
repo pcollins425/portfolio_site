@@ -78,6 +78,20 @@ def assert_assistant_secrets_write(user: dict[str, Any] | None) -> None:
         raise HTTPException(status_code=403, detail="No dgs_assistant_secrets write access")
 
 
+def assert_mail_intake_read(user: dict[str, Any] | None) -> None:
+    if _skip(user):
+        return
+    if not cat.has_area_read(_perms(user), cat.MAIL_INTAKE_AREA):
+        raise HTTPException(status_code=403, detail="No dgs_mail_intake read access")
+
+
+def assert_mail_intake_write(user: dict[str, Any] | None) -> None:
+    if _skip(user):
+        return
+    if not cat.has_area_write(_perms(user), cat.MAIL_INTAKE_AREA):
+        raise HTTPException(status_code=403, detail="No dgs_mail_intake write access")
+
+
 def has_read(user: dict[str, Any] | None, area: str) -> bool:
     """Auth off stays open. A missing grant is closed."""
     if _skip(user):

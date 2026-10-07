@@ -1,7 +1,8 @@
 """Theme Hub — reference page for one catalog theme, plus the Pre-Check upload.
 
-Documents land in inventory.document (same library as contract PDFs) and
-vendors.theme_document. A lab is always a software row plus a jurisdiction.
+Uploads land in inventory.document and vendors.theme_document. A lab that
+already exists in vendors.lab_letter shows here once software_ref points at
+a software row on this theme. A lab is always a software row plus a jurisdiction.
 A par is the theme, for all jurisdictions or one jurisdiction. A slick stays
 on the theme and may name a cabinet.
 
@@ -266,6 +267,49 @@ def _documents(theme_id: str) -> list[dict]:
         else:
             item["jurisdiction_label"] = "All jurisdictions" if item["doc_kind"] == "par" else None
         out.append(item)
+    out.extend(_lab_letter_documents(theme_id))
+    return out
+
+
+def _lab_letter_documents(theme_id: str) -> list[dict]:
+    """Letters indexed from Q:, linked by software_ref, shown as hub labs."""
+    rows = _query(
+        """
+        SELECT l.reference_key, l.software_ref, l.jurisdiction_id, l.nas_rel_path,
+               l.issue_date, l.insert_date, s.software_id, j.jurisdiction_name
+        FROM vendors.lab_letter l
+        JOIN vendors.software s ON s.reference_key = l.software_ref
+        LEFT JOIN clients.jurisdiction j ON j.reference_key = l.jurisdiction_id
+        WHERE s.theme_id = %s
+        ORDER BY j.jurisdiction_name, l.issue_date DESC, l.reference_key
+        """,
+        (theme_id,),
+    )
+    out = []
+    for row in rows:
+        item = _row(row)
+        stored = item.get("nas_rel_path") or ""
+        try:
+            serve = document_paths.lab_letter_serve_path(stored)
+        except ValueError:
+            continue
+        label = item.get("jurisdiction_name") or None
+        out.append(
+            {
+                "reference_key": item.get("reference_key"),
+                "doc_kind": "lab",
+                "software_ref": item.get("software_ref"),
+                "cabinet_id": None,
+                "jurisdiction_code": item.get("jurisdiction_id"),
+                "jurisdiction_label": label,
+                "insert_date": item.get("issue_date") or item.get("insert_date"),
+                "software_id": item.get("software_id"),
+                "cabinet_name": None,
+                "nas_rel_path": serve,
+                "original_filename": serve.rsplit("/", 1)[-1],
+                "document_key": item.get("reference_key"),
+            }
+        )
     return out
 
 
