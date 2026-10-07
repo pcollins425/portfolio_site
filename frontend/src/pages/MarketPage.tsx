@@ -206,7 +206,7 @@ export default function MarketPage() {
             />
           </div>
           <p className={`mt-3 text-xs ${t.code}`}>
-            Active Slot Master stints, joined to the asset. Centers and signs are left out.{" "}
+            Active Slot Master stints, joined to the asset. Cabinet type Center, Sign, Controller, and Server are left out.{" "}
             {universal} stay off the agreement count. Floor share uses{" "}
             <span className="font-mono">total_number_of_machines</span> and only houses that
             have both a size and our machines.

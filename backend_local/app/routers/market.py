@@ -35,11 +35,11 @@ def _field_query(sql: str, params=None):
     return mssql.query(sql, params=params, database=_catalog(), profile="field", load_env=False)
 
 
-def _is_floor_machine(cabinet_name: str | None) -> bool:
-    name = (cabinet_name or "").strip().lower()
-    if "center" in name or "sign" in name:
-        return False
-    return True
+_EXCLUDED_CABINET_TYPES = {"center", "sign", "controller", "server"}
+
+
+def _is_floor_machine(cabinet_type: str | None) -> bool:
+    return (cabinet_type or "").strip().lower() not in _EXCLUDED_CABINET_TYPES
 
 
 def _vendor_ids(raw: Any) -> list[str]:
@@ -67,7 +67,7 @@ def build_market_snapshot(
 
     for row in machine_rows:
         cabinet = (row.get("cabinet_name") or "").strip()
-        if not _is_floor_machine(cabinet):
+        if not _is_floor_machine(row.get("cabinet_type")):
             continue
         casino_id = str(row.get("casino_id") or "").strip()
         if not casino_id:
@@ -169,6 +169,7 @@ def market_overview(
                 c.total_number_of_machines,
                 a.vendor_id,
                 v.vendor_name,
+                a.cabinet_type,
                 cab.cabinet_name
             FROM inventory.slot_master_migration AS sm
             INNER JOIN inventory.assets AS a ON a.reference_key = sm.asset_id

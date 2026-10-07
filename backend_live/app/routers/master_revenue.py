@@ -322,17 +322,8 @@ def _exec_norm_action(v: object) -> str:
 
 
 def _exec_is_non_playable(row: dict[str, Any]) -> bool:
-    text = " ".join(
-        [
-            str(row.get("asset_no") or ""),
-            str(row.get("cabinet_type") or ""),
-            str(row.get("machine_type") or ""),
-            str(row.get("cabinet_name") or ""),
-            str(row.get("theme_name") or ""),
-            str(row.get("serial_number") or ""),
-        ]
-    ).lower()
-    return any(tok in text for tok in ("center", "sign", "controller", "server"))
+    cabinet_type = str(row.get("cabinet_type") or "").strip().lower()
+    return cabinet_type in {"center", "sign", "controller", "server"}
 
 
 def _exec_effective_from(row: dict[str, Any]) -> date | None:
@@ -938,33 +929,10 @@ def _month_span(from_ym: str, to_ym: str) -> list[str]:
 # Sold sentinel casino — never expected to invoice.
 _SOLD_CASINO_ID = "CT-00907"
 
-# Playable-only expected rows — same tokens as MR processor floor compare.
-# Primary: SMM asset_no + inventory.assets cabinet_type / machine_type.
-# Fallback: cabinet name / serial text until asset attrs are stamped on all centers/signs.
-# Theme EXISTS covers rare Sign rows with no asset row attrs (Harrah's OK signage).
+# Playable-only expected rows. Excluder is inventory.assets.cabinet_type.
 _NON_PLAYABLE_SQL = """
-  AND NOT (
-    LOWER(LTRIM(RTRIM(COALESCE(sm.asset_no, N'')))) IN (N'center', N'sign', N'controller', N'server')
-    OR LOWER(LTRIM(RTRIM(COALESCE(a.cabinet_type, N'')))) IN (N'center', N'sign', N'controller', N'server')
-    OR LOWER(LTRIM(RTRIM(COALESCE(a.machine_type, N'')))) IN (N'center', N'sign', N'controller', N'server')
-    OR CHARINDEX(N'center', LOWER(COALESCE(cab.cabinet_name, N''))) > 0
-    OR CHARINDEX(N'sign', LOWER(COALESCE(cab.cabinet_name, N''))) > 0
-    OR CHARINDEX(N'controller', LOWER(COALESCE(cab.cabinet_name, N''))) > 0
-    OR CHARINDEX(N'server', LOWER(COALESCE(cab.cabinet_name, N''))) > 0
-    OR CHARINDEX(N'center', LOWER(COALESCE(a.serial_number, N''))) > 0
-    OR CHARINDEX(N'sign', LOWER(COALESCE(a.serial_number, N''))) > 0
-    OR CHARINDEX(N'controller', LOWER(COALESCE(a.serial_number, N''))) > 0
-    OR CHARINDEX(N'server', LOWER(COALESCE(a.serial_number, N''))) > 0
-    OR EXISTS (
-      SELECT 1 FROM vendors.themes AS th
-      WHERE th.reference_key = sm.theme_id
-        AND (
-          LOWER(LTRIM(RTRIM(COALESCE(th.theme_name, N'')))) = N'sign'
-          OR CHARINDEX(N'center', LOWER(COALESCE(th.theme_name, N''))) > 0
-          OR CHARINDEX(N'controller', LOWER(COALESCE(th.theme_name, N''))) > 0
-          OR CHARINDEX(N'server', LOWER(COALESCE(th.theme_name, N''))) > 0
-        )
-    )
+  AND LOWER(LTRIM(RTRIM(COALESCE(a.cabinet_type, N'')))) NOT IN (
+    N'center', N'sign', N'controller', N'server'
   )
 """
 
