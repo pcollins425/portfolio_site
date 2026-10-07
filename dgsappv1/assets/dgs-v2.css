@@ -6425,6 +6425,44 @@ body.dgs-warehouse-v2.dgs-wh-drawer-compact .dgs-v2-drawer-body {
   }
 }
 
+/* Dashboard groups: Executive, Operations, Performance, Validation */
+body.dgs-dashboard-v2 .dgs-v2-view-toggle {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 12px;
+  max-width: 100%;
+  background: transparent;
+  border: none;
+  padding: 0;
+}
+
+body.dgs-dashboard-v2 .dgs-dashboard-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+body.dgs-dashboard-v2 .dgs-dashboard-group-label {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--dgs-v2-text-muted);
+  padding-left: 6px;
+}
+
+body.dgs-dashboard-v2 .dgs-dashboard-group-tabs {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 4px;
+  background: var(--dgs-v2-card);
+  border: 1px solid var(--dgs-v2-border);
+  border-radius: 12px;
+}
+
 /* ===================== Dashboard compact ≤1366 / phone ===================== */
 
 @media (max-width: 1366px) {
@@ -6455,8 +6493,10 @@ body.dgs-warehouse-v2.dgs-wh-drawer-compact .dgs-v2-drawer-body {
     align-self: stretch;
     overflow: visible;
     box-sizing: border-box;
-    padding: 3px;
-    gap: 3px;
+    padding: 0;
+    gap: 10px;
+    background: transparent;
+    border: none;
   }
 
   body.dgs-dashboard-v2 .dgs-v2-view-toggle button {

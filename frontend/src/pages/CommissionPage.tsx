@@ -386,7 +386,7 @@ export default function CommissionPage({
     <div className="space-y-6">
       <section className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h2 className={t.pageTitle}>Commission contract</h2>
+          <h2 className={t.pageTitle}>Identification</h2>
           <p className={t.pageSub}>
             {forbidden
               ? "This queue is Paul-only."
