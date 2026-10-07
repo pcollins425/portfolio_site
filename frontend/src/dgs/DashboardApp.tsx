@@ -198,35 +198,33 @@ export default function DashboardApp() {
   }, []);
 
   const hidePeriod = route === "/analyst" || route === "/commission" || route === "/market";
-  const showHealth = route !== "/executive";
+  const executive = route === "/executive";
 
   return (
     <DashboardMonthProvider month={month} setMonth={setMonth} periods={periods}>
-      <div className="dgs-dashboard-app space-y-4 p-4 sm:p-5">
-        <div
-          className={`flex flex-wrap items-center gap-3 ${showHealth ? "justify-between" : "justify-end"}`}
-        >
-          {showHealth ? (
-            health?.ok === true ? (
-              <div className="rounded-lg border border-emerald-500/25 bg-emerald-500/10 px-3 py-1.5 text-xs text-emerald-300">
-                Live · <span className="font-mono">{health.database ?? "?"}</span> @ {health.host ?? "?"}
-                {health.master_revenue_rows != null
-                  ? ` · ${health.master_revenue_rows.toLocaleString()} façade rows`
-                  : null}
-              </div>
-            ) : health?.ok === false ? (
-              <div className="rounded-lg border border-rose-500/25 bg-rose-500/10 px-3 py-1.5 text-sm text-rose-300">
-                Database unreachable or API misconfigured. Set <code className="font-mono text-xs">?api=</code> on
-                this page or run <code className="font-mono text-xs">backend_local</code> locally.
-              </div>
-            ) : (
-              <div className={`text-xs ${t.code}`}>Connecting…</div>
-            )
-          ) : null}
+      <div className={`dgs-dashboard-app space-y-4 p-4 sm:p-5 ${executive ? "!pt-3 sm:!pt-4" : ""}`}>
+        {executive ? null : (
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          {health?.ok === true ? (
+            <div className="rounded-lg border border-emerald-500/25 bg-emerald-500/10 px-3 py-1.5 text-xs text-emerald-300">
+              Live · <span className="font-mono">{health.database ?? "?"}</span> @ {health.host ?? "?"}
+              {health.master_revenue_rows != null
+                ? ` · ${health.master_revenue_rows.toLocaleString()} façade rows`
+                : null}
+            </div>
+          ) : health?.ok === false ? (
+            <div className="rounded-lg border border-rose-500/25 bg-rose-500/10 px-3 py-1.5 text-sm text-rose-300">
+              Database unreachable or API misconfigured. Set <code className="font-mono text-xs">?api=</code> on
+              this page or run <code className="font-mono text-xs">backend_local</code> locally.
+            </div>
+          ) : (
+            <div className={`text-xs ${t.code}`}>Connecting…</div>
+          )}
           {!hidePeriod ? (
             <MonthSelector month={month} periods={periods} onChange={setMonth} />
           ) : null}
         </div>
+        )}
         <div className="dgs-dashboard-panel">
           {routePage(
             route,

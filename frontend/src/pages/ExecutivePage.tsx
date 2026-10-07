@@ -251,7 +251,7 @@ function MonthCard({ row }: { row: MonthSeriesRow }) {
 
 export default function ExecutivePage() {
   const t = useDashboardTheme();
-  const { month } = useDashboardMonth();
+  const { month, periods, setMonth } = useDashboardMonth();
   const [data, setData] = useState<ExecutivePayload | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -287,11 +287,30 @@ export default function ExecutivePage() {
   const series = [...(data?.series ?? [])].reverse(); // newest first for table
 
   return (
-    <div className="space-y-6 md:space-y-8">
-      <section>
-        <h2 className={t.pageTitle}>Executive snapshot</h2>
-        {err ? <p className={t.pageSub}>Couldn’t load this snapshot.</p> : null}
-      </section>
+    <div className="space-y-4">
+      <header className="flex flex-wrap items-center justify-between gap-3">
+        <h2 className={t.pageTitle}>Executive Overview</h2>
+        {periods.length ? (
+          <label className={`inline-flex items-center gap-2 text-sm ${t.code}`}>
+            <span className="font-medium">Period</span>
+            <select
+              value={month || periods[0]?.slice(0, 7) || ""}
+              onChange={(e) => setMonth(e.target.value)}
+              className="rounded-lg border border-white/10 bg-[#141922] px-2.5 py-1.5 text-sm text-[#f3f5f9] outline-none focus:border-[#6eb5ff]/40"
+            >
+              {periods.map((p) => {
+                const ym = p.slice(0, 7);
+                return (
+                  <option key={p} value={ym}>
+                    {ym}
+                  </option>
+                );
+              })}
+            </select>
+          </label>
+        ) : null}
+      </header>
+      {err ? <p className={t.pageSub}>Couldn’t load this overview.</p> : null}
 
       {!err && (
         <>
