@@ -5,12 +5,49 @@
   const RAIL_KEY = "dgs-rail-collapsed";
   const GROUPS_KEY = "dgs-nav-groups";
 
-  const NAV_GROUPS = [
+  const DASHBOARD_GROUPS = [
     {
-      id: "revenue",
-      label: "Dashboards",
-      items: [{ id: "dashboard", label: "Dashboard", href: "dashboard.html" }],
+      id: "executive",
+      label: "Executive",
+      items: [
+        { id: "dash-executive", route: "/executive", label: "Executive", requireArea: "dgs_performance" },
+        { id: "dash-market", route: "/market", label: "Market", requireArea: "dgs_performance" },
+      ],
     },
+    {
+      id: "operations",
+      label: "Operations",
+      items: [{ id: "dash-field", route: "/field", label: "Field", requireArea: "dgs_tech_dashboard" }],
+    },
+    {
+      id: "performance",
+      label: "Performance",
+      items: [
+        { id: "dash-performance", route: "/performance", label: "Performance", requireArea: "dgs_performance" },
+        { id: "dash-commission", route: "/finance", label: "Commission", requireArea: "dgs_finance_dashboard" },
+      ],
+    },
+    {
+      id: "validation",
+      label: "Validation",
+      items: [
+        { id: "dash-analyst", route: "/analyst", label: "Analyst", requireArea: "dgs_analyst" },
+        { id: "dash-identification", route: "/commission", label: "Identification", requireArea: "dgs_commission" },
+      ],
+    },
+  ];
+
+  const NAV_GROUPS = [
+    ...DASHBOARD_GROUPS.map((group) => ({
+      id: `nav-${group.id}`,
+      label: group.label,
+      items: group.items.map((item) => ({
+        id: item.id,
+        label: item.label,
+        href: `dashboard.html?view=${item.route.slice(1)}`,
+        requireAnyOf: item.requireArea ? [item.requireArea] : undefined,
+      })),
+    })),
     {
       id: "inventory",
       label: "Inventory",
@@ -101,38 +138,6 @@
     },
   ];
 
-  const DASHBOARD_GROUPS = [
-    {
-      id: "executive",
-      label: "Executive",
-      items: [
-        { route: "/executive", label: "Executive", requireArea: "dgs_performance" },
-        { route: "/market", label: "Market", requireArea: "dgs_performance" },
-      ],
-    },
-    {
-      id: "operations",
-      label: "Operations",
-      items: [{ route: "/field", label: "Field", requireArea: "dgs_tech_dashboard" }],
-    },
-    {
-      id: "performance",
-      label: "Performance",
-      items: [
-        { route: "/performance", label: "Performance", requireArea: "dgs_performance" },
-        { route: "/finance", label: "Commission", requireArea: "dgs_finance_dashboard" },
-      ],
-    },
-    {
-      id: "validation",
-      label: "Validation",
-      items: [
-        { route: "/analyst", label: "Analyst", requireArea: "dgs_analyst" },
-        { route: "/commission", label: "Identification", requireArea: "dgs_commission" },
-      ],
-    },
-  ];
-
   const READ_LEVELS = {
     READ_ONLY: 1,
     UPDATES_ONLY: 1,
@@ -207,6 +212,38 @@
       fallback ||
       "/executive"
     );
+  }
+
+  function resolveNavActiveId(activeId) {
+    if (activeId !== "dashboard") return activeId;
+    const view = (new URLSearchParams(window.location.search).get("view") || "executive").replace(/^\//, "");
+    for (const group of DASHBOARD_GROUPS) {
+      for (const item of group.items) {
+        if (item.route === `/${view}`) return item.id;
+      }
+    }
+    return activeId;
+  }
+
+  function revealActiveNavGroup(activeId) {
+    const resolved = resolveNavActiveId(activeId);
+    const state = loadGroupState();
+    let changed = false;
+    for (const group of NAV_GROUPS) {
+      if (!group.items.some((item) => item.id === resolved)) continue;
+      if (state[group.id] !== true) {
+        state[group.id] = true;
+        changed = true;
+      }
+    }
+    if (changed) saveGroupState(state);
+  }
+
+  function refreshAppNav(activeId) {
+    const id = activeId || "dashboard";
+    revealActiveNavGroup(id);
+    renderAppSidebar(id);
+    if (usesMobileTopNav()) syncMobileTopNav(id);
   }
 
   function findNavItem(activeId) {
@@ -301,7 +338,7 @@
             ${group.items
               .map(
                 (item) =>
-                  `<a href="${withApi(item.href)}" class="dgs-mobile-menu-link${item.id === activeId ? " active" : ""}">${item.label}</a>`
+                  `<a href="${withApi(item.href)}" class="dgs-mobile-menu-link${item.id === resolveNavActiveId(activeId) ? " active" : ""}">${item.label}</a>`
               )
               .join("")}
           </nav>
@@ -432,7 +469,7 @@
         ${group.items
           .map(
             (item) =>
-              `<a href="${withApi(item.href)}" class="dgs-nav-flyout-link${item.id === activeId ? " active" : ""}">${item.label}</a>`
+              `<a href="${withApi(item.href)}" class="dgs-nav-flyout-link${item.id === resolveNavActiveId(activeId) ? " active" : ""}">${item.label}</a>`
           )
           .join("")}
       </nav>`;
@@ -451,6 +488,7 @@
     const groupState = loadGroupState();
     nav.innerHTML = "";
 
+    const resolvedId = resolveNavActiveId(activeId);
     for (const group of visibleNavGroups()) {
       const open = groupState[group.id] ?? group.defaultOpen ?? false;
       const section = document.createElement("div");
@@ -479,7 +517,7 @@
           const a = document.createElement("a");
           a.href = withApi(item.href);
           a.textContent = item.label;
-          if (item.id === activeId) a.classList.add("active");
+          if (item.id === resolvedId) a.classList.add("active");
           items.appendChild(a);
         }
         section.appendChild(items);
@@ -565,61 +603,44 @@
       const sel = document.createElement("select");
       sel.className = "dgs-dashboard-view-select";
       sel.setAttribute("aria-label", "Dashboard views");
-      for (const group of visibleDashboardGroups()) {
-        const og = document.createElement("optgroup");
-        og.label = group.label;
-        for (const item of group.items) {
-          const opt = document.createElement("option");
-          opt.value = item.route;
-          opt.textContent = dashboardItemLabel(item, true);
-          if (item.route === activeRoute) opt.selected = true;
-          og.appendChild(opt);
-        }
-        sel.appendChild(og);
+      for (const item of visibleDashboardNav()) {
+        const opt = document.createElement("option");
+        opt.value = item.route;
+        opt.textContent = dashboardItemLabel(item, true);
+        if (item.route === activeRoute) opt.selected = true;
+        sel.appendChild(opt);
       }
       sel.addEventListener("change", () => setDashboardRoute(sel.value));
       nav.appendChild(sel);
       return;
     }
 
-    for (const group of visibleDashboardGroups()) {
-      const wrap = document.createElement("div");
-      wrap.className = "dgs-dashboard-group";
-      const heading = document.createElement("span");
-      heading.className = "dgs-dashboard-group-label";
-      heading.textContent = group.label;
-      wrap.appendChild(heading);
-      const tabs = document.createElement("div");
-      tabs.className = "dgs-dashboard-group-tabs";
-      for (const item of group.items) {
-        const el = document.createElement(v2 ? "button" : "a");
-        if (!v2) el.href = "#";
-        el.type = v2 ? "button" : undefined;
-        el.textContent = item.label;
-        el.dataset.route = item.route;
-        if (item.route === activeRoute) el.classList.add("active");
-        el.addEventListener("click", (e) => {
-          e.preventDefault();
-          setDashboardRoute(item.route);
-        });
-        if (item.route === "/analyst" && analystOpenMonths > 0) {
-          const badge = document.createElement("span");
-          badge.className = "dgs-analyst-badge";
-          badge.textContent = String(analystOpenMonths);
-          badge.title = `${analystOpenMonths} month${analystOpenMonths === 1 ? "" : "s"} with open intake flags`;
-          el.appendChild(badge);
-        }
-        if (item.route === "/commission" && commissionOpenMonths > 0) {
-          const badge = document.createElement("span");
-          badge.className = "dgs-analyst-badge";
-          badge.textContent = String(commissionOpenMonths);
-          badge.title = `${commissionOpenMonths} month${commissionOpenMonths === 1 ? "" : "s"} with open identification flags`;
-          el.appendChild(badge);
-        }
-        tabs.appendChild(el);
+    for (const item of visibleDashboardNav()) {
+      const el = document.createElement(v2 ? "button" : "a");
+      if (!v2) el.href = "#";
+      el.type = v2 ? "button" : undefined;
+      el.textContent = item.label;
+      el.dataset.route = item.route;
+      if (item.route === activeRoute) el.classList.add("active");
+      el.addEventListener("click", (e) => {
+        e.preventDefault();
+        setDashboardRoute(item.route);
+      });
+      if (item.route === "/analyst" && analystOpenMonths > 0) {
+        const badge = document.createElement("span");
+        badge.className = "dgs-analyst-badge";
+        badge.textContent = String(analystOpenMonths);
+        badge.title = `${analystOpenMonths} month${analystOpenMonths === 1 ? "" : "s"} with open intake flags`;
+        el.appendChild(badge);
       }
-      wrap.appendChild(tabs);
-      nav.appendChild(wrap);
+      if (item.route === "/commission" && commissionOpenMonths > 0) {
+        const badge = document.createElement("span");
+        badge.className = "dgs-analyst-badge";
+        badge.textContent = String(commissionOpenMonths);
+        badge.title = `${commissionOpenMonths} month${commissionOpenMonths === 1 ? "" : "s"} with open identification flags`;
+        el.appendChild(badge);
+      }
+      nav.appendChild(el);
     }
   }
 
@@ -647,11 +668,7 @@
     if (normalized === "/field") {
       const root = document.getElementById("dashboard-root");
       if (window.DGSField) DGSField.load(root);
-      if (window.history.replaceState) {
-        const u = new URL(window.location.href);
-        u.searchParams.set("view", "field");
-        window.history.replaceState({}, "", u.pathname + u.search);
-      }
+      rememberDashboardView("field");
       return;
     }
     loadDashboardBundle()
@@ -665,11 +682,16 @@
         }
       });
 
+    rememberDashboardView(normalized);
+  }
+
+  function rememberDashboardView(view) {
     if (window.history.replaceState) {
       const u = new URL(window.location.href);
-      u.searchParams.set("view", normalized.replace(/^\//, ""));
+      u.searchParams.set("view", String(view).replace(/^\//, ""));
       window.history.replaceState({}, "", u.pathname + u.search);
     }
+    refreshAppNav("dashboard");
   }
 
   function initDashboardPage() {
@@ -809,6 +831,7 @@
       wireMobileTopNav(activeId);
       syncMobileTopNav(activeId);
     }
+    revealActiveNavGroup(activeId);
     document.body.classList.toggle("dgs-hide-performance", !hasAreaRead("dgs_performance"));
     document.body.classList.toggle("dgs-hide-deals", !hasAreaRead("dgs_deals"));
     document.body.classList.toggle("dgs-hide-workbench", !hasAreaRead("dgs_projects_workbench"));
