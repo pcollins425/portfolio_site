@@ -82,6 +82,8 @@ function helpFor(label: string) {
   return COLUMN_HELP.find((item) => item.label === label)?.text ?? "";
 }
 
+const TIP_WIDTH = 320;
+
 function HeaderTip({
   label,
   text,
@@ -100,7 +102,7 @@ function HeaderTip({
     const el = btnRef.current;
     if (!el) return;
     const rect = el.getBoundingClientRect();
-    const width = 256;
+    const width = Math.min(TIP_WIDTH, window.innerWidth - 24);
     const margin = 12;
     const center = rect.left + rect.width / 2;
     const left = Math.max(
@@ -160,8 +162,13 @@ function HeaderTip({
       {open && pos ? (
         <span
           role="tooltip"
-          style={{ top: pos.top, left: pos.left }}
-          className="pointer-events-none fixed z-50 w-64 -translate-x-1/2 rounded-lg border border-white/10 bg-[#0e1218] px-3 py-2 text-left text-[13px] font-normal normal-case leading-snug tracking-normal text-[#c5cdd9] shadow-lg"
+          style={{
+            top: pos.top,
+            left: pos.left,
+            width: Math.min(TIP_WIDTH, window.innerWidth - 24),
+            whiteSpace: "normal",
+          }}
+          className="pointer-events-none fixed z-50 block -translate-x-1/2 rounded-lg border border-white/10 bg-[#0e1218] px-3 py-2 text-left text-[13px] font-normal normal-case leading-snug tracking-normal text-[#c5cdd9] shadow-lg break-words"
         >
           {text}
         </span>
