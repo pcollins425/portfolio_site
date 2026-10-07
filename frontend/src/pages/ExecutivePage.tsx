@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { fetchJson } from "../api/client";
 import { useDashboardMonth, withMonthQuery } from "../dgs/MonthContext";
 import { useDashboardTheme } from "../dgs/ThemeContext";
@@ -51,6 +51,125 @@ function fmtMonthLabel(iso: string) {
   return d.toLocaleDateString(undefined, { year: "numeric", month: "short" });
 }
 
+const COLUMN_HELP: { label: string; text: string }[] = [
+  {
+    label: "Projects",
+    text: "Open jobs still cover month-end. Closed jobs finished during the month. A job with no dates is left out. The cell is open, then closed.",
+  },
+  {
+    label: "Deals",
+    text: "Deals opened during the month, then deals won, then deals lost. Won and lost follow the close date.",
+  },
+  {
+    label: "Machines / Δ",
+    text: "Playable machines on the floor at month-end. The change is against the prior month-end. A conversion or swap does not add a machine.",
+  },
+  {
+    label: "Footprint Δ %",
+    text: "Share of the floor that changed: conversions plus swaps, divided by machines on the floor. Moves are not included. The detail is conversions, swaps, and the floor count.",
+  },
+  {
+    label: "Clients",
+    text: "Properties with playable machines on the floor at month-end.",
+  },
+  {
+    label: "Reporting %",
+    text: "Properties that turned in a report, out of the properties expected to bill. The detail is reported over expected.",
+  },
+];
+
+function helpFor(label: string) {
+  return COLUMN_HELP.find((item) => item.label === label)?.text ?? "";
+}
+
+function HeaderTip({
+  label,
+  text,
+  hideLabel = false,
+}: {
+  label: string;
+  text: string;
+  hideLabel?: boolean;
+}) {
+  const btnRef = useRef<HTMLButtonElement>(null);
+  const pinned = useRef(false);
+  const [open, setOpen] = useState(false);
+  const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
+
+  const place = () => {
+    const el = btnRef.current;
+    if (!el) return;
+    const rect = el.getBoundingClientRect();
+    const width = 256;
+    const margin = 12;
+    const center = rect.left + rect.width / 2;
+    const left = Math.max(
+      margin + width / 2,
+      Math.min(center, window.innerWidth - margin - width / 2),
+    );
+    setPos({ top: rect.bottom + 8, left });
+  };
+
+  useEffect(() => {
+    if (!open) return;
+    const close = (event: MouseEvent) => {
+      if (btnRef.current?.contains(event.target as Node)) return;
+      pinned.current = false;
+      setOpen(false);
+    };
+    document.addEventListener("mousedown", close);
+    return () => document.removeEventListener("mousedown", close);
+  }, [open]);
+
+  return (
+    <span className="inline-flex items-center gap-1.5">
+      {hideLabel ? null : label}
+      <button
+        ref={btnRef}
+        type="button"
+        aria-label={`How ${label} is calculated`}
+        aria-expanded={open}
+        className="inline-flex h-4 w-4 items-center justify-center rounded-full border border-current/30 text-[10px] font-semibold normal-case leading-none opacity-70 hover:opacity-100"
+        onMouseEnter={() => {
+          place();
+          setOpen(true);
+        }}
+        onMouseLeave={() => {
+          if (!pinned.current) setOpen(false);
+        }}
+        onFocus={() => {
+          place();
+          setOpen(true);
+        }}
+        onBlur={() => {
+          if (!pinned.current) setOpen(false);
+        }}
+        onClick={() => {
+          if (pinned.current) {
+            pinned.current = false;
+            setOpen(false);
+            return;
+          }
+          pinned.current = true;
+          place();
+          setOpen(true);
+        }}
+      >
+        ?
+      </button>
+      {open && pos ? (
+        <span
+          role="tooltip"
+          style={{ top: pos.top, left: pos.left }}
+          className="pointer-events-none fixed z-50 w-64 -translate-x-1/2 rounded-lg border border-white/10 bg-[#0e1218] px-3 py-2 text-left text-[13px] font-normal normal-case leading-snug tracking-normal text-[#c5cdd9] shadow-lg"
+        >
+          {text}
+        </span>
+      ) : null}
+    </span>
+  );
+}
+
 function Kpi({
   label,
   value,
@@ -81,35 +200,48 @@ function MonthCard({ row }: { row: MonthSeriesRow }) {
         <span className="text-xs text-[#8b96a8]">
           {row.reporting.pct.toFixed(0)}% reporting ({row.reporting.reported}/
           {row.reporting.expected})
+          <span className="ml-1 inline-flex align-middle">
+            <HeaderTip label="Reporting %" text={helpFor("Reporting %")} hideLabel />
+          </span>
         </span>
       </header>
       <dl className="grid grid-cols-2 gap-x-3 gap-y-2 text-xs">
         <div>
-          <dt className="text-[#8b96a8]">Projects</dt>
+          <dt className="text-[#8b96a8]">
+            <HeaderTip label="Projects" text={helpFor("Projects")} />
+          </dt>
           <dd className="font-mono text-[#c5cdd9]">
             {row.projects.open} open / {row.projects.closed} closed
           </dd>
         </div>
         <div>
-          <dt className="text-[#8b96a8]">Deals</dt>
+          <dt className="text-[#8b96a8]">
+            <HeaderTip label="Deals" text={helpFor("Deals")} />
+          </dt>
           <dd className="font-mono text-[#c5cdd9]">
             {row.deals.created} / {row.deals.won} / {row.deals.closed}
           </dd>
         </div>
         <div>
-          <dt className="text-[#8b96a8]">Machines</dt>
+          <dt className="text-[#8b96a8]">
+            <HeaderTip label="Machines / Δ" text={helpFor("Machines / Δ")} />
+          </dt>
           <dd className="font-mono text-[#c5cdd9]">
             {row.placements.machines.toLocaleString()} ({fmtDelta(row.placements.delta)})
           </dd>
         </div>
         <div>
-          <dt className="text-[#8b96a8]">Footprint Δ</dt>
+          <dt className="text-[#8b96a8]">
+            <HeaderTip label="Footprint Δ %" text={helpFor("Footprint Δ %")} />
+          </dt>
           <dd className="font-mono text-[#c5cdd9]">
             {row.footprint.pct.toFixed(2)}% ({row.footprint.converts}c+{row.footprint.swaps}s)
           </dd>
         </div>
         <div className="col-span-2">
-          <dt className="text-[#8b96a8]">Leased clients</dt>
+          <dt className="text-[#8b96a8]">
+            <HeaderTip label="Clients" text={helpFor("Clients")} />
+          </dt>
           <dd className="font-mono text-[#c5cdd9]">{row.leased_clients}</dd>
         </div>
       </dl>
@@ -145,7 +277,6 @@ export default function ExecutivePage() {
     };
   }, [month]);
 
-  const latest = data?.latest ?? "";
   const windowMonths = data?.window_months ?? 12;
   const coinIn = data?.coinIn ?? 0;
   const coinInMom = data?.coinInMom ?? 0;
@@ -159,20 +290,7 @@ export default function ExecutivePage() {
     <div className="space-y-6 md:space-y-8">
       <section>
         <h2 className={t.pageTitle}>Executive snapshot</h2>
-        <p className={`${t.pageSub} hidden sm:block`}>
-          {loading
-            ? "Loading aggregates…"
-            : err
-              ? `Could not load live data (${err}). Check API connectivity and façade view.`
-              : `Month-end ${latest}: revenue KPIs + trailing ${windowMonths}-month ops pulse (${data?.source ?? "live"}${data?.series_source ? ` · ops ${data.series_source}` : ""}). Machines = playable EOD floor roster. Project open = calendar still spanning month-end (IMS dates); most jobs are same-day.`}
-        </p>
-        <p className={`${t.pageSub} sm:hidden`}>
-          {loading
-            ? "Loading…"
-            : err
-              ? `Load failed (${err}).`
-              : `${latest.slice(0, 7) || "—"} · ${windowMonths}mo ops${data?.series_source ? ` · ${data.series_source}` : ""}`}
-        </p>
+        {err ? <p className={t.pageSub}>Couldn’t load this snapshot.</p> : null}
       </section>
 
       {!err && (
@@ -220,12 +338,11 @@ export default function ExecutivePage() {
                   <thead className={t.tableHead}>
                     <tr>
                       <th className="px-3 py-2.5 whitespace-nowrap">Month</th>
-                      <th className="px-3 py-2.5 whitespace-nowrap">Projects</th>
-                      <th className="px-3 py-2.5 whitespace-nowrap">Deals</th>
-                      <th className="px-3 py-2.5 whitespace-nowrap">Machines / Δ</th>
-                      <th className="px-3 py-2.5 whitespace-nowrap">Footprint Δ %</th>
-                      <th className="px-3 py-2.5 whitespace-nowrap">Clients</th>
-                      <th className="px-3 py-2.5 whitespace-nowrap">Reporting %</th>
+                      {COLUMN_HELP.map((col) => (
+                        <th key={col.label} className="px-3 py-2.5 whitespace-nowrap">
+                          <HeaderTip label={col.label} text={col.text} />
+                        </th>
+                      ))}
                     </tr>
                   </thead>
                   <tbody className={t.tableRow}>
@@ -271,18 +388,6 @@ export default function ExecutivePage() {
                 </table>
               </div>
             </div>
-          </div>
-
-          <div className={`${t.calloutSky} hidden sm:block`}>
-            <p className={t.calloutTitleSky}>Sources</p>
-            <p className={t.calloutBody}>
-              Revenue KPIs: Master_Revenue façade. Projects: <code className={t.code}>projects.ims</code>{" "}
-              calendar window (open = start ≤ M &lt; end; closed = end in M — not eMaint Open status /
-              undated rows). Deals: HubSpot landing — created in M / won / lost by{" "}
-              <code className={t.code}>close_date</code>. Machines = playable SMM EOD floor roster. Footprint Δ =
-              CONVERT + swaps ÷ machines. Clients = distinct casinos on that roster. Reporting = Finance
-              billing coverage.
-            </p>
           </div>
         </>
       )}
