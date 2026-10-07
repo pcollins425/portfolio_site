@@ -4020,10 +4020,6 @@ body.dgs-software-vault-v2 .dgs-v2-layout-dialog-actions {
 
 /* ===================== Projects module ===================== */
 
-body.dgs-dashboard-v2 #dgs-dashboard-nav {
-  display: none !important;
-}
-
 .dgs-v2-view-toggle {
   display: inline-flex;
   gap: 4px;

@@ -37,16 +37,12 @@
     },
   ];
 
-  function dashboardNavSubgroups() {
+  function dashboardMenuItems() {
     return DASHBOARD_GROUPS.map((group) => ({
       id: `dash-sub-${group.id}`,
       label: group.label,
-      items: group.items.map((item) => ({
-        id: item.id,
-        label: item.label,
-        href: `dashboard.html?view=${item.route.slice(1)}`,
-        requireAnyOf: item.requireArea ? [item.requireArea] : undefined,
-      })),
+      href: `dashboard.html?view=${group.items[0].route.slice(1)}`,
+      requireAnyOf: group.items.map((item) => item.requireArea).filter(Boolean),
     }));
   }
 
@@ -54,7 +50,7 @@
     {
       id: "revenue",
       label: "Dashboard",
-      subgroups: dashboardNavSubgroups(),
+      items: dashboardMenuItems(),
     },
     {
       id: "inventory",
@@ -221,15 +217,21 @@
     return item.label;
   }
 
+  function dashboardGroupForRoute(route) {
+    const path = route && route.startsWith("/") ? route : `/${route || "executive"}`;
+    return DASHBOARD_GROUPS.find((group) => group.items.some((item) => item.route === path)) || null;
+  }
+
+  function visibleItemsInGroup(group) {
+    if (!group) return [];
+    return group.items.filter((item) => !item.requireArea || hasAreaRead(item.requireArea));
+  }
+
   function resolveNavActiveId(activeId) {
     if (activeId !== "dashboard") return activeId;
     const view = (new URLSearchParams(window.location.search).get("view") || "executive").replace(/^\//, "");
-    for (const group of DASHBOARD_GROUPS) {
-      for (const item of group.items) {
-        if (item.route === `/${view}`) return item.id;
-      }
-    }
-    return activeId;
+    const group = dashboardGroupForRoute(`/${view}`);
+    return group ? `dash-sub-${group.id}` : activeId;
   }
 
   function revealActiveNavGroup(activeId) {
@@ -558,34 +560,12 @@
       if (open && !document.body.classList.contains("dgs-rail-collapsed")) {
         const items = document.createElement("div");
         items.className = "dgs-nav-items";
-        if (group.subgroups) {
-          for (const sub of group.subgroups) {
-            const subWrap = document.createElement("div");
-            subWrap.className = "dgs-nav-subgroup";
-            const subLabel = document.createElement("div");
-            subLabel.className = "dgs-nav-subgroup-label";
-            subLabel.textContent = sub.label;
-            subWrap.appendChild(subLabel);
-            const subItems = document.createElement("div");
-            subItems.className = "dgs-nav-items dgs-nav-subitems";
-            for (const item of sub.items) {
-              const a = document.createElement("a");
-              a.href = withApi(item.href);
-              a.textContent = navItemLabel(item);
-              if (item.id === resolvedId) a.classList.add("active");
-              subItems.appendChild(a);
-            }
-            subWrap.appendChild(subItems);
-            items.appendChild(subWrap);
-          }
-        } else {
-          for (const item of group.items) {
-            const a = document.createElement("a");
-            a.href = withApi(item.href);
-            a.textContent = navItemLabel(item);
-            if (item.id === resolvedId) a.classList.add("active");
-            items.appendChild(a);
-          }
+        for (const item of group.items) {
+          const a = document.createElement("a");
+          a.href = withApi(item.href);
+          a.textContent = item.label;
+          if (item.id === resolvedId) a.classList.add("active");
+          items.appendChild(a);
         }
         section.appendChild(items);
       }
@@ -659,40 +639,89 @@
     return dashboardBundlePromise;
   }
 
-  function renderDashboardSubnav() {
+  function renderDashboardSubnav(activeRoute) {
     const nav = document.getElementById("dgs-dashboard-nav");
-    if (nav) nav.remove();
-  }
+    if (!nav) return;
+    const route = activeRoute && String(activeRoute).startsWith("/") ? activeRoute : `/${activeRoute || "executive"}`;
+    const group = dashboardGroupForRoute(route) || visibleDashboardGroups()[0];
+    const items = visibleItemsInGroup(group);
+    nav.hidden = false;
+    nav.innerHTML = "";
+    const v2 = document.body.classList.contains("dgs-dashboard-v2");
+    const phone = window.matchMedia("(max-width: 640px)").matches;
 
-  function showDashboardTitle(route) {
-    const title = document.getElementById("dgs-dashboard-title");
-    if (!title) return;
-    const match = visibleDashboardNav().find((item) => item.route === route);
-    title.textContent = match ? match.label : "Dashboard";
+    if (v2 && phone) {
+      const sel = document.createElement("select");
+      sel.className = "dgs-dashboard-view-select";
+      sel.setAttribute("aria-label", "Dashboard views");
+      for (const item of items) {
+        const opt = document.createElement("option");
+        opt.value = item.route;
+        opt.textContent = navItemLabel(item);
+        if (item.route === route) opt.selected = true;
+        sel.appendChild(opt);
+      }
+      sel.addEventListener("change", () => setDashboardRoute(sel.value));
+      nav.appendChild(sel);
+      return;
+    }
+
+    for (const item of items) {
+      const el = document.createElement(v2 ? "button" : "a");
+      if (!v2) el.href = "#";
+      el.type = v2 ? "button" : undefined;
+      el.textContent = item.label;
+      el.dataset.route = item.route;
+      if (item.route === route) el.classList.add("active");
+      el.addEventListener("click", (e) => {
+        e.preventDefault();
+        setDashboardRoute(item.route);
+      });
+      if (item.route === "/analyst" && analystOpenMonths > 0) {
+        const badge = document.createElement("span");
+        badge.className = "dgs-analyst-badge";
+        badge.textContent = String(analystOpenMonths);
+        badge.title = `${analystOpenMonths} month${analystOpenMonths === 1 ? "" : "s"} with open intake flags`;
+        el.appendChild(badge);
+      }
+      if (item.route === "/commission" && commissionOpenMonths > 0) {
+        const badge = document.createElement("span");
+        badge.className = "dgs-analyst-badge";
+        badge.textContent = String(commissionOpenMonths);
+        badge.title = `${commissionOpenMonths} month${commissionOpenMonths === 1 ? "" : "s"} with open identification flags`;
+        el.appendChild(badge);
+      }
+      nav.appendChild(el);
+    }
   }
 
   function setAnalystOpenMonths(n) {
     const next = Math.max(0, Number(n) || 0);
     if (next === analystOpenMonths) return;
     analystOpenMonths = next;
-    refreshAppNav("dashboard");
+    renderDashboardSubnav(currentDashboardRoute());
   }
 
   function setCommissionOpenMonths(n) {
     const next = Math.max(0, Number(n) || 0);
     if (next === commissionOpenMonths) return;
     commissionOpenMonths = next;
-    refreshAppNav("dashboard");
+    renderDashboardSubnav(currentDashboardRoute());
+  }
+
+  function currentDashboardRoute() {
+    const view = new URLSearchParams(window.location.search).get("view") || "executive";
+    return view.startsWith("/") ? view : `/${view}`;
   }
 
   function setDashboardRoute(route) {
     let normalized = route.startsWith("/") ? route : `/${route}`;
-    const allowed = visibleDashboardNav().map((i) => i.route);
+    const group = dashboardGroupForRoute(normalized) || visibleDashboardGroups()[0];
+    const allowed = visibleItemsInGroup(group).map((item) => item.route);
     if (!allowed.includes(normalized)) {
       normalized = allowed[0] || "/executive";
     }
-    renderDashboardSubnav();
-    showDashboardTitle(normalized);
+    renderDashboardSubnav(normalized);
     if (normalized === "/field") {
       const root = document.getElementById("dashboard-root");
       if (window.DGSField) DGSField.load(root);
