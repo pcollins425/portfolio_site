@@ -8,7 +8,7 @@ from fastapi.responses import JSONResponse
 
 from app import settings as app_settings
 from app import view_as
-from app.routers import admin_employees, analyst, assistant, assets, auth, commerce, commission_contract, contracts, documents, emaint_demo, employees, expenses, field, field_dashboard, hubspot_webhook, market, master_revenue, media, page_chat, parts_bom, parts_catalog, parts_inventory, parts_shop_accounts, performance_intake, projects, projects_workbench, slot_master, software_vault, theme_hub, view_as as view_as_router, warehouse_inventory
+from app.routers import account_guide, admin_employees, analyst, assistant, assets, auth, commerce, commission_contract, contracts, documents, emaint_demo, employees, expenses, field, field_dashboard, hubspot_webhook, market, master_revenue, media, page_chat, parts_bom, parts_catalog, parts_inventory, parts_shop_accounts, performance_intake, projects, projects_workbench, slot_master, software_vault, theme_hub, view_as as view_as_router, warehouse_inventory
 from app.routers.v1 import health as v1_health
 
 app_settings.load_local_env()
@@ -51,6 +51,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+app.include_router(account_guide.router)
 app.include_router(master_revenue.router)
 app.include_router(market.router)
 app.include_router(analyst.router)

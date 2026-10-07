@@ -123,6 +123,11 @@
       ],
     },
     {
+      id: "reference",
+      label: "Reference",
+      items: [{ id: "documents", label: "Documents", href: "documents.html" }],
+    },
+    {
       id: "workspace",
       label: "Workspace",
       items: [

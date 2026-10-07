@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Documents — Electronic gaming operations</title>
+  <meta name="description" content="How the asset, the floor, the month, the job, service, and the customer relate, and which reads another system can call." />
+  <link rel="stylesheet" href="assets/home.css" />
+</head>
+<body class="home-page home-doc">
+  <header class="home-header">
+    <a class="home-mark" href="index.html">Electronic gaming operations</a>
+    <nav class="home-nav" aria-label="Services">
+      <a href="guide/performance.html">Performance</a>
+      <a href="guide/cmms.html">CMMS</a>
+      <a href="guide/crm.html">CRM</a>
+      <a href="guide/workflow.html">Workflow</a>
+      <a href="guide/data.html">Data</a>
+    </nav>
+    <div class="home-header-actions">
+      <a class="home-doc-link" href="documents.html" aria-current="page">Documents</a>
+      <button type="button" class="home-btn-quiet" data-sign-in>Staff sign in</button>
+    </div>
+  </header>
+
+  <main class="home-main">
+    <p id="home-error" class="home-error" hidden></p>
+
+    <article class="home-hero home-prose">
+      <p class="home-eyebrow">Documents</p>
+      <h1>How the data fits together.</h1>
+      <p>This is the technical picture of the application. A serial is an asset. A placement puts that asset on a floor for a span of time. A month is the result of the placements that were there. A job is why the floor changed. Service is work on a unit that was already there. The customer and the agreement describe that same floor.</p>
+      <p>Each section ends with the read another system can call. The call is on that company’s server, and it uses that company’s sign-in. A person can make it today. A system such as QuickBooks, calling for commission with its own key, would use the same reads. That key is not issued yet. Some reads also require that the signed-in person is allowed to see that area.</p>
+      <p id="doc-account-prompt" class="home-hint">A signed-in account also shows how that account’s own records are set up, under each section.</p>
+    </article>
+
+    <nav class="home-section" aria-label="Contents">
+      <ol class="home-toc">
+        <li><a href="#machine">The machine</a></li>
+        <li><a href="#floor">The floor</a></li>
+        <li><a href="#month">The month</a></li>
+        <li><a href="#job">The job</a></li>
+        <li><a href="#service">Service</a></li>
+        <li><a href="#customer">The customer</a></li>
+        <li><a href="#screens">Where it shows up</a></li>
+        <li><a href="#connections">Connections</a></li>
+      </ol>
+    </nav>
+
+    <section class="home-section home-prose" id="machine">
+      <h2>The machine</h2>
+      <p>A serial, a cabinet, and a theme are one asset. Performance, a job, a repair, and an agreement all point back to that asset. When two screens disagree about a machine, the first check is whether they are looking at the same serial.</p>
+      <p>The feed is a record of the physical unit. It lands once. Later screens read it. They do not keep a second copy of the serial.</p>
+      <div class="doc-read">
+        <p class="doc-read-label">Read</p>
+        <p><code>GET /api/assets</code></p>
+        <p class="doc-read-desc">The assets: serial, cabinet, and theme.</p>
+        <p><code>GET /api/assets/hub/{asset_id}</code></p>
+        <p class="doc-read-desc">One asset, and the records that hang off it.</p>
+      </div>
+      <aside class="doc-account" data-account="machine" hidden>
+        <p class="doc-account-label">This account</p>
+        <div class="doc-account-body"></div>
+      </aside>
+    </section>
+
+    <section class="home-section home-prose" id="floor">
+      <h2>The floor</h2>
+      <p>A placement is that asset at a property, for a span of time. The floor at the end of a month is the set of placements still open. A conversion or a swap ends the old placement and starts the next one. The serial may stay. The placement does not. Counting both invents a machine.</p>
+      <p>The feed is the placement: which asset, which property, when it arrived, and when it left. The screen groups those placements by property.</p>
+      <div class="doc-read">
+        <p class="doc-read-label">Read</p>
+        <p><code>GET /api/slot-master/casinos</code></p>
+        <p class="doc-read-desc">Properties, and how many placements are active at each.</p>
+        <p><code>GET /api/slot-master/machines?casino_id=</code></p>
+        <p class="doc-read-desc">The placements at one property: the asset, and the dates that placement covers.</p>
+      </div>
+      <aside class="doc-account" data-account="floor" hidden>
+        <p class="doc-account-label">This account</p>
+        <div class="doc-account-body"></div>
+      </aside>
+    </section>
+
+    <section class="home-section home-prose" id="month">
+      <h2>The month</h2>
+      <p>Performance is a period of results for the placements that were there. Coin-in, win, and commission belong to a placement for that month. A figure that cannot be tied to a placement is unfinished, because nobody can say which machines produced it.</p>
+      <p>The month arrives as a report for a property. It lands against the placements. The screens read the sums, and they read how many of the expected lines have a report.</p>
+      <div class="doc-read">
+        <p class="doc-read-label">Read</p>
+        <p><code>GET /api/executive?month=YYYY-MM</code></p>
+        <p class="doc-read-desc">Coin-in, actual win, and commission for the month, the change from the month before, and a trailing year of machines, jobs, and reporting.</p>
+        <p><code>GET /api/finance/overview?from=YYYY-MM&amp;to=YYYY-MM</code></p>
+        <p class="doc-read-desc">Expected participation lines against invoiced lines. This is the commission read another system would call.</p>
+        <p><code>GET /api/performance/themes-top?month=YYYY-MM</code></p>
+        <p class="doc-read-desc">Themes for that month, on the placements that carried them.</p>
+      </div>
+      <aside class="doc-account" data-account="month" hidden>
+        <p class="doc-account-label">This account</p>
+        <div class="doc-account-body"></div>
+      </aside>
+    </section>
+
+    <section class="home-section home-prose" id="job">
+      <h2>The job</h2>
+      <p>An install, a removal, a move, or a conversion is why the floor changed. The job names the property, the assets, and the dates. The next month can be read beside that job, so a movement in the numbers has a cause sitting on the same machines.</p>
+      <p>The feed is the job itself. It lands on the assets it touched. A repair of a machine that was already there is a different record, covered under service.</p>
+      <div class="doc-read">
+        <p class="doc-read-label">Read</p>
+        <p><code>GET /api/projects/catalog</code></p>
+        <p class="doc-read-desc">The jobs, the property, and how many machines each job moved.</p>
+        <p><code>GET /api/projects/ims?casino_id=</code></p>
+        <p class="doc-read-desc">The schedule of jobs at one property.</p>
+        <p><code>GET /api/projects/catalog/{reference_key}</code></p>
+        <p class="doc-read-desc">One job, including the machines on it.</p>
+      </div>
+      <aside class="doc-account" data-account="job" hidden>
+        <p class="doc-account-label">This account</p>
+        <div class="doc-account-body"></div>
+      </aside>
+    </section>
+
+    <section class="home-section home-prose" id="service">
+      <h2>Service</h2>
+      <p>Service is work on a unit that is already on the floor. The parts belong to that cabinet, so the list of parts is the list that cabinet takes. A warehouse holds a cabinet that is off the floor. The same asset identity is used, so a repair and a performance figure are about one machine.</p>
+      <p>The work order itself is kept by the maintenance connection. This application reads the asset, the parts, and the warehouse. It does not keep a second work-order book.</p>
+      <div class="doc-read">
+        <p class="doc-read-label">Read</p>
+        <p><code>GET /api/parts-inventory</code></p>
+        <p class="doc-read-desc">Parts, and the cabinets they belong to.</p>
+        <p><code>GET /api/warehouse-inventory/pivot</code></p>
+        <p class="doc-read-desc">Cabinets by warehouse, for units that are off the floor.</p>
+      </div>
+      <aside class="doc-account" data-account="service" hidden>
+        <p class="doc-account-label">This account</p>
+        <div class="doc-account-body"></div>
+      </aside>
+    </section>
+
+    <section class="home-section home-prose" id="customer">
+      <h2>The customer</h2>
+      <p>The property, the agreement, and the deal describe the same floor. The agreement covers placements. The deal is the commercial conversation about those machines. When a job changes the floor, the agreement and the deal are supposed to follow, because they point at the same assets.</p>
+      <p>The property feed is the house itself. Contacts and deals arrive from the CRM connection and land on that property. The agreement is the contract on the machines.</p>
+      <div class="doc-read">
+        <p class="doc-read-label">Read</p>
+        <p><code>GET /api/commerce/casinos/{reference_key}</code></p>
+        <p class="doc-read-desc">One property: the house, its contacts, and its deals.</p>
+        <p><code>GET /api/commerce/deals</code></p>
+        <p class="doc-read-desc">Deals across properties.</p>
+        <p><code>GET /api/contracts</code></p>
+        <p class="doc-read-desc">Agreements, and the machines they cover.</p>
+      </div>
+      <aside class="doc-account" data-account="customer" hidden>
+        <p class="doc-account-label">This account</p>
+        <div class="doc-account-body"></div>
+      </aside>
+    </section>
+
+    <section class="home-section" id="screens">
+      <h2>Where it shows up</h2>
+      <p>Each area of the application reads one of those records. It does not own a private copy.</p>
+      <div class="doc-table-wrap">
+        <table class="doc-table">
+          <thead>
+            <tr>
+              <th>Record</th>
+              <th>What reads it</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Asset</td>
+              <td>Assets</td>
+            </tr>
+            <tr>
+              <td>Placement</td>
+              <td>Slot Master, Casinos, Warehouse</td>
+            </tr>
+            <tr>
+              <td>Month</td>
+              <td>Executive, Performance, billing coverage</td>
+            </tr>
+            <tr>
+              <td>Job</td>
+              <td>Projects</td>
+            </tr>
+            <tr>
+              <td>Service</td>
+              <td>Parts. The maintenance connection holds the work itself.</td>
+            </tr>
+            <tr>
+              <td>Customer</td>
+              <td>Casinos, Contracts, Deals</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <aside class="doc-account" data-account="screens" hidden>
+        <p class="doc-account-label">This account</p>
+        <div class="doc-account-body"></div>
+      </aside>
+    </section>
+
+    <section class="home-section" id="connections">
+      <h2>Connections</h2>
+      <p>These are the systems the product can attach to. A company turns on the ones it uses. The reads above stay on that company’s server either way.</p>
+      <div class="doc-table-wrap">
+        <table class="doc-table">
+          <thead>
+            <tr>
+              <th>System</th>
+              <th>What moves</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>eMaint</td>
+              <td>Floor and service. The machines and the work on them can be read, and a floor change can be written back.</td>
+            </tr>
+            <tr>
+              <td>HubSpot</td>
+              <td>Customers, contacts, and deals. They are read into the commercial picture, and catalog quantity can be pushed the other way.</td>
+            </tr>
+            <tr>
+              <td>Google</td>
+              <td>Sign-in with the company’s email, which opens only that company’s server. Gmail brings reports and paperwork in, and sends notices out.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <footer class="home-footer">
+    <p>The service pages are the overview. This page is the data.</p>
+    <button type="button" class="home-btn" data-sign-in>Staff sign in</button>
+  </footer>
+
+  <script src="assets/auth.js"></script>
+  <script src="assets/home.js"></script>
+  <script src="assets/documents.js"></script>
+</body>
+</html>

@@ -455,6 +455,108 @@ a.home-card:hover {
   max-width: 52ch;
 }
 
+.home-doc-link {
+  color: var(--home-muted);
+  text-decoration: none;
+  font-size: 14px;
+  font-weight: 600;
+  padding: 6px 10px;
+  border-radius: 8px;
+}
+
+.home-doc-link:hover,
+.home-doc-link[aria-current="page"] {
+  color: var(--home-heading);
+  background: var(--home-accent-bg);
+}
+
+.doc-read {
+  margin-top: 18px;
+  padding: 14px 16px 6px;
+  background: var(--home-card-2);
+  border: 1px solid var(--home-border);
+  border-radius: 12px;
+}
+
+.doc-read p {
+  margin: 0 0 8px;
+  max-width: none;
+}
+
+.doc-read-label,
+.doc-account-label {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--home-accent);
+}
+
+.doc-read code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 13px;
+  color: var(--home-heading);
+}
+
+.doc-read-desc {
+  color: var(--home-muted);
+  font-size: 14px;
+  margin-bottom: 14px;
+}
+
+.doc-account {
+  margin-top: 16px;
+  padding: 14px 16px 4px;
+  background: var(--home-accent-bg);
+  border: 1px solid var(--home-accent-border);
+  border-radius: 12px;
+}
+
+.doc-account p {
+  margin: 0 0 12px;
+  max-width: 68ch;
+}
+
+.doc-table-wrap {
+  overflow-x: auto;
+  margin-top: 8px;
+  border: 1px solid var(--home-border);
+  border-radius: 12px;
+}
+
+.doc-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 15px;
+}
+
+.doc-table th,
+.doc-table td {
+  text-align: left;
+  vertical-align: top;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--home-border);
+}
+
+.doc-table th {
+  color: var(--home-muted);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  background: var(--home-card-2);
+}
+
+.doc-table td:first-child {
+  color: var(--home-heading);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.doc-table tr:last-child td {
+  border-bottom: 0;
+}
+
 @media (max-width: 860px) {
   .home-cards {
     grid-template-columns: 1fr;
