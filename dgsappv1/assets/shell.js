@@ -661,9 +661,14 @@
 
   function renderDashboardSubnav() {
     const nav = document.getElementById("dgs-dashboard-nav");
-    if (!nav) return;
-    nav.hidden = true;
-    nav.innerHTML = "";
+    if (nav) nav.remove();
+  }
+
+  function showDashboardTitle(route) {
+    const title = document.getElementById("dgs-dashboard-title");
+    if (!title) return;
+    const match = visibleDashboardNav().find((item) => item.route === route);
+    title.textContent = match ? match.label : "Dashboard";
   }
 
   function setAnalystOpenMonths(n) {
@@ -686,7 +691,8 @@
     if (!allowed.includes(normalized)) {
       normalized = allowed[0] || "/executive";
     }
-    renderDashboardSubnav(normalized);
+    renderDashboardSubnav();
+    showDashboardTitle(normalized);
     if (normalized === "/field") {
       const root = document.getElementById("dashboard-root");
       if (window.DGSField) DGSField.load(root);
