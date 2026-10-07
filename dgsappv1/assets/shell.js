@@ -53,7 +53,7 @@
   const NAV_GROUPS = [
     {
       id: "revenue",
-      label: "Dashboards",
+      label: "Dashboard",
       subgroups: dashboardNavSubgroups(),
     },
     {
@@ -211,26 +211,14 @@
     return visibleDashboardGroups().flatMap((group) => group.items);
   }
 
-  function dashboardItemLabel(item, withCount) {
-    let label = item.label;
-    if (!withCount) return label;
-    if (item.route === "/analyst" && analystOpenMonths > 0) {
-      label += ` (${analystOpenMonths})`;
+  function navItemLabel(item) {
+    if (item.id === "dash-analyst" && analystOpenMonths > 0) {
+      return `${item.label} (${analystOpenMonths})`;
     }
-    if (item.route === "/commission" && commissionOpenMonths > 0) {
-      label += ` (${commissionOpenMonths})`;
+    if (item.id === "dash-identification" && commissionOpenMonths > 0) {
+      return `${item.label} (${commissionOpenMonths})`;
     }
-    return label;
-  }
-
-  function activeDashboardRoute(fallback) {
-    const nav = document.getElementById("dgs-dashboard-nav");
-    return (
-      nav?.querySelector(".active")?.getAttribute("data-route") ||
-      nav?.querySelector("select")?.value ||
-      fallback ||
-      "/executive"
-    );
+    return item.label;
   }
 
   function resolveNavActiveId(activeId) {
@@ -258,7 +246,6 @@
         for (const sub of group.subgroups) {
           if (!sub.items.some((item) => item.id === resolved)) continue;
           mark(group.id);
-          mark(sub.id);
         }
         continue;
       }
@@ -367,7 +354,7 @@
       return items
         .map(
           (item) =>
-            `<a href="${withApi(item.href)}" class="dgs-mobile-menu-link${nested ? " dgs-mobile-menu-sublink" : ""}${item.id === resolvedId ? " active" : ""}">${item.label}</a>`
+            `<a href="${withApi(item.href)}" class="dgs-mobile-menu-link${nested ? " dgs-mobile-menu-sublink" : ""}${item.id === resolvedId ? " active" : ""}">${navItemLabel(item)}</a>`
         )
         .join("");
     }
@@ -516,7 +503,7 @@
       return items
         .map(
           (item) =>
-            `<a href="${withApi(item.href)}" class="dgs-nav-flyout-link${item.id === resolvedId ? " active" : ""}">${item.label}</a>`
+            `<a href="${withApi(item.href)}" class="dgs-nav-flyout-link${item.id === resolvedId ? " active" : ""}">${navItemLabel(item)}</a>`
         )
         .join("");
     }
@@ -573,38 +560,29 @@
         items.className = "dgs-nav-items";
         if (group.subgroups) {
           for (const sub of group.subgroups) {
-            const subOpen = groupState[sub.id] ?? false;
             const subWrap = document.createElement("div");
             subWrap.className = "dgs-nav-subgroup";
-            const subHead = document.createElement("button");
-            subHead.type = "button";
-            subHead.className = "dgs-nav-subgroup-head";
-            subHead.innerHTML = `<span>${sub.label}</span><span class="dgs-nav-chevron">${subOpen ? "▾" : "▸"}</span>`;
-            subHead.addEventListener("click", () => {
-              groupState[sub.id] = !subOpen;
-              saveGroupState(groupState);
-              renderAppSidebar(activeId);
-            });
-            subWrap.appendChild(subHead);
-            if (subOpen) {
-              const subItems = document.createElement("div");
-              subItems.className = "dgs-nav-items dgs-nav-subitems";
-              for (const item of sub.items) {
-                const a = document.createElement("a");
-                a.href = withApi(item.href);
-                a.textContent = item.label;
-                if (item.id === resolvedId) a.classList.add("active");
-                subItems.appendChild(a);
-              }
-              subWrap.appendChild(subItems);
+            const subLabel = document.createElement("div");
+            subLabel.className = "dgs-nav-subgroup-label";
+            subLabel.textContent = sub.label;
+            subWrap.appendChild(subLabel);
+            const subItems = document.createElement("div");
+            subItems.className = "dgs-nav-items dgs-nav-subitems";
+            for (const item of sub.items) {
+              const a = document.createElement("a");
+              a.href = withApi(item.href);
+              a.textContent = navItemLabel(item);
+              if (item.id === resolvedId) a.classList.add("active");
+              subItems.appendChild(a);
             }
+            subWrap.appendChild(subItems);
             items.appendChild(subWrap);
           }
         } else {
           for (const item of group.items) {
             const a = document.createElement("a");
             a.href = withApi(item.href);
-            a.textContent = item.label;
+            a.textContent = navItemLabel(item);
             if (item.id === resolvedId) a.classList.add("active");
             items.appendChild(a);
           }
@@ -681,70 +659,25 @@
     return dashboardBundlePromise;
   }
 
-  function renderDashboardSubnav(activeRoute) {
+  function renderDashboardSubnav() {
     const nav = document.getElementById("dgs-dashboard-nav");
     if (!nav) return;
-    const v2 = document.body.classList.contains("dgs-dashboard-v2");
-    const phone = window.matchMedia("(max-width: 640px)").matches;
+    nav.hidden = true;
     nav.innerHTML = "";
-
-    if (v2 && phone) {
-      const sel = document.createElement("select");
-      sel.className = "dgs-dashboard-view-select";
-      sel.setAttribute("aria-label", "Dashboard views");
-      for (const item of visibleDashboardNav()) {
-        const opt = document.createElement("option");
-        opt.value = item.route;
-        opt.textContent = dashboardItemLabel(item, true);
-        if (item.route === activeRoute) opt.selected = true;
-        sel.appendChild(opt);
-      }
-      sel.addEventListener("change", () => setDashboardRoute(sel.value));
-      nav.appendChild(sel);
-      return;
-    }
-
-    for (const item of visibleDashboardNav()) {
-      const el = document.createElement(v2 ? "button" : "a");
-      if (!v2) el.href = "#";
-      el.type = v2 ? "button" : undefined;
-      el.textContent = item.label;
-      el.dataset.route = item.route;
-      if (item.route === activeRoute) el.classList.add("active");
-      el.addEventListener("click", (e) => {
-        e.preventDefault();
-        setDashboardRoute(item.route);
-      });
-      if (item.route === "/analyst" && analystOpenMonths > 0) {
-        const badge = document.createElement("span");
-        badge.className = "dgs-analyst-badge";
-        badge.textContent = String(analystOpenMonths);
-        badge.title = `${analystOpenMonths} month${analystOpenMonths === 1 ? "" : "s"} with open intake flags`;
-        el.appendChild(badge);
-      }
-      if (item.route === "/commission" && commissionOpenMonths > 0) {
-        const badge = document.createElement("span");
-        badge.className = "dgs-analyst-badge";
-        badge.textContent = String(commissionOpenMonths);
-        badge.title = `${commissionOpenMonths} month${commissionOpenMonths === 1 ? "" : "s"} with open identification flags`;
-        el.appendChild(badge);
-      }
-      nav.appendChild(el);
-    }
   }
 
   function setAnalystOpenMonths(n) {
     const next = Math.max(0, Number(n) || 0);
     if (next === analystOpenMonths) return;
     analystOpenMonths = next;
-    renderDashboardSubnav(activeDashboardRoute());
+    refreshAppNav("dashboard");
   }
 
   function setCommissionOpenMonths(n) {
     const next = Math.max(0, Number(n) || 0);
     if (next === commissionOpenMonths) return;
     commissionOpenMonths = next;
-    renderDashboardSubnav(activeDashboardRoute());
+    refreshAppNav("dashboard");
   }
 
   function setDashboardRoute(route) {
