@@ -219,6 +219,40 @@ body.dgs-rail-collapsed .dgs-nav-group-short {
   font-weight: 600;
 }
 
+.dgs-nav-subgroup-head {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 7px 10px 4px 18px;
+  border: none;
+  background: transparent;
+  color: var(--dgs-rail-muted);
+  font-size: 12px;
+  font-weight: 650;
+  font-family: inherit;
+  cursor: pointer;
+  text-align: left;
+}
+
+.dgs-nav-subgroup-head:hover {
+  color: var(--dgs-rail-heading);
+}
+
+.dgs-nav-subitems a {
+  padding-left: 34px;
+}
+
+.dgs-nav-flyout-sub {
+  padding: 8px 8px 2px;
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--dgs-rail-dim);
+  font-weight: 700;
+}
+
 .dgs-nav-flyout {
   position: fixed;
   z-index: 200;
@@ -395,6 +429,23 @@ body.dgs-rail-collapsed .dgs-sidebar-account {
   text-decoration: none;
   font-size: 14px;
   background: rgba(255, 255, 255, 0.02);
+}
+
+.dgs-mobile-menu-subgroup-label {
+  padding: 8px 8px 2px 8px;
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--dgs-rail-dim);
+  font-weight: 700;
+}
+
+.dgs-mobile-menu-subgroup + .dgs-mobile-menu-subgroup {
+  margin-top: 8px;
+}
+
+.dgs-mobile-menu-link.dgs-mobile-menu-sublink {
+  padding-left: 22px;
 }
 
 .dgs-mobile-menu-link:hover,

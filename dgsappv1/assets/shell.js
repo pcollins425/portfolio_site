@@ -37,9 +37,9 @@
     },
   ];
 
-  const NAV_GROUPS = [
-    ...DASHBOARD_GROUPS.map((group) => ({
-      id: `nav-${group.id}`,
+  function dashboardNavSubgroups() {
+    return DASHBOARD_GROUPS.map((group) => ({
+      id: `dash-sub-${group.id}`,
       label: group.label,
       items: group.items.map((item) => ({
         id: item.id,
@@ -47,7 +47,15 @@
         href: `dashboard.html?view=${item.route.slice(1)}`,
         requireAnyOf: item.requireArea ? [item.requireArea] : undefined,
       })),
-    })),
+    }));
+  }
+
+  const NAV_GROUPS = [
+    {
+      id: "revenue",
+      label: "Dashboards",
+      subgroups: dashboardNavSubgroups(),
+    },
     {
       id: "inventory",
       label: "Inventory",
@@ -175,10 +183,21 @@
   }
 
   function visibleNavGroups() {
-    return NAV_GROUPS.map((group) => ({
-      ...group,
-      items: group.items.filter((item) => hasAnyAreaRead(item.requireAnyOf)),
-    })).filter((group) => group.items.length > 0);
+    return NAV_GROUPS.map((group) => {
+      if (group.subgroups) {
+        const subgroups = group.subgroups
+          .map((sub) => ({
+            ...sub,
+            items: sub.items.filter((item) => hasAnyAreaRead(item.requireAnyOf)),
+          }))
+          .filter((sub) => sub.items.length > 0);
+        return { ...group, subgroups };
+      }
+      return {
+        ...group,
+        items: (group.items || []).filter((item) => hasAnyAreaRead(item.requireAnyOf)),
+      };
+    }).filter((group) => (group.subgroups ? group.subgroups.length > 0 : group.items.length > 0));
   }
 
   function visibleDashboardGroups() {
@@ -229,12 +248,21 @@
     const resolved = resolveNavActiveId(activeId);
     const state = loadGroupState();
     let changed = false;
+    function mark(id) {
+      if (state[id] === true) return;
+      state[id] = true;
+      changed = true;
+    }
     for (const group of NAV_GROUPS) {
-      if (!group.items.some((item) => item.id === resolved)) continue;
-      if (state[group.id] !== true) {
-        state[group.id] = true;
-        changed = true;
+      if (group.subgroups) {
+        for (const sub of group.subgroups) {
+          if (!sub.items.some((item) => item.id === resolved)) continue;
+          mark(group.id);
+          mark(sub.id);
+        }
+        continue;
       }
+      if ((group.items || []).some((item) => item.id === resolved)) mark(group.id);
     }
     if (changed) saveGroupState(state);
   }
@@ -248,8 +276,13 @@
 
   function findNavItem(activeId) {
     for (const group of NAV_GROUPS) {
-      for (const item of group.items) {
-        if (item.id === activeId) return item;
+      const lists = group.subgroups
+        ? group.subgroups.map((sub) => sub.items)
+        : [group.items || []];
+      for (const items of lists) {
+        for (const item of items) {
+          if (item.id === activeId) return item;
+        }
       }
     }
     return null;
@@ -329,21 +362,36 @@
     const menu = document.getElementById("dgs-mobile-menu");
     if (!menu) return;
 
+    const resolvedId = resolveNavActiveId(activeId);
+    function mobileLinks(items, nested) {
+      return items
+        .map(
+          (item) =>
+            `<a href="${withApi(item.href)}" class="dgs-mobile-menu-link${nested ? " dgs-mobile-menu-sublink" : ""}${item.id === resolvedId ? " active" : ""}">${item.label}</a>`
+        )
+        .join("");
+    }
     menu.innerHTML = visibleNavGroups()
-      .map(
-      (group) => `
+      .map((group) => {
+        const body = group.subgroups
+          ? group.subgroups
+              .map(
+                (sub) => `
+            <div class="dgs-mobile-menu-subgroup">
+              <div class="dgs-mobile-menu-subgroup-label">${sub.label}</div>
+              <nav class="dgs-mobile-menu-links" aria-label="${sub.label}">
+                ${mobileLinks(sub.items, true)}
+              </nav>
+            </div>`
+              )
+              .join("")
+          : `<nav class="dgs-mobile-menu-links" aria-label="${group.label}">${mobileLinks(group.items, false)}</nav>`;
+        return `
         <section class="dgs-mobile-menu-group">
           <div class="dgs-mobile-menu-group-label">${group.label}</div>
-          <nav class="dgs-mobile-menu-links" aria-label="${group.label}">
-            ${group.items
-              .map(
-                (item) =>
-                  `<a href="${withApi(item.href)}" class="dgs-mobile-menu-link${item.id === resolveNavActiveId(activeId) ? " active" : ""}">${item.label}</a>`
-              )
-              .join("")}
-          </nav>
-        </section>`
-    )
+          ${body}
+        </section>`;
+      })
       .join("");
 
     const account = document.getElementById("sidebar-account");
@@ -463,16 +511,26 @@
     const fly = document.getElementById("dgs-nav-flyout");
     if (!fly) return;
     fly.hidden = false;
+    const resolvedId = resolveNavActiveId(activeId);
+    function flyoutLinks(items) {
+      return items
+        .map(
+          (item) =>
+            `<a href="${withApi(item.href)}" class="dgs-nav-flyout-link${item.id === resolvedId ? " active" : ""}">${item.label}</a>`
+        )
+        .join("");
+    }
+    const body = group.subgroups
+      ? group.subgroups
+          .map(
+            (sub) =>
+              `<div class="dgs-nav-flyout-sub">${sub.label}</div>${flyoutLinks(sub.items)}`
+          )
+          .join("")
+      : flyoutLinks(group.items);
     fly.innerHTML = `
       <div class="dgs-nav-flyout-title">${group.label}</div>
-      <nav class="dgs-nav-flyout-nav">
-        ${group.items
-          .map(
-            (item) =>
-              `<a href="${withApi(item.href)}" class="dgs-nav-flyout-link${item.id === resolveNavActiveId(activeId) ? " active" : ""}">${item.label}</a>`
-          )
-          .join("")}
-      </nav>`;
+      <nav class="dgs-nav-flyout-nav">${body}</nav>`;
     const sidebar = document.getElementById("dgs-sidebar");
     if (sidebar && anchorEl) {
       const sRect = sidebar.getBoundingClientRect();
@@ -513,12 +571,43 @@
       if (open && !document.body.classList.contains("dgs-rail-collapsed")) {
         const items = document.createElement("div");
         items.className = "dgs-nav-items";
-        for (const item of group.items) {
-          const a = document.createElement("a");
-          a.href = withApi(item.href);
-          a.textContent = item.label;
-          if (item.id === resolvedId) a.classList.add("active");
-          items.appendChild(a);
+        if (group.subgroups) {
+          for (const sub of group.subgroups) {
+            const subOpen = groupState[sub.id] ?? false;
+            const subWrap = document.createElement("div");
+            subWrap.className = "dgs-nav-subgroup";
+            const subHead = document.createElement("button");
+            subHead.type = "button";
+            subHead.className = "dgs-nav-subgroup-head";
+            subHead.innerHTML = `<span>${sub.label}</span><span class="dgs-nav-chevron">${subOpen ? "▾" : "▸"}</span>`;
+            subHead.addEventListener("click", () => {
+              groupState[sub.id] = !subOpen;
+              saveGroupState(groupState);
+              renderAppSidebar(activeId);
+            });
+            subWrap.appendChild(subHead);
+            if (subOpen) {
+              const subItems = document.createElement("div");
+              subItems.className = "dgs-nav-items dgs-nav-subitems";
+              for (const item of sub.items) {
+                const a = document.createElement("a");
+                a.href = withApi(item.href);
+                a.textContent = item.label;
+                if (item.id === resolvedId) a.classList.add("active");
+                subItems.appendChild(a);
+              }
+              subWrap.appendChild(subItems);
+            }
+            items.appendChild(subWrap);
+          }
+        } else {
+          for (const item of group.items) {
+            const a = document.createElement("a");
+            a.href = withApi(item.href);
+            a.textContent = item.label;
+            if (item.id === resolvedId) a.classList.add("active");
+            items.appendChild(a);
+          }
         }
         section.appendChild(items);
       }
