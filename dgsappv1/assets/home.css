@@ -470,6 +470,28 @@ a.home-card:hover {
   background: var(--home-accent-bg);
 }
 
+.home-doc h3 {
+  margin: 26px 0 10px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--home-muted);
+}
+
+.home-doc .doc-table td:first-child {
+  white-space: normal;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.home-doc .doc-table td code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 13px;
+  color: var(--home-heading);
+}
+
 .doc-read {
   margin-top: 18px;
   padding: 14px 16px 6px;

@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Documents — Electronic gaming operations</title>
-  <meta name="description" content="How the asset, the floor, the month, the job, service, and the customer relate, and which reads another system can call." />
+  <meta name="description" content="Field-level reference for the records another system can read: assets, placements, months, projects, service, and customers, and which values to pull when comparing them." />
   <link rel="stylesheet" href="assets/home.css" />
 </head>
 <body class="home-page home-doc">
@@ -28,35 +28,70 @@
 
     <article class="home-hero home-prose">
       <p class="home-eyebrow">Documents</p>
-      <h1>How the data fits together.</h1>
-      <p>This is the technical picture of the application. A serial is an asset. A placement puts that asset on a floor for a span of time. A month is the result of the placements that were there. A job is why the floor changed. Service is work on a unit that was already there. The customer and the agreement describe that same floor.</p>
-      <p>Each section ends with the read another system can call. The call is on that company’s server, and it uses that company’s sign-in. A person can make it today. A system such as QuickBooks, calling for commission with its own key, would use the same reads. That key is not issued yet. Some reads also require that the signed-in person is allowed to see that area.</p>
+      <h1>Records, fields, and the reads.</h1>
+      <p>This is the integration reference. It is written for the person who will call the API: what each record contains, which identifier joins it to the next record, and which values to pull when two numbers have to be compared.</p>
+      <p>Calls go to that company’s server with that company’s sign-in (<code>Authorization: Bearer</code>). A person can call them today. A system calling with its own key, such as QuickBooks reading commission, would use these same resources. That key is not issued yet. A missing sign-in is <code>401</code>. A signed-in person without that area is <code>403</code>. List reads are paged with <code>page</code> and <code>page_size</code>.</p>
       <p id="doc-account-prompt" class="home-hint">A signed-in account also shows how that account’s own records are set up, under each section.</p>
     </article>
 
+    <section class="home-section home-prose" id="identifiers">
+      <h2>Identifiers</h2>
+      <p>Join on the stable id. Use the serial when a person is matching a machine. Do not treat the serial as the only key: the same serial can leave one property and arrive at another, and a conversion keeps the serial while replacing the placement.</p>
+      <div class="doc-table-wrap">
+        <table class="doc-table">
+          <thead>
+            <tr><th>Id</th><th>What it is</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>asset reference / asset_id</td><td>The physical unit. Placements, project lines, and parts discussions point here.</td></tr>
+            <tr><td>serial / serial_no / serial_number</td><td>The manufacturer serial on that asset. The human join. Always pair it with <code>asset_id</code> when the unit has moved.</td></tr>
+            <tr><td>placement reference_key</td><td>One span of that asset at one property. A conversion or a removal closes this row and opens another. Counting both counts two machines.</td></tr>
+            <tr><td>casino_id</td><td>The property. Same value on the placement, the project, the month, and the deal.</td></tr>
+            <tr><td>project reference_key</td><td>The catalog job. <code>ims_id</code> on that job points at the schedule row. <code>project_id</code> on a placement points back at the job that opened or closed it.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
     <nav class="home-section" aria-label="Contents">
       <ol class="home-toc">
-        <li><a href="#machine">The machine</a></li>
-        <li><a href="#floor">The floor</a></li>
-        <li><a href="#month">The month</a></li>
-        <li><a href="#job">The job</a></li>
+        <li><a href="#machine">Asset</a></li>
+        <li><a href="#floor">Placement</a></li>
+        <li><a href="#month">Month</a></li>
+        <li><a href="#job">Project</a></li>
         <li><a href="#service">Service</a></li>
-        <li><a href="#customer">The customer</a></li>
-        <li><a href="#screens">Where it shows up</a></li>
+        <li><a href="#customer">Customer</a></li>
+        <li><a href="#screens">Join map</a></li>
         <li><a href="#connections">Connections</a></li>
       </ol>
     </nav>
 
     <section class="home-section home-prose" id="machine">
-      <h2>The machine</h2>
-      <p>A serial, a cabinet, and a theme are one asset. Performance, a job, a repair, and an agreement all point back to that asset. When two screens disagree about a machine, the first check is whether they are looking at the same serial.</p>
-      <p>The feed is a record of the physical unit. It lands once. Later screens read it. They do not keep a second copy of the serial.</p>
+      <h2>Asset</h2>
+      <p>The asset is the unit everything else hangs from. An operator needs the serial, the cabinet, who built it, where it sits right now, and whether that location is a floor or a warehouse.</p>
+      <h3>Fields</h3>
+      <div class="doc-table-wrap">
+        <table class="doc-table">
+          <thead><tr><th>Field</th><th>Use</th></tr></thead>
+          <tbody>
+            <tr><td>compid</td><td>Maintenance-system id of the unit. Stable inside that system.</td></tr>
+            <tr><td>serial_no</td><td>Manufacturer serial.</td></tr>
+            <tr><td>asset_id</td><td>Catalog id. This is what a placement and a project line store.</td></tr>
+            <tr><td>vendor_name, cabinet_name</td><td>Who built it, and the cabinet model. Parts and warehouse counts group on the cabinet.</td></tr>
+            <tr><td>property</td><td>Where the maintenance record says the unit is. A floor property or a warehouse name.</td></tr>
+            <tr><td>status</td><td>Operational status on that record.</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <h3>Comparisons</h3>
+      <p>Pull <code>serial_no</code> and <code>asset_id</code> and match them to <code>serial</code> and <code>asset_id</code> on the active placement. Same serial, different <code>property</code> than <code>casino_name</code>, and the maintenance record has not caught the move. Same serial, a cabinet that does not match the placement’s <code>cabinet_name</code>, and you are not looking at the same build.</p>
+      <p>Pull <code>property</code> and compare it to the warehouse list. A unit whose property is a warehouse and that still has <code>is_active</code> on a floor placement is in two places.</p>
       <div class="doc-read">
         <p class="doc-read-label">Read</p>
         <p><code>GET /api/assets</code></p>
-        <p class="doc-read-desc">The assets: serial, cabinet, and theme.</p>
+        <p class="doc-read-desc"><code>compid</code>, <code>serial_no</code>, <code>asset_id</code>, <code>vendor_name</code>, <code>cabinet_name</code>, <code>property</code>, <code>status</code>. Search is token AND. <code>--token</code> excludes. <code>*</code> is a wildcard inside one word.</p>
         <p><code>GET /api/assets/hub/{asset_id}</code></p>
-        <p class="doc-read-desc">One asset, and the records that hang off it.</p>
+        <p class="doc-read-desc">One unit, with the records that reference it.</p>
       </div>
       <aside class="doc-account" data-account="machine" hidden>
         <p class="doc-account-label">This account</p>
@@ -65,15 +100,39 @@
     </section>
 
     <section class="home-section home-prose" id="floor">
-      <h2>The floor</h2>
-      <p>A placement is that asset at a property, for a span of time. The floor at the end of a month is the set of placements still open. A conversion or a swap ends the old placement and starts the next one. The serial may stay. The placement does not. Counting both invents a machine.</p>
-      <p>The feed is the placement: which asset, which property, when it arrived, and when it left. The screen groups those placements by property.</p>
+      <h2>Placement</h2>
+      <p>A placement is one asset at one property for one span. The floor an operator bills is the set of placements still open at month-end. House number, bank position, theme, denomination, and hold are attributes of that span, not of the serial forever.</p>
+      <h3>Fields</h3>
+      <div class="doc-table-wrap">
+        <table class="doc-table">
+          <thead><tr><th>Field</th><th>Use</th></tr></thead>
+          <tbody>
+            <tr><td>reference_key</td><td>This placement. Not the asset.</td></tr>
+            <tr><td>asset_id, serial</td><td>Which unit.</td></tr>
+            <tr><td>casino_id, casino_name</td><td>Which property.</td></tr>
+            <tr><td>zone, bank, location, zbl</td><td>Where it sits on that floor. <code>zbl</code> is the three joined.</td></tr>
+            <tr><td>asset_no</td><td>House number at that property. Often what a participation sheet calls the machine.</td></tr>
+            <tr><td>vendor_name, cabinet_name, theme_name</td><td>What was on it during this span.</td></tr>
+            <tr><td>Hold, denom</td><td>Par and denomination for this span.</td></tr>
+            <tr><td>date_instl, lastconver</td><td>When this span started. Install date, or the conversion date if this span is a convert.</td></tr>
+            <tr><td>is_active</td><td>Open at the current floor. History includes closed spans. <code>active_count</code> and <code>history_count</code> come back with the list.</td></tr>
+            <tr><td>action, project_id</td><td>On the history read. The action that opened the span, and the project that did it.</td></tr>
+            <tr><td>rmvl_date</td><td>On the history read. When the span ended.</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <h3>Comparisons</h3>
+      <p>Pull <code>is_active</code> placements and count distinct <code>asset_id</code> per <code>casino_id</code>. That is the machine count. Compare it to <code>expected_entries</code> on the month for the same property. A gap is a placement with no participation line, or a billed line whose placement is already closed.</p>
+      <p>Pull <code>date_instl</code> or <code>lastconver</code> and set it next to the month. A span that starts on the 12th did not play a full month. Compare that date to days-on-floor on the participation row before treating a low coin-in as a weak game.</p>
+      <p>Pull <code>GET /api/slot-master/assets/{asset_id}/history</code> and order the spans. Two open rows for one <code>asset_id</code> means a conversion or a move did not close the previous placement.</p>
       <div class="doc-read">
         <p class="doc-read-label">Read</p>
         <p><code>GET /api/slot-master/casinos</code></p>
-        <p class="doc-read-desc">Properties, and how many placements are active at each.</p>
+        <p class="doc-read-desc"><code>casino_id</code>, <code>casino_name</code>, <code>active_count</code>.</p>
         <p><code>GET /api/slot-master/machines?casino_id=</code></p>
-        <p class="doc-read-desc">The placements at one property: the asset, and the dates that placement covers.</p>
+        <p class="doc-read-desc">Active placements for one property, including the latest month’s <code>cipd</code>, <code>adw</code>, <code>win_index</code>, <code>actual_index</code>, and <code>last_report</code> when the caller can read performance.</p>
+        <p><code>GET /api/slot-master/assets/{asset_id}/history</code></p>
+        <p class="doc-read-desc">Every span for one asset: dates, action, <code>project_id</code>, removal.</p>
       </div>
       <aside class="doc-account" data-account="floor" hidden>
         <p class="doc-account-label">This account</p>
@@ -82,17 +141,34 @@
     </section>
 
     <section class="home-section home-prose" id="month">
-      <h2>The month</h2>
-      <p>Performance is a period of results for the placements that were there. Coin-in, win, and commission belong to a placement for that month. A figure that cannot be tied to a placement is unfinished, because nobody can say which machines produced it.</p>
-      <p>The month arrives as a report for a property. It lands against the placements. The screens read the sums, and they read how many of the expected lines have a report.</p>
+      <h2>Month</h2>
+      <p>A month is participation for the placements that were on the floor. An operator needs three grains: the company total, the property, and the machine. Commission at the company total is not enough to explain a property, and a property total is not enough to explain one serial.</p>
+      <h3>Fields</h3>
+      <div class="doc-table-wrap">
+        <table class="doc-table">
+          <thead><tr><th>Field</th><th>Use</th></tr></thead>
+          <tbody>
+            <tr><td>coinIn, actualWin, commission</td><td>Company totals for the month on <code>GET /api/executive</code>. The <code>Mom</code> fields are the change versus the previous month.</td></tr>
+            <tr><td>series[].placements.machines, delta</td><td>Playable machines at each month-end, and the change from the prior month.</td></tr>
+            <tr><td>series[].projects.open, closed</td><td>Jobs whose dates still span that month-end, and jobs whose end date falls in the month.</td></tr>
+            <tr><td>series[].reporting.reported, expected, pct</td><td>Properties with a participation row versus properties that were expected to have one.</td></tr>
+            <tr><td>expected_entries, invoiced_entries, commission</td><td>Per property, per month, on the finance overview. <code>uninvoiced_keys</code> were expected and have no invoice. <code>unexpected_keys</code> were invoiced and were not on the expected floor.</td></tr>
+            <tr><td>cipd, adw, win_index, actual_index, last_report</td><td>Per active placement, for the latest reported month. Coin-in per day, actual win per day, and the index versus the house.</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <h3>Comparisons</h3>
+      <p>Pull <code>commission</code> on the executive read and the sum of <code>commission</code> across properties on <code>GET /api/finance/overview</code> for the same month. They should meet. If the executive number is ahead of the property sum, the property snapshot is older than the company total.</p>
+      <p>Pull <code>reporting.pct</code> for the month and the month before. A drop from a full month to a fraction means reports are still arriving. It does not mean the floor shrank. Confirm with <code>placements.machines</code>, which moves only when placements open or close.</p>
+      <p>Pull <code>cipd</code> for a serial and set <code>date_instl</code> or the project <code>date_start</code> beside it. A low per-day figure on a full-month neighbor, with an install inside the month, is a partial month. A low per-day figure with a start date before the month is the game.</p>
       <div class="doc-read">
         <p class="doc-read-label">Read</p>
         <p><code>GET /api/executive?month=YYYY-MM</code></p>
-        <p class="doc-read-desc">Coin-in, actual win, and commission for the month, the change from the month before, and a trailing year of machines, jobs, and reporting.</p>
+        <p class="doc-read-desc">Company totals, month-over-month, and a 12-month <code>series</code>.</p>
         <p><code>GET /api/finance/overview?from=YYYY-MM&amp;to=YYYY-MM</code></p>
-        <p class="doc-read-desc">Expected participation lines against invoiced lines. This is the commission read another system would call.</p>
+        <p class="doc-read-desc">Per property: expected lines, invoiced lines, commission. This is the commission read another ledger would call. Range max is 36 months.</p>
         <p><code>GET /api/performance/themes-top?month=YYYY-MM</code></p>
-        <p class="doc-read-desc">Themes for that month, on the placements that carried them.</p>
+        <p class="doc-read-desc">Themes for that month, rolled up from the placements that carried them.</p>
       </div>
       <aside class="doc-account" data-account="month" hidden>
         <p class="doc-account-label">This account</p>
@@ -101,17 +177,38 @@
     </section>
 
     <section class="home-section home-prose" id="job">
-      <h2>The job</h2>
-      <p>An install, a removal, a move, or a conversion is why the floor changed. The job names the property, the assets, and the dates. The next month can be read beside that job, so a movement in the numbers has a cause sitting on the same machines.</p>
-      <p>The feed is the job itself. It lands on the assets it touched. A repair of a machine that was already there is a different record, covered under service.</p>
+      <h2>Project</h2>
+      <p>A project is one job for one client. It lists the assets involved, the start and end, the client, and who was on it. An install, a removal, a move, and a conversion are lines on that job. A repair of a machine that stayed in place is not a project.</p>
+      <h3>Fields</h3>
+      <div class="doc-table-wrap">
+        <table class="doc-table">
+          <thead><tr><th>Field</th><th>Use</th></tr></thead>
+          <tbody>
+            <tr><td>reference_key, project_name, project_type, status, status_name</td><td>The job and whether it is open.</td></tr>
+            <tr><td>casino_id, casino_name, tribe_name</td><td>The client.</td></tr>
+            <tr><td>date_start, date_end, date_created</td><td>When the floor change ran. Open-at-month-end means <code>date_start</code> is on or before the month-end and <code>date_end</code> is after it. Both dates have to be present.</td></tr>
+            <tr><td>ims_lead_tech, ims_assistant_techs, assigned_to, created_by</td><td>Who was on the job. The schedule read names the same people as <code>tech</code> and <code>assisting</code>.</td></tr>
+            <tr><td>ims_id, ims_project_number</td><td>The schedule row this catalog job belongs to.</td></tr>
+            <tr><td>actions[].action_type, line_count</td><td>How the lines split: install, remove, move, convert, and the others. <code>line_count</code> is the number of assets in that action.</td></tr>
+            <tr><td>serial_number, zone, bank, location, theme_name, cabinet</td><td>On the printout. One row per asset on the job, with the position and the theme that moved.</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <h3>Comparisons</h3>
+      <p>Pull <code>date_start</code> and <code>date_end</code> and lay them on the performance month. A job that starts and ends inside the month changed the floor for part of the month. Compare those dates to <code>placements.delta</code> and to <code>cipd</code> on the serials in the printout before you read the month as a demand change.</p>
+      <p>Pull <code>serial_number</code> from the printout and <code>asset_id</code> from the placement history where <code>project_id</code> equals this <code>reference_key</code>. The printout is what the job claimed. The history is what the floor recorded. A serial on the printout with no span pointing at the project did not land. A span pointing at the project with no printout line was recorded outside the job.</p>
+      <p>Pull <code>casino_id</code> and the finance overview for that property for the months the dates overlap. The commission change on that property, minus the serials that were already there for the full month, is the part this job can explain.</p>
+      <p>Pull <code>actions</code>. A job with both install and remove lines is a swap. Count the smaller of the two line counts. That count belongs in the footprint change for the month of <code>date_start</code>, not in a second machine count.</p>
       <div class="doc-read">
         <p class="doc-read-label">Read</p>
-        <p><code>GET /api/projects/catalog</code></p>
-        <p class="doc-read-desc">The jobs, the property, and how many machines each job moved.</p>
-        <p><code>GET /api/projects/ims?casino_id=</code></p>
-        <p class="doc-read-desc">The schedule of jobs at one property.</p>
+        <p><code>GET /api/projects/catalog?casino_id=</code></p>
+        <p class="doc-read-desc">Job headers: name, client, type, status, <code>date_start</code>, <code>date_end</code>, <code>line_count</code>.</p>
         <p><code>GET /api/projects/catalog/{reference_key}</code></p>
-        <p class="doc-read-desc">One job, including the machines on it.</p>
+        <p class="doc-read-desc">One job, including who was assigned and the action mix.</p>
+        <p><code>GET /api/projects/catalog/{reference_key}/printout</code></p>
+        <p class="doc-read-desc">The assets on the job: serial, position, theme, cabinet, denom, hold, and the settings that shipped with the line.</p>
+        <p><code>GET /api/projects/ims?casino_id=</code></p>
+        <p class="doc-read-desc">The schedule at one property: <code>project_no</code>, <code>date_start</code>, <code>date_end</code>, <code>tech</code>, <code>assisting</code>, and <code>matching_catalog</code> when a catalog job is linked.</p>
       </div>
       <aside class="doc-account" data-account="job" hidden>
         <p class="doc-account-label">This account</p>
@@ -121,14 +218,33 @@
 
     <section class="home-section home-prose" id="service">
       <h2>Service</h2>
-      <p>Service is work on a unit that is already on the floor. The parts belong to that cabinet, so the list of parts is the list that cabinet takes. A warehouse holds a cabinet that is off the floor. The same asset identity is used, so a repair and a performance figure are about one machine.</p>
-      <p>The work order itself is kept by the maintenance connection. This application reads the asset, the parts, and the warehouse. It does not keep a second work-order book.</p>
+      <p>Service is work on a unit that stayed on the floor. The application exposes the parts that cabinet takes and the warehouses holding cabinets that are off the floor. The work order itself stays on the maintenance connection. Do not read a project line as a repair, or a repair as a new placement.</p>
+      <h3>Fields</h3>
+      <div class="doc-table-wrap">
+        <table class="doc-table">
+          <thead><tr><th>Field</th><th>Use</th></tr></thead>
+          <tbody>
+            <tr><td>item, descrip, reference_key</td><td>The part.</td></tr>
+            <tr><td>item_family</td><td>Filter. Software rows are excluded unless <code>exclude_software=false</code>.</td></tr>
+            <tr><td>mfr, mfrpartno, vpartno</td><td>Manufacturer and vendor part numbers. This is the join to a purchasing system.</td></tr>
+            <tr><td>location</td><td>Where that part is stocked.</td></tr>
+            <tr><td>manufacturer, cabinet, warehouse counts</td><td>On the warehouse pivot. One row per manufacturer and cabinet. Columns are warehouses plus a total. A cell is how many of that cabinet are in that warehouse.</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <h3>Comparisons</h3>
+      <p>Pull <code>cabinet_name</code> on the asset and the parts whose family or description match that cabinet. A part issued against a cabinet the asset does not carry is the wrong bill of materials.</p>
+      <p>Pull the warehouse pivot for a cabinet and the active placements of that same cabinet. The pivot count is off the floor. The placement count is on the floor. A serial in the asset list with a warehouse <code>property</code> and an active placement is the drift between the two.</p>
       <div class="doc-read">
         <p class="doc-read-label">Read</p>
         <p><code>GET /api/parts-inventory</code></p>
-        <p class="doc-read-desc">Parts, and the cabinets they belong to.</p>
+        <p class="doc-read-desc">Parts. Optional <code>family</code>.</p>
+        <p><code>GET /api/parts-inventory/items/{item}</code></p>
+        <p class="doc-read-desc">One part.</p>
         <p><code>GET /api/warehouse-inventory/pivot</code></p>
-        <p class="doc-read-desc">Cabinets by warehouse, for units that are off the floor.</p>
+        <p class="doc-read-desc">Cabinet counts by warehouse.</p>
+        <p><code>GET /api/warehouse-inventory/serials</code></p>
+        <p class="doc-read-desc">The serials behind a pivot cell.</p>
       </div>
       <aside class="doc-account" data-account="service" hidden>
         <p class="doc-account-label">This account</p>
@@ -137,17 +253,35 @@
     </section>
 
     <section class="home-section home-prose" id="customer">
-      <h2>The customer</h2>
-      <p>The property, the agreement, and the deal describe the same floor. The agreement covers placements. The deal is the commercial conversation about those machines. When a job changes the floor, the agreement and the deal are supposed to follow, because they point at the same assets.</p>
-      <p>The property feed is the house itself. Contacts and deals arrive from the CRM connection and land on that property. The agreement is the contract on the machines.</p>
+      <h2>Customer</h2>
+      <p>The customer side is the property, the agreement that covers the machines, and the deal in the CRM. An operator comparing a deal to the floor needs the property id on both, the dates, and the count of machines each one claims.</p>
+      <h3>Fields</h3>
+      <div class="doc-table-wrap">
+        <table class="doc-table">
+          <thead><tr><th>Field</th><th>Use</th></tr></thead>
+          <tbody>
+            <tr><td>reference_key, casino_name, casino_short, tribe_name, state</td><td>The property. <code>casino_short</code> is the name on the finance overview.</td></tr>
+            <tr><td>licensed, sales</td><td>Whether this house is a floor you bill or a prospect.</td></tr>
+            <tr><td>total_number_of_machines</td><td>The house size the commercial record claims, not the placement count.</td></tr>
+            <tr><td>signed_master_agreement, executed_on, expiration, agreement_type</td><td>The commercial term.</td></tr>
+            <tr><td>emaint_property</td><td>The property name on the maintenance connection. Join key when the names differ.</td></tr>
+            <tr><td>hubspot_deal_id, deal_name, amount, close_date, create_date, is_closed, is_closed_won</td><td>The deal. <code>casino_id</code> ties it to the property. <code>ims_id</code> ties it to a schedule row when the deal became a job. <code>product_units</code> is the count the deal claims.</td></tr>
+            <tr><td>agreement_id, vendor_name, sales_order, agreement_date, total_price</td><td>A vendor agreement. This is the purchase of cabinets, not the casino’s participation deal.</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <h3>Comparisons</h3>
+      <p>Pull <code>total_number_of_machines</code> and <code>active_count</code> for the same <code>casino_id</code>. The first is the house. The second is your placements. Floor share is the second divided by the first, and only on houses that have both.</p>
+      <p>Pull <code>product_units</code> and <code>close_date</code> on an open deal and the project <code>line_count</code> where <code>ims_id</code> matches. A deal with units and no <code>ims_id</code> has not become a job. A job whose line count does not match <code>product_units</code> is a different scope than the deal that was sold.</p>
+      <p>Pull <code>close_date</code> and the project <code>date_start</code> for that <code>ims_id</code>. The deal closed when it was won. The floor changed on <code>date_start</code>. Commission for the months between those dates is still the previous floor.</p>
       <div class="doc-read">
         <p class="doc-read-label">Read</p>
         <p><code>GET /api/commerce/casinos/{reference_key}</code></p>
-        <p class="doc-read-desc">One property: the house, its contacts, and its deals.</p>
-        <p><code>GET /api/commerce/deals</code></p>
-        <p class="doc-read-desc">Deals across properties.</p>
+        <p class="doc-read-desc">One property, including contacts and deals nested on the payload.</p>
+        <p><code>GET /api/commerce/deals?status=open|closed|won|all</code></p>
+        <p class="doc-read-desc">Deals across properties. Default <code>status</code> is <code>open</code>.</p>
         <p><code>GET /api/contracts</code></p>
-        <p class="doc-read-desc">Agreements, and the machines they cover.</p>
+        <p class="doc-read-desc">Vendor agreements: id, vendor, sales order, date, price.</p>
       </div>
       <aside class="doc-account" data-account="customer" hidden>
         <p class="doc-account-label">This account</p>
@@ -155,42 +289,20 @@
       </aside>
     </section>
 
-    <section class="home-section" id="screens">
-      <h2>Where it shows up</h2>
-      <p>Each area of the application reads one of those records. It does not own a private copy.</p>
+    <section class="home-section home-prose" id="screens">
+      <h2>Join map</h2>
+      <p>Screens are views of these records. The join is the id in the left column.</p>
       <div class="doc-table-wrap">
         <table class="doc-table">
-          <thead>
-            <tr>
-              <th>Record</th>
-              <th>What reads it</th>
-            </tr>
-          </thead>
+          <thead><tr><th>From</th><th>To</th></tr></thead>
           <tbody>
-            <tr>
-              <td>Asset</td>
-              <td>Assets</td>
-            </tr>
-            <tr>
-              <td>Placement</td>
-              <td>Slot Master, Casinos, Warehouse</td>
-            </tr>
-            <tr>
-              <td>Month</td>
-              <td>Executive, Performance, billing coverage</td>
-            </tr>
-            <tr>
-              <td>Job</td>
-              <td>Projects</td>
-            </tr>
-            <tr>
-              <td>Service</td>
-              <td>Parts. The maintenance connection holds the work itself.</td>
-            </tr>
-            <tr>
-              <td>Customer</td>
-              <td>Casinos, Contracts, Deals</td>
-            </tr>
+            <tr><td>placement.asset_id</td><td>asset.asset_id, and the serial on both</td></tr>
+            <tr><td>placement.casino_id</td><td>project.casino_id, finance row for that property, deal.casino_id</td></tr>
+            <tr><td>placement.project_id</td><td>project.reference_key</td></tr>
+            <tr><td>project.ims_id</td><td>schedule reference_key, and deal.ims_id</td></tr>
+            <tr><td>printout.serial_number</td><td>placement.serial for the casino_id on the project</td></tr>
+            <tr><td>asset.property</td><td>emaint_property on the casino, or a warehouse column on the pivot</td></tr>
+            <tr><td>asset.cabinet_name</td><td>warehouse pivot row, and the parts for that cabinet</td></tr>
           </tbody>
         </table>
       </div>
@@ -200,30 +312,16 @@
       </aside>
     </section>
 
-    <section class="home-section" id="connections">
+    <section class="home-section home-prose" id="connections">
       <h2>Connections</h2>
-      <p>These are the systems the product can attach to. A company turns on the ones it uses. The reads above stay on that company’s server either way.</p>
+      <p>These are the systems a company can attach. The reads above stay on that company’s server. The connection supplies the record that a read does not store itself.</p>
       <div class="doc-table-wrap">
         <table class="doc-table">
-          <thead>
-            <tr>
-              <th>System</th>
-              <th>What moves</th>
-            </tr>
-          </thead>
+          <thead><tr><th>System</th><th>What moves</th></tr></thead>
           <tbody>
-            <tr>
-              <td>eMaint</td>
-              <td>Floor and service. The machines and the work on them can be read, and a floor change can be written back.</td>
-            </tr>
-            <tr>
-              <td>HubSpot</td>
-              <td>Customers, contacts, and deals. They are read into the commercial picture, and catalog quantity can be pushed the other way.</td>
-            </tr>
-            <tr>
-              <td>Google</td>
-              <td>Sign-in with the company’s email, which opens only that company’s server. Gmail brings reports and paperwork in, and sends notices out.</td>
-            </tr>
+            <tr><td>eMaint</td><td>Floor and service. Read the unit, the property, and the work on it. Write a floor change back. Join with <code>emaint_property</code> on the casino and <code>compid</code> on the asset.</td></tr>
+            <tr><td>HubSpot</td><td>Customers, contacts, and deals. Read them onto the property. Push catalog quantity the other way. Join the deal with <code>casino_id</code> and, when the deal has become a job, <code>ims_id</code>.</td></tr>
+            <tr><td>Google</td><td>Sign-in with the company’s email. That login opens only that company’s server. Gmail brings participation reports and paperwork in, and sends notices out. The month read is the result after those reports have landed.</td></tr>
           </tbody>
         </table>
       </div>
@@ -231,7 +329,7 @@
   </main>
 
   <footer class="home-footer">
-    <p>The service pages are the overview. This page is the data.</p>
+    <p>Field reference for the reads. The service pages are the overview.</p>
     <button type="button" class="home-btn" data-sign-in>Staff sign in</button>
   </footer>
 
