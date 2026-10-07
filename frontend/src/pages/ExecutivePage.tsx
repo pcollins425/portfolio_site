@@ -6,7 +6,7 @@ import { fmtUsd } from "../data/mockData";
 
 type MonthSeriesRow = {
   month: string;
-  projects: { open: number; closed: number };
+  projects: { open: number; canceled: number; total: number; closed?: number };
   deals: { created: number; won: number; closed: number };
   placements: { machines: number; delta: number };
   footprint: {
@@ -54,7 +54,7 @@ function fmtMonthLabel(iso: string) {
 const COLUMN_HELP: { label: string; text: string }[] = [
   {
     label: "Projects",
-    text: "Open jobs still cover month-end. Closed jobs finished during the month. A job with no dates is left out. The cell is open, then closed.",
+    text: "Projects that start in the month. The cell is open, then canceled, then total. Completed projects are included in the total. A project with no start date is left out.",
   },
   {
     label: "Deals",
@@ -218,7 +218,7 @@ function MonthCard({ row }: { row: MonthSeriesRow }) {
             <HeaderTip label="Projects" text={helpFor("Projects")} />
           </dt>
           <dd className="font-mono text-[#c5cdd9]">
-            {row.projects.open} open / {row.projects.closed} closed
+            {row.projects.open} / {row.projects.canceled} / {row.projects.total}
           </dd>
         </div>
         <div>
@@ -376,7 +376,7 @@ export default function ExecutivePage() {
                       <tr key={row.month}>
                         <td className={t.tableCellName}>{fmtMonthLabel(row.month)}</td>
                         <td className={t.tableCell}>
-                          {row.projects.open} / {row.projects.closed}
+                          {row.projects.open} / {row.projects.canceled} / {row.projects.total}
                         </td>
                         <td className={t.tableCell}>
                           {row.deals.created} / {row.deals.won} / {row.deals.closed}
