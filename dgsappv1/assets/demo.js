@@ -53,18 +53,24 @@
     state.allowedTableIds = state.user ? new Set(state.user.tables || []) : null;
   }
 
-  function redirectToLogin() {
-    const url = window.DGSAuth ? DGSAuth.loginPageUrl() : loginPageUrlFallback();
-    window.location.replace(url);
+  function redirectExpiredSession() {
+    if (window.DGSAuth) {
+      DGSAuth.setToken(null);
+      window.location.replace(DGSAuth.homePageUrl());
+      return;
+    }
+    sessionStorage.removeItem(AUTH_TOKEN_KEY);
+    window.location.replace(homePageUrlFallback());
   }
 
-  function loginPageUrlFallback() {
-    let path = window.location.pathname;
-    if (path.endsWith("/operations") && !path.endsWith(".html")) {
-      path = path.replace(/\/operations$/, "/operations.html");
-    }
-    const returnTo = `${window.location.origin}${path}?${params.toString()}`;
-    return `login.html?api=${encodeURIComponent(API_BASE)}&return_to=${encodeURIComponent(returnTo)}`;
+  function homePageUrlFallback() {
+    const path = window.location.pathname;
+    const marker = "/dgsappv1/";
+    const at = path.indexOf(marker);
+    const dir = at !== -1 ? path.slice(0, at + marker.length) : path.replace(/[^/]*$/, "");
+    const api = params.get("api");
+    const qs = api ? `?api=${encodeURIComponent(API_BASE)}` : "";
+    return `${window.location.origin}${dir}index.html${qs}`;
   }
 
   function canWriteTable(tableId) {
@@ -212,9 +218,7 @@
     opts.headers = authHeaders(opts.headers);
     const res = await fetch(`${API_BASE}${path}`, opts);
     if (res.status === 401 && state.authRequired) {
-      if (window.DGSAuth) DGSAuth.setToken(null);
-      else sessionStorage.removeItem(AUTH_TOKEN_KEY);
-      redirectToLogin();
+      redirectExpiredSession();
       throw new Error("Sign in required");
     }
     if (!res.ok) {

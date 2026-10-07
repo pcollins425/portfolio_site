@@ -67,6 +67,22 @@
     return `login.html?api=${encodeURIComponent(apiBase())}&return_to=${encodeURIComponent(dest)}`;
   }
 
+  function appDir() {
+    const path = window.location.pathname;
+    const marker = "/dgsappv1/";
+    const at = path.indexOf(marker);
+    if (at !== -1) return path.slice(0, at + marker.length);
+    const guide = path.indexOf("/guide/");
+    if (guide !== -1) return path.slice(0, guide + 1);
+    return path.replace(/[^/]*$/, "");
+  }
+
+  function homePageUrl() {
+    const api = params.get("api");
+    const qs = api ? `?api=${encodeURIComponent(apiBase())}` : "";
+    return `${window.location.origin}${appDir()}index.html${qs}`;
+  }
+
   function viewAsId() {
     return (sessionStorage.getItem(VIEW_AS_KEY) || "").trim();
   }
@@ -157,6 +173,11 @@
         return false;
       }
       setToken(null);
+      sessionStorage.removeItem(VIEW_AS_KEY);
+      if (err.status === 401) {
+        window.location.replace(homePageUrl());
+        return false;
+      }
       window.location.replace(loginPageUrl());
       return false;
     }
@@ -190,6 +211,7 @@
     signOut,
     initLoginPage,
     loginPageUrl,
+    homePageUrl,
     getUser: () => state.user,
     isAuthRequired: () => state.authRequired,
     viewAsId,
