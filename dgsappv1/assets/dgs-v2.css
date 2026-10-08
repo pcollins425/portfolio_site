@@ -1231,31 +1231,54 @@ body.dgs-vendor-hub button.dgs-v2-btn {
   appearance: none;
 }
 
+body.dgs-vendor-hub .vh-cab-tile {
+  grid-column: 1;
+  grid-row: 1;
+}
+
+body.dgs-vendor-hub .vh-theme-tile {
+  grid-column: 2;
+  grid-row: 1;
+}
+
 body.dgs-vendor-hub .vh-agree-tile {
   grid-column: 1 / -1;
+  grid-row: 2;
 }
 
 body.dgs-vendor-hub .vh-agree-body {
   display: flex;
   flex-direction: column;
   gap: 12px;
+  min-height: 0;
+  overflow: hidden;
 }
 
-body.dgs-vendor-hub .vh-agree-picks,
-body.dgs-vendor-hub .vh-agree-cols {
+body.dgs-vendor-hub .vh-agree-picks {
   display: flex;
   gap: 12px;
-  min-height: 0;
+  flex: 0 0 auto;
 }
 
 body.dgs-vendor-hub .vh-agree-cols {
-  align-items: flex-start;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 16px;
+  flex: 1 1 auto;
+  min-height: 0;
+  min-width: 0;
 }
 
 body.dgs-vendor-hub .vh-agree-docs,
 body.dgs-vendor-hub .vh-agree-casinos {
-  flex: 1 1 0;
   min-width: 0;
+  min-height: 0;
+  overflow: auto;
+}
+
+body.dgs-vendor-hub .vh-agree-casinos {
+  border-left: 1px solid var(--dgs-v2-border-soft);
+  padding-left: 12px;
 }
 
 body.dgs-vendor-hub .vh-agree-pick,
@@ -1293,8 +1316,22 @@ body.dgs-vendor-hub .vh-clause {
 }
 
 @media (max-width: 900px) {
+  body.dgs-vendor-hub .vh-cab-tile,
+  body.dgs-vendor-hub .vh-theme-tile,
+  body.dgs-vendor-hub .vh-agree-tile {
+    grid-column: 1;
+    grid-row: auto;
+  }
+
   body.dgs-vendor-hub .vh-agree-cols {
-    flex-direction: column;
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  body.dgs-vendor-hub .vh-agree-casinos {
+    border-left: none;
+    padding-left: 0;
+    border-top: 1px solid var(--dgs-v2-border-soft);
+    padding-top: 8px;
   }
 }
 
@@ -1458,6 +1495,10 @@ body.dgs-vendor-hub .vh-clause {
     grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
     grid-template-rows: minmax(0, 1fr) minmax(0, 1fr);
   }
+
+  body.dgs-vendor-hub .vh-cab-tile { grid-column: 1; grid-row: 1; }
+  body.dgs-vendor-hub .vh-theme-tile { grid-column: 2; grid-row: 1; }
+  body.dgs-vendor-hub .vh-agree-tile { grid-column: 1 / -1; grid-row: 2; }
 }
 
 /* Theme Hub cards are tall (tables + upload forms). Same failure as Casino Hub:

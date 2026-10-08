@@ -238,13 +238,13 @@
     const cabinets = data.cabinets || [];
     const doc = selectedDocument(selectedAgreement());
     els.hubGrid.innerHTML = `
-      <article class="dgs-v2-hub-tile">
+      <article class="dgs-v2-hub-tile vh-cab-tile">
         <div class="dgs-v2-hub-tile-head">
           <div class="dgs-v2-section-label">Cabinets</div>
         </div>
         <div class="dgs-v2-hub-tile-body vh-scroll">${cabinetRows(cabinets)}</div>
       </article>
-      <article class="dgs-v2-hub-tile">
+      <article class="dgs-v2-hub-tile vh-theme-tile">
         <div class="dgs-v2-hub-tile-head">
           <div class="dgs-v2-section-label">Themes</div>
         </div>
