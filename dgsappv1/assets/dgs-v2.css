@@ -1173,6 +1173,10 @@ body.dgs-vendor-hub .dgs-v2-hub-grid {
   overflow: hidden;
 }
 
+body.dgs-vendor-hub .dgs-v2-hub-grid:has(.vh-agree-tile) {
+  grid-template-rows: minmax(0, 1fr) minmax(0, 1.15fr);
+}
+
 body.dgs-vendor-hub .dgs-v2-hub-tile {
   min-height: 0;
   overflow: hidden;
@@ -1429,6 +1433,30 @@ body.dgs-vendor-hub .vh-clause {
 
   body.dgs-vendor-hub .dgs-v2-hub-grid {
     flex-direction: row;
+  }
+}
+
+/* Agreements stay on this page: cabinets and themes on the top row,
+   the agreement and its casino list across the bottom. */
+@media (max-width: 1366px) {
+  body.dgs-vendor-hub .dgs-v2-hub-grid:has(.vh-agree-tile) {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr) minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 900px) {
+  body.dgs-vendor-hub .dgs-v2-hub-grid:has(.vh-agree-tile) {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1.2fr);
+  }
+}
+
+@media (max-width: 900px) and (orientation: landscape) {
+  body.dgs-vendor-hub .dgs-v2-hub-grid:has(.vh-agree-tile) {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr) minmax(0, 1fr);
   }
 }
 

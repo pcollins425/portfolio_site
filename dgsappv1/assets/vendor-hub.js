@@ -12,7 +12,6 @@
     mediaUrls: {},
     data: null,
     agreements: [],
-    view: params.get("view") === "agreements" ? "agreements" : "catalog",
     agreementId: (params.get("agreement") || "").trim(),
     documentId: "",
   };
@@ -27,7 +26,7 @@
     captionId: document.getElementById("caption-id"),
     captionMeta: document.getElementById("caption-meta"),
     btnBack: document.getElementById("btn-back"),
-    btnAgreements: document.getElementById("btn-agreements"),
+    hubSubtitle: document.getElementById("hub-subtitle"),
   };
 
   function apiUrl(path) {
@@ -156,22 +155,15 @@
     window.open(url, "_blank", "noopener");
   }
 
-  function paintAgreements() {
+  function agreementsTile() {
     const rows = state.agreements || [];
-    if (!rows.length) {
-      els.hubGrid.innerHTML = `
-        <article class="dgs-v2-hub-tile vh-agree-tile">
-          <div class="dgs-v2-hub-tile-head"><div class="dgs-v2-section-label">Distribution agreements</div></div>
-          <div class="dgs-v2-hub-tile-body vh-scroll"><p class="dgs-v2-lines-status">No distribution agreements on file.</p></div>
-        </article>`;
-      return;
-    }
+    if (!rows.length) return "";
     syncAgreementChoice();
     const agreement = selectedAgreement();
     const doc = selectedDocument(agreement);
     const agreementButtons = rows.map((row) => {
       const active = row.reference_key === agreement.reference_key ? " is-active" : "";
-      const flag = row.governing ? "Governing" : `Replaced by a later agreement`;
+      const flag = row.governing ? "Governing" : "Replaced";
       return `<button type="button" class="vh-agree-pick${active}" data-agreement="${esc(row.reference_key)}">
         <span>${esc(row.agreement_number)}</span>
         <span class="vh-cab-count">${esc(flag)}</span>
@@ -190,7 +182,7 @@
     ).join("");
     const fileBtn = doc && doc.has_file
       ? `<button type="button" class="dgs-v2-btn vh-pdf" id="btn-dist-pdf">Open PDF</button>`
-      : `<p class="dgs-v2-lines-status">PDF not filed yet.</p>`;
+      : "";
     const casinoHtml = !doc
       ? `<p class="dgs-v2-lines-status">No document selected.</p>`
       : !doc.has_territory
@@ -206,7 +198,7 @@
                   ${esc(label)}${extra ? `<span class="vh-doc-title">${esc(extra)}</span>` : ""}
                 </a>`;
               }).join("")}</div>`).join("");
-    els.hubGrid.innerHTML = `
+    return `
       <article class="dgs-v2-hub-tile vh-agree-tile">
         <div class="dgs-v2-hub-tile-head">
           <div class="dgs-v2-section-label">Distribution agreements</div>
@@ -220,6 +212,9 @@
           </div>
         </div>
       </article>`;
+  }
+
+  function bindAgreements(doc) {
     els.hubGrid.querySelectorAll("[data-agreement]").forEach((button) => {
       button.addEventListener("click", () => {
         state.agreementId = button.getAttribute("data-agreement");
@@ -240,13 +235,8 @@
   function paint() {
     const data = state.data;
     if (!data) return;
-    if (state.view === "agreements") {
-      paintAgreements();
-      if (els.btnAgreements) els.btnAgreements.textContent = "Cabinets";
-      return;
-    }
-    if (els.btnAgreements) els.btnAgreements.textContent = "Agreements";
     const cabinets = data.cabinets || [];
+    const doc = selectedDocument(selectedAgreement());
     els.hubGrid.innerHTML = `
       <article class="dgs-v2-hub-tile">
         <div class="dgs-v2-hub-tile-head">
@@ -259,7 +249,9 @@
           <div class="dgs-v2-section-label">Themes</div>
         </div>
         <div class="dgs-v2-hub-tile-body vh-scroll">${themeList(allThemes(data))}</div>
-      </article>`;
+      </article>
+      ${agreementsTile()}`;
+    bindAgreements(doc);
   }
 
   async function loadMediaUrl(relPath) {
@@ -286,6 +278,11 @@
       ? ` · ${agreementCount.toLocaleString()} distribution agreement${agreementCount === 1 ? "" : "s"}`
       : "";
     els.captionMeta.textContent = `${cabinets.length.toLocaleString()} cabinets · ${themeCount.toLocaleString()} themes${agreementBit}`;
+    if (els.hubSubtitle) {
+      els.hubSubtitle.textContent = agreementCount
+        ? "Cabinets, themes, and distribution agreements"
+        : "Cabinets and the themes on them";
+    }
     els.btnBack.href = pageUrl("vendors-v2.html", { id: data.reference_key });
     paint();
 
@@ -319,12 +316,6 @@
       if (agreementRes.ok) {
         const agreementBody = await agreementRes.json().catch(() => ({}));
         state.agreements = agreementBody.agreements || [];
-      }
-      if (els.btnAgreements) {
-        els.btnAgreements.addEventListener("click", () => {
-          state.view = state.view === "agreements" ? "catalog" : "agreements";
-          paint();
-        });
       }
       render(body);
       els.hubLoading.hidden = true;
