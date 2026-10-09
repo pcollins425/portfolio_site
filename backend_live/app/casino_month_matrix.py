@@ -289,3 +289,174 @@ WHERE TRY_CONVERT(date, mr.[date]) >= %s
         "units": len(rows),
         "vendors": vendors,
     }
+
+
+def _bucket() -> dict[str, dict[str, float]]:
+    return {"tdw_sum": {}, "tdw_n": {}, "adw_sum": {}, "adw_n": {}}
+
+
+def _add_month(bucket: dict[str, dict[str, float]], ym: str, tdw: Any, adw: Any) -> None:
+    if tdw is not None:
+        bucket["tdw_sum"][ym] = bucket["tdw_sum"].get(ym, 0.0) + float(tdw)
+        bucket["tdw_n"][ym] = bucket["tdw_n"].get(ym, 0.0) + 1
+    if adw is not None:
+        bucket["adw_sum"][ym] = bucket["adw_sum"].get(ym, 0.0) + float(adw)
+        bucket["adw_n"][ym] = bucket["adw_n"].get(ym, 0.0) + 1
+
+
+def _measures(bucket: dict[str, dict[str, float]], months: list[str]) -> dict[str, Any]:
+    tdw: dict[str, float] = {}
+    adw: dict[str, float] = {}
+    tdw_sum = tdw_n = adw_sum = adw_n = 0.0
+    for ym in months:
+        n = bucket["tdw_n"].get(ym, 0)
+        if n:
+            tdw[ym] = round(bucket["tdw_sum"][ym] / n, 2)
+            tdw_sum += bucket["tdw_sum"][ym]
+            tdw_n += n
+        n = bucket["adw_n"].get(ym, 0)
+        if n:
+            adw[ym] = round(bucket["adw_sum"][ym] / n, 2)
+            adw_sum += bucket["adw_sum"][ym]
+            adw_n += n
+    return {
+        "tdw": tdw,
+        "adw": adw,
+        "tdw_avg": _avg(tdw_sum, int(tdw_n)),
+        "adw_avg": _avg(adw_sum, int(adw_n)),
+    }
+
+
+def build_expand(query: Query, casino_id: str, end: date) -> dict[str, Any]:
+    """One casino, six months, nested vendor → cabinet → sign or theme → serial."""
+    months = month_keys(end, 6)
+    start, stop = _bounds(months)
+    rows = query(
+        f"""
+SELECT
+  {_CASINO_NAME} AS casino_name,
+  CONVERT(char(7), TRY_CONVERT(date, mr.[date]), 126) AS ym,
+  RTRIM(mr.Serial_number) AS serial,
+  RTRIM(mr.Vendor) AS vendor,
+  RTRIM(mr.Cabinet) AS cabinet,
+  RTRIM(mr.Theme) AS theme,
+  CAST(mr.TDW AS float) AS tdw,
+  CAST(mr.ADW AS float) AS adw,
+  mr.slot_master_id
+FROM {_MV} AS mr
+{_CASINO_JOINS}
+WHERE TRY_CONVERT(date, mr.[date]) >= %s
+  AND TRY_CONVERT(date, mr.[date]) < %s
+  AND {_CASINO_ID} = %s
+{_UNIT_FILTER}
+""",
+        (start, stop, casino_id),
+    )
+    signs = _sign_index(query)
+    casino_name = str(rows[0]["casino_name"]).strip() if rows else ""
+
+    vendors: dict[str, Any] = {}
+    for row in rows:
+        ym = str(row["ym"] or "").strip()
+        if ym not in months:
+            continue
+        vendor = str(row["vendor"] or "").strip() or "—"
+        cabinet = str(row["cabinet"] or "").strip() or "—"
+        theme = str(row["theme"] or "").strip() or "—"
+        serial = str(row["serial"] or "").strip() or "(no serial)"
+        smm = str(row["slot_master_id"] or "").strip()
+        tdw = None if row["tdw"] is None else float(row["tdw"])
+        adw = None if row["adw"] is None else float(row["adw"])
+        sign = signs.get(smm)
+
+        v = vendors.setdefault(vendor, {"bucket": _bucket(), "cabinets": {}})
+        c = v["cabinets"].setdefault(cabinet, {"bucket": _bucket(), "signs": {}, "themes": {}})
+        _add_month(v["bucket"], ym, tdw, adw)
+        _add_month(c["bucket"], ym, tdw, adw)
+
+        if sign:
+            group = c["signs"].setdefault(
+                sign["ssm"],
+                {
+                    "bucket": _bucket(),
+                    "sign_serial": sign["sign_serial"],
+                    "themes": {},
+                },
+            )
+            leaf_parent = group["themes"].setdefault(theme, {"bucket": _bucket(), "serials": {}})
+            _add_month(group["bucket"], ym, tdw, adw)
+        else:
+            leaf_parent = c["themes"].setdefault(theme, {"bucket": _bucket(), "serials": {}})
+        _add_month(leaf_parent["bucket"], ym, tdw, adw)
+        leaf_key = smm or serial
+        leaf = leaf_parent["serials"].setdefault(
+            leaf_key, {"bucket": _bucket(), "serial": serial, "slot_master_id": smm}
+        )
+        _add_month(leaf["bucket"], ym, tdw, adw)
+
+    def serial_nodes(serials: dict[str, Any]) -> list[dict[str, Any]]:
+        out = []
+        for key in sorted(serials, key=lambda k: serials[k]["serial"].lower()):
+            node = serials[key]
+            out.append(
+                {
+                    "serial": node["serial"],
+                    "slot_master_id": node["slot_master_id"],
+                    **_measures(node["bucket"], months),
+                }
+            )
+        return out
+
+    def theme_nodes(themes: dict[str, Any]) -> list[dict[str, Any]]:
+        out = []
+        for name in sorted(themes, key=str.lower):
+            node = themes[name]
+            out.append(
+                {
+                    "theme": name,
+                    **_measures(node["bucket"], months),
+                    "serials": serial_nodes(node["serials"]),
+                }
+            )
+        return out
+
+    vendor_out = []
+    for vendor in sorted(vendors, key=str.lower):
+        vnode = vendors[vendor]
+        cabinets = []
+        for cabinet in sorted(vnode["cabinets"], key=str.lower):
+            cnode = vnode["cabinets"][cabinet]
+            sign_groups = []
+            for ssm in sorted(cnode["signs"]):
+                group = cnode["signs"][ssm]
+                sign_groups.append(
+                    {
+                        "ssm": ssm,
+                        "sign_serial": group["sign_serial"],
+                        **_measures(group["bucket"], months),
+                        "themes": theme_nodes(group["themes"]),
+                    }
+                )
+            cabinets.append(
+                {
+                    "cabinet": cabinet,
+                    **_measures(cnode["bucket"], months),
+                    "sign_groups": sign_groups,
+                    "themes": theme_nodes(cnode["themes"]),
+                }
+            )
+        vendor_out.append(
+            {
+                "vendor": vendor,
+                **_measures(vnode["bucket"], months),
+                "cabinets": cabinets,
+            }
+        )
+
+    return {
+        "source": "live",
+        "casino_id": casino_id,
+        "casino_name": casino_name,
+        "months": months,
+        "vendors": vendor_out,
+    }

@@ -11,7 +11,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from app import dgs_org_access as org
 from app import mssql
 from app.auth_deps import require_demo_user
-from app.casino_month_matrix import build_cell, build_matrix
+from app.casino_month_matrix import build_cell, build_expand, build_matrix
 from app.commission_rules import parse_rules, reporting_waived
 
 router = APIRouter(prefix="/api", tags=["master-revenue"])
@@ -1522,6 +1522,21 @@ def performance_casino_month_cell(
     if not ym:
         raise HTTPException(status_code=400, detail="month must be YYYY-MM")
     return build_cell(_revenue_query, casino_id.strip(), ym)
+
+
+@router.get("/performance/casino-month/expand")
+def performance_casino_month_expand(
+    casino_id: str = Query(..., min_length=1),
+    month: str | None = Query(None, description="YYYY-MM performance month the six columns end on"),
+):
+    periods = _distinct_periods(36)
+    try:
+        end, _prev = _resolve_target_period(month, periods)
+    except HTTPException as exc:
+        if exc.status_code == 404:
+            return {"source": "live", "casino_id": casino_id, "vendors": [], "months": []}
+        raise
+    return build_expand(_revenue_query, casino_id.strip(), end)
 
 
 @router.get("/performance/themes-top")
