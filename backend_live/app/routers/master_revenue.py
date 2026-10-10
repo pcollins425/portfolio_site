@@ -11,7 +11,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from app import dgs_org_access as org
 from app import mssql
 from app.auth_deps import require_demo_user
-from app.casino_month_matrix import build_cell, build_expand, build_matrix
+from app.casino_month_matrix import build_cell, build_expand, build_leaders, build_matrix
 from app.commission_rules import parse_rules, reporting_waived
 
 router = APIRouter(
@@ -1559,6 +1559,22 @@ def performance_casino_month_expand(
             return {"source": "live", "casino_id": casino_id, "vendors": [], "months": []}
         raise
     return build_expand(_revenue_query, casino_id.strip(), end)
+
+
+@router.get("/performance/leaders")
+def performance_leaders(
+    month: str | None = Query(None, description="YYYY-MM performance month the six columns end on"),
+    user: Annotated[dict[str, Any] | None, Depends(require_demo_user)] = None,
+):
+    org.assert_performance_read(user)
+    periods = _distinct_periods(36)
+    try:
+        end, _prev = _resolve_target_period(month, periods)
+    except HTTPException as exc:
+        if exc.status_code == 404:
+            return {"source": "live", "themes": [], "cabinets": [], "signs": [], "regions": []}
+        raise
+    return build_leaders(_revenue_query, end)
 
 
 @router.get("/performance/themes-top")
