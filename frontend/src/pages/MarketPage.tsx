@@ -16,6 +16,30 @@ import { useDashboardTheme } from "../dgs/ThemeContext";
 
 type NamedUnits = { name: string; units: number };
 type Leader = { casino: string; units: number; floor: number; share_pct: number };
+type Band = {
+  contracted: number;
+  penetrated: number;
+  open: number;
+  penetration_pct: number;
+};
+type TribeRow = {
+  tribe_id: string;
+  name: string;
+  contracted_casinos: number;
+  open_casinos: number;
+  on_floor: number;
+  units: number;
+  share_pct: number;
+};
+type SalesBook = {
+  units: number;
+  game_sale: number;
+  convert_to_sale: number;
+  other: number;
+  game_sale_houses: number;
+  convert_houses: number;
+  reseller_units: number;
+};
 
 type MarketPayload = {
   units: number;
@@ -29,6 +53,15 @@ type MarketPayload = {
   floor_size: number;
   blended_share_pct: number;
   excluded_universal: string[];
+  commercial_houses?: number;
+  unlisted_casinos?: number;
+  bands?: {
+    tribe: Band;
+    casino: Band;
+    vendor_casino: Band;
+  };
+  tribes?: TribeRow[];
+  sales?: SalesBook;
   leaders: Leader[];
   vendors: NamedUnits[];
   cabinets: NamedUnits[];
@@ -102,6 +135,76 @@ function RankChart({
   );
 }
 
+function PenetrationDonut({ band }: { band: Band }) {
+  const t = useDashboardTheme();
+  const donut = [
+    { name: "Penetrated", value: band.penetrated },
+    { name: "Open", value: band.open },
+  ];
+  return (
+    <div className="relative mx-auto h-40 w-40">
+      <ResponsiveContainer width="100%" height="100%">
+        <PieChart>
+          <Pie
+            data={donut}
+            dataKey="value"
+            nameKey="name"
+            innerRadius={48}
+            outerRadius={64}
+            stroke="none"
+            paddingAngle={band.contracted ? 2 : 0}
+          >
+            <Cell fill="#6eb5ff" />
+            <Cell fill="rgba(255,255,255,0.14)" />
+          </Pie>
+          <Tooltip
+            contentStyle={{ backgroundColor: t.chart.tooltipBg, borderColor: t.chart.tooltipBorder }}
+          />
+        </PieChart>
+      </ResponsiveContainer>
+      <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
+        <span className="text-2xl font-semibold tracking-tight text-[#f3f5f9]">
+          {band.penetration_pct.toFixed(0)}%
+        </span>
+        <span className="text-xs text-[#8b96a8]">leased</span>
+      </div>
+    </div>
+  );
+}
+
+function BandCard({
+  title,
+  question,
+  band,
+}: {
+  title: string;
+  question: string;
+  band: Band;
+}) {
+  const t = useDashboardTheme();
+  return (
+    <div className={t.panel}>
+      <p className={t.panelLabel}>{title}</p>
+      <p className={`mt-1 text-xs ${t.code}`}>{question}</p>
+      <PenetrationDonut band={band} />
+      <div className="mt-2 grid grid-cols-3 gap-2 text-center">
+        <div>
+          <p className="text-lg font-semibold text-[#f3f5f9]">{band.contracted.toLocaleString()}</p>
+          <p className={`text-xs ${t.code}`}>Contracted</p>
+        </div>
+        <div>
+          <p className="text-lg font-semibold text-[#f3f5f9]">{band.penetrated.toLocaleString()}</p>
+          <p className={`text-xs ${t.code}`}>On floor</p>
+        </div>
+        <div>
+          <p className="text-lg font-semibold text-[#f3f5f9]">{band.open.toLocaleString()}</p>
+          <p className={`text-xs ${t.code}`}>Open</p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function MarketPage() {
   const t = useDashboardTheme();
   const [data, setData] = useState<MarketPayload | null>(null);
@@ -128,122 +231,261 @@ export default function MarketPage() {
     return <p className={`text-sm ${t.code}`}>Loading floor…</p>;
   }
 
-  const donut = [
-    { name: "Penetrated", value: data.penetrated_markets },
-    { name: "Open", value: data.open_markets },
-  ];
   const universal = data.excluded_universal.join(", ");
+  const bands = data.bands;
+  const sales = data.sales;
+  const charts = (
+    <section className="grid gap-4 xl:grid-cols-3">
+      <RankChart
+        title="Floor share leaders"
+        color="#34d399"
+        dataKey="share"
+        tickFormatter={(value) => `${value}%`}
+        rows={data.leaders.map((row) => ({
+          label: row.casino,
+          share: row.share_pct,
+          units: row.units,
+          floor: row.floor,
+        }))}
+        tooltip={(row) =>
+          `${row.label} · ${Number(row.units).toLocaleString()} of ${Number(row.floor).toLocaleString()}`
+        }
+      />
+      <RankChart
+        title="Vendor portfolio"
+        color="#6eb5ff"
+        dataKey="units"
+        rows={data.vendors.map((row) => ({ label: row.name, units: row.units }))}
+        tooltip={(row) => `${row.label} · ${Number(row.units).toLocaleString()} machines`}
+      />
+      <RankChart
+        title="Cabinet mix"
+        color="#a78bfa"
+        dataKey="units"
+        rows={data.cabinets.map((row) => ({ label: row.name, units: row.units }))}
+        tooltip={(row) => `${row.label} · ${Number(row.units).toLocaleString()} machines`}
+      />
+    </section>
+  );
+
+  if (!bands) {
+    const donut = [
+      { name: "Penetrated", value: data.penetrated_markets },
+      { name: "Open", value: data.open_markets },
+    ];
+    return (
+      <div className="space-y-6">
+        <section className="grid gap-4 lg:grid-cols-[220px_1fr]">
+          <div className={t.panel}>
+            <p className={t.panelLabel}>Contracted markets</p>
+            <div className="relative mt-2 h-52">
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie
+                    data={donut}
+                    dataKey="value"
+                    nameKey="name"
+                    innerRadius={62}
+                    outerRadius={82}
+                    stroke="none"
+                    paddingAngle={2}
+                  >
+                    <Cell fill="#6eb5ff" />
+                    <Cell fill="rgba(255,255,255,0.14)" />
+                  </Pie>
+                  <Tooltip
+                    contentStyle={{ backgroundColor: t.chart.tooltipBg, borderColor: t.chart.tooltipBorder }}
+                  />
+                </PieChart>
+              </ResponsiveContainer>
+              <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
+                <span className="text-3xl font-semibold tracking-tight text-[#f3f5f9]">
+                  {data.penetration_pct.toFixed(0)}%
+                </span>
+                <span className="text-xs text-[#8b96a8]">penetrated</span>
+              </div>
+            </div>
+          </div>
+          <div>
+            <h2 className={t.pageTitle}>Market</h2>
+            <p className={`max-w-3xl ${t.pageSub}`}>
+              {data.units.toLocaleString()} machines are on the floor at{" "}
+              {data.casinos_with_units.toLocaleString()} casinos.{" "}
+              {data.penetrated_markets.toLocaleString()} of{" "}
+              {data.contracted_markets.toLocaleString()} contracted vendor markets have at least one of
+              them. Where a house floor size is on file, those machines are{" "}
+              {data.blended_share_pct.toFixed(1)}% of the floor.
+            </p>
+            <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+              <Kpi
+                label="Contracted"
+                value={data.contracted_markets.toLocaleString()}
+                sub="Casino × vendor agreements"
+              />
+              <Kpi
+                label="Penetrated"
+                value={data.penetrated_markets.toLocaleString()}
+                sub="Agreement with a machine on the floor"
+              />
+              <Kpi
+                label="Open"
+                value={data.open_markets.toLocaleString()}
+                sub="Agreement, no machine yet"
+              />
+              <Kpi
+                label="Units on floor"
+                value={data.units.toLocaleString()}
+                sub={`${data.casinos_with_units.toLocaleString()} casinos`}
+              />
+              <Kpi
+                label="Floor share"
+                value={`${data.blended_share_pct.toFixed(1)}%`}
+                sub={`${data.floor_units.toLocaleString()} of ${data.floor_size.toLocaleString()} at ${data.floor_casinos} houses`}
+              />
+            </div>
+            <p className={`mt-3 text-xs ${t.code}`}>
+              Active Slot Master stints, joined to the asset. Cabinet type Center, Sign, Controller, and
+              Server are left out. {universal} stay off the agreement count. Floor share uses{" "}
+              <span className="font-mono">total_number_of_machines</span> and only houses that have both
+              a size and our machines.
+            </p>
+          </div>
+        </section>
+        {charts}
+      </div>
+    );
+  }
+
+  const tribeRows = data.tribes ?? [];
 
   return (
     <div className="space-y-6">
-      <section className="grid gap-4 lg:grid-cols-[220px_1fr]">
-        <div className={t.panel}>
-          <p className={t.panelLabel}>Contracted markets</p>
-          <div className="relative mt-2 h-52">
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Pie
-                  data={donut}
-                  dataKey="value"
-                  nameKey="name"
-                  innerRadius={62}
-                  outerRadius={82}
-                  stroke="none"
-                  paddingAngle={2}
-                >
-                  <Cell fill="#6eb5ff" />
-                  <Cell fill="rgba(255,255,255,0.14)" />
-                </Pie>
-                <Tooltip
-                  contentStyle={{ backgroundColor: t.chart.tooltipBg, borderColor: t.chart.tooltipBorder }}
-                />
-              </PieChart>
-            </ResponsiveContainer>
-            <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
-              <span className="text-3xl font-semibold tracking-tight text-[#f3f5f9]">
-                {data.penetration_pct.toFixed(0)}%
-              </span>
-              <span className="text-xs text-[#8b96a8]">penetrated</span>
-            </div>
-          </div>
+      <section>
+        <h2 className={t.pageTitle}>Market</h2>
+        <p className={`max-w-3xl ${t.pageSub}`}>
+          {data.units.toLocaleString()} leased machines are on the floor at{" "}
+          {data.casinos_with_units.toLocaleString()} casinos. We are in{" "}
+          {bands.tribe.penetrated.toLocaleString()} of {bands.tribe.contracted.toLocaleString()} tribes,
+          on the floor at {bands.casino.penetrated.toLocaleString()} of{" "}
+          {bands.casino.contracted.toLocaleString()} contracted houses, and using{" "}
+          {bands.vendor_casino.penetrated.toLocaleString()} of{" "}
+          {bands.vendor_casino.contracted.toLocaleString()} vendor rights. Where a floor size is on file,
+          those machines are {data.blended_share_pct.toFixed(1)}% of the floor.
+        </p>
+        <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <Kpi
+            label="Units on floor"
+            value={data.units.toLocaleString()}
+            sub={`${data.casinos_with_units.toLocaleString()} casinos`}
+          />
+          <Kpi
+            label="Floor share"
+            value={`${data.blended_share_pct.toFixed(1)}%`}
+            sub={`${data.floor_units.toLocaleString()} of ${data.floor_size.toLocaleString()} at ${data.floor_casinos} houses`}
+          />
+          <Kpi
+            label="Commercial houses"
+            value={(data.commercial_houses ?? 0).toLocaleString()}
+            sub="In the house and vendor counts, not one tribe"
+          />
+          <Kpi
+            label="Unlisted houses"
+            value={(data.unlisted_casinos ?? 0).toLocaleString()}
+            sub="Machines on the floor, no vendor agreement"
+          />
         </div>
-
-        <div>
-          <h2 className={t.pageTitle}>Market</h2>
-          <p className={`max-w-3xl ${t.pageSub}`}>
-            {data.units.toLocaleString()} machines are on the floor at{" "}
-            {data.casinos_with_units.toLocaleString()} casinos.{" "}
-            {data.penetrated_markets.toLocaleString()} of{" "}
-            {data.contracted_markets.toLocaleString()} contracted vendor markets have at least
-            one of them. Where a house floor size is on file, those machines are{" "}
-            {data.blended_share_pct.toFixed(1)}% of the floor.
-          </p>
-          <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
-            <Kpi
-              label="Contracted"
-              value={data.contracted_markets.toLocaleString()}
-              sub="Casino × vendor agreements"
-            />
-            <Kpi
-              label="Penetrated"
-              value={data.penetrated_markets.toLocaleString()}
-              sub="Agreement with a machine on the floor"
-            />
-            <Kpi
-              label="Open"
-              value={data.open_markets.toLocaleString()}
-              sub="Agreement, no machine yet"
-            />
-            <Kpi
-              label="Units on floor"
-              value={data.units.toLocaleString()}
-              sub={`${data.casinos_with_units.toLocaleString()} casinos`}
-            />
-            <Kpi
-              label="Floor share"
-              value={`${data.blended_share_pct.toFixed(1)}%`}
-              sub={`${data.floor_units.toLocaleString()} of ${data.floor_size.toLocaleString()} at ${data.floor_casinos} houses`}
-            />
-          </div>
-          <p className={`mt-3 text-xs ${t.code}`}>
-            Active Slot Master stints, joined to the asset. Cabinet type Center, Sign, Controller, and Server are left out.{" "}
-            {universal} stay off the agreement count. Floor share uses{" "}
-            <span className="font-mono">total_number_of_machines</span> and only houses that
-            have both a size and our machines.
-          </p>
-        </div>
+        <p className={`mt-3 text-xs ${t.code}`}>
+          Active Slot Master stints, joined to the asset. Cabinet type Center, Sign, Controller, and
+          Server are left out. {universal} stay off the agreement count. A sale is not penetration.
+          Floor share uses <span className="font-mono">total_number_of_machines</span> and only houses
+          that have both a size and our machines.
+        </p>
       </section>
 
-      <section className="grid gap-4 xl:grid-cols-3">
-        <RankChart
-          title="Floor share leaders"
-          color="#34d399"
-          dataKey="share"
-          tickFormatter={(value) => `${value}%`}
-          rows={data.leaders.map((row) => ({
-            label: row.casino,
-            share: row.share_pct,
-            units: row.units,
-            floor: row.floor,
-          }))}
-          tooltip={(row) =>
-            `${row.label} · ${Number(row.units).toLocaleString()} of ${Number(row.floor).toLocaleString()}`
-          }
+      <section className="grid gap-4 lg:grid-cols-3">
+        <BandCard
+          title="Tribe"
+          question="Any leased machine at any house in the nation"
+          band={bands.tribe}
         />
-        <RankChart
-          title="Vendor portfolio"
-          color="#6eb5ff"
-          dataKey="units"
-          rows={data.vendors.map((row) => ({ label: row.name, units: row.units }))}
-          tooltip={(row) => `${row.label} · ${Number(row.units).toLocaleString()} machines`}
+        <BandCard
+          title="Casino"
+          question="Any leased machine at that house"
+          band={bands.casino}
         />
-        <RankChart
-          title="Cabinet mix"
-          color="#a78bfa"
-          dataKey="units"
-          rows={data.cabinets.map((row) => ({ label: row.name, units: row.units }))}
-          tooltip={(row) => `${row.label} · ${Number(row.units).toLocaleString()} machines`}
+        <BandCard
+          title="Vendor × casino"
+          question="A leased machine of that vendor at that house"
+          band={bands.vendor_casino}
         />
+      </section>
+
+      {sales ? (
+        <section className={t.panel}>
+          <p className={t.panelLabel}>Sales</p>
+          <p className={`mt-1 max-w-3xl text-sm ${t.pageSub}`}>
+            {sales.units.toLocaleString()} cabinets are on the sales book.{" "}
+            {sales.game_sale.toLocaleString()} are direct game sales and{" "}
+            {sales.convert_to_sale.toLocaleString()} are floor conversions. These counts stay off the
+            penetration rates.
+          </p>
+          <div className="mt-4 grid gap-3 sm:grid-cols-3">
+            <Kpi label="Total sales" value={sales.units.toLocaleString()} sub="sold_details rows" />
+            <Kpi
+              label="Game Sale"
+              value={sales.game_sale.toLocaleString()}
+              sub={`${sales.reseller_units.toLocaleString()} reseller · ${sales.game_sale_houses.toLocaleString()} casinos`}
+            />
+            <Kpi
+              label="Convert to Sale"
+              value={sales.convert_to_sale.toLocaleString()}
+              sub={`${sales.convert_houses.toLocaleString()} casinos`}
+            />
+          </div>
+          {sales.other > 0 ? (
+            <p className={`mt-3 text-xs ${t.code}`}>
+              {sales.other.toLocaleString()} sales have a sale reason other than Game Sale or Convert to
+              Sale, so they sit in the total and in neither split.
+            </p>
+          ) : null}
+        </section>
+      ) : null}
+
+      {charts}
+
+      <section className={t.tableWrap}>
+        <p className={`${t.panelLabel} px-4 pt-4`}>Tribes</p>
+        <p className={`px-4 pb-2 text-xs ${t.code}`}>
+          Open houses are contracted and have no leased machine. Commercial is left off this list.
+        </p>
+        <div className="max-h-[32rem] overflow-auto">
+        <table className="w-full text-left text-sm">
+          <thead className={t.tableHead}>
+            <tr>
+              <th className="px-4 py-3 font-medium">Tribe</th>
+              <th className="px-4 py-3 font-medium">Contracted houses</th>
+              <th className="px-4 py-3 font-medium">On floor</th>
+              <th className="px-4 py-3 font-medium">Open</th>
+              <th className="px-4 py-3 font-medium">Units</th>
+              <th className="px-4 py-3 font-medium">Floor share</th>
+            </tr>
+          </thead>
+          <tbody className={t.tableRow}>
+            {tribeRows.map((row) => (
+              <tr key={row.tribe_id}>
+                <td className="px-4 py-2">{row.name}</td>
+                <td className="px-4 py-2">{row.contracted_casinos.toLocaleString()}</td>
+                <td className="px-4 py-2">{row.on_floor.toLocaleString()}</td>
+                <td className="px-4 py-2">{row.open_casinos.toLocaleString()}</td>
+                <td className="px-4 py-2">{row.units.toLocaleString()}</td>
+                <td className="px-4 py-2">
+                  {row.share_pct > 0 ? `${row.share_pct.toFixed(1)}%` : "—"}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        </div>
       </section>
     </div>
   );
