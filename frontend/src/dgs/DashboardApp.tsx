@@ -199,11 +199,13 @@ export default function DashboardApp() {
 
   const hidePeriod = route === "/analyst" || route === "/commission" || route === "/market";
   const executive = route === "/executive";
+  const market = route === "/market";
+  const showHeader = !executive && !(market && health?.ok !== false);
 
   return (
     <DashboardMonthProvider month={month} setMonth={setMonth} periods={periods}>
-      <div className={`dgs-dashboard-app space-y-4 p-4 sm:p-5 ${executive ? "!pt-3 sm:!pt-4" : ""}`}>
-        {executive ? null : (
+      <div className={`dgs-dashboard-app space-y-4 p-4 sm:p-5 ${executive || market ? "!pt-3 sm:!pt-4" : ""}`}>
+        {showHeader ? (
         <div className="flex flex-wrap items-center justify-between gap-3">
           {health?.ok === true ? (
             <div className="rounded-lg border border-emerald-500/25 bg-emerald-500/10 px-3 py-1.5 text-xs text-emerald-300">
@@ -224,7 +226,7 @@ export default function DashboardApp() {
             <MonthSelector month={month} periods={periods} onChange={setMonth} />
           ) : null}
         </div>
-        )}
+        ) : null}
         <div className="dgs-dashboard-panel">
           {routePage(
             route,

@@ -94,14 +94,13 @@ function RankChart({
   tooltip: (row: Record<string, string | number>) => string;
 }) {
   const t = useDashboardTheme();
-  const chartRows = [...rows].reverse();
   return (
     <div className={t.panel}>
       <p className={t.panelLabel}>{title}</p>
       <div className="mt-4 h-80">
-        {chartRows.length ? (
+        {rows.length ? (
           <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={chartRows} layout="vertical" margin={{ left: 8, right: 12 }}>
+            <BarChart data={rows} layout="vertical" margin={{ left: 8, right: 12 }}>
               <CartesianGrid strokeDasharray="3 3" stroke={t.chart.grid} horizontal={false} />
               <XAxis
                 type="number"
@@ -184,8 +183,10 @@ function BandCard({
   const t = useDashboardTheme();
   return (
     <div className={t.panel}>
-      <p className={t.panelLabel}>{title}</p>
-      <p className={`mt-1 text-xs ${t.code}`}>{question}</p>
+      <div className="flex items-start justify-between gap-3">
+        <p className={t.panelLabel}>{title}</p>
+        <p className={`max-w-[12rem] text-right text-xs leading-snug ${t.code}`}>{question}</p>
+      </div>
       <PenetrationDonut band={band} />
       <div className="mt-2 grid grid-cols-3 gap-2 text-center">
         <div>
@@ -356,7 +357,9 @@ export default function MarketPage() {
     );
   }
 
-  const tribeRows = data.tribes ?? [];
+  const tribeRows = [...(data.tribes ?? [])].sort(
+    (a, b) => b.units - a.units || a.name.localeCompare(b.name),
+  );
 
   return (
     <div className="space-y-6">
@@ -394,12 +397,6 @@ export default function MarketPage() {
             sub="Machines on the floor, no vendor agreement"
           />
         </div>
-        <p className={`mt-3 text-xs ${t.code}`}>
-          Active Slot Master stints, joined to the asset. Cabinet type Center, Sign, Controller, and
-          Server are left out. {universal} stay off the agreement count. A sale is not penetration.
-          Floor share uses <span className="font-mono">total_number_of_machines</span> and only houses
-          that have both a size and our machines.
-        </p>
       </section>
 
       <section className="grid gap-4 lg:grid-cols-3">
@@ -454,37 +451,39 @@ export default function MarketPage() {
       {charts}
 
       <section className={t.tableWrap}>
-        <p className={`${t.panelLabel} px-4 pt-4`}>Tribes</p>
-        <p className={`px-4 pb-2 text-xs ${t.code}`}>
-          Open houses are contracted and have no leased machine. Commercial is left off this list.
-        </p>
+        <div className="flex items-baseline justify-between gap-3 px-4 py-3">
+          <p className={t.panelLabel}>Tribes</p>
+          <p className={`text-xs ${t.code}`}>{tribeRows.length.toLocaleString()} tribes</p>
+        </div>
         <div className="max-h-[32rem] overflow-auto">
-        <table className="w-full text-left text-sm">
-          <thead className={t.tableHead}>
-            <tr>
-              <th className="px-4 py-3 font-medium">Tribe</th>
-              <th className="px-4 py-3 font-medium">Contracted houses</th>
-              <th className="px-4 py-3 font-medium">On floor</th>
-              <th className="px-4 py-3 font-medium">Open</th>
-              <th className="px-4 py-3 font-medium">Units</th>
-              <th className="px-4 py-3 font-medium">Floor share</th>
-            </tr>
-          </thead>
-          <tbody className={t.tableRow}>
-            {tribeRows.map((row) => (
-              <tr key={row.tribe_id}>
-                <td className="px-4 py-2">{row.name}</td>
-                <td className="px-4 py-2">{row.contracted_casinos.toLocaleString()}</td>
-                <td className="px-4 py-2">{row.on_floor.toLocaleString()}</td>
-                <td className="px-4 py-2">{row.open_casinos.toLocaleString()}</td>
-                <td className="px-4 py-2">{row.units.toLocaleString()}</td>
-                <td className="px-4 py-2">
-                  {row.share_pct > 0 ? `${row.share_pct.toFixed(1)}%` : "—"}
-                </td>
+          <table className="w-full text-left text-sm">
+            <thead className={`sticky top-0 z-10 ${t.tableHead}`}>
+              <tr>
+                <th className="px-4 py-2 text-left font-medium">Tribe</th>
+                <th className="px-4 py-2 text-right font-medium">Houses</th>
+                <th className="px-4 py-2 text-right font-medium">On floor</th>
+                <th className="px-4 py-2 text-right font-medium">Open</th>
+                <th className="px-4 py-2 text-right font-medium">Units</th>
+                <th className="px-4 py-2 text-right font-medium">Share</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody className={t.tableRow}>
+              {tribeRows.map((row) => (
+                <tr key={row.tribe_id} className={row.units > 0 ? "" : "opacity-60"}>
+                  <td className={t.tableCellName}>{row.name}</td>
+                  <td className={`${t.tableCell} text-right`}>{row.contracted_casinos.toLocaleString()}</td>
+                  <td className={`${t.tableCell} text-right`}>{row.on_floor.toLocaleString()}</td>
+                  <td className={`${row.open_casinos > 0 ? t.tableCell : t.tableCellMuted} text-right`}>
+                    {row.open_casinos.toLocaleString()}
+                  </td>
+                  <td className={`${t.tableCell} text-right`}>{row.units.toLocaleString()}</td>
+                  <td className={`${t.tableCellMuted} text-right`}>
+                    {row.share_pct > 0 ? `${row.share_pct.toFixed(1)}%` : "—"}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       </section>
     </div>
