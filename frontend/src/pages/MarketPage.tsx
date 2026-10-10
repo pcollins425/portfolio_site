@@ -357,10 +357,6 @@ export default function MarketPage() {
     );
   }
 
-  const tribeRows = [...(data.tribes ?? [])].sort(
-    (a, b) => b.units - a.units || a.name.localeCompare(b.name),
-  );
-
   return (
     <div className="space-y-6">
       <section>
@@ -449,43 +445,6 @@ export default function MarketPage() {
       ) : null}
 
       {charts}
-
-      <section className={t.tableWrap}>
-        <div className="flex items-baseline justify-between gap-3 px-4 py-3">
-          <p className={t.panelLabel}>Tribes</p>
-          <p className={`text-xs ${t.code}`}>{tribeRows.length.toLocaleString()} tribes</p>
-        </div>
-        <div className="max-h-[32rem] overflow-auto">
-          <table className="w-full text-left text-sm">
-            <thead className={`sticky top-0 z-10 ${t.tableHead}`}>
-              <tr>
-                <th className="px-4 py-2 text-left font-medium">Tribe</th>
-                <th className="px-4 py-2 text-right font-medium">Houses</th>
-                <th className="px-4 py-2 text-right font-medium">On floor</th>
-                <th className="px-4 py-2 text-right font-medium">Open</th>
-                <th className="px-4 py-2 text-right font-medium">Units</th>
-                <th className="px-4 py-2 text-right font-medium">Share</th>
-              </tr>
-            </thead>
-            <tbody className={t.tableRow}>
-              {tribeRows.map((row) => (
-                <tr key={row.tribe_id} className={row.units > 0 ? "" : "opacity-60"}>
-                  <td className={t.tableCellName}>{row.name}</td>
-                  <td className={`${t.tableCell} text-right`}>{row.contracted_casinos.toLocaleString()}</td>
-                  <td className={`${t.tableCell} text-right`}>{row.on_floor.toLocaleString()}</td>
-                  <td className={`${row.open_casinos > 0 ? t.tableCell : t.tableCellMuted} text-right`}>
-                    {row.open_casinos.toLocaleString()}
-                  </td>
-                  <td className={`${t.tableCell} text-right`}>{row.units.toLocaleString()}</td>
-                  <td className={`${t.tableCellMuted} text-right`}>
-                    {row.share_pct > 0 ? `${row.share_pct.toFixed(1)}%` : "—"}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </section>
     </div>
   );
 }
