@@ -12,6 +12,8 @@ from typing import Any, Callable
 Query = Callable[..., list[dict[str, Any]]]
 
 _MV = "[dashboard].[vw_performance_report]"
+_YM = "CONVERT(char(7), mr.[date], 126)"
+_DATE_RANGE = "mr.[date] >= %s AND mr.[date] < %s"
 
 _UNIT_FILTER = """
   AND NOT (
@@ -76,7 +78,7 @@ def build_matrix(query: Query, end: date) -> dict[str, Any]:
 SELECT
   {_CASINO_ID} AS casino_id,
   {_CASINO_NAME} AS casino_name,
-  CONVERT(char(7), TRY_CONVERT(date, mr.[date]), 126) AS ym,
+  {_YM} AS ym,
   SUM(CASE WHEN mr.TDW IS NOT NULL THEN CAST(mr.TDW AS float) ELSE 0 END) AS tdw_sum,
   SUM(CASE WHEN mr.TDW IS NOT NULL THEN 1 ELSE 0 END) AS tdw_n,
   SUM(CASE WHEN mr.ADW IS NOT NULL THEN CAST(mr.ADW AS float) ELSE 0 END) AS adw_sum,
@@ -91,13 +93,12 @@ SELECT
            THEN 1 ELSE 0 END) AS actual_n
 FROM {_MV} AS mr
 {_CASINO_JOINS}
-WHERE TRY_CONVERT(date, mr.[date]) >= %s
-  AND TRY_CONVERT(date, mr.[date]) < %s
+WHERE {_DATE_RANGE}
 {_UNIT_FILTER}
 GROUP BY
   {_CASINO_ID},
   {_CASINO_NAME},
-  CONVERT(char(7), TRY_CONVERT(date, mr.[date]), 126)
+  {_YM}
 """,
         (start, stop),
     )
@@ -261,8 +262,7 @@ SELECT
   mr.slot_master_id
 FROM {_MV} AS mr
 {_CASINO_JOINS}
-WHERE TRY_CONVERT(date, mr.[date]) >= %s
-  AND TRY_CONVERT(date, mr.[date]) < %s
+WHERE {_DATE_RANGE}
   AND {_CASINO_ID} = %s
 {_UNIT_FILTER}
 """,
@@ -437,7 +437,7 @@ def build_expand(query: Query, casino_id: str, end: date) -> dict[str, Any]:
         f"""
 SELECT
   {_CASINO_NAME} AS casino_name,
-  CONVERT(char(7), TRY_CONVERT(date, mr.[date]), 126) AS ym,
+  {_YM} AS ym,
   RTRIM(mr.Serial_number) AS serial,
   RTRIM(mr.Vendor) AS vendor,
   RTRIM(mr.Cabinet) AS cabinet,
@@ -450,8 +450,7 @@ SELECT
   mr.slot_master_id
 FROM {_MV} AS mr
 {_CASINO_JOINS}
-WHERE TRY_CONVERT(date, mr.[date]) >= %s
-  AND TRY_CONVERT(date, mr.[date]) < %s
+WHERE {_DATE_RANGE}
   AND {_CASINO_ID} = %s
 {_UNIT_FILTER}
 """,
@@ -605,119 +604,147 @@ _ABBREV = {
 }
 
 
-def _region_name(state: str) -> str | None:
-    key = state.strip().lower()
-    if key in _ABBREV:
-        key = _ABBREV[key].lower()
-    return _STATE_REGION.get(key)
+_THEO = (
+    "COALESCE(CAST(mr.WIN_Index AS float), "
+    "CAST(mr.TDW AS float) / NULLIF(TRY_CONVERT(float, mr.HouseWPU), 0))"
+)
 
 
-class _Roll:
-    def __init__(self) -> None:
-        self.theo = 0.0
-        self.n = 0
-        self.serials: set[str] = set()
-        self.themes: set[str] = set()
-        self.sign_serial = ""
-
-    def add(self, theo: float, serial: str, theme: str = "") -> None:
-        self.theo += theo
-        self.n += 1
-        if serial:
-            self.serials.add(serial)
-        if theme:
-            self.themes.add(theme)
+def _region_case_sql() -> str:
+    """Map Master_Revenue.State onto a Census region inside SQL."""
+    whens = [f"WHEN '{name}' THEN N'{region}'" for name, region in _STATE_REGION.items()]
+    for abbr, full in _ABBREV.items():
+        whens.append(f"WHEN '{abbr}' THEN N'{_STATE_REGION[full.lower()]}'")
+    return "CASE LOWER(RTRIM(mr.State)) " + " ".join(whens) + " ELSE NULL END"
 
 
-def _ranked(rolls: dict[str, _Roll], limit: int, minimum: int) -> list[dict[str, Any]]:
-    rows = []
-    for name, roll in rolls.items():
-        if roll.n < minimum or not roll.n:
+def _ranked_agg(rows: list[dict[str, Any]], kind: str, limit: int, minimum: int) -> list[dict[str, Any]]:
+    out = []
+    for row in rows:
+        if str(row.get("kind") or "") != kind:
             continue
-        rows.append(
+        name = str(row.get("name") or "").strip()
+        n = int(row.get("n") or 0)
+        if not name or n < minimum:
+            continue
+        out.append(
             {
                 "name": name,
-                "theo_index": round(roll.theo / roll.n, 2),
-                "units": len(roll.serials),
+                "theo_index": round(float(row["theo_sum"]) / n, 2),
+                "units": int(row.get("units") or 0),
             }
         )
-    rows.sort(key=lambda row: (-row["theo_index"], row["name"].lower()))
-    return rows[:limit]
+    out.sort(key=lambda item: (-item["theo_index"], item["name"].lower()))
+    return out[:limit]
+
+
+def _sign_leaders(query: Query, start: date, stop: date) -> list[dict[str, Any]]:
+    """One row per loaded sign. Aggregation stays in SQL; the sign list is 11 lines."""
+    signs = _sign_index(query)
+    keys = [smm for smm in signs if smm]
+    if not keys:
+        return []
+    marks = ", ".join(["%s"] * len(keys))
+    rows = query(
+        f"""
+SELECT
+  mr.slot_master_id AS smm,
+  NULLIF(RTRIM(mr.Theme), N'') AS theme,
+  NULLIF(RTRIM(mr.Serial_number), N'') AS serial,
+  SUM({_THEO}) AS theo_sum,
+  COUNT(*) AS n
+FROM {_MV} AS mr
+WHERE {_DATE_RANGE}
+  AND TRY_CONVERT(float, mr.HouseWPU) > 0
+  AND (mr.WIN_Index IS NOT NULL OR mr.TDW IS NOT NULL)
+  AND mr.slot_master_id IN ({marks})
+{_UNIT_FILTER}
+GROUP BY mr.slot_master_id,
+         NULLIF(RTRIM(mr.Theme), N''),
+         NULLIF(RTRIM(mr.Serial_number), N'')
+""",
+        (start, stop, *keys),
+    )
+    grouped: dict[str, dict[str, Any]] = {}
+    for row in rows:
+        sign = signs.get(str(row.get("smm") or "").strip())
+        if not sign or not row.get("n"):
+            continue
+        bucket = grouped.setdefault(
+            sign["ssm"],
+            {"sign_serial": sign["sign_serial"], "theo": 0.0, "n": 0, "serials": set(), "themes": set()},
+        )
+        bucket["theo"] += float(row["theo_sum"] or 0)
+        bucket["n"] += int(row["n"])
+        serial = str(row.get("serial") or "").strip()
+        theme = str(row.get("theme") or "").strip()
+        if serial:
+            bucket["serials"].add(serial)
+        if theme:
+            bucket["themes"].add(theme)
+    out = []
+    for ssm, bucket in grouped.items():
+        if not bucket["n"]:
+            continue
+        out.append(
+            {
+                "name": bucket["sign_serial"] or ssm,
+                "detail": " · ".join(sorted(bucket["themes"], key=str.lower)),
+                "theo_index": round(bucket["theo"] / bucket["n"], 2),
+                "units": len(bucket["serials"]),
+            }
+        )
+    out.sort(key=lambda item: (-item["theo_index"], item["name"].lower()))
+    return out
 
 
 def build_leaders(query: Query, end: date) -> dict[str, Any]:
     """Theo-index lists for the six months ending on ``end``.
 
-    A row's index is the average of its unit-months. Themes and cabinets
-    need at least six of those months so one hot seat does not lead.
+    Theme, cabinet, and region averages are grouped in SQL. A sign row is
+    one loaded SSM line. Themes and cabinets need at least six unit-months.
     """
     keys = month_keys(end, 6)
     start, stop = _bounds(keys)
     rows = query(
         f"""
 SELECT
-  RTRIM(mr.Theme) AS theme,
-  RTRIM(mr.Cabinet) AS cabinet,
-  RTRIM(mr.State) AS state,
-  RTRIM(mr.Serial_number) AS serial,
-  mr.slot_master_id,
-  CAST(mr.WIN_Index AS float) AS theo_index,
-  TRY_CONVERT(float, mr.HouseWPU) AS house,
-  CAST(mr.TDW AS float) AS tdw
-FROM {_MV} AS mr
-WHERE TRY_CONVERT(date, mr.[date]) >= %s
-  AND TRY_CONVERT(date, mr.[date]) < %s
+  CASE
+    WHEN GROUPING(theme) = 0 THEN 'theme'
+    WHEN GROUPING(cabinet) = 0 THEN 'cabinet'
+    ELSE 'region'
+  END AS kind,
+  CASE
+    WHEN GROUPING(theme) = 0 THEN theme
+    WHEN GROUPING(cabinet) = 0 THEN cabinet
+    ELSE region
+  END AS name,
+  SUM(theo) AS theo_sum,
+  COUNT(*) AS n,
+  COUNT(DISTINCT serial) AS units
+FROM (
+  SELECT
+    NULLIF(RTRIM(mr.Theme), N'') AS theme,
+    NULLIF(RTRIM(mr.Cabinet), N'') AS cabinet,
+    {_region_case_sql()} AS region,
+    {_THEO} AS theo,
+    NULLIF(RTRIM(mr.Serial_number), N'') AS serial
+  FROM {_MV} AS mr
+  WHERE {_DATE_RANGE}
+    AND TRY_CONVERT(float, mr.HouseWPU) > 0
+    AND (mr.WIN_Index IS NOT NULL OR mr.TDW IS NOT NULL)
 {_UNIT_FILTER}
+) AS src
+WHERE theo IS NOT NULL
+GROUP BY GROUPING SETS ((theme), (cabinet), (region))
 """,
         (start, stop),
     )
-    signs = _sign_index(query)
-    themes: dict[str, _Roll] = {}
-    cabinets: dict[str, _Roll] = {}
-    sign_rolls: dict[str, _Roll] = {}
-    regions: dict[str, _Roll] = {}
-    for row in rows:
-        theo, _actual = _unit_indexes(row)
-        if theo is None:
-            continue
-        theme = str(row["theme"] or "").strip()
-        cabinet = str(row["cabinet"] or "").strip()
-        serial = str(row["serial"] or "").strip()
-        smm = str(row["slot_master_id"] or "").strip()
-        if theme:
-            themes.setdefault(theme, _Roll()).add(theo, serial, theme)
-        if cabinet:
-            cabinets.setdefault(cabinet, _Roll()).add(theo, serial)
-        region = _region_name(str(row["state"] or ""))
-        if region:
-            regions.setdefault(region, _Roll()).add(theo, serial)
-        sign = signs.get(smm)
-        if sign and theme:
-            roll = sign_rolls.setdefault(sign["ssm"], _Roll())
-            roll.sign_serial = sign["sign_serial"]
-            roll.add(theo, serial, theme)
-
-    sign_rows = []
-    for ssm, roll in sign_rolls.items():
-        if not roll.n:
-            continue
-        label = roll.sign_serial or ssm
-        detail = " · ".join(sorted(roll.themes, key=str.lower))
-        sign_rows.append(
-            {
-                "name": label,
-                "detail": detail,
-                "theo_index": round(roll.theo / roll.n, 2),
-                "units": len(roll.serials),
-            }
-        )
-    sign_rows.sort(key=lambda row: (-row["theo_index"], row["name"].lower()))
-
     return {
         "source": "live",
         "performance_month": keys[-1],
-        "themes": _ranked(themes, 8, 6),
-        "cabinets": _ranked(cabinets, 8, 6),
-        "signs": sign_rows,
-        "regions": _ranked(regions, 4, 1),
+        "themes": _ranked_agg(rows, "theme", 8, 6),
+        "cabinets": _ranked_agg(rows, "cabinet", 8, 6),
+        "signs": _sign_leaders(query, start, stop),
+        "regions": _ranked_agg(rows, "region", 4, 1),
     }

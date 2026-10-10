@@ -27,6 +27,7 @@ type MatrixPayload = {
     theo?: Record<string, number | null>;
     actual?: Record<string, number | null>;
   };
+  leaders?: LeadersPayload;
   error?: string;
 };
 
@@ -170,17 +171,11 @@ export default function PerformancePage() {
     setLeaders(null);
     setOpen(new Set());
     setTrees({});
-    fetchJson<LeadersPayload>(withMonthQuery("/api/performance/leaders", month))
-      .then((d) => {
-        if (!dead) setLeaders(d);
-      })
-      .catch(() => {
-        if (!dead) setLeaders(null);
-      });
     fetchJson<MatrixPayload>(withMonthQuery("/api/performance/casino-month", month))
       .then((d) => {
         if (!dead) {
           setData(d);
+          setLeaders(d.leaders ?? null);
           setErr(d.error ?? null);
         }
       })

@@ -9,6 +9,8 @@ from __future__ import annotations
 import logging
 import os
 import threading
+from collections.abc import Callable, Iterator
+from contextlib import contextmanager
 from typing import Any, Literal
 
 import pymssql
@@ -173,6 +175,27 @@ def execute(
         except Exception:
             pass
         raise
+    finally:
+        conn.close()
+
+
+@contextmanager
+def query_session(
+    *,
+    database: str | None = None,
+    profile: DbProfile = "dashboard",
+    load_env: bool = True,
+) -> Iterator[Callable[..., list[dict]]]:
+    """Run several SELECTs on one pooled connection."""
+    conn = get_connection(database=database, profile=profile, load_env=load_env)
+    try:
+        cursor = conn.cursor(as_dict=True)
+
+        def _query(sql: str, params=None) -> list[dict]:
+            cursor.execute(sql, params)
+            return cursor.fetchall()
+
+        yield _query
     finally:
         conn.close()
 

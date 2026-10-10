@@ -62,9 +62,9 @@ def _ym_label(v) -> str | None:
     return d.isoformat()[:7] if d else None
 
 
-def _distinct_periods(limit: int) -> list[date]:
+def _distinct_periods(limit: int, run=None) -> list[date]:
     lim = max(1, min(int(limit), 120))
-    rows = _revenue_query(
+    rows = (run or _revenue_query)(
         f"""
 SELECT DISTINCT TOP ({lim})
     [date] AS d
@@ -1521,14 +1521,17 @@ def performance_casino_month(
     user: Annotated[dict[str, Any] | None, Depends(require_demo_user)] = None,
 ):
     org.assert_performance_read(user)
-    periods = _distinct_periods(36)
-    try:
-        end, _prev = _resolve_target_period(month, periods)
-    except HTTPException as exc:
-        if exc.status_code == 404:
-            return {"source": "live", "months": [], "casinos": [], "floor": {"tdw": {}, "adw": {}}}
-        raise
-    return build_matrix(_revenue_query, end)
+    with mssql.query_session(database=_revenue_catalog(), load_env=False) as q:
+        periods = _distinct_periods(36, q)
+        try:
+            end, _prev = _resolve_target_period(month, periods)
+        except HTTPException as exc:
+            if exc.status_code == 404:
+                return {"source": "live", "months": [], "casinos": [], "floor": {"tdw": {}, "adw": {}}}
+            raise
+        payload = build_matrix(q, end)
+        payload["leaders"] = build_leaders(q, end)
+        return payload
 
 
 @router.get("/performance/casino-month/cell")
