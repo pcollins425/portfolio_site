@@ -1,5 +1,6 @@
 import { Fragment, useEffect, useMemo, useState, type CSSProperties, type ReactNode } from "react";
 import { fetchJson } from "../api/client";
+import CompareSets, { type CompareSeed } from "./CompareSets";
 import { useDashboardMonth, withMonthQuery } from "../dgs/MonthContext";
 import { useDashboardTheme } from "../dgs/ThemeContext";
 import { fmtUsd } from "../data/mockData";
@@ -31,7 +32,7 @@ type MatrixPayload = {
   error?: string;
 };
 
-type LeaderRow = { name: string; theo_index: number; units: number; detail?: string };
+type LeaderRow = { id?: string; name: string; theo_index: number; units: number; detail?: string };
 type LeadersPayload = {
   themes?: LeaderRow[];
   cabinets?: LeaderRow[];
@@ -123,7 +124,17 @@ function valueCells(
   );
 }
 
-function LeaderList({ title, note, rows }: { title: string; note: string; rows: LeaderRow[] }) {
+function LeaderList({
+  title,
+  note,
+  rows,
+  onPick,
+}: {
+  title: string;
+  note: string;
+  rows: LeaderRow[];
+  onPick?: (row: LeaderRow) => void;
+}) {
   return (
     <section className="rounded-xl border border-white/10 bg-[#141922] p-3">
       <h3 className="text-sm font-semibold text-[#9ecbff]">{title}</h3>
@@ -136,7 +147,13 @@ function LeaderList({ title, note, rows }: { title: string; note: string; rows: 
             <li key={`${row.name}-${i}`} className="flex items-start justify-between gap-3 text-sm">
               <span className="min-w-0">
                 <span className="text-[#8b96a8]">{i + 1}. </span>
-                <span className="text-[#f3f5f9]">{row.name}</span>
+                {onPick ? (
+                  <button type="button" className="text-left text-[#f3f5f9] hover:text-[#9ecbff]" onClick={() => onPick(row)}>
+                    {row.name}
+                  </button>
+                ) : (
+                  <span className="text-[#f3f5f9]">{row.name}</span>
+                )}
                 {row.detail ? <span className="mt-0.5 block truncate text-[11px] text-[#8b96a8]">{row.detail}</span> : null}
               </span>
               <span className="shrink-0 text-right">
@@ -164,6 +181,14 @@ export default function PerformancePage() {
   const [open, setOpen] = useState<Set<string>>(new Set());
   const [trees, setTrees] = useState<Record<string, ExpandPayload>>({});
   const [loadingId, setLoadingId] = useState<string | null>(null);
+  const [seed, setSeed] = useState<CompareSeed | null>(null);
+  const [seedToken, setSeedToken] = useState(0);
+
+  function pickLeader(split: string, row: LeaderRow) {
+    const next = seedToken + 1;
+    setSeedToken(next);
+    setSeed({ token: next, split, id: row.id || row.name, label: row.name });
+  }
 
   useEffect(() => {
     let dead = false;
@@ -400,12 +425,14 @@ export default function PerformancePage() {
 
       {leaders ? (
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-          <LeaderList title="Themes" note="Top 8 · at least 6 unit-months" rows={leaders.themes ?? []} />
-          <LeaderList title="Cabinets" note="Top 8 · at least 6 unit-months" rows={leaders.cabinets ?? []} />
-          <LeaderList title="Sign themes" note="Themes on one sign" rows={leaders.signs ?? []} />
-          <LeaderList title="Regions" note="US Census region from state" rows={leaders.regions ?? []} />
+          <LeaderList title="Themes" note="Top 8 · at least 6 unit-months" rows={leaders.themes ?? []} onPick={(row) => pickLeader("theme", row)} />
+          <LeaderList title="Cabinets" note="Top 8 · at least 6 unit-months" rows={leaders.cabinets ?? []} onPick={(row) => pickLeader("cabinet", row)} />
+          <LeaderList title="Sign themes" note="Themes on one sign" rows={leaders.signs ?? []} onPick={(row) => pickLeader("sign_bank", row)} />
+          <LeaderList title="Regions" note="US Census region from state" rows={leaders.regions ?? []} onPick={(row) => pickLeader("region", row)} />
         </div>
       ) : null}
+
+      <CompareSets month={month} seed={seed} />
 
       <div className="flex flex-wrap items-center gap-3">
         <input

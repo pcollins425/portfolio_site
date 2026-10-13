@@ -6,6 +6,7 @@ The browser receives the grid. A cell click loads that casino-month only.
 from __future__ import annotations
 
 import json
+import time
 from datetime import date
 from typing import Any, Callable
 
@@ -629,6 +630,7 @@ def _ranked_agg(rows: list[dict[str, Any]], kind: str, limit: int, minimum: int)
             continue
         out.append(
             {
+                "id": name,
                 "name": name,
                 "theo_index": round(float(row["theo_sum"]) / n, 2),
                 "units": int(row.get("units") or 0),
@@ -688,6 +690,7 @@ GROUP BY mr.slot_master_id,
             continue
         out.append(
             {
+                "id": ssm,
                 "name": bucket["sign_serial"] or ssm,
                 "detail": " · ".join(sorted(bucket["themes"], key=str.lower)),
                 "theo_index": round(bucket["theo"] / bucket["n"], 2),
@@ -748,3 +751,460 @@ GROUP BY GROUPING SETS ((theme), (cabinet), (region))
         "signs": _sign_leaders(query, start, stop),
         "regions": _ranked_agg(rows, "region", 4, 1),
     }
+
+
+# Houses whose signs have all been walked. Empty until one is marked.
+# A seat with no sign match stays out of "without a sign" on every other house.
+CENSUS_COMPLETE_CASINOS: frozenset[str] = frozenset()
+
+COMPARE_FLOOR = 6
+_MEMBER_CAP = 500
+
+SPLITS: tuple[dict[str, str], ...] = (
+    {"id": "theme", "label": "Theme"},
+    {"id": "cabinet", "label": "Cabinet"},
+    {"id": "vendor", "label": "Vendor"},
+    {"id": "casino", "label": "Casino"},
+    {"id": "region", "label": "Region"},
+    {"id": "sign", "label": "Sign"},
+    {"id": "sign_bank", "label": "Sign bank"},
+    {"id": "denom", "label": "Denom"},
+)
+_SPLIT_IDS = {item["id"] for item in SPLITS}
+
+_FIXED_VALUES: dict[str, tuple[tuple[str, str], ...]] = {
+    "sign": (("with", "With a sign"), ("without", "Without a sign")),
+    "denom": (("single", "Single denom"), ("multi", "Multi denom")),
+}
+_FIXED_LABELS = {
+    split: {value_id: label for value_id, label in pairs}
+    for split, pairs in _FIXED_VALUES.items()
+}
+
+_compare_cache: dict[tuple[str, str], tuple[float, list[dict[str, Any]]]] = {}
+_COMPARE_TTL = 30.0
+
+
+class CompareError(ValueError):
+    """The compare request cannot be run."""
+
+
+def denom_class(raw: Any) -> str | None:
+    """Single when one denom is filled. Multi when several are. Blank stays out."""
+    if raw is None:
+        return None
+    text = str(raw).strip()
+    if not text or text.lower() in {"nan", "null", "none", "n/a"}:
+        return None
+    text = text.replace("$", "").replace(",", "/")
+    parts = [part.strip() for part in text.split("/") if part.strip()]
+    good = 0
+    for part in parts:
+        token = part[1:] if part.startswith(".") else part
+        if not token:
+            return None
+        try:
+            float(part if not part.startswith(".") else f"0{part}")
+        except ValueError:
+            return None
+        good += 1
+    if good == 1:
+        return "single"
+    if good > 1:
+        return "multi"
+    return None
+
+
+def splits_catalog() -> dict[str, Any]:
+    return {"splits": [dict(item) for item in SPLITS]}
+
+
+def _require_split(split: str, hold: str | None) -> None:
+    if split not in _SPLIT_IDS:
+        raise CompareError("Unknown split.")
+    if hold:
+        if hold not in _SPLIT_IDS:
+            raise CompareError("Unknown hold.")
+        if hold == split:
+            raise CompareError("The hold has to be a different attribute than the split.")
+
+
+def _attr(row: dict[str, Any], split: str) -> tuple[str, str] | None:
+    if split == "theme":
+        theme_id = row.get("theme_id")
+        theme = row.get("theme")
+        if theme_id:
+            return str(theme_id), str(theme or theme_id)
+        if theme:
+            return f"name:{theme}", str(theme)
+        return None
+    if split == "cabinet":
+        cabinet = row.get("cabinet")
+        return (str(cabinet), str(cabinet)) if cabinet else None
+    if split == "vendor":
+        vendor = row.get("vendor")
+        return (str(vendor), str(vendor)) if vendor else None
+    if split == "casino":
+        casino_id = row.get("casino_id")
+        if not casino_id:
+            return None
+        return str(casino_id), str(row.get("casino") or casino_id)
+    if split == "region":
+        region = row.get("region")
+        return (str(region), str(region)) if region else None
+    if split == "sign":
+        kind = row.get("sign")
+        if kind not in _FIXED_LABELS["sign"]:
+            return None
+        return str(kind), _FIXED_LABELS["sign"][str(kind)]
+    if split == "sign_bank":
+        bank = row.get("sign_bank")
+        if not bank:
+            return None
+        return str(bank), str(row.get("sign_bank_label") or bank)
+    if split == "denom":
+        kind = row.get("denom_class")
+        if kind not in _FIXED_LABELS["denom"]:
+            return None
+        return str(kind), _FIXED_LABELS["denom"][str(kind)]
+    return None
+
+
+def _hold_ok(row: dict[str, Any], hold: str | None, hold_value: str | None) -> bool:
+    if not hold:
+        return True
+    attr = _attr(row, hold)
+    return attr is not None and attr[0] == hold_value
+
+
+def _side_note(split: str, value_id: str, unit_months: int) -> str | None:
+    if split == "sign" and value_id == "without" and not CENSUS_COMPLETE_CASINOS:
+        return "No house is marked census-complete, so seats without a sign stay out."
+    if unit_months and unit_months < COMPARE_FLOOR:
+        return f"Under {COMPARE_FLOOR} unit-months."
+    return None
+
+
+def _label_for(rows: list[dict[str, Any]], split: str, value_id: str) -> str:
+    fixed = _FIXED_LABELS.get(split, {}).get(value_id)
+    if fixed:
+        return fixed
+    for row in rows:
+        attr = _attr(row, split)
+        if attr and attr[0] == value_id:
+            return attr[1]
+    return value_id
+
+
+def list_values(
+    rows: list[dict[str, Any]],
+    split: str,
+    hold: str | None = None,
+    hold_value: str | None = None,
+) -> list[dict[str, Any]]:
+    _require_split(split, hold if hold else None)
+    if hold and not hold_value:
+        raise CompareError("Pick a hold value, or clear the hold.")
+    counts: dict[str, int] = {}
+    labels: dict[str, str] = {}
+    for row in rows:
+        if not _hold_ok(row, hold, hold_value):
+            continue
+        attr = _attr(row, split)
+        if not attr:
+            continue
+        value_id, label = attr
+        counts[value_id] = counts.get(value_id, 0) + 1
+        labels[value_id] = label
+    if split in _FIXED_VALUES:
+        for value_id, label in _FIXED_VALUES[split]:
+            labels.setdefault(value_id, label)
+            counts.setdefault(value_id, 0)
+        order = {value_id: index for index, (value_id, _label) in enumerate(_FIXED_VALUES[split])}
+        values = [{"id": value_id, "label": labels[value_id], "unit_months": counts[value_id]} for value_id in labels]
+        values.sort(key=lambda item: order.get(item["id"], 99))
+        return values
+    values = [
+        {"id": value_id, "label": labels[value_id], "unit_months": counts[value_id]}
+        for value_id in labels
+    ]
+    values.sort(key=lambda item: (item["label"].lower(), item["id"]))
+    return values
+
+
+def _summarize(
+    rows: list[dict[str, Any]],
+    split: str,
+    value_id: str,
+    hold: str | None,
+    hold_value: str | None,
+) -> dict[str, Any]:
+    matched = []
+    for row in rows:
+        if not _hold_ok(row, hold, hold_value):
+            continue
+        attr = _attr(row, split)
+        if attr and attr[0] == value_id:
+            matched.append(row)
+    unit_months = len(matched)
+    units = len({(row.get("casino_id"), row.get("serial") or row.get("smm") or "") for row in matched})
+    theo = round(sum(float(row["theo"]) for row in matched) / unit_months, 2) if unit_months else None
+    return {
+        "id": value_id,
+        "label": _label_for(rows, split, value_id),
+        "theo_index": theo,
+        "units": units,
+        "unit_months": unit_months,
+        "thin": bool(unit_months and unit_months < COMPARE_FLOOR),
+        "note": _side_note(split, value_id, unit_months),
+    }
+
+
+def compare_rows(
+    rows: list[dict[str, Any]],
+    split: str,
+    side_a: str,
+    side_b: str,
+    hold: str | None = None,
+    hold_value: str | None = None,
+    months: list[str] | None = None,
+) -> dict[str, Any]:
+    _require_split(split, hold if hold else None)
+    if not side_a or not side_b:
+        raise CompareError("Pick two sides.")
+    if side_a == side_b:
+        raise CompareError("Pick two different sides.")
+    if hold and not hold_value:
+        raise CompareError("Pick a hold value, or clear the hold.")
+    return {
+        "split": split,
+        "hold": hold or None,
+        "hold_value": hold_value if hold else None,
+        "floor": COMPARE_FLOOR,
+        "months": months or [],
+        "sides": [
+            _summarize(rows, split, side_a, hold, hold_value),
+            _summarize(rows, split, side_b, hold, hold_value),
+        ],
+    }
+
+
+def member_rows(
+    rows: list[dict[str, Any]],
+    split: str,
+    value_id: str,
+    hold: str | None = None,
+    hold_value: str | None = None,
+) -> dict[str, Any]:
+    _require_split(split, hold if hold else None)
+    if not value_id:
+        raise CompareError("Pick a side.")
+    if hold and not hold_value:
+        raise CompareError("Pick a hold value, or clear the hold.")
+    houses: dict[str, dict[str, Any]] = {}
+    for row in rows:
+        if not _hold_ok(row, hold, hold_value):
+            continue
+        attr = _attr(row, split)
+        if not attr or attr[0] != value_id:
+            continue
+        casino_id = str(row.get("casino_id") or "")
+        house = houses.setdefault(
+            casino_id,
+            {"casino_id": casino_id, "casino_name": str(row.get("casino") or casino_id), "serials": {}},
+        )
+        serial_key = str(row.get("smm") or row.get("serial") or "")
+        leaf = house["serials"].setdefault(
+            serial_key,
+            {
+                "serial": str(row.get("serial") or "(no serial)"),
+                "theme": str(row.get("theme") or ""),
+                "cabinet": str(row.get("cabinet") or ""),
+                "theo": 0.0,
+                "unit_months": 0,
+            },
+        )
+        leaf["theo"] += float(row["theo"])
+        leaf["unit_months"] += 1
+        if row.get("theme"):
+            leaf["theme"] = str(row["theme"])
+        if row.get("cabinet"):
+            leaf["cabinet"] = str(row["cabinet"])
+    casinos = []
+    for house in houses.values():
+        serials = []
+        for leaf in house["serials"].values():
+            n = leaf["unit_months"]
+            serials.append(
+                {
+                    "serial": leaf["serial"],
+                    "theme": leaf["theme"],
+                    "cabinet": leaf["cabinet"],
+                    "unit_months": n,
+                    "theo_index": round(leaf["theo"] / n, 2) if n else None,
+                }
+            )
+        serials.sort(key=lambda item: item["serial"].lower())
+        casinos.append(
+            {
+                "casino_id": house["casino_id"],
+                "casino_name": house["casino_name"],
+                "serials": serials,
+            }
+        )
+    casinos.sort(key=lambda item: item["casino_name"].lower())
+    shown = 0
+    trimmed: list[dict[str, Any]] = []
+    truncated = False
+    for house in casinos:
+        if shown >= _MEMBER_CAP:
+            truncated = True
+            break
+        serials = house["serials"]
+        room = _MEMBER_CAP - shown
+        if len(serials) > room:
+            serials = serials[:room]
+            truncated = True
+        shown += len(serials)
+        trimmed.append(
+            {
+                "casino_id": house["casino_id"],
+                "casino_name": house["casino_name"],
+                "serials": serials,
+            }
+        )
+    return {
+        "id": value_id,
+        "label": _label_for(rows, split, value_id),
+        "truncated": truncated,
+        "casinos": trimmed,
+    }
+
+
+def _classify_compare_row(row: dict[str, Any], signs: dict[str, dict[str, str]]) -> dict[str, Any]:
+    smm = str(row.get("smm") or "").strip() or None
+    casino_id = str(row.get("casino_id") or "").strip()
+    sign = signs.get(smm or "")
+    if sign:
+        sign_kind: str | None = "with"
+        sign_bank = sign["ssm"]
+        sign_label = sign["sign_serial"] or sign["ssm"]
+    elif casino_id in CENSUS_COMPLETE_CASINOS:
+        sign_kind = "without"
+        sign_bank = None
+        sign_label = None
+    else:
+        sign_kind = None
+        sign_bank = None
+        sign_label = None
+    theo = row.get("theo")
+    if theo is None:
+        return {}
+    return {
+        "ym": str(row.get("ym") or "").strip(),
+        "theme_id": str(row.get("theme_id") or "").strip() or None,
+        "theme": str(row.get("theme") or "").strip() or None,
+        "cabinet": str(row.get("cabinet") or "").strip() or None,
+        "vendor": str(row.get("vendor") or "").strip() or None,
+        "casino_id": casino_id,
+        "casino": str(row.get("casino") or "").strip(),
+        "region": str(row.get("region") or "").strip() or None,
+        "smm": smm,
+        "serial": str(row.get("serial") or "").strip() or "(no serial)",
+        "sign": sign_kind,
+        "sign_bank": sign_bank,
+        "sign_bank_label": sign_label,
+        "denom_class": denom_class(row.get("denom")),
+        "theo": float(theo),
+    }
+
+
+def load_compare_rows(query: Query, end: date) -> tuple[list[str], list[dict[str, Any]]]:
+    keys = month_keys(end, 6)
+    start, stop = _bounds(keys)
+    cache_key = (start.isoformat(), stop.isoformat())
+    cached = _compare_cache.get(cache_key)
+    now = time.time()
+    if cached and now - cached[0] < _COMPARE_TTL:
+        return keys, cached[1]
+    signs = _sign_index(query)
+    raw = query(
+        f"""
+SELECT
+  {_YM} AS ym,
+  NULLIF(RTRIM(mr.Theme), N'') AS theme,
+  NULLIF(RTRIM(smm.theme_id), N'') AS theme_id,
+  NULLIF(RTRIM(mr.Cabinet), N'') AS cabinet,
+  NULLIF(RTRIM(mr.Vendor), N'') AS vendor,
+  {_CASINO_ID} AS casino_id,
+  {_CASINO_NAME} AS casino,
+  {_region_case_sql()} AS region,
+  NULLIF(RTRIM(mr.slot_master_id), N'') AS smm,
+  NULLIF(RTRIM(mr.Serial_number), N'') AS serial,
+  NULLIF(RTRIM(mr.Denom), N'') AS denom,
+  {_THEO} AS theo
+FROM {_MV} AS mr
+{_CASINO_JOINS}
+WHERE {_DATE_RANGE}
+  AND TRY_CONVERT(float, mr.HouseWPU) > 0
+  AND (mr.WIN_Index IS NOT NULL OR mr.TDW IS NOT NULL)
+{_UNIT_FILTER}
+""",
+        (start, stop),
+    )
+    rows = [item for item in (_classify_compare_row(row, signs) for row in raw) if item]
+    _compare_cache[cache_key] = (now, rows)
+    return keys, rows
+
+
+def _window(query: Query, end: date) -> tuple[list[str], list[dict[str, Any]]]:
+    return load_compare_rows(query, end)
+
+
+def build_compare_values(
+    query: Query,
+    end: date,
+    split: str,
+    hold: str | None = None,
+    hold_value: str | None = None,
+) -> dict[str, Any]:
+    keys, rows = _window(query, end)
+    return {
+        "source": "live",
+        "performance_month": keys[-1],
+        "split": split,
+        "hold": hold or None,
+        "values": list_values(rows, split, hold, hold_value),
+    }
+
+
+def build_compare(
+    query: Query,
+    end: date,
+    split: str,
+    side_a: str,
+    side_b: str,
+    hold: str | None = None,
+    hold_value: str | None = None,
+) -> dict[str, Any]:
+    keys, rows = _window(query, end)
+    payload = compare_rows(rows, split, side_a, side_b, hold, hold_value, keys)
+    payload["source"] = "live"
+    payload["performance_month"] = keys[-1]
+    return payload
+
+
+def build_compare_members(
+    query: Query,
+    end: date,
+    split: str,
+    value_id: str,
+    hold: str | None = None,
+    hold_value: str | None = None,
+) -> dict[str, Any]:
+    keys, rows = _window(query, end)
+    payload = member_rows(rows, split, value_id, hold, hold_value)
+    payload["source"] = "live"
+    payload["performance_month"] = keys[-1]
+    payload["months"] = keys
+    return payload

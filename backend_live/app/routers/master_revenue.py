@@ -11,7 +11,17 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from app import dgs_org_access as org
 from app import mssql
 from app.auth_deps import require_demo_user
-from app.casino_month_matrix import build_cell, build_expand, build_leaders, build_matrix
+from app.casino_month_matrix import (
+    CompareError,
+    build_cell,
+    build_compare,
+    build_compare_members,
+    build_compare_values,
+    build_expand,
+    build_leaders,
+    build_matrix,
+    splits_catalog,
+)
 from app.commission_rules import parse_rules, reporting_waived
 
 router = APIRouter(
@@ -1578,6 +1588,105 @@ def performance_leaders(
             return {"source": "live", "themes": [], "cabinets": [], "signs": [], "regions": []}
         raise
     return build_leaders(_revenue_query, end)
+
+
+def _compare_end(month: str | None, run=None):
+    periods = _distinct_periods(36, run)
+    try:
+        end, _prev = _resolve_target_period(month, periods)
+    except HTTPException as exc:
+        if exc.status_code == 404:
+            return None
+        raise
+    return end
+
+
+def _compare_call(fn, month: str | None, **kwargs):
+    with mssql.query_session(database=_revenue_catalog(), load_env=False) as q:
+        end = _compare_end(month, q)
+        if end is None:
+            return None
+        try:
+            return fn(q, end, **kwargs)
+        except CompareError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.get("/performance/compare/splits")
+def performance_compare_splits(
+    user: Annotated[dict[str, Any] | None, Depends(require_demo_user)] = None,
+):
+    org.assert_performance_read(user)
+    return splits_catalog()
+
+
+@router.get("/performance/compare/values")
+def performance_compare_values(
+    split: str = Query(..., min_length=1),
+    month: str | None = Query(None, description="YYYY-MM performance month the six columns end on"),
+    hold: str | None = Query(None),
+    hold_value: str | None = Query(None),
+    user: Annotated[dict[str, Any] | None, Depends(require_demo_user)] = None,
+):
+    org.assert_performance_read(user)
+    payload = _compare_call(
+        build_compare_values,
+        month,
+        split=split.strip(),
+        hold=(hold or "").strip() or None,
+        hold_value=(hold_value or "").strip() or None,
+    )
+    if payload is None:
+        return {"source": "live", "values": []}
+    return payload
+
+
+@router.get("/performance/compare")
+def performance_compare(
+    split: str = Query(..., min_length=1),
+    side_a: str = Query(..., min_length=1),
+    side_b: str = Query(..., min_length=1),
+    month: str | None = Query(None, description="YYYY-MM performance month the six columns end on"),
+    hold: str | None = Query(None),
+    hold_value: str | None = Query(None),
+    user: Annotated[dict[str, Any] | None, Depends(require_demo_user)] = None,
+):
+    org.assert_performance_read(user)
+    payload = _compare_call(
+        build_compare,
+        month,
+        split=split.strip(),
+        side_a=side_a.strip(),
+        side_b=side_b.strip(),
+        hold=(hold or "").strip() or None,
+        hold_value=(hold_value or "").strip() or None,
+    )
+    if payload is None:
+        return {"source": "live", "sides": []}
+    return payload
+
+
+@router.get("/performance/compare/members")
+def performance_compare_members(
+    split: str = Query(..., min_length=1),
+    value: str = Query(..., min_length=1),
+    month: str | None = Query(None, description="YYYY-MM performance month the six columns end on"),
+    hold: str | None = Query(None),
+    hold_value: str | None = Query(None),
+    user: Annotated[dict[str, Any] | None, Depends(require_demo_user)] = None,
+):
+    org.assert_performance_read(user)
+    payload = _compare_call(
+        build_compare_members,
+        month,
+        split=split.strip(),
+        value_id=value.strip(),
+        hold=(hold or "").strip() or None,
+        hold_value=(hold_value or "").strip() or None,
+    )
+    if payload is None:
+        return {"source": "live", "casinos": []}
+    return payload
 
 
 @router.get("/performance/themes-top")
