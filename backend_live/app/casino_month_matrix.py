@@ -753,10 +753,6 @@ GROUP BY GROUPING SETS ((theme), (cabinet), (region))
     }
 
 
-# Houses whose signs have all been walked. Empty until one is marked.
-# A seat with no sign match stays out of "without a sign" on every other house.
-CENSUS_COMPLETE_CASINOS: frozenset[str] = frozenset()
-
 COMPARE_FLOOR = 6
 _MEMBER_CAP = 500
 
@@ -878,8 +874,6 @@ def _hold_ok(row: dict[str, Any], hold: str | None, hold_value: str | None) -> b
 
 
 def _side_note(split: str, value_id: str, unit_months: int) -> str | None:
-    if split == "sign" and value_id == "without" and not CENSUS_COMPLETE_CASINOS:
-        return "No house is marked census-complete, so seats without a sign stay out."
     if unit_months and unit_months < COMPARE_FLOOR:
         return f"Under {COMPARE_FLOOR} unit-months."
     return None
@@ -1086,15 +1080,12 @@ def _classify_compare_row(row: dict[str, Any], signs: dict[str, dict[str, str]])
     casino_id = str(row.get("casino_id") or "").strip()
     sign = signs.get(smm or "")
     if sign:
-        sign_kind: str | None = "with"
+        sign_kind = "with"
         sign_bank = sign["ssm"]
         sign_label = sign["sign_serial"] or sign["ssm"]
-    elif casino_id in CENSUS_COMPLETE_CASINOS:
-        sign_kind = "without"
-        sign_bank = None
-        sign_label = None
     else:
-        sign_kind = None
+        # Not on a sign line means no sign. A missing match is not left unknown.
+        sign_kind = "without"
         sign_bank = None
         sign_label = None
     theo = row.get("theo")

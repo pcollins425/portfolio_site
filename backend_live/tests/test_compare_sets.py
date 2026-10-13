@@ -3,8 +3,8 @@
 import unittest
 
 from app.casino_month_matrix import (
-    CENSUS_COMPLETE_CASINOS,
     CompareError,
+    _classify_compare_row,
     compare_rows,
     denom_class,
     list_values,
@@ -48,12 +48,30 @@ class DenomClassTests(unittest.TestCase):
 
 
 class CompareTests(unittest.TestCase):
-    def test_same_theme_sign_sides_and_unsigned_gate(self):
-        self.assertEqual(len(CENSUS_COMPLETE_CASINOS), 0)
+    def test_unmarked_seat_counts_as_no_sign(self):
+        raw = {
+            "ym": "2026-09",
+            "theme": "Devil's Lock",
+            "casino_id": "CT-1",
+            "casino": "Downstream",
+            "smm": "SMM-9",
+            "serial": "200",
+            "theo": 0.5,
+            "denom": "0.01",
+        }
+        unmarked = _classify_compare_row(raw, {})
+        self.assertEqual(unmarked["sign"], "without")
+        marked = _classify_compare_row(
+            raw,
+            {"SMM-9": {"ssm": "SSM-1", "sign_serial": "143906"}},
+        )
+        self.assertEqual(marked["sign"], "with")
+        self.assertEqual(marked["sign_bank"], "SSM-1")
+
         rows = [
             _row(sign="with", theo=1.4, serial="100"),
             _row(sign="with", theo=1.0, serial="101", smm="SMM-2"),
-            _row(sign=None, theo=0.5, serial="200", smm="SMM-3"),
+            _row(sign="without", theo=0.5, serial="200", smm="SMM-3"),
             _row(
                 theme="Other",
                 theme_id="TH-9",
@@ -64,16 +82,14 @@ class CompareTests(unittest.TestCase):
             ),
         ]
         values = list_values(rows, "sign", "theme", "name:Devil's Lock")
-        self.assertEqual([item["id"] for item in values], ["with", "without"])
         self.assertEqual(values[0]["unit_months"], 2)
-        self.assertEqual(values[1]["unit_months"], 0)
+        self.assertEqual(values[1]["unit_months"], 1)
 
         result = compare_rows(rows, "sign", "with", "without", "theme", "name:Devil's Lock")
         signed, unsigned = result["sides"]
         self.assertEqual(signed["theo_index"], 1.2)
-        self.assertEqual(signed["units"], 2)
-        self.assertIsNone(unsigned["theo_index"])
-        self.assertIn("census-complete", unsigned["note"])
+        self.assertEqual(unsigned["theo_index"], 0.5)
+        self.assertEqual(unsigned["note"], "Under 6 unit-months.")
 
     def test_theme_hold_uses_theme_id(self):
         rows = [
