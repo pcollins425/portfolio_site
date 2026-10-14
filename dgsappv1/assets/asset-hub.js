@@ -283,12 +283,39 @@
     return tileWide("Parts BOM", body);
   }
 
+  function renderWorkOrdersTile(block) {
+    const orders = (block && block.orders) || [];
+    const count = (block && block.open_count) || 0;
+    if (!count) {
+      return tile(
+        "Work orders",
+        `<p class="dgs-v2-hub-empty">No open work orders.</p>`
+      );
+    }
+    const lines = orders
+      .map((wo) => {
+        const when = fmtDate(wo.date_wo);
+        const where = wo.property ? ` · ${esc(wo.property)}` : "";
+        const desc = wo.description
+          ? `<div class="dgs-v2-hub-muted">${esc(wo.description)}</div>`
+          : "";
+        return `<div><span class="mono">${esc(wo.wo || "—")}</span> · ${esc(when)}${where}</div>${desc}`;
+      })
+      .join("");
+    const more =
+      count > orders.length
+        ? `<div class="dgs-v2-hub-muted">${orders.length} of ${count} open</div>`
+        : "";
+    return tile("Work orders", lines + more);
+  }
+
   function renderTiles(hub) {
     const a = hub.asset;
     els.hubGrid.innerHTML = [
       renderAssetRecordTile(a),
       renderBomTile(hub.bom, a),
       renderCompinfoTile(hub.compinfo),
+      renderWorkOrdersTile(hub.work_orders),
       renderContractTile(hub.contract),
       renderSlotMasterTile(hub.slot_master),
       renderWarehouseTile(hub.warehouse, hub.compinfo),

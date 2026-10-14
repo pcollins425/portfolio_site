@@ -2257,6 +2257,13 @@ body.dgs-dashboard-v2 .dgs-dashboard-mount:has(.dgs-field-pair) {
   overflow-wrap: normal;
   line-height: 1.25;
 }
+.dgs-field-table a.dgs-field-asset {
+  color: #93c5fd;
+  text-decoration: none;
+}
+.dgs-field-table a.dgs-field-asset:hover {
+  text-decoration: underline;
+}
 .dgs-field-table th {
   color: #8b96a8;
   font-size: 0.75rem;

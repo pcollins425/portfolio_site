@@ -418,13 +418,35 @@ def asset_hub(asset_id: str):
         LEFT JOIN vendors.themes AS th ON th.reference_key = sm.theme_id
     """
 
+    work_orders_sql = """
+        SELECT TOP 20
+            wo.wo,
+            wo.date_wo,
+            wo.property,
+            wo.brief_desc
+        FROM projects.work_orders AS wo
+        WHERE wo.asset_id = %s
+          AND wo.workstatus = N'O'
+          AND ISNULL(wo.stattype, N'') NOT IN (N'Completed', N'Cancelled')
+        ORDER BY wo.date_wo DESC, wo.wo DESC
+    """
+    work_order_count_sql = """
+        SELECT COUNT(*) AS open_count
+        FROM projects.work_orders AS wo
+        WHERE wo.asset_id = %s
+          AND wo.workstatus = N'O'
+          AND ISNULL(wo.stattype, N'') NOT IN (N'Completed', N'Cancelled')
+    """
+
     try:
-        asset_rows, compinfo_rows, contract_rows, sm_rows = _field_query_many(
+        asset_rows, compinfo_rows, contract_rows, sm_rows, wo_rows, wo_count_rows = _field_query_many(
             [
                 (asset_sql, (aid,)),
                 (compinfo_sql, (aid,)),
                 (contract_sql, (aid,)),
                 (slot_master_sql, (aid, aid)),
+                (work_orders_sql, (aid,)),
+                (work_order_count_sql, (aid,)),
             ]
         )
     except Exception as exc:
@@ -563,6 +585,18 @@ def asset_hub(asset_id: str):
         },
         "warehouse": warehouse,
         "bom": bom,
+        "work_orders": {
+            "open_count": int((wo_count_rows[0].get("open_count") if wo_count_rows else 0) or 0),
+            "orders": [
+                {
+                    "wo": _json_value(row.get("wo")),
+                    "date_wo": _json_value(row.get("date_wo")),
+                    "property": _json_value(row.get("property")),
+                    "description": _json_value(row.get("brief_desc")),
+                }
+                for row in wo_rows
+            ],
+        },
     }
 
 

@@ -11,9 +11,21 @@
   }
 
   function cell(value, cls) {
-    const text = value == null || value === "" ? "—" : value;
     const attr = cls ? ` class="${cls}"` : "";
+    if (value && typeof value === "object") {
+      const text = value.text == null || value.text === "" ? "—" : value.text;
+      if (!value.href) return `<td${attr}>${esc(text)}</td>`;
+      return `<td${attr}><a class="dgs-field-asset" href="${esc(value.href)}">${esc(text)}</a></td>`;
+    }
+    const text = value == null || value === "" ? "—" : value;
     return `<td${attr}>${esc(text)}</td>`;
+  }
+
+  function serialCell(row) {
+    const assetId = row.asset_id;
+    const href = assetId && window.DGSAssetNav ? DGSAssetNav.hubHref(assetId) : "";
+    if (!href) return row.serial;
+    return { text: row.serial || assetId, href };
   }
 
   function table(headers, rows, empty) {
@@ -80,7 +92,7 @@
                 row.date_wo,
                 row.wo,
                 row.property,
-                row.serial,
+                serialCell(row),
                 row.vendor,
                 row.cabinet,
                 row.theme,
