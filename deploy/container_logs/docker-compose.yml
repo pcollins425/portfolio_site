@@ -42,7 +42,7 @@ services:
       DOZZLE_ENABLE_ACTIONS: "false"
       DOZZLE_ENABLE_SHELL: "false"
       DOZZLE_NO_ANALYTICS: "true"
-      DOZZLE_BASE: /dgs-container-logs
+      DOZZLE_BASE: /api/container-logs
       DOZZLE_AUTH_PROVIDER: none
 
   gate:

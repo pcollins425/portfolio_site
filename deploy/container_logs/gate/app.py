@@ -19,7 +19,7 @@ READ_LEVELS = frozenset(
 )
 AREA = os.environ.get("LOGS_AREA", "dgs_container_logs")
 COOKIE = os.environ.get("LOGS_COOKIE", "dgs_logs")
-PREFIX = "/dgs-container-logs"
+PREFIX = "/api/container-logs"
 DOZZLE = os.environ["DOZZLE_URL"].rstrip("/")
 SECRET = os.environ["EMAINT_DEMO_JWT_SECRET"].strip()
 _HOP = {

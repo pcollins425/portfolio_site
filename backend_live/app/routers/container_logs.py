@@ -32,26 +32,26 @@ def _forward_headers(headers) -> dict[str, str]:
     return {key: value for key, value in headers.items() if key.lower() not in _HOP}
 
 
-def _target(path: str, query: str) -> str:
-    url = f"http://{_GATE}/dgs-container-logs"
-    if path:
-        url += "/" + path.lstrip("/")
-    if query:
-        url += "?" + query
+def _target(request: Request) -> str:
+    url = f"http://{_GATE}{request.url.path}"
+    if request.url.query:
+        url += "?" + request.url.query
     return url
 
 
-@router.api_route("/dgs-container-logs", methods=["GET", "POST", "HEAD", "OPTIONS"])
+@router.api_route("/api/container-logs", methods=["GET", "POST", "HEAD", "OPTIONS"])
+@router.api_route("/api/container-logs/", methods=["GET", "POST", "HEAD", "OPTIONS"])
 @router.api_route(
-    "/dgs-container-logs/{path:path}",
+    "/api/container-logs/{path:path}",
     methods=["GET", "POST", "HEAD", "PUT", "DELETE", "PATCH", "OPTIONS"],
 )
 async def proxy_http(request: Request, path: str = ""):
+    del path
     client = httpx.AsyncClient(timeout=None)
     upstream = await client.send(
         client.build_request(
             request.method,
-            _target(path, request.url.query),
+            _target(request),
             headers=_forward_headers(request.headers),
             content=await request.body(),
         ),
@@ -87,11 +87,11 @@ def _ws_header_kw(headers: dict[str, str]) -> dict:
     return {"extra_headers": headers}
 
 
-@router.websocket("/dgs-container-logs/{path:path}")
+@router.websocket("/api/container-logs/{path:path}")
 async def proxy_ws(websocket: WebSocket, path: str):
     await websocket.accept()
     query = websocket.url.query
-    url = f"ws://{_GATE}/dgs-container-logs/{path}"
+    url = f"ws://{_GATE}/api/container-logs/{path}"
     if query:
         url += "?" + query
     headers = {}
