@@ -71,6 +71,12 @@ def test_org_sensitive_areas_in_catalog():
     assert cat.FINANCE_DASHBOARD_AREA in ids
     assert cat.ASSISTANT_AREA in ids
     assert cat.ASSISTANT_SECRETS_AREA in ids
+    assert cat.CONTAINER_LOGS_AREA in ids
+    assert cat.PERMISSION_CATALOG[
+        next(i for i, a in enumerate(cat.PERMISSION_CATALOG) if a.id == cat.CONTAINER_LOGS_AREA)
+    ].levels == (cat.LEVEL_READ,)
+    assert cat.has_area_read({"dgs_container_logs": "READ_ONLY"}, cat.CONTAINER_LOGS_AREA)
+    assert not cat.has_area_write({"dgs_container_logs": "READ_ONLY"}, cat.CONTAINER_LOGS_AREA)
     assert cat.has_area_read({"expenses": "READ_ONLY"}, cat.EXPENSES_AREA)
     assert not cat.has_area_write({"expenses": "READ_ONLY"}, cat.EXPENSES_AREA)
     assert cat.has_area_write({"dgs_expenses_mass_edit": "UPDATES_ONLY"}, cat.EXPENSES_MASS_EDIT_AREA)

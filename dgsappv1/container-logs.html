@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Container logs</title>
+  <meta name="robots" content="noindex" />
+</head>
+<body>
+  <p id="status">Opening container logs…</p>
+  <script src="assets/auth.js"></script>
+  <script>
+    (function () {
+      var READ = {
+        READ_ONLY: 1,
+        UPDATES_ONLY: 1,
+        ADDS_ONLY: 1,
+        ADDS_AND_UPDATES: 1,
+        ALL_CHANGES: 1
+      };
+      DGSAuth.ensureAuth().then(function (ok) {
+        if (!ok) return;
+        var user = DGSAuth.getUser() || {};
+        var level = (user.permissions || {}).dgs_container_logs;
+        if (!READ[level]) {
+          window.location.replace(DGSAuth.homePageUrl());
+          return;
+        }
+        var token = DGSAuth.getToken();
+        if (!token) {
+          window.location.replace(DGSAuth.loginPageUrl());
+          return;
+        }
+        var form = document.createElement("form");
+        form.method = "POST";
+        form.action = DGSAuth.apiBase() + "/dgs-container-logs/dgs-session";
+        var input = document.createElement("input");
+        input.type = "hidden";
+        input.name = "token";
+        input.value = token;
+        form.appendChild(input);
+        document.body.appendChild(form);
+        form.submit();
+      });
+    })();
+  </script>
+</body>
+</html>

@@ -143,6 +143,13 @@
           href: "mail-intake.html",
           requireAnyOf: ["dgs_mail_intake"],
         },
+        {
+          id: "container_logs",
+          label: "Container Logs",
+          href: "container-logs.html",
+          requireAnyOf: ["dgs_container_logs"],
+          newWindow: true,
+        },
       ],
     },
   ];
@@ -352,6 +359,12 @@
     }
   }
 
+  function navAnchor(item, className, resolvedId) {
+    const active = item.id === resolvedId ? " active" : "";
+    const blank = item.newWindow ? ' target="_blank" rel="noopener noreferrer"' : "";
+    return `<a href="${withApi(item.href)}" class="${className}${active}"${blank}>${navItemLabel(item)}</a>`;
+  }
+
   function renderMobileTopNav(activeId) {
     const menu = document.getElementById("dgs-mobile-menu");
     if (!menu) return;
@@ -361,7 +374,7 @@
       return items
         .map(
           (item) =>
-            `<a href="${withApi(item.href)}" class="dgs-mobile-menu-link${nested ? " dgs-mobile-menu-sublink" : ""}${item.id === resolvedId ? " active" : ""}">${navItemLabel(item)}</a>`
+            navAnchor(item, `dgs-mobile-menu-link${nested ? " dgs-mobile-menu-sublink" : ""}`, resolvedId)
         )
         .join("");
     }
@@ -510,7 +523,7 @@
       return items
         .map(
           (item) =>
-            `<a href="${withApi(item.href)}" class="dgs-nav-flyout-link${item.id === resolvedId ? " active" : ""}">${navItemLabel(item)}</a>`
+            navAnchor(item, "dgs-nav-flyout-link", resolvedId)
         )
         .join("");
     }
@@ -569,6 +582,10 @@
           const a = document.createElement("a");
           a.href = withApi(item.href);
           a.textContent = item.label;
+          if (item.newWindow) {
+            a.target = "_blank";
+            a.rel = "noopener noreferrer";
+          }
           if (item.id === resolvedId) a.classList.add("active");
           items.appendChild(a);
         }
