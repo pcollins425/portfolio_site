@@ -96,15 +96,29 @@ def field_dashboard(
             wo.wo,
             wo.date_wo,
             wo.property,
-            wo.compid,
+            COALESCE(ast.serial_number, wo.compid) AS compid,
             wo.brief_desc,
             ven.vendor_name,
             cab.cabinet_name,
             COALESCE(th.theme_name, comp.comp_desc, wo.comp_desc) AS theme_name
         FROM projects.work_orders AS wo
         LEFT JOIN inventory.compinfo_landing AS comp ON comp.compid = wo.compid
-        LEFT JOIN vendors.vendors AS ven ON ven.reference_key = comp.vendor_id
-        LEFT JOIN vendors.cabinets AS cab ON cab.reference_key = comp.cabinet_id
+        OUTER APPLY (
+            SELECT TOP 1
+                a.serial_number,
+                a.vendor_id,
+                a.cabinet_id
+            FROM inventory.assets AS a
+            WHERE NULLIF(LTRIM(RTRIM(comp.serial_no)), N'') IS NOT NULL
+              AND NULLIF(LTRIM(RTRIM(comp.vendor_id)), N'') IS NOT NULL
+              AND a.serial_number = comp.serial_no
+              AND a.vendor_id = comp.vendor_id
+            ORDER BY a.reference_key
+        ) AS ast
+        LEFT JOIN vendors.vendors AS ven
+            ON ven.reference_key = COALESCE(ast.vendor_id, comp.vendor_id)
+        LEFT JOIN vendors.cabinets AS cab
+            ON cab.reference_key = COALESCE(ast.cabinet_id, NULLIF(LTRIM(RTRIM(comp.cabinet_id)), N''))
         LEFT JOIN vendors.themes AS th ON th.reference_key = comp.theme_id
         WHERE {_OPEN_WO}
         {wo_sql}
