@@ -90,8 +90,9 @@ async def _proxy_http(request: web.Request) -> web.StreamResponse:
     headers = {
         key: value
         for key, value in request.headers.items()
-        if key.lower() not in _HOP
+        if key.lower() not in _HOP and key.lower() != "accept-encoding"
     }
+    headers["Accept-Encoding"] = "identity"
     timeout = aiohttp.ClientTimeout(total=None, sock_connect=10, sock_read=None)
     async with aiohttp.ClientSession(timeout=timeout) as session:
         async with session.request(
