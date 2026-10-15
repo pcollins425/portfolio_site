@@ -28,6 +28,13 @@
     return { text: row.serial || assetId, href };
   }
 
+  function propertyCell(row) {
+    const casinoId = row.casino_id;
+    const href = casinoId && window.DGSCasinoNav ? DGSCasinoNav.hubHref(casinoId) : "";
+    if (!href) return row.property;
+    return { text: row.property || casinoId, href };
+  }
+
   function table(headers, rows, empty) {
     if (!rows.length) {
       return `<p class="dgs-field-empty">${esc(empty)}</p>`;
@@ -91,7 +98,7 @@
               orders.map((row) => [
                 row.date_wo,
                 row.wo,
-                row.property,
+                propertyCell(row),
                 serialCell(row),
                 row.vendor,
                 row.cabinet,

@@ -938,6 +938,32 @@ def casino_detail(
                 (tribe_id, cid),
             )
         hubspot = _hubspot_for_casino(cid)
+        wo_rows = _field_query(
+            """
+            SELECT TOP 20
+                wo.wo,
+                wo.date_wo,
+                COALESCE(ast.serial_number, NULLIF(LTRIM(RTRIM(wo.compid)), N'')) AS serial,
+                wo.brief_desc
+            FROM projects.work_orders AS wo
+            LEFT JOIN inventory.assets AS ast ON ast.reference_key = wo.asset_id
+            WHERE wo.casino_id = %s
+              AND wo.workstatus = N'O'
+              AND ISNULL(wo.stattype, N'') NOT IN (N'Completed', N'Cancelled')
+            ORDER BY wo.date_wo DESC, wo.wo DESC
+            """,
+            (cid,),
+        )
+        wo_count_rows = _field_query(
+            """
+            SELECT COUNT(*) AS open_count
+            FROM projects.work_orders AS wo
+            WHERE wo.casino_id = %s
+              AND wo.workstatus = N'O'
+              AND ISNULL(wo.stattype, N'') NOT IN (N'Completed', N'Cancelled')
+            """,
+            (cid,),
+        )
     except HTTPException:
         raise
     except Exception as exc:
@@ -1039,6 +1065,18 @@ def casino_detail(
         ],
         "performance": performance,
         "hubspot": hubspot,
+        "work_orders": {
+            "open_count": int((wo_count_rows[0].get("open_count") if wo_count_rows else 0) or 0),
+            "orders": [
+                {
+                    "wo": _json_value(row.get("wo")),
+                    "date_wo": _json_value(row.get("date_wo")),
+                    "serial": _json_value(row.get("serial")),
+                    "description": _json_value(row.get("brief_desc")),
+                }
+                for row in wo_rows
+            ],
+        },
     }
     if not org.has_read(user, cat.PERFORMANCE_AREA):
         payload["performance"] = None

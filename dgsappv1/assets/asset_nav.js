@@ -28,6 +28,14 @@
       .replace(/"/g, "&quot;");
   }
 
+  window.DGSCasinoNav = {
+    hubHref(casinoId) {
+      const id = String(casinoId || "").trim();
+      if (!id) return "";
+      return pageUrl("casino-hub.html", { id });
+    },
+  };
+
   window.DGSAssetNav = {
     hubHref(assetId) {
       const id = String(assetId || "").trim();

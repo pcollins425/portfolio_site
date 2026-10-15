@@ -394,6 +394,30 @@
     return tile("Vendor distribution", `<div class="dgs-v2-casino-hub-people">${html}</div>`);
   }
 
+  function renderWorkOrdersTile(d) {
+    const block = d.work_orders || {};
+    const orders = block.orders || [];
+    const count = Number(block.open_count) || 0;
+    if (!count) {
+      return tile("Work orders", `<p class="dgs-v2-hub-empty">No open work orders.</p>`);
+    }
+    const lines = orders
+      .map((wo) => {
+        const when = fmtDate(wo.date_wo);
+        const serial = wo.serial ? ` · ${esc(wo.serial)}` : "";
+        const desc = wo.description
+          ? `<div class="dgs-v2-hub-muted">${esc(wo.description)}</div>`
+          : "";
+        return `<div><span class="mono">${esc(wo.wo || "—")}</span> · ${esc(when)}${serial}</div>${desc}`;
+      })
+      .join("");
+    const more =
+      count > orders.length
+        ? `<div class="dgs-v2-hub-muted">${orders.length} of ${count} open</div>`
+        : "";
+    return tile("Work orders", `${lines}${more}`);
+  }
+
   function renderTiles(d) {
     const hidePerf = document.body.classList.contains("dgs-hide-performance");
     const hideDeals = document.body.classList.contains("dgs-hide-deals");
@@ -403,6 +427,7 @@
       hidePerf ? "" : renderAgreementTile(d),
       renderDistributionTile(d),
       renderFloorTile(d),
+      renderWorkOrdersTile(d),
       renderImsTile(d),
       renderContactsTile(d),
       hideDeals ? "" : renderDealsTile(d),
