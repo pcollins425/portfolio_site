@@ -51,13 +51,13 @@ const FIXED_LABELS: Record<string, Record<string, string>> = {
 };
 
 function indexStyle(index: number | null | undefined): string {
-  if (index == null) return "";
+  if (index == null || !Number.isFinite(index)) return "";
   const delta = index - 1;
   if (Math.abs(delta) < 0.02) return "";
-  const mag = Math.min(1, Math.abs(delta) / 0.25);
-  const alpha = (0.12 + mag * 0.38).toFixed(2);
-  if (delta > 0) return `background-color: rgba(34, 197, 94, ${alpha}); color: #d1fae5;`;
-  return `background-color: rgba(239, 68, 68, ${alpha}); color: #fecaca;`;
+  const mag = Math.min(1, (Math.abs(delta) - 0.02) / 0.73);
+  const alpha = (0.06 + mag * 0.50).toFixed(2);
+  if (delta > 0) return `background-color: rgba(34, 197, 94, ${alpha});`;
+  return `background-color: rgba(239, 68, 68, ${alpha});`;
 }
 
 function styleObject(css: string): Record<string, string> {
