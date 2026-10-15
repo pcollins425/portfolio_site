@@ -739,8 +739,48 @@ def theme_detail(
     _assert_read(user)
     theme = _theme(theme_id.strip())
     theme_key = str(theme["reference_key"])
+    wo_rows = _query(
+        """
+        SELECT TOP 20
+            wo.wo,
+            wo.date_wo,
+            COALESCE(ast.serial_number, NULLIF(LTRIM(RTRIM(wo.compid)), N'')) AS serial,
+            wo.property,
+            wo.brief_desc
+        FROM projects.work_orders AS wo
+        LEFT JOIN inventory.assets AS ast ON ast.reference_key = wo.asset_id
+        WHERE wo.theme_id = %s
+          AND wo.workstatus = N'O'
+          AND ISNULL(wo.stattype, N'') NOT IN (N'Completed', N'Cancelled')
+        ORDER BY wo.date_wo DESC, wo.wo DESC
+        """,
+        (theme_key,),
+    )
+    wo_count_rows = _query(
+        """
+        SELECT COUNT(*) AS open_count
+        FROM projects.work_orders AS wo
+        WHERE wo.theme_id = %s
+          AND wo.workstatus = N'O'
+          AND ISNULL(wo.stattype, N'') NOT IN (N'Completed', N'Cancelled')
+        """,
+        (theme_key,),
+    )
     payload = {
         "theme": _row(theme),
+        "work_orders": {
+            "open_count": int((wo_count_rows[0].get("open_count") if wo_count_rows else 0) or 0),
+            "orders": [
+                {
+                    "wo": _json_value(row.get("wo")),
+                    "date_wo": _json_value(row.get("date_wo")),
+                    "serial": _json_value(row.get("serial")),
+                    "property": _json_value(row.get("property")),
+                    "description": _json_value(row.get("brief_desc")),
+                }
+                for row in wo_rows
+            ],
+        },
         "can_write": _can_write(user),
         "performance": None
         if not org.has_read(user, cat.PERFORMANCE_AREA)

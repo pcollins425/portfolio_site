@@ -478,7 +478,24 @@
       : "";
 
     const hidePerf = document.body.classList.contains("dgs-hide-performance");
+    const orders = (payload.work_orders && payload.work_orders.orders) || [];
+    const orderCount = Number(payload.work_orders && payload.work_orders.open_count) || 0;
+    const orderLines = orders
+      .map((wo) => {
+        const when = wo.date_wo ? String(wo.date_wo).slice(0, 10) : "—";
+        const serial = wo.serial ? ` · ${esc(wo.serial)}` : "";
+        const where = wo.property ? ` · ${esc(wo.property)}` : "";
+        const desc = wo.description ? `<div class="th-note">${esc(wo.description)}</div>` : "";
+        return `<div><span class="mono">${esc(wo.wo || "—")}</span> · ${esc(when)}${serial}${where}</div>${desc}`;
+      })
+      .join("");
+    const orderMore =
+      orderCount > orders.length ? `<p class="th-note">${orders.length} of ${orderCount} open</p>` : "";
+    const orderBody = orderCount
+      ? `${orderLines}${orderMore}`
+      : `<p class="th-note">No open work orders.</p>`;
     els.grid.innerHTML = [
+      tile("Work orders", orderBody),
       hidePerf ? "" : performanceCard(payload.performance),
       tile(
         "Associated software",

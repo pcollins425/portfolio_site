@@ -437,7 +437,7 @@ WHERE s.cabinet_id IS NOT NULL AND s.theme_id IS NOT NULL
 
 
 @vendors_router.get("/{reference_key}/hub")
-def vendor_hub(reference_key: str):
+def vendor_hub(reference_key: str, cabinet: str = Query("", max_length=25)):
     """Cabinets for one vendor, and the themes each cabinet carries."""
     vid = reference_key.strip()
     if not vid:
@@ -454,6 +454,39 @@ def vendor_hub(reference_key: str):
         )
         if not rows:
             raise HTTPException(status_code=404, detail=f"vendor not found: {vid!r}")
+        cabinet_filter = cabinet.strip()
+        wo_filter = " AND ast.cabinet_id = %s" if cabinet_filter else ""
+        wo_params = (vid, cabinet_filter) if cabinet_filter else (vid,)
+        wo_rows = _field_query(
+            f"""
+            SELECT TOP 20
+                wo.wo,
+                wo.date_wo,
+                COALESCE(ast.serial_number, NULLIF(LTRIM(RTRIM(wo.compid)), N'')) AS serial,
+                wo.comp_desc,
+                wo.brief_desc
+            FROM projects.work_orders AS wo
+            INNER JOIN inventory.assets AS ast ON ast.reference_key = wo.asset_id
+            WHERE ast.vendor_id = %s
+              {wo_filter}
+              AND wo.workstatus = N'O'
+              AND ISNULL(wo.stattype, N'') NOT IN (N'Completed', N'Cancelled')
+            ORDER BY wo.date_wo DESC, wo.wo DESC
+            """,
+            wo_params,
+        )
+        wo_count_rows = _field_query(
+            f"""
+            SELECT COUNT(*) AS open_count
+            FROM projects.work_orders AS wo
+            INNER JOIN inventory.assets AS ast ON ast.reference_key = wo.asset_id
+            WHERE ast.vendor_id = %s
+              {wo_filter}
+              AND wo.workstatus = N'O'
+              AND ISNULL(wo.stattype, N'') NOT IN (N'Completed', N'Cancelled')
+            """,
+            wo_params,
+        )
         linked = _field_query(
             f"""
             SELECT
@@ -531,6 +564,20 @@ def vendor_hub(reference_key: str):
             }
             for row in loose
         ],
+        "cabinet_id": cabinet_filter or None,
+        "work_orders": {
+            "open_count": int((wo_count_rows[0].get("open_count") if wo_count_rows else 0) or 0),
+            "orders": [
+                {
+                    "wo": _json_value(row.get("wo")),
+                    "date_wo": _json_value(row.get("date_wo")),
+                    "serial": _json_value(row.get("serial")),
+                    "theme": _json_value(row.get("comp_desc")),
+                    "description": _json_value(row.get("brief_desc")),
+                }
+                for row in wo_rows
+            ],
+        },
     }
 
 

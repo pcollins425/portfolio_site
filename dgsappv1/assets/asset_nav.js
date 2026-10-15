@@ -28,6 +28,25 @@
       .replace(/"/g, "&quot;");
   }
 
+  window.DGSVendorNav = {
+    hubHref(vendorId, cabinetId) {
+      const id = String(vendorId || "").trim();
+      if (!id) return "";
+      const params = { id };
+      const cabinet = String(cabinetId || "").trim();
+      if (cabinet) params.cabinet = cabinet;
+      return pageUrl("vendor-hub.html", params);
+    },
+  };
+
+  window.DGSThemeNav = {
+    hubHref(themeId) {
+      const id = String(themeId || "").trim();
+      if (!id) return "";
+      return pageUrl("theme-hub.html", { id });
+    },
+  };
+
   window.DGSCasinoNav = {
     hubHref(casinoId) {
       const id = String(casinoId || "").trim();

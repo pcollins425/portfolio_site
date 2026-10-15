@@ -98,17 +98,18 @@ def field_dashboard(
             wo.property,
             wo.casino_id,
             wo.asset_id,
+            wo.theme_id,
+            ast.vendor_id,
+            ast.cabinet_id,
             COALESCE(ast.serial_number, wo.compid) AS compid,
             wo.brief_desc,
             ven.vendor_name,
             cab.cabinet_name,
-            COALESCE(th.theme_name, comp.comp_desc, wo.comp_desc) AS theme_name
+            wo.comp_desc AS theme_name
         FROM projects.work_orders AS wo
         LEFT JOIN inventory.assets AS ast ON ast.reference_key = wo.asset_id
-        LEFT JOIN inventory.compinfo_landing AS comp ON comp.compid = wo.compid
         LEFT JOIN vendors.vendors AS ven ON ven.reference_key = ast.vendor_id
         LEFT JOIN vendors.cabinets AS cab ON cab.reference_key = ast.cabinet_id
-        LEFT JOIN vendors.themes AS th ON th.reference_key = comp.theme_id
         WHERE {_OPEN_WO}
         {wo_sql}
         ORDER BY wo.date_wo DESC, wo.wo DESC
@@ -133,6 +134,9 @@ def field_dashboard(
                 "property": _text(row.get("property")),
                 "casino_id": _text(row.get("casino_id")),
                 "asset_id": _text(row.get("asset_id")),
+                "theme_id": _text(row.get("theme_id")),
+                "vendor_id": _text(row.get("vendor_id")),
+                "cabinet_id": _text(row.get("cabinet_id")),
                 "serial": _text(row.get("compid")),
                 "vendor": _text(row.get("vendor_name")),
                 "cabinet": _text(row.get("cabinet_name")),

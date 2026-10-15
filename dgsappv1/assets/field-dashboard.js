@@ -35,6 +35,27 @@
     return { text: row.property || casinoId, href };
   }
 
+  function vendorCell(row) {
+    const href = row.vendor_id && window.DGSVendorNav ? DGSVendorNav.hubHref(row.vendor_id) : "";
+    if (!href) return row.vendor;
+    return { text: row.vendor || row.vendor_id, href };
+  }
+
+  function cabinetCell(row) {
+    const href =
+      row.vendor_id && row.cabinet_id && window.DGSVendorNav
+        ? DGSVendorNav.hubHref(row.vendor_id, row.cabinet_id)
+        : "";
+    if (!href) return row.cabinet;
+    return { text: row.cabinet || row.cabinet_id, href };
+  }
+
+  function themeCell(row) {
+    const href = row.theme_id && window.DGSThemeNav ? DGSThemeNav.hubHref(row.theme_id) : "";
+    if (!href) return row.theme;
+    return { text: row.theme || row.theme_id, href };
+  }
+
   function table(headers, rows, empty) {
     if (!rows.length) {
       return `<p class="dgs-field-empty">${esc(empty)}</p>`;
@@ -100,9 +121,9 @@
                 row.wo,
                 propertyCell(row),
                 serialCell(row),
-                row.vendor,
-                row.cabinet,
-                row.theme,
+                vendorCell(row),
+                cabinetCell(row),
+                themeCell(row),
                 row.description,
               ]),
               "No open work orders."

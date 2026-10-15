@@ -7,10 +7,12 @@
 
   const params = new URLSearchParams(window.location.search);
   const vendorId = (params.get("id") || "").trim();
+  const cabinetId = (params.get("cabinet") || "").trim();
 
   const state = {
     mediaUrls: {},
     data: null,
+    cabinetId,
     agreements: [],
     agreementId: (params.get("agreement") || "").trim(),
     documentId: "",
@@ -73,7 +75,8 @@
       .map((cabinet) => {
         const name = cabinet.cabinet_name || cabinet.reference_key || "Cabinet";
         const count = (cabinet.themes || []).length;
-        return `<div class="vh-cab-btn">
+        const on = cabinet.reference_key === state.cabinetId;
+        return `<div class="vh-cab-btn${on ? " vh-cab-on" : ""}" ${on ? 'style="font-weight:600"' : ""}>
           <span>${esc(name)}</span>
           <span class="vh-cab-count">${count.toLocaleString()}</span>
         </div>`;
@@ -232,12 +235,34 @@
     if (pdf && doc) pdf.addEventListener("click", () => openPdf(doc));
   }
 
+  function workOrdersTile(data) {
+    const block = data.work_orders || {};
+    const orders = block.orders || [];
+    const count = Number(block.open_count) || 0;
+    const title = data.cabinet_id ? "Work orders for this cabinet" : "Work orders";
+    if (!count) {
+      return `<article class="dgs-v2-hub-tile"><div class="dgs-v2-hub-tile-head"><div class="dgs-v2-section-label">${esc(title)}</div></div><div class="dgs-v2-hub-tile-body"><p class="dgs-v2-lines-status">No open work orders.</p></div></article>`;
+    }
+    const lines = orders
+      .map((wo) => {
+        const when = wo.date_wo ? String(wo.date_wo).slice(0, 10) : "—";
+        const serial = wo.serial ? ` · ${esc(wo.serial)}` : "";
+        const theme = wo.theme ? ` · ${esc(wo.theme)}` : "";
+        const desc = wo.description ? `<div class="dgs-v2-hub-muted">${esc(wo.description)}</div>` : "";
+        return `<div><span class="mono">${esc(wo.wo || "—")}</span> · ${esc(when)}${serial}${theme}</div>${desc}`;
+      })
+      .join("");
+    const more = count > orders.length ? `<div class="dgs-v2-hub-muted">${orders.length} of ${count} open</div>` : "";
+    return `<article class="dgs-v2-hub-tile"><div class="dgs-v2-hub-tile-head"><div class="dgs-v2-section-label">${esc(title)}</div></div><div class="dgs-v2-hub-tile-body vh-scroll">${lines}${more}</div></article>`;
+  }
+
   function paint() {
     const data = state.data;
     if (!data) return;
     const cabinets = data.cabinets || [];
     const doc = selectedDocument(selectedAgreement());
     els.hubGrid.innerHTML = `
+      ${workOrdersTile(data)}
       <article class="dgs-v2-hub-tile vh-cab-tile">
         <div class="dgs-v2-hub-tile-head">
           <div class="dgs-v2-section-label">Cabinets</div>
@@ -305,7 +330,7 @@
     try {
       const headers = window.DGSAuth ? DGSAuth.authHeaders() : {};
       const [res, agreementRes] = await Promise.all([
-        fetch(apiUrl(`/api/commerce/vendors/${encodeURIComponent(vendorId)}/hub`), { headers }),
+        fetch(apiUrl(`/api/commerce/vendors/${encodeURIComponent(vendorId)}/hub${cabinetId ? `?cabinet=${encodeURIComponent(cabinetId)}` : ""}`), { headers }),
         fetch(apiUrl(`/api/commerce/vendors/${encodeURIComponent(vendorId)}/distribution-agreements`), { headers }),
       ]);
       const body = await res.json().catch(() => ({}));
