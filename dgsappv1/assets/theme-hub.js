@@ -16,11 +16,13 @@
     title: document.getElementById("caption-title"),
     id: document.getElementById("caption-id"),
     meta: document.getElementById("caption-meta"),
+    themeImage: document.getElementById("theme-image-wrap"),
     grid: document.getElementById("hub-grid"),
     add: document.getElementById("add-root"),
   };
 
   let payload = null;
+  let themeImageUrl = null;
 
   function apiBase() {
     return (window.DGSAuth ? DGSAuth.apiBase() : "").replace(/\/$/, "");
@@ -55,6 +57,39 @@
 
   function docHref(path) {
     return `${apiBase()}/api/documents/${String(path || "").split("/").map(encodeURIComponent).join("/")}`;
+  }
+
+  async function loadMediaUrl(relPath) {
+    if (!relPath) return null;
+    const headers = window.DGSAuth ? DGSAuth.authHeaders() : {};
+    const res = await fetch(
+      `${apiBase()}/api/media/${encodeURIComponent(relPath)}`,
+      { headers }
+    );
+    if (!res.ok) return null;
+    const blob = await res.blob();
+    return URL.createObjectURL(blob);
+  }
+
+  async function renderThemeImage(theme) {
+    if (!els.themeImage) return;
+    if (themeImageUrl) {
+      URL.revokeObjectURL(themeImageUrl);
+      themeImageUrl = null;
+    }
+    const path = theme && theme.image_media_path;
+    const label = (theme && theme.theme_name) || themeId || "Theme";
+    if (!path) {
+      els.themeImage.innerHTML = `<span class="placeholder">No image</span>`;
+      return;
+    }
+    const url = await loadMediaUrl(path);
+    if (!url) {
+      els.themeImage.innerHTML = `<span class="placeholder">${esc(label)}</span>`;
+      return;
+    }
+    themeImageUrl = url;
+    els.themeImage.innerHTML = `<img src="${url}" alt="${esc(label)}" title="${esc(label)}" />`;
   }
 
   function money(n) {
@@ -722,6 +757,7 @@
       els.meta.textContent = payload.theme.vendor_name || "";
       els.loading.hidden = true;
       els.body.hidden = false;
+      void renderThemeImage(payload.theme).catch(() => {});
       if (addMode) renderAdd();
       else renderHub();
     } catch (err) {

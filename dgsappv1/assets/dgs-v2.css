@@ -1503,6 +1503,10 @@ body.dgs-vendor-hub .vh-clause {
 
 /* Theme Hub cards are tall (tables + upload forms). Same failure as Casino Hub:
    the 2-col grid sizes rows short and the next card paints on top. */
+body.dgs-theme-hub .dgs-v2-hub-cabinet {
+  padding: 20px;
+}
+
 body.dgs-theme-hub .dgs-v2-image-caption {
   flex-shrink: 0;
 }
@@ -1597,10 +1601,31 @@ body.dgs-theme-hub .th-form select {
   }
 
   body.dgs-theme-hub .dgs-v2-hub-media-inner {
+    flex-direction: row;
+    align-items: stretch;
+    min-height: 148px;
+    max-height: 168px;
+  }
+
+  body.dgs-theme-hub .dgs-v2-hub-hero {
+    flex: 0 0 42%;
+    width: 42%;
     min-height: 0;
+    max-height: none;
+    border-bottom: none;
+    border-right: 1px solid var(--dgs-v2-border-soft);
+  }
+
+  body.dgs-theme-hub .dgs-v2-hub-cabinet {
+    padding: 12px;
   }
 
   body.dgs-theme-hub .dgs-v2-image-caption {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
     padding: 12px 14px;
   }
 

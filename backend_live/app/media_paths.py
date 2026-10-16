@@ -1,4 +1,4 @@
-"""Resolve and authorize vendor media paths (logos, cabinet images)."""
+"""Resolve and authorize vendor media paths (logos, cabinet images, theme images)."""
 
 from __future__ import annotations
 
@@ -63,10 +63,14 @@ def is_registered_media_path(rel_path: str) -> bool:
                 SELECT 1 FROM vendors.cabinets
                 WHERE image_media_path = %s
             ) THEN 1
+            WHEN EXISTS (
+                SELECT 1 FROM vendors.themes
+                WHERE image_media_path = %s
+            ) THEN 1
             ELSE 0
         END AS ok
         """,
-        (rel_path, rel_path),
+        (rel_path, rel_path, rel_path),
         database=catalog(),
         profile="field",
         load_env=False,

@@ -181,7 +181,7 @@ def _theme(theme_id: str) -> dict:
     rows = _query(
         """
         SELECT t.reference_key, t.theme_name, t.vendor_id,
-               t.slick_media_path, v.vendor_name
+               t.slick_media_path, t.image_media_path, v.vendor_name
         FROM vendors.themes t
         LEFT JOIN vendors.vendors v ON v.reference_key = t.vendor_id
         WHERE t.reference_key = %s

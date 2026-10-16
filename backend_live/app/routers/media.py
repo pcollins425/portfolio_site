@@ -1,4 +1,4 @@
-"""Serve vendor logo and cabinet images registered in vendors.* media path columns."""
+"""Serve vendor logo, cabinet, and theme images registered in vendors.* media path columns."""
 
 from __future__ import annotations
 
