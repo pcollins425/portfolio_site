@@ -99,6 +99,39 @@
     return window.DGS && DGS.withApi ? DGS.withApi(safe) : safe;
   }
 
+  function hubLink(href, label) {
+    const text = label == null || label === "" ? "—" : String(label);
+    if (!href) return esc(text);
+    if (window.DGSAssetNav && typeof DGSAssetNav.linkHtml === "function") {
+      return DGSAssetNav.linkHtml(href, text);
+    }
+    return `<a class="dgs-v2-hub-serial-link" href="${esc(href)}">${esc(text)}</a>`;
+  }
+
+  function casinoLink(row) {
+    const label = row.casino_short || row.property || "—";
+    const href =
+      row.casino_id && window.DGSCasinoNav ? DGSCasinoNav.hubHref(row.casino_id) : "";
+    return hubLink(href, label);
+  }
+
+  function serialLink(row) {
+    const label = row.serial_no || "—";
+    const href =
+      row.asset_id && window.DGSAssetNav ? DGSAssetNav.hubHref(row.asset_id) : "";
+    return hubLink(href, label);
+  }
+
+  function cabinetLink(row) {
+    const label = row.cabinet_name || "—";
+    const vendorId = row.vendor_id || (payload.theme && payload.theme.vendor_id) || "";
+    const href =
+      vendorId && row.cabinet_id && window.DGSVendorNav
+        ? DGSVendorNav.hubHref(vendorId, row.cabinet_id)
+        : "";
+    return hubLink(href, label);
+  }
+
   function performanceCard(perf) {
     const summary = (perf && perf.summary) || ["Indexed performance could not be loaded."];
     const summaryHtml = `<div class="th-perf-summary">${summary
@@ -402,9 +435,9 @@
       .map((row) => {
         const perf = row.performance;
         return `<tr>
-          <td>${esc(row.casino_short || row.property || "—")}</td>
-          <td class="mono">${esc(row.serial_no || "—")}</td>
-          <td>${esc(row.cabinet_name || "—")}</td>
+          <td>${casinoLink(row)}</td>
+          <td class="mono">${serialLink(row)}</td>
+          <td>${cabinetLink(row)}</td>
           <td>${esc(row.status || "—")}</td>
           <td>${perf ? esc(money(perf.adw)) : "—"}</td>
           <td>${perf ? esc(perf.days_on_floor) : "—"}</td>

@@ -319,6 +319,8 @@ def _installs(theme_id: str, theme_name: str) -> list[dict]:
         SELECT TOP (80)
             c.serial_no, c.compid, c.status, c.date_instl, c.property,
             cas.reference_key AS casino_id, cas.casino_short,
+            COALESCE(NULLIF(LTRIM(RTRIM(c.asset_id)), N''), a.reference_key) AS asset_id,
+            a.cabinet_id, a.vendor_id,
             cab.cabinet_name
         FROM inventory.compinfo_landing c
         LEFT JOIN inventory.assets a ON a.reference_key = c.asset_id

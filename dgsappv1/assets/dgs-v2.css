@@ -1539,6 +1539,15 @@ body.dgs-theme-hub .dgs-v2-hub-tile-body {
   overflow-x: auto;
 }
 
+body.dgs-theme-hub .th-table a.dgs-v2-hub-serial-link {
+  color: var(--dgs-v2-accent);
+  text-decoration: none;
+}
+
+body.dgs-theme-hub .th-table a.dgs-v2-hub-serial-link:hover {
+  text-decoration: underline;
+}
+
 body.dgs-theme-hub .th-form input,
 body.dgs-theme-hub .th-form select {
   width: 100%;
