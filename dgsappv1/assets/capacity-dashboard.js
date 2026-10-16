@@ -98,7 +98,7 @@
     if (!rows.length) {
       return `<p class="dgs-field-empty">No rows.</p>`;
     }
-    const head = `<tr><th>Name</th><th class="dgs-field-num">Downtime</th><th class="dgs-field-num">WOs</th><th class="dgs-field-num">Assets</th></tr>`;
+    const head = `<tr><th>Name</th><th class="dgs-field-num">Downtime (days)</th><th class="dgs-field-num">WOs</th><th class="dgs-field-num">Assets</th></tr>`;
     const body = rows
       .map((row) => {
         const value =
@@ -175,7 +175,7 @@
         const pct = yMax ? (value / yMax) * 100 : 0;
         return `<div class="dgs-capacity-trend-col" title="${esc(row.month)}: ${esc(
           fmtNum(value)
-        )} downtime · ${esc(fmtNum(row.wo_count, 0))} WOs">
+        )} downtime days · ${esc(fmtNum(row.wo_count, 0))} WOs">
           <div class="dgs-capacity-trend-bar-wrap">
             <div class="dgs-capacity-trend-bar" style="height:${pct}%"></div>
           </div>
@@ -183,8 +183,8 @@
         </div>`;
       })
       .join("");
-    return `<div class="dgs-capacity-trend-chart" role="img" aria-label="Downtime by month">
-      <div class="dgs-capacity-trend-yaxis-name">Downtime</div>
+    return `<div class="dgs-capacity-trend-chart" role="img" aria-label="Downtime days by month">
+      <div class="dgs-capacity-trend-yaxis-name">Downtime (days)</div>
       <div class="dgs-capacity-trend-yaxis">${tickHtml}</div>
       <div class="dgs-capacity-trend-plot">
         <div class="dgs-capacity-trend-grid">${gridHtml}</div>
@@ -231,7 +231,7 @@
         ${table(
           [
             { label: "WO #", cls: "dgs-field-num" },
-            { label: "Downtime", cls: "dgs-field-num" },
+            { label: "Downtime (days)", cls: "dgs-field-num" },
             { label: "Down start", cls: "dgs-field-date" },
             { label: "Down end", cls: "dgs-field-date" },
             { label: "Casino" },
@@ -255,7 +255,7 @@
         )}`;
       document.getElementById("capacity-drill-close")?.addEventListener("click", () => {
         state.drill = null;
-        panel.innerHTML = `<p class="dgs-field-empty">Select a Region, State, Casino, Vendor, Cabinet, or Theme row to list work orders with downtime hours and down start/end.</p>`;
+        panel.innerHTML = `<p class="dgs-field-empty">Select a Region, State, Casino, Vendor, Cabinet, or Theme row to list work orders with downtime days and down start/end.</p>`;
       });
     } catch (err) {
       panel.innerHTML = `<p class="error-box">${esc(err.message || err)}</p>`;
@@ -281,11 +281,11 @@
           </label>
           <p class="dgs-capacity-note">${esc(
             data.bucket_rule ||
-              "Full downtime hours attributed to the month of COALESCE(downstart, date_wo)."
+              "Downtime is eMaint Downtime (Days). Full days attributed to the month of COALESCE(downstart, date_wo)."
           )}</p>
         </div>
         <div class="dgs-capacity-kpis">
-          <div class="dgs-capacity-kpi"><div class="label">Downtime</div><div class="value">${esc(
+          <div class="dgs-capacity-kpi"><div class="label">Downtime (days)</div><div class="value">${esc(
             fmtNum(k.downtime)
           )}</div></div>
           <div class="dgs-capacity-kpi"><div class="label">Work orders</div><div class="value">${esc(
@@ -294,7 +294,7 @@
           <div class="dgs-capacity-kpi"><div class="label">Assets</div><div class="value">${esc(
             fmtNum(k.asset_count, 0)
           )}</div></div>
-          <div class="dgs-capacity-kpi"><div class="label">Avg downtime / WO</div><div class="value">${esc(
+          <div class="dgs-capacity-kpi"><div class="label">Avg days / WO</div><div class="value">${esc(
             fmtNum(k.avg_downtime)
           )}</div></div>
           <div class="dgs-capacity-kpi"><div class="label">Part cost</div><div class="value">${esc(
@@ -302,7 +302,7 @@
           )}</div></div>
         </div>
         <section class="dgs-field-panel dgs-capacity-panel">
-          <h2>Downtime by month <span>12 mo</span></h2>
+          <h2>Downtime days by month <span>12 mo</span></h2>
           ${trendBars(data.trend || [])}
         </section>
         <div class="dgs-capacity-grid">
@@ -336,7 +336,7 @@
           ${partTable(data.part_costs || [])}
         </section>
         <section class="dgs-field-panel dgs-capacity-panel" id="capacity-drill">
-          <p class="dgs-field-empty">Select a Region, State, Casino, Vendor, Cabinet, or Theme row to list work orders with downtime hours and down start/end.</p>
+          <p class="dgs-field-empty">Select a Region, State, Casino, Vendor, Cabinet, or Theme row to list work orders with downtime days and down start/end.</p>
         </section>
       </div>`;
     document.getElementById("capacity-month")?.addEventListener("change", (event) => {

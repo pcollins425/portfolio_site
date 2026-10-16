@@ -261,7 +261,7 @@ def capacity_dashboard(
         "month": month_key,
         "month_start": start.isoformat(),
         "month_end": end.isoformat(),
-        "bucket_rule": "Full downtime hours attributed to the month of COALESCE(downstart, date_wo).",
+        "bucket_rule": "Downtime is eMaint Downtime (Days) on work_orders.hours. Full days attributed to the month of COALESCE(downstart, date_wo).",
         "kpis": {
             "downtime": round(downtime, 2),
             "wo_count": wo_count,
