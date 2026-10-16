@@ -200,7 +200,7 @@
             { label: "Downtime", cls: "dgs-field-num" },
             { label: "Down start", cls: "dgs-field-date" },
             { label: "Down end", cls: "dgs-field-date" },
-            { label: "Property" },
+            { label: "Casino" },
             { label: "Serial" },
             { label: "Vendor" },
             { label: "Cabinet" },

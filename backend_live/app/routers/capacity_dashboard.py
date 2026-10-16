@@ -209,7 +209,7 @@ def capacity_dashboard(
         ),
         "casino": breakout(
             "COALESCE(NULLIF(LTRIM(RTRIM(wo.casino_id)), N''), N'Unassigned')",
-            "COALESCE(NULLIF(LTRIM(RTRIM(cas.casino_short)), N''), NULLIF(LTRIM(RTRIM(cas.casino_name)), N''), NULLIF(LTRIM(RTRIM(wo.property)), N''), N'Unassigned')",
+            "COALESCE(NULLIF(LTRIM(RTRIM(cas.casino_name)), N''), N'Unassigned')",
         ),
     }
     product = {
@@ -231,12 +231,7 @@ def capacity_dashboard(
         f"""
         SELECT
             COALESCE(NULLIF(LTRIM(RTRIM(wo.casino_id)), N''), N'Unassigned') AS dim_key,
-            COALESCE(
-                NULLIF(LTRIM(RTRIM(cas.casino_short)), N''),
-                NULLIF(LTRIM(RTRIM(cas.casino_name)), N''),
-                NULLIF(LTRIM(RTRIM(wo.property)), N''),
-                N'Unassigned'
-            ) AS dim_label,
+            COALESCE(NULLIF(LTRIM(RTRIM(cas.casino_name)), N''), N'Unassigned') AS dim_label,
             ISNULL(SUM(CAST(mat.ext_cost AS float)), 0) AS part_cost,
             COUNT(*) AS line_count
         FROM projects.work_order_material AS mat
@@ -247,12 +242,7 @@ def capacity_dashboard(
           AND {_BUCKET} < DATEADD(day, 1, %s)
         GROUP BY
             COALESCE(NULLIF(LTRIM(RTRIM(wo.casino_id)), N''), N'Unassigned'),
-            COALESCE(
-                NULLIF(LTRIM(RTRIM(cas.casino_short)), N''),
-                NULLIF(LTRIM(RTRIM(cas.casino_name)), N''),
-                NULLIF(LTRIM(RTRIM(wo.property)), N''),
-                N'Unassigned'
-            )
+            COALESCE(NULLIF(LTRIM(RTRIM(cas.casino_name)), N''), N'Unassigned')
         ORDER BY part_cost DESC, line_count DESC
         """,
         (start, end),
@@ -330,7 +320,6 @@ def capacity_drill(
             ven.vendor_name,
             cab.cabinet_name,
             COALESCE(th.theme_name, wo.comp_desc) AS theme_name,
-            cas.casino_short,
             cas.casino_name
         {_base_joins()}
         WHERE {_INCLUDE}
@@ -352,7 +341,7 @@ def capacity_drill(
                 "hours": round(_num(row.get("hours")), 2) if row.get("hours") is not None else None,
                 "downstart": _day(row.get("downstart")),
                 "downend": _day(row.get("downend")),
-                "property": _text(row.get("casino_short") or row.get("casino_name") or row.get("property")),
+                "property": _text(row.get("casino_name") or "Unassigned"),
                 "casino_id": _text(row.get("casino_id")),
                 "asset_id": _text(row.get("asset_id")),
                 "theme_id": _text(row.get("theme_id")),
