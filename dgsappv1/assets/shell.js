@@ -17,7 +17,15 @@
     {
       id: "operations",
       label: "Operations",
-      items: [{ id: "dash-field", route: "/field", label: "Field", requireArea: "dgs_tech_dashboard" }],
+      items: [
+        { id: "dash-field", route: "/field", label: "Field", requireArea: "dgs_tech_dashboard" },
+        {
+          id: "dash-capacity",
+          route: "/capacity",
+          label: "Capacity",
+          requireArea: "dgs_capacity_dashboard",
+        },
+      ],
     },
     {
       id: "performance",
@@ -748,6 +756,12 @@
       const root = document.getElementById("dashboard-root");
       if (window.DGSField) DGSField.load(root);
       rememberDashboardView("field");
+      return;
+    }
+    if (normalized === "/capacity") {
+      const root = document.getElementById("dashboard-root");
+      if (window.DGSCapacity) DGSCapacity.load(root);
+      rememberDashboardView("capacity");
       return;
     }
     loadDashboardBundle()
