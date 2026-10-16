@@ -2360,12 +2360,73 @@ body.dgs-dashboard-v2 .dgs-dashboard-mount:has(.dgs-capacity) {
 .dgs-capacity-rank-row:hover td {
   background: rgba(147, 197, 253, 0.08);
 }
-.dgs-capacity-trend {
+.dgs-capacity-trend-chart {
+  display: grid;
+  grid-template-columns: 1.6rem 3.2rem minmax(0, 1fr);
+  grid-template-rows: minmax(160px, 200px) auto;
+  gap: 0.25rem 0.4rem;
+  align-items: stretch;
+}
+.dgs-capacity-trend-yaxis-name {
+  grid-row: 1;
+  grid-column: 1;
+  align-self: center;
+  justify-self: center;
+  color: #c5cdd9;
+  font-size: 0.72rem;
+  font-weight: 650;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  writing-mode: vertical-rl;
+  transform: rotate(180deg);
+  white-space: nowrap;
+}
+.dgs-capacity-trend-yaxis {
+  grid-row: 1;
+  grid-column: 2;
   display: flex;
-  align-items: flex-end;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 0.1rem 0 1.35rem;
+}
+.dgs-capacity-trend-tick {
+  color: #8b96a8;
+  font-size: 0.7rem;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  line-height: 1;
+}
+.dgs-capacity-trend-plot {
+  grid-row: 1;
+  grid-column: 3;
+  position: relative;
+  min-width: 0;
+  border-left: 1px solid rgba(255, 255, 255, 0.14);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.14);
+  padding: 0 0.2rem 0;
+}
+.dgs-capacity-trend-grid {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  bottom: 1.35rem;
+  pointer-events: none;
+}
+.dgs-capacity-trend-gridline {
+  position: absolute;
+  left: 0;
+  right: 0;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+.dgs-capacity-trend {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: stretch;
   gap: 0.35rem;
-  height: 140px;
-  padding: 0.4rem 0.2rem 0;
+  height: 100%;
+  padding: 0.1rem 0.1rem 0;
 }
 .dgs-capacity-trend-col {
   flex: 1;
@@ -2373,20 +2434,37 @@ body.dgs-dashboard-v2 .dgs-dashboard-mount:has(.dgs-capacity) {
   height: 100%;
   display: flex;
   flex-direction: column;
-  justify-content: flex-end;
   align-items: center;
   gap: 0.3rem;
+}
+.dgs-capacity-trend-bar-wrap {
+  flex: 1;
+  width: 100%;
+  min-height: 0;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
 }
 .dgs-capacity-trend-bar {
   width: 70%;
   max-width: 2rem;
-  min-height: 4px;
+  min-height: 0;
   border-radius: 4px 4px 0 0;
   background: linear-gradient(180deg, #93c5fd, #3b82f6);
 }
 .dgs-capacity-trend-label {
+  flex: 0 0 1.1rem;
   color: #8b96a8;
   font-size: 0.7rem;
+  line-height: 1.1rem;
+}
+.dgs-capacity-trend-xaxis-name {
+  grid-row: 2;
+  grid-column: 3;
+  color: #8b96a8;
+  font-size: 0.72rem;
+  text-align: center;
+  letter-spacing: 0.03em;
 }
 .dgs-capacity-drill-head {
   display: flex;

@@ -142,22 +142,56 @@
     return `<div class="dgs-field-scroll"><table class="dgs-field-table"><thead>${head}</thead><tbody>${body}</tbody></table></div>`;
   }
 
+  function niceCeiling(value) {
+    const n = Math.max(Number(value) || 0, 1);
+    const mag = Math.pow(10, Math.floor(Math.log10(n)));
+    const scaled = n / mag;
+    const nice = scaled <= 1 ? 1 : scaled <= 2 ? 2 : scaled <= 5 ? 5 : 10;
+    return nice * mag;
+  }
+
   function trendBars(trend) {
     if (!trend.length) {
       return `<p class="dgs-field-empty">No downtime trend yet.</p>`;
     }
-    const max = Math.max(...trend.map((row) => Number(row.downtime) || 0), 1);
-    return `<div class="dgs-capacity-trend">${trend
+    const rawMax = Math.max(...trend.map((row) => Number(row.downtime) || 0), 0);
+    const yMax = niceCeiling(rawMax || 1);
+    const ticks = [yMax, yMax * 0.75, yMax * 0.5, yMax * 0.25, 0];
+    const tickHtml = ticks
+      .map(
+        (tick) =>
+          `<div class="dgs-capacity-trend-tick"><span>${esc(fmtNum(tick))}</span></div>`
+      )
+      .join("");
+    const gridHtml = ticks
+      .map(
+        (tick) =>
+          `<div class="dgs-capacity-trend-gridline" style="bottom:${(tick / yMax) * 100}%"></div>`
+      )
+      .join("");
+    const cols = trend
       .map((row) => {
-        const pct = Math.max(4, ((Number(row.downtime) || 0) / max) * 100);
+        const value = Number(row.downtime) || 0;
+        const pct = yMax ? (value / yMax) * 100 : 0;
         return `<div class="dgs-capacity-trend-col" title="${esc(row.month)}: ${esc(
-          fmtNum(row.downtime)
+          fmtNum(value)
         )} downtime · ${esc(fmtNum(row.wo_count, 0))} WOs">
-          <div class="dgs-capacity-trend-bar" style="height:${pct}%"></div>
+          <div class="dgs-capacity-trend-bar-wrap">
+            <div class="dgs-capacity-trend-bar" style="height:${pct}%"></div>
+          </div>
           <div class="dgs-capacity-trend-label">${esc((row.month || "").slice(5))}</div>
         </div>`;
       })
-      .join("")}</div>`;
+      .join("");
+    return `<div class="dgs-capacity-trend-chart" role="img" aria-label="Downtime by month">
+      <div class="dgs-capacity-trend-yaxis-name">Downtime</div>
+      <div class="dgs-capacity-trend-yaxis">${tickHtml}</div>
+      <div class="dgs-capacity-trend-plot">
+        <div class="dgs-capacity-trend-grid">${gridHtml}</div>
+        <div class="dgs-capacity-trend">${cols}</div>
+      </div>
+      <div class="dgs-capacity-trend-xaxis-name">Month</div>
+    </div>`;
   }
 
   let state = {
