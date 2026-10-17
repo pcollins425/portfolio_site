@@ -36,7 +36,51 @@
       </div>
     </section>
 
-    <section class="home-section" aria-label="Services">
+    <section class="home-cycle" aria-labelledby="cycle-title">
+      <div class="home-cycle-intro">
+        <p class="home-eyebrow">The connection</p>
+        <h2 id="cycle-title">Walk the records — and land back where you started.</h2>
+        <p>
+          Services only work because the same machine, floor install, property, vendor rights, and theme stay linked.
+          This is sample data. Use the arrows, or let it advance on its own.
+        </p>
+      </div>
+
+      <div class="home-cycle-shell" data-home-cycle>
+        <ol class="home-cycle-rail" data-cycle-rail aria-label="Connection path">
+          <li><button type="button" data-cycle-step="0" aria-current="step">Asset</button></li>
+          <li><button type="button" data-cycle-step="1">Floor</button></li>
+          <li><button type="button" data-cycle-step="2">Casino</button></li>
+          <li><button type="button" data-cycle-step="3">Vendors</button></li>
+          <li><button type="button" data-cycle-step="4">Vendor</button></li>
+          <li><button type="button" data-cycle-step="5">Theme</button></li>
+          <li><button type="button" data-cycle-step="6">Active assets</button></li>
+        </ol>
+
+        <div class="home-cycle-stage">
+          <div class="home-cycle-toolbar">
+            <div class="home-cycle-controls">
+              <button type="button" class="home-cycle-nav" data-cycle-prev aria-label="Previous step">
+                <span aria-hidden="true">‹</span>
+              </button>
+              <button type="button" class="home-cycle-nav" data-cycle-next aria-label="Next step">
+                <span aria-hidden="true">›</span>
+              </button>
+            </div>
+            <p class="home-cycle-sample">Sample data · not a live property</p>
+            <p class="home-cycle-progress" data-cycle-progress>1 / 7</p>
+          </div>
+
+          <div class="home-cycle-panel" data-cycle-panel aria-live="polite"></div>
+          <p class="home-cycle-caption" data-cycle-caption></p>
+          <p class="home-cycle-linkto" data-cycle-linkto></p>
+        </div>
+      </div>
+    </section>
+
+    <section class="home-section home-services" aria-labelledby="services-title">
+      <h2 id="services-title">Services ride on that connection.</h2>
+      <p class="home-services-lead">Performance, maintenance, the customer, and the job only stay coherent because they share the same records.</p>
       <div class="home-cards">
         <a class="home-card" href="guide/performance.html">
           <h3>Performance</h3>
