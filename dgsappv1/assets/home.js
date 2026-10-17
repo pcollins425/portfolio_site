@@ -70,7 +70,7 @@
 })();
 
 /**
- * 3D circular carousel of synthetic detail pages.
+ * Elliptical coverflow of synthetic detail pages (front low/bright, back high/dark).
  * Asset → Floor → Casino → Available vendors → Vendor → Theme → Active assets → Asset
  */
 function initConnectionCycle() {
@@ -321,21 +321,7 @@ function initConnectionCycle() {
     );
   }
 
-  function pageRadius() {
-    var page = track.querySelector(".home-cycle-page");
-    var width = page ? page.offsetWidth : 300;
-    var count = steps.length;
-    var halfAngle = Math.PI / count;
-    return Math.round(width / 2 / Math.tan(halfAngle)) + 24;
-  }
-
-  function applyRadius() {
-    scene.style.setProperty("--cycle-tz", pageRadius() + "px");
-  }
-
   function buildPages() {
-    var count = steps.length;
-    scene.style.setProperty("--cycle-count", String(count));
     track.innerHTML = steps
       .map(function (step, i) {
         return (
@@ -343,8 +329,6 @@ function initConnectionCycle() {
           i +
           '" data-kind="' +
           escapeHtml(step.kind) +
-          '" style="--i:' +
-          i +
           '" role="button" tabindex="0" aria-label="' +
           escapeHtml(step.label + ": " + step.title) +
           '">' +
@@ -366,13 +350,58 @@ function initConnectionCycle() {
         );
       })
       .join("");
-    applyRadius();
+  }
+
+  function layoutPages() {
+    if (reduceMotion) return;
+
+    var nodes = root.querySelectorAll("[data-cycle-step]");
+    var count = steps.length;
+    var sceneW = scene.clientWidth || 720;
+    var sceneH = scene.clientHeight || 480;
+    var radiusX = Math.min(sceneW * 0.34, 250);
+    var radiusY = Math.min(sceneH * 0.28, 150);
+    var radiusZ = Math.min(sceneW * 0.22, 160);
+
+    nodes.forEach(function (node) {
+      var stepIndex = Number(node.getAttribute("data-cycle-step"));
+      var rel = ((stepIndex - index) % count + count) % count;
+      var theta = (rel / count) * Math.PI * 2;
+      var cos = Math.cos(theta);
+      var sin = Math.sin(theta);
+      var depth = (1 - cos) / 2;
+      var x = sin * radiusX;
+      var y = cos * radiusY * 0.85;
+      var z = cos * radiusZ;
+      var scale = 1 - depth * 0.38;
+      var rotateY = -sin * 38;
+      var brightness = 1 - depth * 0.62;
+      var opacity = 1 - depth * 0.2;
+
+      node.style.transform =
+        "translate(-50%, -50%)" +
+        " translate3d(" +
+        x.toFixed(1) +
+        "px, " +
+        y.toFixed(1) +
+        "px, " +
+        z.toFixed(1) +
+        "px)" +
+        " rotateY(" +
+        rotateY.toFixed(1) +
+        "deg)" +
+        " scale(" +
+        scale.toFixed(3) +
+        ")";
+      node.style.zIndex = String(Math.round(cos * 100 + 100));
+      node.style.filter = "brightness(" + brightness.toFixed(3) + ")";
+      node.style.opacity = opacity.toFixed(3);
+    });
   }
 
   function render() {
     var step = steps[index];
     var count = steps.length;
-    scene.style.setProperty("--cycle-index", String(index));
     caption.textContent = step.caption;
     linkto.textContent = step.linkto;
     progress.textContent = index + 1 + " / " + count;
@@ -387,6 +416,8 @@ function initConnectionCycle() {
         node.removeAttribute("aria-current");
       }
     });
+
+    layoutPages();
   }
 
   function go(next) {
@@ -472,7 +503,7 @@ function initConnectionCycle() {
   });
 
   window.addEventListener("resize", function () {
-    applyRadius();
+    layoutPages();
   });
 
   render();

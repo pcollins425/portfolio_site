@@ -105,7 +105,7 @@ a.home-mark:hover {
   margin-bottom: 48px;
 }
 
-/* Connection cycle — 3D circular carousel of detail pages */
+/* Connection cycle — elliptical coverflow (front low/bright, back high/dark) */
 
 .home-cycle {
   margin: 0 0 80px;
@@ -134,13 +134,10 @@ a.home-mark:hover {
   display: grid;
   gap: 14px;
   padding: 18px 18px 22px;
-  background:
-    radial-gradient(ellipse 70% 50% at 50% 55%, rgba(110, 181, 255, 0.12), transparent 58%),
-    linear-gradient(180deg, rgba(110, 181, 255, 0.04), transparent 40%),
-    var(--home-card-2);
-  border: 1px solid var(--home-accent-border);
+  background: #05070c;
+  border: 1px solid rgba(110, 181, 255, 0.22);
   border-radius: 18px;
-  overflow: visible;
+  overflow: hidden;
 }
 
 .home-cycle-toolbar {
@@ -149,7 +146,7 @@ a.home-mark:hover {
   align-items: center;
   gap: 10px 16px;
   position: relative;
-  z-index: 3;
+  z-index: 20;
 }
 
 .home-cycle-controls {
@@ -163,8 +160,8 @@ a.home-mark:hover {
   display: inline-grid;
   place-items: center;
   border-radius: 10px;
-  border: 1px solid var(--home-border);
-  background: var(--home-card);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: #141a24;
   color: var(--home-heading);
   font-size: 22px;
   line-height: 1;
@@ -200,86 +197,55 @@ a.home-mark:hover {
 }
 
 .home-cycle-scene {
-  --cycle-count: 7;
-  --cycle-index: 0;
-  --cycle-tz: 340px;
-  --page-w: min(300px, 72vw);
-  --page-h: 390px;
+  --page-w: min(340px, 78vw);
+  --page-h: 250px;
   position: relative;
-  height: 460px;
-  margin: 8px 0 4px;
-  perspective: 1400px;
-  perspective-origin: 50% 45%;
-  display: grid;
-  place-items: center;
+  height: min(520px, 78vw);
+  min-height: 420px;
+  margin: 4px 0 8px;
+  perspective: 1600px;
+  perspective-origin: 50% 42%;
 }
 
 .home-cycle-carousel {
-  position: relative;
-  width: var(--page-w);
-  height: var(--page-h);
+  position: absolute;
+  inset: 0;
   transform-style: preserve-3d;
-  transition: transform 0.85s cubic-bezier(0.22, 0.7, 0.25, 1);
-  transform:
-    translateZ(calc(var(--cycle-tz) * -1))
-    rotateY(calc(var(--cycle-index) * -360deg / var(--cycle-count)));
 }
 
 .home-cycle-page {
   position: absolute;
-  inset: 0;
+  left: 50%;
+  top: 50%;
   width: var(--page-w);
   height: var(--page-h);
   margin: 0;
-  padding: 18px 18px 16px;
-  border-radius: 16px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.03), transparent 28%),
-    #1a1f2a;
-  box-shadow:
-    0 18px 40px rgba(0, 0, 0, 0.45),
-    inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  padding: 16px 18px 14px;
+  border-radius: 22px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: linear-gradient(165deg, #3a5f8c 0%, #1e3a5f 48%, #152a45 100%);
+  box-shadow: 0 16px 28px rgba(0, 0, 0, 0.55);
   color: inherit;
   text-align: left;
   cursor: pointer;
   transform-style: preserve-3d;
-  backface-visibility: hidden;
-  -webkit-backface-visibility: hidden;
-  transform: rotateY(calc(var(--i) * 360deg / var(--cycle-count))) translateZ(var(--cycle-tz));
+  transform-origin: center center;
   transition:
-    border-color 0.35s ease,
-    box-shadow 0.35s ease,
-    opacity 0.35s ease,
-    filter 0.35s ease;
-  opacity: 0.72;
-  filter: brightness(0.78) saturate(0.9);
+    transform 0.75s cubic-bezier(0.22, 0.7, 0.25, 1),
+    filter 0.75s ease,
+    opacity 0.75s ease,
+    box-shadow 0.75s ease,
+    border-color 0.35s ease;
   overflow: hidden;
-}
-
-.home-cycle-page::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  background: linear-gradient(115deg, transparent 40%, rgba(0, 0, 0, 0.28));
-  pointer-events: none;
-  opacity: 0.55;
+  will-change: transform, filter, opacity;
 }
 
 .home-cycle-page.is-active {
-  opacity: 1;
-  filter: none;
-  border-color: var(--home-accent-border);
+  border-color: rgba(140, 196, 255, 0.55);
+  background: linear-gradient(165deg, #5b8fd4 0%, #2f5f9a 45%, #1e4470 100%);
   box-shadow:
-    0 0 0 1px rgba(110, 181, 255, 0.22),
-    0 22px 48px rgba(0, 0, 0, 0.55),
-    0 0 60px rgba(110, 181, 255, 0.12);
-  z-index: 2;
-}
-
-.home-cycle-page.is-active::before {
-  opacity: 0;
+    0 22px 40px rgba(0, 0, 0, 0.65),
+    0 0 40px rgba(90, 150, 220, 0.2);
 }
 
 .home-cycle-page-chrome {
@@ -287,9 +253,7 @@ a.home-mark:hover {
   align-items: baseline;
   justify-content: space-between;
   gap: 10px;
-  margin-bottom: 10px;
-  position: relative;
-  z-index: 1;
+  margin-bottom: 8px;
 }
 
 .home-cycle-kicker {
@@ -298,37 +262,35 @@ a.home-mark:hover {
   font-weight: 600;
   letter-spacing: 0.07em;
   text-transform: uppercase;
-  color: var(--home-accent);
+  color: rgba(190, 220, 255, 0.9);
 }
 
 .home-cycle-page-id {
   margin: 0;
   font-size: 11px;
   font-weight: 600;
-  color: var(--home-dim);
+  color: rgba(180, 200, 230, 0.55);
   font-variant-numeric: tabular-nums;
   text-align: right;
 }
 
 .home-cycle-page h3 {
-  position: relative;
-  z-index: 1;
-  margin: 0 0 14px;
-  font-size: 1.35rem;
+  margin: 0 0 12px;
+  font-size: 1.25rem;
   line-height: 1.2;
   letter-spacing: -0.02em;
-  color: var(--home-heading);
+  color: #f3f7ff;
 }
 
 .home-cycle-page-body {
-  position: relative;
-  z-index: 1;
+  max-height: calc(var(--page-h) - 88px);
+  overflow: auto;
 }
 
 .home-cycle-page-note {
-  margin: 14px 0 0;
+  margin: 12px 0 0;
   font-size: 13px;
-  color: var(--home-muted);
+  color: rgba(200, 215, 235, 0.75);
 }
 
 .home-cycle-grid {
@@ -344,14 +306,14 @@ a.home-mark:hover {
   font-weight: 600;
   letter-spacing: 0.05em;
   text-transform: uppercase;
-  color: var(--home-dim);
+  color: rgba(180, 205, 235, 0.55);
 }
 
 .home-cycle-grid dd {
   margin: 3px 0 0;
   font-size: 14px;
   font-weight: 600;
-  color: var(--home-heading);
+  color: #eef4ff;
 }
 
 .home-cycle-chips {
@@ -374,22 +336,22 @@ a.home-mark:hover {
   gap: 10px;
   padding: 10px 12px;
   border-radius: 10px;
-  border: 1px solid var(--home-border);
-  background: var(--home-card-2);
-  color: var(--home-heading);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(8, 16, 28, 0.35);
+  color: #eef4ff;
   font-size: 13px;
   font-weight: 600;
 }
 
 .home-cycle-chips li span {
-  color: var(--home-dim);
+  color: rgba(180, 205, 235, 0.55);
   font-size: 11px;
   font-weight: 600;
 }
 
 .home-cycle-chips li.is-focus {
-  border-color: var(--home-accent-border);
-  background: var(--home-accent-bg);
+  border-color: rgba(140, 196, 255, 0.45);
+  background: rgba(90, 150, 220, 0.22);
 }
 
 .home-cycle-list {
@@ -407,22 +369,22 @@ a.home-mark:hover {
   gap: 6px 14px;
   padding: 10px 12px;
   border-radius: 12px;
-  border: 1px solid var(--home-border);
-  background: var(--home-card-2);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(8, 16, 28, 0.35);
 }
 
 .home-cycle-list li.is-focus {
-  border-color: var(--home-accent-border);
-  background: var(--home-accent-bg);
+  border-color: rgba(140, 196, 255, 0.45);
+  background: rgba(90, 150, 220, 0.22);
 }
 
 .home-cycle-list strong {
-  color: var(--home-heading);
+  color: #eef4ff;
   font-weight: 600;
 }
 
 .home-cycle-list span {
-  color: var(--home-muted);
+  color: rgba(200, 215, 235, 0.7);
   font-size: 13px;
 }
 
@@ -430,14 +392,14 @@ a.home-mark:hover {
   margin: 4px 0 0;
   max-width: 68ch;
   font-size: 15px;
-  color: var(--home-text);
+  color: rgba(210, 220, 235, 0.88);
 }
 
 .home-cycle-linkto {
   margin: 4px 0 0;
   font-size: 13px;
   font-weight: 600;
-  color: var(--home-accent);
+  color: #8ec5ff;
 }
 
 .home-cycle-shell.is-paused .home-cycle-progress::after {
@@ -447,32 +409,34 @@ a.home-mark:hover {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .home-cycle-carousel {
+  .home-cycle-page {
     transition: none;
   }
 
   .home-cycle-scene {
     perspective: none;
     height: auto;
+    min-height: 0;
   }
 
   .home-cycle-carousel {
-    transform: none;
-    width: 100%;
-    max-width: 360px;
-    height: auto;
+    position: relative;
+    inset: auto;
   }
 
   .home-cycle-page {
     position: relative;
-    inset: auto;
+    left: auto;
+    top: auto;
     width: 100%;
+    max-width: 420px;
     height: auto;
-    min-height: 320px;
+    min-height: 240px;
+    margin: 0 auto;
     transform: none !important;
     display: none;
-    opacity: 1;
-    filter: none;
+    opacity: 1 !important;
+    filter: none !important;
   }
 
   .home-cycle-page.is-active {
@@ -1010,17 +974,18 @@ a.home-card:hover {
   }
 
   .home-cycle-scene {
-    --page-h: 360px;
+    --page-h: 230px;
     height: 400px;
-    perspective: 1100px;
+    min-height: 360px;
   }
 
   .home-cycle-page {
-    padding: 16px 14px 14px;
+    padding: 14px 14px 12px;
+    border-radius: 18px;
   }
 
   .home-cycle-page h3 {
-    font-size: 1.2rem;
+    font-size: 1.1rem;
   }
 
   .home-cycle-grid {
