@@ -47,34 +47,26 @@
       </div>
 
       <div class="home-cycle-shell" data-home-cycle>
-        <ol class="home-cycle-rail" data-cycle-rail aria-label="Connection path">
-          <li><button type="button" data-cycle-step="0" aria-current="step">Asset</button></li>
-          <li><button type="button" data-cycle-step="1">Floor</button></li>
-          <li><button type="button" data-cycle-step="2">Casino</button></li>
-          <li><button type="button" data-cycle-step="3">Vendors</button></li>
-          <li><button type="button" data-cycle-step="4">Vendor</button></li>
-          <li><button type="button" data-cycle-step="5">Theme</button></li>
-          <li><button type="button" data-cycle-step="6">Active assets</button></li>
-        </ol>
-
-        <div class="home-cycle-stage">
-          <div class="home-cycle-toolbar">
-            <div class="home-cycle-controls">
-              <button type="button" class="home-cycle-nav" data-cycle-prev aria-label="Previous step">
-                <span aria-hidden="true">‹</span>
-              </button>
-              <button type="button" class="home-cycle-nav" data-cycle-next aria-label="Next step">
-                <span aria-hidden="true">›</span>
-              </button>
-            </div>
-            <p class="home-cycle-sample">Sample data · not a live property</p>
-            <p class="home-cycle-progress" data-cycle-progress>1 / 7</p>
+        <div class="home-cycle-toolbar">
+          <div class="home-cycle-controls">
+            <button type="button" class="home-cycle-nav" data-cycle-prev aria-label="Previous step">
+              <span aria-hidden="true">‹</span>
+            </button>
+            <button type="button" class="home-cycle-nav" data-cycle-next aria-label="Next step">
+              <span aria-hidden="true">›</span>
+            </button>
           </div>
-
-          <div class="home-cycle-panel" data-cycle-panel aria-live="polite"></div>
-          <p class="home-cycle-caption" data-cycle-caption></p>
-          <p class="home-cycle-linkto" data-cycle-linkto></p>
+          <p class="home-cycle-sample">Sample data · not a live property</p>
+          <p class="home-cycle-progress" data-cycle-progress>1 / 7</p>
         </div>
+
+        <div class="home-cycle-orbit" data-cycle-orbit aria-label="Connection cycle">
+          <div class="home-cycle-orbit-ring" aria-hidden="true"></div>
+          <div class="home-cycle-orbit-track" data-cycle-track></div>
+        </div>
+
+        <p class="home-cycle-caption" data-cycle-caption aria-live="polite"></p>
+        <p class="home-cycle-linkto" data-cycle-linkto></p>
       </div>
     </section>
 

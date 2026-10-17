@@ -70,7 +70,8 @@
 })();
 
 /**
- * Synthetic closed walk for the public home page.
+ * Circular connection walk for the public home page.
+ * All steps stay on the ring; the active one sits front and center.
  * Asset → Floor → Casino → Available vendors → Vendor → Theme → Active assets → Asset
  */
 function initConnectionCycle() {
@@ -79,11 +80,11 @@ function initConnectionCycle() {
   var root = document.querySelector("[data-home-cycle]");
   if (!root) return;
 
-  var panel = root.querySelector("[data-cycle-panel]");
+  var orbit = root.querySelector("[data-cycle-orbit]");
+  var track = root.querySelector("[data-cycle-track]");
   var caption = root.querySelector("[data-cycle-caption]");
   var linkto = root.querySelector("[data-cycle-linkto]");
   var progress = root.querySelector("[data-cycle-progress]");
-  var railButtons = root.querySelectorAll("[data-cycle-step]");
   var reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
   var intervalMs = reduceMotion ? 0 : 6500;
   var timer = null;
@@ -148,12 +149,13 @@ function initConnectionCycle() {
   var steps = [
     {
       kind: "asset",
-      rail: 0,
+      label: "Asset",
+      title: focusAsset.serial,
       caption:
         "Start on a physical asset — the cabinet on the floor, with its own identity.",
       linkto: "Links to the Slot Master install on this floor →",
-      html: function () {
-        return entityCard("asset", "Asset", focusAsset.id, focusAsset.serial, [
+      detail: function () {
+        return fieldsHtml([
           ["Serial", focusAsset.serial],
           ["Cabinet", focusAsset.cabinet],
           ["Theme", focusAsset.theme],
@@ -163,53 +165,44 @@ function initConnectionCycle() {
     },
     {
       kind: "floor",
-      rail: 1,
+      label: "Floor",
+      title: world.floor.key,
       caption:
         "The floor record is the install: where that asset sits, and that it is live.",
       linkto: "That install belongs to a casino →",
-      html: function () {
-        return entityCard(
-          "floor",
-          "Slot Master",
-          world.floor.key,
-          world.floor.label,
-          [
-            ["Asset", focusAsset.id],
-            ["Action", world.floor.action],
-            ["Status", world.floor.status],
-            ["Bank / seat", world.floor.bank + " / " + world.floor.seat],
-          ]
-        );
+      detail: function () {
+        return fieldsHtml([
+          ["Asset", focusAsset.id],
+          ["Action", world.floor.action],
+          ["Status", world.floor.status],
+          ["Bank / seat", world.floor.bank + " / " + world.floor.seat],
+        ]);
       },
     },
     {
       kind: "casino",
-      rail: 2,
+      label: "Casino",
+      title: world.casino.name,
       caption:
         "The property is not a folder of spreadsheets — it is the customer the floor hangs on.",
       linkto: "Open which vendors this casino can run →",
-      html: function () {
-        return entityCard(
-          "casino",
-          "Casino",
-          world.casino.id,
-          world.casino.name,
-          [
-            ["Tribe", world.casino.tribe],
-            ["State", world.casino.state],
-            ["Active units", String(world.casino.floorUnits)],
-            ["Focus asset", focusAsset.serial],
-          ]
-        );
+      detail: function () {
+        return fieldsHtml([
+          ["Tribe", world.casino.tribe],
+          ["State", world.casino.state],
+          ["Active units", String(world.casino.floorUnits)],
+          ["Focus asset", focusAsset.serial],
+        ]);
       },
     },
     {
       kind: "vendors",
-      rail: 3,
+      label: "Vendors",
+      title: "Available here",
       caption:
         "Available vendors are a commercial fact on the casino — who is allowed on this floor.",
       linkto: "Step into one of those vendors →",
-      html: function () {
+      detail: function () {
         var chips = world.vendors
           .map(function (v) {
             return (
@@ -221,69 +214,49 @@ function initConnectionCycle() {
             );
           })
           .join("");
-        return (
-          '<article class="home-cycle-card" data-kind="vendors">' +
-          '<p class="home-cycle-kicker">Available vendors</p>' +
-          "<h3>" +
-          escapeHtml(world.casino.name) +
-          "</h3>" +
-          '<p class="home-cycle-sub">Rights on this property · sample list</p>' +
-          '<ul class="home-cycle-chips">' +
-          chips +
-          "</ul>" +
-          "</article>"
-        );
+        return '<ul class="home-cycle-chips">' + chips + "</ul>";
       },
     },
     {
       kind: "vendor",
-      rail: 4,
+      label: "Vendor",
+      title: world.vendor.name,
       caption:
         "A vendor is more than a logo — cabinets and themes hang under that name.",
       linkto: "Open a theme from this vendor →",
-      html: function () {
-        return entityCard(
-          "vendor",
-          "Vendor",
-          world.vendor.id,
-          world.vendor.name,
-          [
-            ["Cabinet line", world.vendor.cabinet],
-            ["Theme ahead", world.theme.name],
-            ["At casino", world.casino.name],
-            ["On rights list", "Yes"],
-          ]
-        );
+      detail: function () {
+        return fieldsHtml([
+          ["Cabinet line", world.vendor.cabinet],
+          ["Theme ahead", world.theme.name],
+          ["At casino", world.casino.name],
+          ["On rights list", "Yes"],
+        ]);
       },
     },
     {
       kind: "theme",
-      rail: 5,
+      label: "Theme",
+      title: world.theme.name,
       caption:
         "The theme is what the customer recognizes — and it already knows its active assets.",
       linkto: "See which assets are live on this theme →",
-      html: function () {
-        return entityCard(
-          "theme",
-          "Theme",
-          world.theme.id,
-          world.theme.name,
-          [
-            ["Vendor", world.theme.vendor],
-            ["Active assets", String(world.theme.activeAssets)],
-            ["Cabinet", world.vendor.cabinet],
-            ["Property", world.casino.name],
-          ]
-        );
+      detail: function () {
+        return fieldsHtml([
+          ["Vendor", world.theme.vendor],
+          ["Active assets", String(world.theme.activeAssets)],
+          ["Cabinet", world.vendor.cabinet],
+          ["Property", world.casino.name],
+        ]);
       },
     },
     {
       kind: "theme_assets",
-      rail: 6,
+      label: "Active assets",
+      title: world.theme.name,
       caption:
         "Active assets on the theme close the loop — including the machine you started on.",
       linkto: "Back to the asset you started with →",
-      html: function () {
+      detail: function () {
         var rows = world.assets
           .map(function (a) {
             return (
@@ -301,20 +274,7 @@ function initConnectionCycle() {
             );
           })
           .join("");
-        return (
-          '<article class="home-cycle-card" data-kind="theme_assets">' +
-          '<p class="home-cycle-kicker">Active assets</p>' +
-          "<h3>" +
-          escapeHtml(world.theme.name) +
-          "</h3>" +
-          '<p class="home-cycle-sub">Live on ' +
-          escapeHtml(world.casino.name) +
-          "</p>" +
-          '<ul class="home-cycle-list">' +
-          rows +
-          "</ul>" +
-          "</article>"
-        );
+        return '<ul class="home-cycle-list">' + rows + "</ul>";
       },
     },
   ];
@@ -327,50 +287,70 @@ function initConnectionCycle() {
       .replace(/"/g, "&quot;");
   }
 
-  function entityCard(kind, kicker, id, title, fields) {
-    var pairs = fields
-      .map(function (pair) {
+  function fieldsHtml(fields) {
+    return (
+      '<dl class="home-cycle-grid">' +
+      fields
+        .map(function (pair) {
+          return (
+            "<div><dt>" +
+            escapeHtml(pair[0]) +
+            "</dt><dd>" +
+            escapeHtml(pair[1]) +
+            "</dd></div>"
+          );
+        })
+        .join("") +
+      "</dl>"
+    );
+  }
+
+  function buildNodes() {
+    var count = steps.length;
+    orbit.style.setProperty("--cycle-count", String(count));
+    track.innerHTML = steps
+      .map(function (step, i) {
         return (
-          "<div><dt>" +
-          escapeHtml(pair[0]) +
-          "</dt><dd>" +
-          escapeHtml(pair[1]) +
-          "</dd></div>"
+          '<button type="button" class="home-cycle-node" data-cycle-step="' +
+          i +
+          '" data-kind="' +
+          escapeHtml(step.kind) +
+          '" style="--i:' +
+          i +
+          '">' +
+          '<span class="home-cycle-node-inner">' +
+          '<span class="home-cycle-kicker">' +
+          escapeHtml(step.label) +
+          "</span>" +
+          '<span class="home-cycle-node-title">' +
+          escapeHtml(step.title) +
+          "</span>" +
+          '<span class="home-cycle-node-detail">' +
+          step.detail() +
+          "</span>" +
+          "</span>" +
+          "</button>"
         );
       })
       .join("");
-    return (
-      '<article class="home-cycle-card" data-kind="' +
-      escapeHtml(kind) +
-      '">' +
-      '<p class="home-cycle-kicker">' +
-      escapeHtml(kicker) +
-      "</p>" +
-      "<h3>" +
-      escapeHtml(title) +
-      "</h3>" +
-      '<p class="home-cycle-sub">' +
-      escapeHtml(id) +
-      "</p>" +
-      '<dl class="home-cycle-grid">' +
-      pairs +
-      "</dl>" +
-      "</article>"
-    );
   }
 
   function render() {
     var step = steps[index];
-    panel.innerHTML = step.html();
+    var count = steps.length;
+    orbit.style.setProperty("--cycle-index", String(index));
     caption.textContent = step.caption;
     linkto.textContent = step.linkto;
-    progress.textContent = index + 1 + " / " + steps.length;
-    railButtons.forEach(function (btn) {
-      var stepIndex = Number(btn.getAttribute("data-cycle-step"));
-      if (stepIndex === step.rail) {
-        btn.setAttribute("aria-current", "step");
+    progress.textContent = index + 1 + " / " + count;
+
+    root.querySelectorAll("[data-cycle-step]").forEach(function (node) {
+      var stepIndex = Number(node.getAttribute("data-cycle-step"));
+      var active = stepIndex === index;
+      node.classList.toggle("is-active", active);
+      if (active) {
+        node.setAttribute("aria-current", "step");
       } else {
-        btn.removeAttribute("aria-current");
+        node.removeAttribute("aria-current");
       }
     });
   }
@@ -410,6 +390,8 @@ function initConnectionCycle() {
     }, 12000);
   }
 
+  buildNodes();
+
   root.querySelector("[data-cycle-prev]").addEventListener("click", function () {
     pauseForUser();
     go(index - 1);
@@ -422,12 +404,12 @@ function initConnectionCycle() {
     resumeLater();
   });
 
-  railButtons.forEach(function (btn) {
-    btn.addEventListener("click", function () {
-      pauseForUser();
-      go(Number(btn.getAttribute("data-cycle-step")));
-      resumeLater();
-    });
+  track.addEventListener("click", function (event) {
+    var node = event.target.closest("[data-cycle-step]");
+    if (!node || !track.contains(node)) return;
+    pauseForUser();
+    go(Number(node.getAttribute("data-cycle-step")));
+    resumeLater();
   });
 
   root.addEventListener("mouseenter", function () {
