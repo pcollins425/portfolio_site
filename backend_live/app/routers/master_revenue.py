@@ -279,6 +279,11 @@ def _executive_ops_series_prefer_snapshot(
                 )
             latest_month = month_ends[-1]
             latest_stock = int(by_me[latest_month].get("machines") or 0)
+            today = date.today()
+            if (latest_month.year, latest_month.month) == (today.year, today.month):
+                live_units = _exec_current_live_units_on_floor()
+                if live_units is not None:
+                    latest_stock = live_units
             machines_by_ym = _exec_machine_totals_backfill_from_latest(
                 month_ends, latest_stock, flow_delta_by_ym
             )
@@ -593,6 +598,29 @@ def _exec_machine_totals_backfill_from_latest(
     return out
 
 
+def _exec_current_live_units_on_floor() -> int | None:
+    """Current stock count aligned to Market's units-on-floor definition."""
+    try:
+        row = _app_query(
+            """
+            SELECT COUNT(*) AS n
+            FROM inventory.slot_master_migration AS sm
+            INNER JOIN inventory.assets AS a
+                ON a.reference_key = sm.asset_id
+            WHERE sm.is_active = 1
+              AND UPPER(LTRIM(RTRIM(ISNULL(sm.action, N'')))) <> N'SOLD'
+              AND sm.casino_id IS NOT NULL
+              AND LTRIM(RTRIM(sm.casino_id)) <> N''
+              AND LOWER(LTRIM(RTRIM(ISNULL(a.cabinet_type, N'')))) NOT IN (
+                    N'center', N'sign', N'controller', N'server'
+              )
+            """
+        )[0]
+        return int(row.get("n") or 0)
+    except Exception:
+        return None
+
+
 def _exec_project_acquisition_delta_by_month(month_ends: list[date]) -> dict[str, int]:
     """Acquisition additions by project month (playable-only)."""
     out: dict[str, int] = {me.isoformat()[:7]: 0 for me in month_ends}
@@ -885,10 +913,17 @@ def _executive_ops_series(month_ends: list[date]) -> list[dict[str, Any]]:
         flow_delta_by_ym[ym] = int(project_delta_by_ym.get(ym, 0)) + int(
             acquisition_delta_by_ym.get(ym, 0)
         )
-    latest_ym = month_ends[-1].isoformat()[:7]
+    latest_month = month_ends[-1]
+    latest_ym = latest_month.isoformat()[:7]
+    latest_stock = int(machines_by_ym.get(latest_ym, 0))
+    today = date.today()
+    if (latest_month.year, latest_month.month) == (today.year, today.month):
+        live_units = _exec_current_live_units_on_floor()
+        if live_units is not None:
+            latest_stock = live_units
     machines_by_ym = _exec_machine_totals_backfill_from_latest(
         month_ends,
-        int(machines_by_ym.get(latest_ym, 0)),
+        latest_stock,
         flow_delta_by_ym,
     )
 
