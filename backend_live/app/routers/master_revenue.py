@@ -360,12 +360,12 @@ def _exec_effective_from(row: dict[str, Any]) -> date | None:
             return lastconver
         return None
     if action in ("", "INSTALL"):
-        return golive or instl
+        return instl or golive
     if ims_start is not None:
         return ims_start
     if lastconver is not None:
         return lastconver
-    return golive or instl
+    return instl or golive
 
 
 def _exec_stint_era(row: dict[str, Any]) -> date | None:
@@ -378,8 +378,8 @@ def _exec_stint_era(row: dict[str, Any]) -> date | None:
         return _as_date(row.get("project_start"))
     return (
         _as_date(row.get("lastconver"))
-        or _as_date(row.get("golive001"))
         or _as_date(row.get("date_instl"))
+        or _as_date(row.get("golive001"))
     )
 
 
@@ -452,7 +452,7 @@ def _exec_logic_suppress(
             if action not in ("MOVE", "UPGRADE", "CONVERT"):
                 if lc_self is not None and not (lc_self < upg_era):
                     continue
-                inst = _as_date(row.get("golive001")) or _as_date(row.get("date_instl"))
+                inst = _as_date(row.get("date_instl")) or _as_date(row.get("golive001"))
                 if lc_self is None and inst is not None and not (inst < upg_era):
                     continue
                 return True
