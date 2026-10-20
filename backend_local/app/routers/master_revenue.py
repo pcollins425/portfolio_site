@@ -271,12 +271,10 @@ def _executive_ops_series_prefer_snapshot(
                     attr.get("flow_delta") or int(r.get("machines_delta") or 0)
                 )
             latest_month = month_ends[-1]
-            latest_stock = int(by_me[latest_month].get("machines") or 0)
-            today = date.today()
-            if (latest_month.year, latest_month.month) == (today.year, today.month):
-                live_units = _exec_current_live_units_on_floor()
-                if live_units is not None:
-                    latest_stock = live_units
+            latest_stock = _exec_anchor_stock_for_month_end(
+                latest_month,
+                int(by_me[latest_month].get("machines") or 0),
+            )
             machines_by_ym = _exec_machine_totals_backfill_from_latest(
                 month_ends, latest_stock, flow_delta_by_ym
             )
@@ -614,6 +612,30 @@ def _exec_current_live_units_on_floor() -> int | None:
         return None
 
 
+def _exec_anchor_stock_for_month_end(target_month_end: date, fallback: int) -> int:
+    """Anchor a window's latest month to live stock, then reverse by subsequent deltas."""
+    live_units = _exec_current_live_units_on_floor()
+    if live_units is None:
+        return int(fallback or 0)
+
+    target_ym = target_month_end.isoformat()[:7]
+    current_ym = date.today().isoformat()[:7]
+    if target_ym >= current_ym:
+        return int(live_units)
+
+    post_months: list[date] = []
+    ym = _shift_month(target_ym, 1)
+    while ym <= current_ym:
+        post_months.append(_month_bounds(ym)[1])
+        ym = _shift_month(ym, 1)
+    if not post_months:
+        return int(live_units)
+
+    post_attr = _exec_machine_attribution_by_month(post_months)
+    subtract = sum(int(post_attr.get(me.isoformat()[:7], {}).get("flow_delta") or 0) for me in post_months)
+    return int(live_units) - int(subtract)
+
+
 def _exec_project_acquisition_delta_by_month(month_ends: list[date]) -> dict[str, int]:
     """Acquisition additions by project month (playable-only)."""
     out: dict[str, int] = {me.isoformat()[:7]: 0 for me in month_ends}
@@ -908,12 +930,10 @@ def _executive_ops_series(month_ends: list[date]) -> list[dict[str, Any]]:
         )
     latest_month = month_ends[-1]
     latest_ym = latest_month.isoformat()[:7]
-    latest_stock = int(machines_by_ym.get(latest_ym, 0))
-    today = date.today()
-    if (latest_month.year, latest_month.month) == (today.year, today.month):
-        live_units = _exec_current_live_units_on_floor()
-        if live_units is not None:
-            latest_stock = live_units
+    latest_stock = _exec_anchor_stock_for_month_end(
+        latest_month,
+        int(machines_by_ym.get(latest_ym, 0)),
+    )
     machines_by_ym = _exec_machine_totals_backfill_from_latest(
         month_ends,
         latest_stock,
