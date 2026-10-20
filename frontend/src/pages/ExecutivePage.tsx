@@ -67,7 +67,7 @@ const COLUMN_HELP: { label: string; text: string }[] = [
   },
   {
     label: "Machines / Δ",
-    text: "Δ is active floor change vs prior month-end. Detail shows proj (installs minus removals minus CTS) and acq (acquisition adds) separately.",
+    text: "Δ is active floor change vs prior month-end. Detail shows proj (non-acquisition portion of Δ) and acq (acquisition portion of Δ).",
   },
   {
     label: "Footprint Δ %",
@@ -363,9 +363,9 @@ export default function ExecutivePage() {
             <p className="mt-1 text-xs text-[#8b96a8]">
               <span className="text-[#c5cdd9]">Δ</span> = active floor change vs prior month-end
               <span className="mx-2">•</span>
-              <span className="text-sky-300">proj</span> = installs - removals - CTS
+              <span className="text-sky-300">proj</span> = non-acquisition share of Δ
               <span className="mx-2">•</span>
-              <span className="text-amber-300">acq</span> = acquisition adds
+              <span className="text-amber-300">acq</span> = acquisition share of Δ
             </p>
 
             {/* Phone: stacked month cards */}
