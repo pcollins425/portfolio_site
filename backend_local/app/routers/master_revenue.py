@@ -648,23 +648,23 @@ def _exec_project_acquisition_delta_by_month(month_ends: list[date]) -> dict[str
         for r in _app_query(
             """
             SELECT
-                CONVERT(char(7), i.start_date, 126) AS ym,
+                CONVERT(char(7), COALESCE(i.start_date, pc.date_start), 126) AS ym,
                 COUNT(DISTINCT pd.asset_id) AS n
             FROM projects.project_details AS pd
             INNER JOIN projects.project_catalog AS pc
                 ON pc.reference_key = pd.project_id
-            INNER JOIN projects.ims AS i
+            LEFT JOIN projects.ims AS i
                 ON i.reference_key = pc.ims_id
             INNER JOIN inventory.assets AS a
                 ON a.reference_key = pd.asset_id
-            WHERE pd.action_type IN (N'ACQUISITION', N'DELIVERY')
-              AND i.start_date IS NOT NULL
-              AND CAST(i.start_date AS date) >= %s
-              AND CAST(i.start_date AS date) <= %s
+            WHERE pd.action_type = N'ACQUISITION'
+              AND COALESCE(CAST(i.start_date AS date), CAST(pc.date_start AS date)) IS NOT NULL
+              AND COALESCE(CAST(i.start_date AS date), CAST(pc.date_start AS date)) >= %s
+              AND COALESCE(CAST(i.start_date AS date), CAST(pc.date_start AS date)) <= %s
               AND LOWER(LTRIM(RTRIM(ISNULL(a.cabinet_type, N'')))) NOT IN (
                     N'center', N'sign', N'controller', N'server'
               )
-            GROUP BY CONVERT(char(7), i.start_date, 126)
+            GROUP BY CONVERT(char(7), COALESCE(i.start_date, pc.date_start), 126)
             """,
             (window_start, window_end),
         ):
@@ -692,24 +692,24 @@ def _exec_project_non_acq_delta_by_month(month_ends: list[date]) -> dict[str, in
         for r in _app_query(
             """
             SELECT
-                CONVERT(char(7), i.start_date, 126) AS ym,
+                CONVERT(char(7), COALESCE(i.start_date, pc.date_start), 126) AS ym,
                 SUM(CASE WHEN pd.action_type = N'INSTALL' THEN 1 ELSE 0 END) AS installs,
                 SUM(CASE WHEN pd.action_type = N'REMOVE' THEN 1 ELSE 0 END) AS removals
             FROM projects.project_details AS pd
             INNER JOIN projects.project_catalog AS pc
                 ON pc.reference_key = pd.project_id
-            INNER JOIN projects.ims AS i
+            LEFT JOIN projects.ims AS i
                 ON i.reference_key = pc.ims_id
             INNER JOIN inventory.assets AS a
                 ON a.reference_key = pd.asset_id
             WHERE pd.action_type IN (N'INSTALL', N'REMOVE')
-              AND i.start_date IS NOT NULL
-              AND CAST(i.start_date AS date) >= %s
-              AND CAST(i.start_date AS date) <= %s
+              AND COALESCE(CAST(i.start_date AS date), CAST(pc.date_start AS date)) IS NOT NULL
+              AND COALESCE(CAST(i.start_date AS date), CAST(pc.date_start AS date)) >= %s
+              AND COALESCE(CAST(i.start_date AS date), CAST(pc.date_start AS date)) <= %s
               AND LOWER(LTRIM(RTRIM(ISNULL(a.cabinet_type, N'')))) NOT IN (
                     N'center', N'sign', N'controller', N'server'
               )
-            GROUP BY CONVERT(char(7), i.start_date, 126)
+            GROUP BY CONVERT(char(7), COALESCE(i.start_date, pc.date_start), 126)
             """,
             (window_start, window_end),
         ):
@@ -724,25 +724,25 @@ def _exec_project_non_acq_delta_by_month(month_ends: list[date]) -> dict[str, in
         for r in _app_query(
             """
             SELECT
-                CONVERT(char(7), i.start_date, 126) AS ym,
+                CONVERT(char(7), COALESCE(i.start_date, pc.date_start), 126) AS ym,
                 COUNT(*) AS n
             FROM projects.sold_details AS sd
             INNER JOIN projects.project_details AS pd
                 ON pd.reference_key = sd.project_detail_id
             INNER JOIN projects.project_catalog AS pc
                 ON pc.reference_key = pd.project_id
-            INNER JOIN projects.ims AS i
+            LEFT JOIN projects.ims AS i
                 ON i.reference_key = pc.ims_id
             INNER JOIN inventory.assets AS a
                 ON a.reference_key = pd.asset_id
-            WHERE i.start_date IS NOT NULL
-              AND CAST(i.start_date AS date) >= %s
-              AND CAST(i.start_date AS date) <= %s
+            WHERE COALESCE(CAST(i.start_date AS date), CAST(pc.date_start AS date)) IS NOT NULL
+              AND COALESCE(CAST(i.start_date AS date), CAST(pc.date_start AS date)) >= %s
+              AND COALESCE(CAST(i.start_date AS date), CAST(pc.date_start AS date)) <= %s
               AND LOWER(LTRIM(RTRIM(ISNULL(sd.sale_reason, N'')))) = N'convert to sale'
               AND LOWER(LTRIM(RTRIM(ISNULL(a.cabinet_type, N'')))) NOT IN (
                     N'center', N'sign', N'controller', N'server'
               )
-            GROUP BY CONVERT(char(7), i.start_date, 126)
+            GROUP BY CONVERT(char(7), COALESCE(i.start_date, pc.date_start), 126)
             """,
             (window_start, window_end),
         ):
