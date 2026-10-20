@@ -262,19 +262,12 @@ def _executive_ops_series_prefer_snapshot(
         if all(me in by_me for me in month_ends):
             series: list[dict[str, Any]] = []
             attr_by_ym = _exec_machine_attribution_by_month(month_ends)
-            prev_machines: int | None = None
             for me in month_ends:
                 r = by_me[me]
                 machines = int(r.get("machines") or 0)
                 ym = me.isoformat()[:7]
                 attr = attr_by_ym.get(ym, {})
-                active_delta = int(
-                    attr.get(
-                        "active_stock_delta",
-                        machines - prev_machines if prev_machines is not None else 0,
-                    )
-                )
-                prev_machines = machines
+                flow_delta = int(attr.get("flow_delta") or int(r.get("machines_delta") or 0))
                 acquisition_delta = int(attr.get("acquisition_delta") or 0)
                 changed = int(r.get("footprint_changed") or 0)
                 expected = int(r.get("reporting_expected") or 0)
@@ -295,8 +288,8 @@ def _executive_ops_series_prefer_snapshot(
                         },
                         "placements": {
                             "machines": machines,
-                            "delta": active_delta,
-                            "projectDelta": active_delta - acquisition_delta,
+                            "delta": flow_delta,
+                            "projectDelta": int(attr.get("project_delta") or (flow_delta - acquisition_delta)),
                             "acquisitionDelta": acquisition_delta,
                         },
                         "footprint": {
@@ -604,11 +597,101 @@ def _exec_project_acquisition_delta_by_month(month_ends: list[date]) -> dict[str
     return out
 
 
+def _exec_project_non_acq_delta_by_month(month_ends: list[date]) -> dict[str, int]:
+    """Project delta by month excluding acquisitions: INSTALL - REMOVE - CTS."""
+    out: dict[str, int] = {me.isoformat()[:7]: 0 for me in month_ends}
+    if not month_ends:
+        return out
+
+    window_start = date(month_ends[0].year, month_ends[0].month, 1)
+    window_end = month_ends[-1]
+    installs_by_ym: dict[str, int] = {}
+    removals_by_ym: dict[str, int] = {}
+    cts_by_ym: dict[str, int] = {}
+
+    try:
+        for r in _app_query(
+            """
+            SELECT
+                CONVERT(char(7), i.start_date, 126) AS ym,
+                SUM(CASE WHEN pd.action_type = N'INSTALL' THEN 1 ELSE 0 END) AS installs,
+                SUM(CASE WHEN pd.action_type = N'REMOVE' THEN 1 ELSE 0 END) AS removals
+            FROM projects.project_details AS pd
+            INNER JOIN projects.project_catalog AS pc
+                ON pc.reference_key = pd.project_id
+            INNER JOIN projects.ims AS i
+                ON i.reference_key = pc.ims_id
+            INNER JOIN inventory.assets AS a
+                ON a.reference_key = pd.asset_id
+            WHERE pd.action_type IN (N'INSTALL', N'REMOVE')
+              AND i.start_date IS NOT NULL
+              AND CAST(i.start_date AS date) >= %s
+              AND CAST(i.start_date AS date) <= %s
+              AND LOWER(LTRIM(RTRIM(ISNULL(a.cabinet_type, N'')))) NOT IN (
+                    N'center', N'sign', N'controller', N'server'
+              )
+            GROUP BY CONVERT(char(7), i.start_date, 126)
+            """,
+            (window_start, window_end),
+        ):
+            ym = str(r.get("ym") or "").strip()
+            if ym:
+                installs_by_ym[ym] = int(r.get("installs") or 0)
+                removals_by_ym[ym] = int(r.get("removals") or 0)
+    except Exception:
+        installs_by_ym, removals_by_ym = {}, {}
+
+    try:
+        for r in _app_query(
+            """
+            SELECT
+                CONVERT(char(7), i.start_date, 126) AS ym,
+                COUNT(*) AS n
+            FROM projects.sold_details AS sd
+            INNER JOIN projects.project_details AS pd
+                ON pd.reference_key = sd.project_detail_id
+            INNER JOIN projects.project_catalog AS pc
+                ON pc.reference_key = pd.project_id
+            INNER JOIN projects.ims AS i
+                ON i.reference_key = pc.ims_id
+            INNER JOIN inventory.assets AS a
+                ON a.reference_key = pd.asset_id
+            WHERE i.start_date IS NOT NULL
+              AND CAST(i.start_date AS date) >= %s
+              AND CAST(i.start_date AS date) <= %s
+              AND LOWER(LTRIM(RTRIM(ISNULL(sd.sale_reason, N'')))) = N'convert to sale'
+              AND LOWER(LTRIM(RTRIM(ISNULL(a.cabinet_type, N'')))) NOT IN (
+                    N'center', N'sign', N'controller', N'server'
+              )
+            GROUP BY CONVERT(char(7), i.start_date, 126)
+            """,
+            (window_start, window_end),
+        ):
+            ym = str(r.get("ym") or "").strip()
+            if ym:
+                cts_by_ym[ym] = int(r.get("n") or 0)
+    except Exception:
+        cts_by_ym = {}
+
+    for me in month_ends:
+        ym = me.isoformat()[:7]
+        out[ym] = (
+            installs_by_ym.get(ym, 0)
+            - removals_by_ym.get(ym, 0)
+            - cts_by_ym.get(ym, 0)
+        )
+    return out
+
+
 def _exec_machine_attribution_by_month(month_ends: list[date]) -> dict[str, dict[str, int]]:
-    """Month map of active stock delta + acquisition breakdown."""
+    """Month map of flow delta + acquisition breakdown."""
+    project_by_ym = _exec_project_non_acq_delta_by_month(month_ends)
     acq_by_ym = _exec_project_acquisition_delta_by_month(month_ends)
     out: dict[str, dict[str, int]] = {
         me.isoformat()[:7]: {
+            "flow_delta": int(project_by_ym.get(me.isoformat()[:7], 0))
+            + int(acq_by_ym.get(me.isoformat()[:7], 0)),
+            "project_delta": int(project_by_ym.get(me.isoformat()[:7], 0)),
             "acquisition_delta": int(acq_by_ym.get(me.isoformat()[:7], 0)),
         }
         for me in month_ends
@@ -620,7 +703,7 @@ def _exec_machine_attribution_by_month(month_ends: list[date]) -> dict[str, dict
             """
             SELECT
                 month_end,
-                active_stock_delta,
+                project_flow_net,
                 installs_playable,
                 removes_playable,
                 cts_playable,
@@ -645,7 +728,8 @@ def _exec_machine_attribution_by_month(month_ends: list[date]) -> dict[str, dict
             merged = out.get(ym, {})
             merged.update(
                 {
-                "active_stock_delta": int(r.get("active_stock_delta") or 0),
+                "flow_delta": int(r.get("project_flow_net") or 0),
+                "project_delta": installs - removes - cts,
                 "acquisition_delta": acq,
                 }
             )
@@ -757,6 +841,7 @@ def _executive_ops_series(month_ends: list[date]) -> list[dict[str, Any]]:
     # --- EOD playable floor (machines + leased clients) ---
     smm_rows = _exec_fetch_smm_floor_rows()
     machines_by_ym, leased_by_ym = _exec_floor_counts_by_month(month_ends, smm_rows)
+    project_delta_by_ym = _exec_project_non_acq_delta_by_month(month_ends)
     acquisition_delta_by_ym = _exec_project_acquisition_delta_by_month(month_ends)
 
     # --- Footprint numerator: CONVERT + swaps (INSTALL/REMOVE same project) ---
@@ -873,14 +958,12 @@ def _executive_ops_series(month_ends: list[date]) -> list[dict[str, Any]]:
             pass
 
     series: list[dict[str, Any]] = []
-    prev_machines: int | None = None
     for me in month_ends:
         ym = me.isoformat()[:7]
         machines = machines_by_ym.get(ym, 0)
-        active_delta = (machines - prev_machines) if prev_machines is not None else 0
-        prev_machines = machines
+        project_delta = project_delta_by_ym.get(ym, 0)
         acquisition_delta = acquisition_delta_by_ym.get(ym, 0)
-        project_delta = active_delta - acquisition_delta
+        flow_delta = project_delta + acquisition_delta
         converts = converts_by_ym.get(ym, 0)
         swaps = swaps_by_ym.get(ym, 0)
         changed = converts + swaps
@@ -904,7 +987,7 @@ def _executive_ops_series(month_ends: list[date]) -> list[dict[str, Any]]:
                 },
                 "placements": {
                     "machines": machines,
-                    "delta": active_delta,
+                    "delta": flow_delta,
                     "projectDelta": project_delta,
                     "acquisitionDelta": acquisition_delta,
                 },

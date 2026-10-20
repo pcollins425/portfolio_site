@@ -67,7 +67,7 @@ const COLUMN_HELP: { label: string; text: string }[] = [
   },
   {
     label: "Machines / Δ",
-    text: "Δ is active floor change vs prior month-end. Detail shows proj (non-acquisition portion of Δ) and acq (acquisition portion of Δ).",
+    text: "Δ is net machine flow for the month: proj plus acq. Proj is non-acquisition change (install/remove/CTS), and acq is acquisition-only.",
   },
   {
     label: "Footprint Δ %",
@@ -361,11 +361,11 @@ export default function ExecutivePage() {
               Ops pulse — trailing {windowMonths} months (newest first)
             </p>
             <p className="mt-1 text-xs text-[#8b96a8]">
-              <span className="text-[#c5cdd9]">Δ</span> = active floor change vs prior month-end
+              <span className="text-[#c5cdd9]">Δ</span> = monthly net machine flow
               <span className="mx-2">•</span>
-              <span className="text-sky-300">proj</span> = non-acquisition share of Δ
+              <span className="text-sky-300">proj</span> = non-acquisition net
               <span className="mx-2">•</span>
-              <span className="text-amber-300">acq</span> = acquisition share of Δ
+              <span className="text-amber-300">acq</span> = acquisition net
             </p>
 
             {/* Phone: stacked month cards */}
