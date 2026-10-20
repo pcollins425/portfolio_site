@@ -657,7 +657,7 @@ def _exec_project_acquisition_delta_by_month(month_ends: list[date]) -> dict[str
                 ON i.reference_key = pc.ims_id
             INNER JOIN inventory.assets AS a
                 ON a.reference_key = pd.asset_id
-            WHERE pd.action_type = N'ACQUISITION'
+            WHERE pd.action_type IN (N'ACQUISITION', N'DELIVERY')
               AND i.start_date IS NOT NULL
               AND CAST(i.start_date AS date) >= %s
               AND CAST(i.start_date AS date) <= %s
@@ -775,46 +775,6 @@ def _exec_machine_attribution_by_month(month_ends: list[date]) -> dict[str, dict
         }
         for me in month_ends
     }
-    if not month_ends:
-        return out
-    try:
-        rows = mssql.query(
-            """
-            SELECT
-                month_end,
-                project_flow_net,
-                installs_playable,
-                removes_playable,
-                cts_playable,
-                acquisitions_playable
-            FROM finance.vw_executive_machine_delta_attribution_month
-            WHERE month_end >= %s AND month_end <= %s
-            """,
-            params=(month_ends[0], month_ends[-1]),
-            database=_revenue_catalog(),
-            profile="dashboard",
-            load_env=False,
-        )
-        for r in rows:
-            me = _as_date(r.get("month_end"))
-            if me is None:
-                continue
-            ym = me.isoformat()[:7]
-            installs = int(r.get("installs_playable") or 0)
-            removes = int(r.get("removes_playable") or 0)
-            cts = int(r.get("cts_playable") or 0)
-            acq = int(r.get("acquisitions_playable") or 0)
-            merged = out.get(ym, {})
-            merged.update(
-                {
-                "flow_delta": int(r.get("project_flow_net") or 0),
-                "project_delta": installs - removes - cts,
-                "acquisition_delta": acq,
-                }
-            )
-            out[ym] = merged
-    except Exception:
-        pass
     return out
 
 
