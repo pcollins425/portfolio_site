@@ -262,16 +262,30 @@ def _executive_ops_series_prefer_snapshot(
         if all(me in by_me for me in month_ends):
             series: list[dict[str, Any]] = []
             attr_by_ym = _exec_machine_attribution_by_month(month_ends)
+            flow_delta_by_ym: dict[str, int] = {}
+            for me in month_ends:
+                ym = me.isoformat()[:7]
+                r = by_me[me]
+                attr = attr_by_ym.get(ym, {})
+                flow_delta_by_ym[ym] = int(
+                    attr.get("flow_delta") or int(r.get("machines_delta") or 0)
+                )
+            latest_month = month_ends[-1]
+            latest_stock = int(by_me[latest_month].get("machines") or 0)
+            machines_by_ym = _exec_machine_totals_backfill_from_latest(
+                month_ends, latest_stock, flow_delta_by_ym
+            )
             for me in month_ends:
                 r = by_me[me]
-                machines = int(r.get("machines") or 0)
                 ym = me.isoformat()[:7]
+                machines = int(machines_by_ym.get(ym, 0))
                 attr = attr_by_ym.get(ym, {})
-                flow_delta = int(attr.get("flow_delta") or int(r.get("machines_delta") or 0))
+                flow_delta = int(flow_delta_by_ym.get(ym, 0))
                 acquisition_delta = int(attr.get("acquisition_delta") or 0)
                 changed = int(r.get("footprint_changed") or 0)
                 expected = int(r.get("reporting_expected") or 0)
                 reported = int(r.get("reporting_reported") or 0)
+                footprint_pct = round((changed / machines) * 100.0, 2) if machines else 0.0
                 series.append(
                     {
                         "month": me.isoformat(),
@@ -297,7 +311,7 @@ def _executive_ops_series_prefer_snapshot(
                             "converts": int(r.get("footprint_converts") or 0),
                             "swaps": int(r.get("footprint_swaps") or 0),
                             "active": machines,
-                            "pct": float(r.get("footprint_pct") or 0),
+                            "pct": footprint_pct,
                         },
                         "leased_clients": int(r.get("leased_clients") or 0),
                         "reporting": {
@@ -555,6 +569,21 @@ def _exec_floor_counts_by_month(
             {str(r.get("casino_id") or "") for r in playable if r.get("casino_id")}
         )
     return machines_by_ym, clients_by_ym
+
+
+def _exec_machine_totals_backfill_from_latest(
+    month_ends: list[date],
+    latest_machines: int,
+    flow_delta_by_ym: dict[str, int],
+) -> dict[str, int]:
+    """Backfill month machine totals from latest trusted stock and monthly flow deltas."""
+    out: dict[str, int] = {}
+    running = int(latest_machines or 0)
+    for me in reversed(month_ends):
+        ym = me.isoformat()[:7]
+        out[ym] = running
+        running -= int(flow_delta_by_ym.get(ym, 0))
+    return out
 
 
 def _exec_project_acquisition_delta_by_month(month_ends: list[date]) -> dict[str, int]:
@@ -843,6 +872,18 @@ def _executive_ops_series(month_ends: list[date]) -> list[dict[str, Any]]:
     machines_by_ym, leased_by_ym = _exec_floor_counts_by_month(month_ends, smm_rows)
     project_delta_by_ym = _exec_project_non_acq_delta_by_month(month_ends)
     acquisition_delta_by_ym = _exec_project_acquisition_delta_by_month(month_ends)
+    flow_delta_by_ym: dict[str, int] = {}
+    for me in month_ends:
+        ym = me.isoformat()[:7]
+        flow_delta_by_ym[ym] = int(project_delta_by_ym.get(ym, 0)) + int(
+            acquisition_delta_by_ym.get(ym, 0)
+        )
+    latest_ym = month_ends[-1].isoformat()[:7]
+    machines_by_ym = _exec_machine_totals_backfill_from_latest(
+        month_ends,
+        int(machines_by_ym.get(latest_ym, 0)),
+        flow_delta_by_ym,
+    )
 
     # --- Footprint numerator: CONVERT + swaps (INSTALL/REMOVE same project) ---
     converts_by_ym: dict[str, int] = {}
@@ -960,10 +1001,10 @@ def _executive_ops_series(month_ends: list[date]) -> list[dict[str, Any]]:
     series: list[dict[str, Any]] = []
     for me in month_ends:
         ym = me.isoformat()[:7]
-        machines = machines_by_ym.get(ym, 0)
+        machines = int(machines_by_ym.get(ym, 0))
         project_delta = project_delta_by_ym.get(ym, 0)
         acquisition_delta = acquisition_delta_by_ym.get(ym, 0)
-        flow_delta = project_delta + acquisition_delta
+        flow_delta = int(flow_delta_by_ym.get(ym, 0))
         converts = converts_by_ym.get(ym, 0)
         swaps = swaps_by_ym.get(ym, 0)
         changed = converts + swaps
