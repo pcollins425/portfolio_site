@@ -261,9 +261,20 @@ def _executive_ops_series_prefer_snapshot(
         by_me = {_as_date(r.get("month_end")): r for r in rows}
         if all(me in by_me for me in month_ends):
             series: list[dict[str, Any]] = []
+            attr_by_ym = _exec_machine_attribution_by_month(month_ends)
+            prev_machines: int | None = None
             for me in month_ends:
                 r = by_me[me]
                 machines = int(r.get("machines") or 0)
+                ym = me.isoformat()[:7]
+                attr = attr_by_ym.get(ym, {})
+                active_delta = int(
+                    attr.get(
+                        "active_stock_delta",
+                        machines - prev_machines if prev_machines is not None else 0,
+                    )
+                )
+                prev_machines = machines
                 changed = int(r.get("footprint_changed") or 0)
                 expected = int(r.get("reporting_expected") or 0)
                 reported = int(r.get("reporting_reported") or 0)
@@ -283,7 +294,9 @@ def _executive_ops_series_prefer_snapshot(
                         },
                         "placements": {
                             "machines": machines,
-                            "delta": int(r.get("machines_delta") or 0),
+                            "delta": active_delta,
+                            "projectDelta": int(attr.get("project_delta") or 0),
+                            "acquisitionDelta": int(attr.get("acquisition_delta") or 0),
                         },
                         "footprint": {
                             "changed": changed,
@@ -550,8 +563,180 @@ def _exec_floor_counts_by_month(
     return machines_by_ym, clients_by_ym
 
 
+def _exec_project_machine_delta_by_month(month_ends: list[date]) -> dict[str, int]:
+    """Machine delta by project month: playable INSTALL - REMOVE - CTS."""
+    out: dict[str, int] = {me.isoformat()[:7]: 0 for me in month_ends}
+    if not month_ends:
+        return out
+
+    window_start = date(month_ends[0].year, month_ends[0].month, 1)
+    window_end = month_ends[-1]
+    installs_by_ym: dict[str, int] = {}
+    removals_by_ym: dict[str, int] = {}
+    cts_by_ym: dict[str, int] = {}
+
+    try:
+        for r in _app_query(
+            """
+            SELECT
+                CONVERT(char(7), i.start_date, 126) AS ym,
+                SUM(CASE WHEN pd.action_type = N'INSTALL' THEN 1 ELSE 0 END) AS installs,
+                SUM(CASE WHEN pd.action_type = N'REMOVE' THEN 1 ELSE 0 END) AS removals
+            FROM projects.project_details AS pd
+            INNER JOIN projects.project_catalog AS pc
+                ON pc.reference_key = pd.project_id
+            INNER JOIN projects.ims AS i
+                ON i.reference_key = pc.ims_id
+            INNER JOIN inventory.assets AS a
+                ON a.reference_key = pd.asset_id
+            WHERE pd.action_type IN (N'INSTALL', N'REMOVE')
+              AND i.start_date IS NOT NULL
+              AND CAST(i.start_date AS date) >= %s
+              AND CAST(i.start_date AS date) <= %s
+              AND LOWER(LTRIM(RTRIM(ISNULL(a.cabinet_type, N'')))) NOT IN (
+                    N'center', N'sign', N'controller', N'server'
+              )
+            GROUP BY CONVERT(char(7), i.start_date, 126)
+            """,
+            (window_start, window_end),
+        ):
+            ym = str(r.get("ym") or "").strip()
+            if not ym:
+                continue
+            installs_by_ym[ym] = int(r.get("installs") or 0)
+            removals_by_ym[ym] = int(r.get("removals") or 0)
+    except Exception:
+        installs_by_ym, removals_by_ym = {}, {}
+
+    try:
+        for r in _app_query(
+            """
+            SELECT
+                CONVERT(char(7), i.start_date, 126) AS ym,
+                COUNT(*) AS n
+            FROM projects.sold_details AS sd
+            INNER JOIN projects.project_details AS pd
+                ON pd.reference_key = sd.project_detail_id
+            INNER JOIN projects.project_catalog AS pc
+                ON pc.reference_key = pd.project_id
+            INNER JOIN projects.ims AS i
+                ON i.reference_key = pc.ims_id
+            INNER JOIN inventory.assets AS a
+                ON a.reference_key = pd.asset_id
+            WHERE i.start_date IS NOT NULL
+              AND CAST(i.start_date AS date) >= %s
+              AND CAST(i.start_date AS date) <= %s
+              AND LOWER(LTRIM(RTRIM(ISNULL(sd.sale_reason, N'')))) = N'convert to sale'
+              AND LOWER(LTRIM(RTRIM(ISNULL(a.cabinet_type, N'')))) NOT IN (
+                    N'center', N'sign', N'controller', N'server'
+              )
+            GROUP BY CONVERT(char(7), i.start_date, 126)
+            """,
+            (window_start, window_end),
+        ):
+            ym = str(r.get("ym") or "").strip()
+            if ym:
+                cts_by_ym[ym] = int(r.get("n") or 0)
+    except Exception:
+        cts_by_ym = {}
+
+    for me in month_ends:
+        ym = me.isoformat()[:7]
+        out[ym] = (
+            installs_by_ym.get(ym, 0)
+            - removals_by_ym.get(ym, 0)
+            - cts_by_ym.get(ym, 0)
+        )
+    return out
+
+
+def _exec_project_acquisition_delta_by_month(month_ends: list[date]) -> dict[str, int]:
+    """Acquisition additions by project month (playable-only)."""
+    out: dict[str, int] = {me.isoformat()[:7]: 0 for me in month_ends}
+    if not month_ends:
+        return out
+
+    window_start = date(month_ends[0].year, month_ends[0].month, 1)
+    window_end = month_ends[-1]
+    try:
+        for r in _app_query(
+            """
+            SELECT
+                CONVERT(char(7), i.start_date, 126) AS ym,
+                COUNT(DISTINCT pd.asset_id) AS n
+            FROM projects.project_details AS pd
+            INNER JOIN projects.project_catalog AS pc
+                ON pc.reference_key = pd.project_id
+            INNER JOIN projects.ims AS i
+                ON i.reference_key = pc.ims_id
+            INNER JOIN inventory.assets AS a
+                ON a.reference_key = pd.asset_id
+            WHERE pd.action_type = N'ACQUISITION'
+              AND i.start_date IS NOT NULL
+              AND CAST(i.start_date AS date) >= %s
+              AND CAST(i.start_date AS date) <= %s
+              AND LOWER(LTRIM(RTRIM(ISNULL(a.cabinet_type, N'')))) NOT IN (
+                    N'center', N'sign', N'controller', N'server'
+              )
+            GROUP BY CONVERT(char(7), i.start_date, 126)
+            """,
+            (window_start, window_end),
+        ):
+            ym = str(r.get("ym") or "").strip()
+            if ym:
+                out[ym] = int(r.get("n") or 0)
+    except Exception:
+        pass
+    return out
+
+
+def _exec_machine_attribution_by_month(month_ends: list[date]) -> dict[str, dict[str, int]]:
+    """Month map of active stock delta + project/acquisition breakdown."""
+    out: dict[str, dict[str, int]] = {
+        me.isoformat()[:7]: {"active_stock_delta": 0, "project_delta": 0, "acquisition_delta": 0}
+        for me in month_ends
+    }
+    if not month_ends:
+        return out
+    try:
+        rows = mssql.query(
+            """
+            SELECT
+                month_end,
+                active_stock_delta,
+                installs_playable,
+                removes_playable,
+                cts_playable,
+                acquisitions_playable
+            FROM finance.vw_executive_machine_delta_attribution_month
+            WHERE month_end >= %s AND month_end <= %s
+            """,
+            params=(month_ends[0], month_ends[-1]),
+            database=_revenue_catalog(),
+            profile="dashboard",
+            load_env=False,
+        )
+        for r in rows:
+            me = _as_date(r.get("month_end"))
+            if me is None:
+                continue
+            ym = me.isoformat()[:7]
+            installs = int(r.get("installs_playable") or 0)
+            removes = int(r.get("removes_playable") or 0)
+            cts = int(r.get("cts_playable") or 0)
+            acq = int(r.get("acquisitions_playable") or 0)
+            out[ym] = {
+                "active_stock_delta": int(r.get("active_stock_delta") or 0),
+                "project_delta": installs - removes - cts,
+                "acquisition_delta": acq,
+            }
+    except Exception:
+        pass
+    return out
+
+
 def _executive_ops_series(month_ends: list[date]) -> list[dict[str, Any]]:
-    """Trailing ops metrics: EOD machines, convert+swap footprint, reporting coverage."""
+    """Trailing ops metrics: EOD machines, project-date machine delta, and ops coverage."""
     if not month_ends:
         return []
 
@@ -652,6 +837,8 @@ def _executive_ops_series(month_ends: list[date]) -> list[dict[str, Any]]:
     # --- EOD playable floor (machines + leased clients) ---
     smm_rows = _exec_fetch_smm_floor_rows()
     machines_by_ym, leased_by_ym = _exec_floor_counts_by_month(month_ends, smm_rows)
+    machine_delta_by_ym = _exec_project_machine_delta_by_month(month_ends)
+    acquisition_delta_by_ym = _exec_project_acquisition_delta_by_month(month_ends)
 
     # --- Footprint numerator: CONVERT + swaps (INSTALL/REMOVE same project) ---
     converts_by_ym: dict[str, int] = {}
@@ -771,8 +958,10 @@ def _executive_ops_series(month_ends: list[date]) -> list[dict[str, Any]]:
     for me in month_ends:
         ym = me.isoformat()[:7]
         machines = machines_by_ym.get(ym, 0)
-        delta = (machines - prev_machines) if prev_machines is not None else 0
+        active_delta = (machines - prev_machines) if prev_machines is not None else 0
         prev_machines = machines
+        project_delta = machine_delta_by_ym.get(ym, 0)
+        acquisition_delta = acquisition_delta_by_ym.get(ym, 0)
         converts = converts_by_ym.get(ym, 0)
         swaps = swaps_by_ym.get(ym, 0)
         changed = converts + swaps
@@ -796,7 +985,9 @@ def _executive_ops_series(month_ends: list[date]) -> list[dict[str, Any]]:
                 },
                 "placements": {
                     "machines": machines,
-                    "delta": delta,
+                    "delta": active_delta,
+                    "projectDelta": project_delta,
+                    "acquisitionDelta": acquisition_delta,
                 },
                 "footprint": {
                     "changed": changed,

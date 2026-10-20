@@ -8,7 +8,12 @@ type MonthSeriesRow = {
   month: string;
   projects: { open: number; canceled: number; total: number; closed?: number };
   deals: { created: number; won: number; closed: number };
-  placements: { machines: number; delta: number };
+  placements: {
+    machines: number;
+    delta: number;
+    projectDelta?: number;
+    acquisitionDelta?: number;
+  };
   footprint: {
     changed: number;
     converts: number;
@@ -62,7 +67,7 @@ const COLUMN_HELP: { label: string; text: string }[] = [
   },
   {
     label: "Machines / Δ",
-    text: "Playable machines on the floor at month-end. The change is against the prior month-end. A conversion or swap does not add a machine.",
+    text: "Δ is active floor change vs prior month-end. Detail shows proj (installs minus removals minus CTS) and acq (acquisition adds) separately.",
   },
   {
     label: "Footprint Δ %",
@@ -235,6 +240,15 @@ function MonthCard({ row }: { row: MonthSeriesRow }) {
           </dt>
           <dd className="font-mono text-[#c5cdd9]">
             {row.placements.machines.toLocaleString()} ({fmtDelta(row.placements.delta)})
+            <span className="ml-2 text-[11px]">
+              <span className="text-sky-300">
+                proj {fmtDelta(row.placements.projectDelta ?? 0)}
+              </span>
+              <span className="mx-1 text-[#8b96a8]">|</span>
+              <span className="text-amber-300">
+                acq {fmtDelta(row.placements.acquisitionDelta ?? 0)}
+              </span>
+            </span>
           </dd>
         </div>
         <div>
@@ -346,6 +360,13 @@ export default function ExecutivePage() {
             <p className={t.panelLabel}>
               Ops pulse — trailing {windowMonths} months (newest first)
             </p>
+            <p className="mt-1 text-xs text-[#8b96a8]">
+              <span className="text-[#c5cdd9]">Δ</span> = active floor change vs prior month-end
+              <span className="mx-2">•</span>
+              <span className="text-sky-300">proj</span> = installs - removals - CTS
+              <span className="mx-2">•</span>
+              <span className="text-amber-300">acq</span> = acquisition adds
+            </p>
 
             {/* Phone: stacked month cards */}
             <div className="mt-3 space-y-3 md:hidden">
@@ -385,6 +406,15 @@ export default function ExecutivePage() {
                           {row.placements.machines.toLocaleString()}
                           <span className="ml-1 text-xs opacity-70">
                             ({fmtDelta(row.placements.delta)})
+                          </span>
+                          <span className="ml-2 text-[11px]">
+                            <span className="text-sky-300">
+                              proj {fmtDelta(row.placements.projectDelta ?? 0)}
+                            </span>
+                            <span className="mx-1 opacity-60">|</span>
+                            <span className="text-amber-300">
+                              acq {fmtDelta(row.placements.acquisitionDelta ?? 0)}
+                            </span>
                           </span>
                         </td>
                         <td className={t.tableCell}>
