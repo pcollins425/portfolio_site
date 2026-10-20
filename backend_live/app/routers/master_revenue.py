@@ -699,8 +699,13 @@ def _exec_project_acquisition_delta_by_month(month_ends: list[date]) -> dict[str
 
 def _exec_machine_attribution_by_month(month_ends: list[date]) -> dict[str, dict[str, int]]:
     """Month map of active stock delta + project/acquisition breakdown."""
+    project_by_ym = _exec_project_machine_delta_by_month(month_ends)
+    acq_by_ym = _exec_project_acquisition_delta_by_month(month_ends)
     out: dict[str, dict[str, int]] = {
-        me.isoformat()[:7]: {"active_stock_delta": 0, "project_delta": 0, "acquisition_delta": 0}
+        me.isoformat()[:7]: {
+            "project_delta": int(project_by_ym.get(me.isoformat()[:7], 0)),
+            "acquisition_delta": int(acq_by_ym.get(me.isoformat()[:7], 0)),
+        }
         for me in month_ends
     }
     if not month_ends:
@@ -732,11 +737,15 @@ def _exec_machine_attribution_by_month(month_ends: list[date]) -> dict[str, dict
             removes = int(r.get("removes_playable") or 0)
             cts = int(r.get("cts_playable") or 0)
             acq = int(r.get("acquisitions_playable") or 0)
-            out[ym] = {
+            merged = out.get(ym, {})
+            merged.update(
+                {
                 "active_stock_delta": int(r.get("active_stock_delta") or 0),
                 "project_delta": installs - removes - cts,
                 "acquisition_delta": acq,
-            }
+                }
+            )
+            out[ym] = merged
     except Exception:
         pass
     return out
