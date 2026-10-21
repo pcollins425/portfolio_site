@@ -71,21 +71,41 @@ function fmtPct(v: number): string {
   return `${v >= 0 ? "+" : ""}${(v * 100).toFixed(1)}%`;
 }
 
+const PROJECTED_COMMISSION_TIP =
+  "Estimate for casinos with an expected floor but no report in the focus month. " +
+  "Each missing casino: expected entries × average commission per entry from that casino’s last up to 6 reported months. " +
+  "Thin history falls back to tribe → state → portfolio average. Fully reporting-waived months are excluded. Not actual billed commission.";
+
 function Kpi({
   label,
   value,
   sub,
   positive,
+  tip,
 }: {
   label: string;
   value: string;
   sub?: string;
   positive?: boolean;
+  tip?: string;
 }) {
   const t = useDashboardTheme();
   return (
-    <div className={t.kpi}>
-      <p className={t.kpiLabel}>{label}</p>
+    <div className={t.kpi} title={tip}>
+      <p className={t.kpiLabel}>
+        <span className="inline-flex items-center gap-1.5">
+          {label}
+          {tip ? (
+            <span
+              className="inline-flex h-4 w-4 shrink-0 cursor-help items-center justify-center rounded-full border border-current/30 text-[10px] font-semibold normal-case leading-none opacity-70"
+              title={tip}
+              aria-label={tip}
+            >
+              ?
+            </span>
+          ) : null}
+        </span>
+      </p>
       <p className={t.kpiValue}>{value}</p>
       {sub != null && <p className={positive === false ? t.kpiSub : t.kpiSubPositive}>{sub}</p>}
     </div>
@@ -211,6 +231,7 @@ export default function FinancePage() {
             value={fmtUsd(k.projected_commission ?? 0)}
             sub={`${k.casinos_missing} missing · ${k.casinos_reported} of ${k.casinos_expected} expected reported`}
             positive={k.casinos_missing === 0}
+            tip={PROJECTED_COMMISSION_TIP}
           />
         </div>
       )}
