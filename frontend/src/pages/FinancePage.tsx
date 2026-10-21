@@ -74,7 +74,18 @@ function fmtPct(v: number): string {
 const PROJECTED_COMMISSION_TIP =
   "Estimate for casinos with an expected floor but no report in the focus month. " +
   "Each missing casino: expected entries × average commission per entry from that casino’s last up to 6 reported months. " +
-  "Thin history falls back to tribe → state → portfolio average. Fully reporting-waived months are excluded. Not actual billed commission.";
+  "Thin history falls back to tribe → state → portfolio average. Fully reporting-waived months are excluded. " +
+  "Shown as ~$ rounded to the nearest $500 — not actual billed commission.";
+
+function fmtProjectedCommission(n: number): string {
+  const rounded = Math.round(n / 500) * 500;
+  const dollars = new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+    maximumFractionDigits: 0,
+  }).format(rounded);
+  return `~${dollars}`;
+}
 
 function Kpi({
   label,
@@ -228,7 +239,7 @@ export default function FinancePage() {
           />
           <Kpi
             label={`Projected commission (${k.month})`}
-            value={fmtUsd(k.projected_commission ?? 0)}
+            value={fmtProjectedCommission(k.projected_commission ?? 0)}
             sub={`${k.casinos_missing} missing · ${k.casinos_reported} of ${k.casinos_expected} expected reported`}
             positive={k.casinos_missing === 0}
             tip={PROJECTED_COMMISSION_TIP}
