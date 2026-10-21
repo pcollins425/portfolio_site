@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+from collections import defaultdict
 from datetime import date, datetime, timedelta
 from typing import Annotated, Any
 
@@ -1183,6 +1184,147 @@ _NON_PLAYABLE_SQL = """
   )
 """
 
+# Trailing months used for $/expected-entry rate on Casinos Missing Report projection.
+_PROJECTED_LOOKBACK_MONTHS = 6
+
+
+def _coverage_rate_per_entry(row: dict) -> float | None:
+    """Commission ÷ expected entries for a reported casino-month."""
+    expected = int(row.get("expected_entries") or 0)
+    if expected <= 0 or int(row.get("invoiced_keys") or 0) <= 0:
+        return None
+    return float(row.get("commission") or 0) / expected
+
+
+def _is_missing_report_row(row: dict) -> bool:
+    """Expected floor, zero invoiced keys, not fully reporting-waived."""
+    if int(row.get("expected_entries") or 0) <= 0:
+        return False
+    if int(row.get("invoiced_keys") or 0) > 0:
+        return False
+    waived = int(row.get("reporting_waived_keys") or 0)
+    actionable = int(row.get("uninvoiced_actionable_keys") or 0)
+    if waived > 0 and actionable == 0:
+        return False
+    return True
+
+
+def _mean_rate(rates: list[float]) -> float | None:
+    return (sum(rates) / len(rates)) if rates else None
+
+
+def _casino_trailing_rate(
+    by_cm: dict[tuple[str, str], dict],
+    casino: str,
+    focus_ym: str,
+    *,
+    lookback: int = _PROJECTED_LOOKBACK_MONTHS,
+) -> float | None:
+    candidates: list[tuple[str, float]] = []
+    for (c, ym), row in by_cm.items():
+        if c != casino or ym >= focus_ym:
+            continue
+        rate = _coverage_rate_per_entry(row)
+        if rate is not None:
+            candidates.append((ym, rate))
+    candidates.sort(key=lambda x: x[0], reverse=True)
+    return _mean_rate([r for _, r in candidates[:lookback]])
+
+
+def _group_trailing_rate(
+    by_cm: dict[tuple[str, str], dict],
+    members: set[str],
+    focus_ym: str,
+    *,
+    lookback: int = _PROJECTED_LOOKBACK_MONTHS,
+) -> float | None:
+    """Mean $/entry across members for months in the lookback window before focus."""
+    if not members:
+        return None
+    floor_ym = _shift_month(focus_ym, -lookback)
+    rates: list[float] = []
+    for (c, ym), row in by_cm.items():
+        if c not in members or ym >= focus_ym or ym < floor_ym:
+            continue
+        rate = _coverage_rate_per_entry(row)
+        if rate is not None:
+            rates.append(rate)
+    return _mean_rate(rates)
+
+
+def _load_casino_tribe_state() -> dict[str, dict[str, str]]:
+    """Map casino_short → tribe_id / state_id for projection fallbacks. Soft-fail."""
+    try:
+        rows = mssql.query(
+            """
+SELECT
+    COALESCE(NULLIF(RTRIM(c.casino_short), N''), RTRIM(c.casino_name)) AS casino_short,
+    RTRIM(c.tribe_id) AS tribe_id,
+    RTRIM(c.state_id) AS state_id
+FROM clients.casinos AS c
+WHERE c.reference_key <> %s
+""",
+            params=(_SOLD_CASINO_ID,),
+            database=_revenue_catalog(),
+            profile="dashboard",
+            load_env=False,
+        )
+    except Exception:
+        return {}
+    out: dict[str, dict[str, str]] = {}
+    for r in rows or []:
+        casino = str(r.get("casino_short") or "").strip()
+        if not casino:
+            continue
+        out[casino] = {
+            "tribe_id": str(r.get("tribe_id") or "").strip(),
+            "state_id": str(r.get("state_id") or "").strip(),
+        }
+    return out
+
+
+def _projected_commission_for_missing(
+    by_cm: dict[tuple[str, str], dict],
+    focus_ym: str,
+    *,
+    casino_meta: dict[str, dict[str, str]] | None = None,
+) -> float:
+    """Single whole-dollar projection for casinos missing a report in focus_ym.
+
+    Per missing casino: expected_entries × trailing avg $/expected-entry
+    (last up to 6 reported months). Fallback: tribe → state → global.
+    """
+    meta = casino_meta if casino_meta is not None else _load_casino_tribe_state()
+    by_tribe: dict[str, set[str]] = defaultdict(set)
+    by_state: dict[str, set[str]] = defaultdict(set)
+    for casino, m in meta.items():
+        if m.get("tribe_id"):
+            by_tribe[m["tribe_id"]].add(casino)
+        if m.get("state_id"):
+            by_state[m["state_id"]].add(casino)
+
+    all_casinos = {c for (c, _) in by_cm}
+    global_rate = _group_trailing_rate(by_cm, all_casinos, focus_ym)
+
+    total = 0.0
+    for (casino, ym), row in by_cm.items():
+        if ym != focus_ym or not _is_missing_report_row(row):
+            continue
+        expected = int(row.get("expected_entries") or 0)
+        rate = _casino_trailing_rate(by_cm, casino, focus_ym)
+        if rate is None:
+            m = meta.get(casino) or {}
+            tid, sid = m.get("tribe_id") or "", m.get("state_id") or ""
+            if tid:
+                rate = _group_trailing_rate(by_cm, by_tribe.get(tid, set()), focus_ym)
+            if rate is None and sid:
+                rate = _group_trailing_rate(by_cm, by_state.get(sid, set()), focus_ym)
+            if rate is None:
+                rate = global_rate
+        if rate is None:
+            continue
+        total += expected * rate
+    return round(total, 2)
 
 
 @router.get("/finance/overview")
@@ -1212,7 +1354,8 @@ def finance_overview(
 
     mom_ym = _shift_month(t, -1)
     yoy_ym = _shift_month(t, -12)
-    ext_months = sorted(set(months + [mom_ym, yoy_ym]))
+    hist_months = _month_span(_shift_month(t, -_PROJECTED_LOOKBACK_MONTHS), t)
+    ext_months = sorted(set(months + [mom_ym, yoy_ym] + hist_months))
     window_start = _month_bounds(ext_months[0])[0]
     window_end = _month_bounds(ext_months[-1])[0]
 
@@ -1303,12 +1446,14 @@ WHERE processing_month BETWEEN %s AND %s
     focus = month_totals(t)
     mom = month_totals(mom_ym)
     yoy = month_totals(yoy_ym)
+    projected_commission = _projected_commission_for_missing(by_cm, t)
 
     def pct(a: float, b: float) -> float:
         return (a - b) / b if b else 0.0
 
     kpis = {
         **focus,
+        "projected_commission": projected_commission,
         "expected_entries_mom": pct(focus["expected_entries"], mom["expected_entries"]),
         "expected_entries_yoy": pct(focus["expected_entries"], yoy["expected_entries"]),
         "commission_mom": pct(focus["commission"], mom["commission"]),
@@ -1403,7 +1548,8 @@ def _finance_overview_live(
 
     mom_ym = _shift_month(t, -1)
     yoy_ym = _shift_month(t, -12)
-    ext_months = sorted(set(months + [mom_ym, yoy_ym]))
+    hist_months = _month_span(_shift_month(t, -_PROJECTED_LOOKBACK_MONTHS), t)
+    ext_months = sorted(set(months + [mom_ym, yoy_ym] + hist_months))
 
     window_start = _month_bounds(ext_months[0])[0]
     window_end = _month_bounds(ext_months[-1])[1]
@@ -1674,11 +1820,34 @@ WHERE sm.casino_id <> %s
     mom = month_totals(mom_ym)
     yoy = month_totals(yoy_ym)
 
+    # Build snapshot-shaped rows so projection uses the same helper as the default path.
+    by_cm_proj: dict[tuple[str, str], dict] = {}
+    proj_casinos = (
+        {c for (c, _) in expected_sets}
+        | {c for (c, _) in invoiced_sets}
+        | {c for (c, _) in commission_by_key}
+    )
+    for casino in proj_casinos:
+        for ym in ext_months:
+            exp_set = expected_sets.get((casino, ym), set())
+            inv_set = invoiced_sets.get((casino, ym), set())
+            waived_set = waived_sets.get((casino, ym), set())
+            uninvoiced = exp_set - inv_set
+            by_cm_proj[(casino, ym)] = {
+                "expected_entries": expected_counts.get((casino, ym), len(exp_set)),
+                "invoiced_keys": len(inv_set),
+                "reporting_waived_keys": len(waived_set & uninvoiced),
+                "uninvoiced_actionable_keys": len(uninvoiced - waived_set),
+                "commission": float(commission_by_key.get((casino, ym), 0.0)),
+            }
+    projected_commission = _projected_commission_for_missing(by_cm_proj, t)
+
     def pct(a: float, b: float) -> float:
         return (a - b) / b if b else 0.0
 
     kpis = {
         **focus,
+        "projected_commission": projected_commission,
         "expected_entries_mom": pct(focus["expected_entries"], mom["expected_entries"]),
         "expected_entries_yoy": pct(focus["expected_entries"], yoy["expected_entries"]),
         "commission_mom": pct(focus["commission"], mom["commission"]),

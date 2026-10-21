@@ -52,6 +52,7 @@ type OverviewPayload = {
   to: string;
   months: string[];
   kpis: MonthlyRow & {
+    projected_commission: number;
     expected_entries_mom: number;
     expected_entries_yoy: number;
     commission_mom: number;
@@ -206,9 +207,9 @@ export default function FinancePage() {
             positive={k.commission_mom >= 0}
           />
           <Kpi
-            label="Casinos missing report"
-            value={`${k.casinos_missing}`}
-            sub={`${k.casinos_reported} of ${k.casinos_expected} expected reported`}
+            label={`Projected commission (${k.month})`}
+            value={fmtUsd(k.projected_commission ?? 0)}
+            sub={`${k.casinos_missing} missing · ${k.casinos_reported} of ${k.casinos_expected} expected reported`}
             positive={k.casinos_missing === 0}
           />
         </div>
