@@ -16,7 +16,12 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from app import mssql
 from app import permission_catalog as cat
 from app.auth_deps import require_area_read, require_demo_user
-from app.casino_scope import assigned_employee_id, sql_params, sql_predicate
+from app.casino_scope import (
+    assigned_employee_id,
+    columns_contain_any,
+    sql_params,
+    sql_predicate,
+)
 
 router = APIRouter(
     prefix="/api/work-orders",
@@ -91,6 +96,23 @@ def _route_scope(user: dict[str, Any] | None) -> tuple[str, tuple[Any, ...]]:
     if not employee_id:
         return "", ()
     return f" AND {sql_predicate('cas')}", sql_params(employee_id)
+
+
+def _detail_scope(user: dict[str, Any] | None) -> tuple[str, tuple[Any, ...]]:
+    """Techs: casino on their route, or WO assigned to them (Field list)."""
+    employee_id = assigned_employee_id(user)
+    if not employee_id:
+        return "", ()
+    from app.routers import projects as project_routes
+
+    named_sql, named_params = columns_contain_any(
+        ["wo.assignto"],
+        project_routes._project_needles(user),
+    )
+    return (
+        f" AND ({sql_predicate('cas')} OR {named_sql})",
+        sql_params(employee_id) + named_params,
+    )
 
 
 def _status_sql(status: str) -> str:
@@ -287,7 +309,7 @@ def work_order_detail(
 
     include_priority = _has_priority_column()
     priority_select = "wo.priority," if include_priority else ""
-    scope_sql, scope_params = _route_scope(user)
+    scope_sql, scope_params = _detail_scope(user)
 
     rows = _query(
         f"""

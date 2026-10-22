@@ -56,17 +56,49 @@
     return { text: row.theme || row.theme_id, href };
   }
 
-  function table(headers, rows, empty) {
+  function table(headers, rows, empty, options) {
     if (!rows.length) {
       return `<p class="dgs-field-empty">${esc(empty)}</p>`;
     }
+    const opts = options || {};
+    const rowClass = opts.rowClass || "";
     const head = headers
       .map((col) => `<th${col.cls ? ` class="${col.cls}"` : ""}>${esc(col.label)}</th>`)
       .join("");
     const body = rows
-      .map((row) => `<tr>${row.map((value, i) => cell(value, headers[i].cls)).join("")}</tr>`)
+      .map((entry) => {
+        const cells = Array.isArray(entry) ? entry : entry.cells;
+        const attrs = Array.isArray(entry) ? "" : entry.attrs || "";
+        const cls = Array.isArray(entry)
+          ? rowClass
+          : [rowClass, entry.rowClass].filter(Boolean).join(" ");
+        const classAttr = cls ? ` class="${cls}"` : "";
+        return `<tr${classAttr}${attrs}>${cells
+          .map((value, i) => cell(value, headers[i].cls))
+          .join("")}</tr>`;
+      })
       .join("");
     return `<div class="dgs-field-scroll"><table class="dgs-field-table"><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table></div>`;
+  }
+
+  function openWoDetail(wo) {
+    if (!wo || !window.DGSWorkOrderDetail) return;
+    DGSWorkOrderDetail.open(wo);
+  }
+
+  function bindWoRows(root) {
+    root.querySelectorAll(".dgs-field-wo-row[data-wo]").forEach((row) => {
+      row.addEventListener("click", (event) => {
+        if (event.target.closest("a")) return;
+        openWoDetail(row.getAttribute("data-wo"));
+      });
+      row.addEventListener("keydown", (event) => {
+        if (event.key !== "Enter" && event.key !== " ") return;
+        if (event.target.closest("a")) return;
+        event.preventDefault();
+        openWoDetail(row.getAttribute("data-wo"));
+      });
+    });
   }
 
   async function load(root) {
@@ -116,20 +148,27 @@
                 { label: "Theme" },
                 { label: "Description" },
               ],
-              orders.map((row) => [
-                row.date_wo,
-                row.wo,
-                propertyCell(row),
-                serialCell(row),
-                vendorCell(row),
-                cabinetCell(row),
-                themeCell(row),
-                row.description,
-              ]),
+              orders.map((row) => ({
+                rowClass: "dgs-field-wo-row",
+                attrs: ` data-wo="${esc(row.wo)}" tabindex="0" role="button" aria-label="Open work order ${esc(
+                  row.wo || ""
+                )}"`,
+                cells: [
+                  row.date_wo,
+                  row.wo,
+                  propertyCell(row),
+                  serialCell(row),
+                  vendorCell(row),
+                  cabinetCell(row),
+                  themeCell(row),
+                  row.description,
+                ],
+              })),
               "No open work orders."
             )}
           </section>
         </div>`;
+      bindWoRows(root);
     } catch (err) {
       root.innerHTML = `<p class="error-box">${esc(err.message || err)}</p>`;
     }

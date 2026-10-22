@@ -2917,10 +2917,12 @@ body.dgs-dashboard-v2 .dgs-dashboard-mount:has(.dgs-capacity) {
   box-shadow: -12px 0 32px rgba(0, 0, 0, 0.35);
   color: #f3f5f9;
 }
-body.capacity-drill-open .dgs-capacity-drawer-backdrop {
+body.capacity-drill-open .dgs-capacity-drawer-backdrop,
+body.wo-detail-open .dgs-capacity-drawer-backdrop {
   display: block;
 }
-body.capacity-drill-open .dgs-capacity-drawer {
+body.capacity-drill-open .dgs-capacity-drawer,
+body.wo-detail-open .dgs-capacity-drawer {
   display: flex;
 }
 .dgs-capacity-drawer-head {
@@ -3041,11 +3043,16 @@ body.capacity-drill-open .dgs-capacity-drawer {
 .dgs-wo-panel {
   padding: 0.75rem 0.85rem 1rem;
 }
-.dgs-wo-table tbody tr {
+.dgs-wo-table tbody tr,
+.dgs-field-wo-row {
   cursor: pointer;
 }
-.dgs-wo-row.is-active td {
+.dgs-wo-row.is-active td,
+.dgs-field-wo-row.is-active td {
   background: rgba(147, 197, 253, 0.12);
+}
+.dgs-field-wo-row:hover td {
+  background: rgba(255, 255, 255, 0.03);
 }
 .dgs-wo-pager {
   display: flex;
