@@ -170,24 +170,47 @@
     return field(label, `<pre class="dgs-wo-pre">${esc(value)}</pre>`);
   }
 
-  function materialsHtml(materials) {
+  function sourceLabel(source) {
+    const raw = String(source || "").trim().toUpperCase();
+    if (raw === "EMAINT") return "eMaint";
+    if (raw === "APPSHEET") return "AppSheet";
+    return source || "—";
+  }
+
+  function materialsHtml(materials, total) {
     if (!materials || !materials.length) {
-      return `<p class="dgs-field-empty">No material lines.</p>`;
+      return `<p class="dgs-field-empty">No charge lines.</p>`;
     }
     const head =
-      "<tr><th>Item</th><th class='dgs-field-num'>Req</th><th class='dgs-field-num'>Issued</th><th>Status</th><th class='dgs-field-num'>Ext cost</th></tr>";
+      "<tr><th>Item</th><th class='dgs-field-num'>Qty</th><th class='dgs-field-num'>Unit</th><th class='dgs-field-num'>Ext</th><th>Source</th><th>Status</th></tr>";
     const body = materials
-      .map(
-        (row) => `<tr>
-          <td>${esc(row.item || "—")}</td>
-          <td class="dgs-field-num">${esc(fmtNum(row.qty_requested, 2))}</td>
-          <td class="dgs-field-num">${esc(fmtNum(row.qty_issued, 2))}</td>
-          <td>${esc(row.status || "—")}</td>
+      .map((row) => {
+        const qty =
+          row.qty_issued != null && Number(row.qty_issued) !== 0
+            ? row.qty_issued
+            : row.qty_requested;
+        const meta = [row.mfr, row.mfrpartno].filter(Boolean).join(" · ");
+        const descrip = row.descrip
+          ? `<div class="dgs-wo-mat-descrip">${esc(row.descrip)}</div>`
+          : "";
+        const metaHtml = meta ? `<div class="dgs-wo-mat-meta">${esc(meta)}</div>` : "";
+        return `<tr>
+          <td><div class="dgs-wo-mat-item">${esc(row.item || "—")}</div>${descrip}${metaHtml}</td>
+          <td class="dgs-field-num">${esc(fmtNum(qty, 2))}</td>
+          <td class="dgs-field-num">${esc(fmtMoney(row.unit_cost))}</td>
           <td class="dgs-field-num">${esc(fmtMoney(row.ext_cost))}</td>
-        </tr>`
-      )
+          <td>${esc(sourceLabel(row.source))}</td>
+          <td>${esc(row.status || "—")}</td>
+        </tr>`;
+      })
       .join("");
-    return `<div class="dgs-field-scroll"><table class="dgs-field-table"><thead>${head}</thead><tbody>${body}</tbody></table></div>`;
+    const foot =
+      total == null
+        ? ""
+        : `<tfoot><tr><td colspan="3">Total</td><td class="dgs-field-num">${esc(
+            fmtMoney(total)
+          )}</td><td colspan="2"></td></tr></tfoot>`;
+    return `<div class="dgs-field-scroll"><table class="dgs-field-table dgs-wo-mat-table"><thead>${head}</thead><tbody>${body}</tbody>${foot}</table></div>`;
   }
 
   async function openDetail(root, wo) {
@@ -271,7 +294,8 @@
           }
           <section class="dgs-wo-section">
             <h3>Materials</h3>
-            ${materialsHtml(data.materials)}
+            <p class="dgs-wo-section-note">Charge lines from eMaint and AppSheet.</p>
+            ${materialsHtml(data.materials, data.materials_total)}
           </section>
           <section class="dgs-wo-section">
             <h3>Record</h3>

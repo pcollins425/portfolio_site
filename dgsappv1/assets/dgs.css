@@ -3070,6 +3070,32 @@ body.capacity-drill-open .dgs-capacity-drawer {
   text-transform: uppercase;
   color: #8b96a8;
 }
+.dgs-wo-section-note {
+  margin: -0.25rem 0 0.65rem;
+  color: #8b96a8;
+  font-size: 0.78rem;
+}
+.dgs-wo-mat-item {
+  font-weight: 600;
+  color: #f3f5f9;
+}
+.dgs-wo-mat-descrip {
+  margin-top: 0.15rem;
+  color: #c5cdd9;
+  font-size: 0.82rem;
+  line-height: 1.35;
+}
+.dgs-wo-mat-meta {
+  margin-top: 0.1rem;
+  color: #8b96a8;
+  font-size: 0.72rem;
+}
+.dgs-wo-mat-table tfoot td {
+  border-top: 1px solid rgba(255, 255, 255, 0.12);
+  font-weight: 600;
+  color: #f3f5f9;
+  padding-top: 0.55rem;
+}
 .dgs-wo-fields {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));

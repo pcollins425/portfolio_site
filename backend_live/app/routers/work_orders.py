@@ -361,11 +361,15 @@ def work_order_detail(
     wo_key = _text(row.get("wo"))
 
     materials: list[dict[str, Any]] = []
+    materials_total: float | None = None
     if wo_key:
         mat_rows = _query(
             """
             SELECT
                 mat.item,
+                inv.descrip AS item_descrip,
+                inv.mfr AS item_mfr,
+                inv.mfrpartno AS item_mfrpartno,
                 mat.qty_requested,
                 mat.qty_allocated,
                 mat.qty_issued,
@@ -374,6 +378,9 @@ def work_order_detail(
                 mat.ext_cost,
                 mat.source
             FROM projects.work_order_material AS mat
+            LEFT JOIN inventory.inventory AS inv
+              ON LTRIM(RTRIM(CAST(inv.item AS nvarchar(100))))
+               = LTRIM(RTRIM(CAST(mat.item AS nvarchar(100))))
             WHERE mat.wo = %s
             ORDER BY mat.index_key, mat.item
             """,
@@ -382,6 +389,9 @@ def work_order_detail(
         materials = [
             {
                 "item": _text(m.get("item")),
+                "descrip": _text(m.get("item_descrip")),
+                "mfr": _text(m.get("item_mfr")),
+                "mfrpartno": _text(m.get("item_mfrpartno")),
                 "qty_requested": _num(m.get("qty_requested")),
                 "qty_allocated": _num(m.get("qty_allocated")),
                 "qty_issued": _num(m.get("qty_issued")),
@@ -396,6 +406,11 @@ def work_order_detail(
             }
             for m in mat_rows
         ]
+        if materials:
+            materials_total = round(
+                sum((_num(m.get("ext_cost")) or 0.0) for m in materials),
+                2,
+            )
 
     detail = {
         "wo": wo_key,
@@ -455,6 +470,7 @@ def work_order_detail(
         "editdate": _day(row.get("editdate")),
         "moneypenny": bool(row.get("moneypenny")),
         "materials": materials,
+        "materials_total": materials_total,
     }
     if include_priority:
         detail["priority"] = _text(row.get("priority"))
