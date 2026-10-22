@@ -62,6 +62,12 @@
       .join("/")}`;
   }
 
+  /** Hub label only — keep .pdf on disk / API path. */
+  function docLabel(doc) {
+    const raw = String(doc?.original_filename || doc?.document_key || "").trim();
+    return raw.replace(/\.pdf$/i, "") || raw;
+  }
+
   async function openDocument(relPath) {
     if (!relPath) return;
     const headers = window.DGSAuth ? DGSAuth.authHeaders() : {};
@@ -474,7 +480,7 @@
           <td>${esc(doc.software_id || doc.cabinet_name || "—")}</td>
           <td><button type="button" class="th-doc-link" data-doc-path="${esc(
             doc.nas_rel_path || ""
-          )}">${esc(doc.original_filename || doc.document_key)}</button></td>
+          )}">${esc(docLabel(doc))}</button></td>
         </tr>`
       )
       .join("");
