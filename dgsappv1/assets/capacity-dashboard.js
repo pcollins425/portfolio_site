@@ -144,10 +144,10 @@
   }
 
   const RANK_SORT_COLS = [
-    { key: "downtime", label: "Downtime (days)", money: false },
-    { key: "part_cost", label: "Part cost", money: true },
-    { key: "wo_count", label: "WOs", money: false },
-    { key: "asset_count", label: "Assets", money: false },
+    { key: "downtime", label: "Downtime", title: "Downtime (days)", money: false },
+    { key: "part_cost", label: "Part cost", title: "Part cost", money: true },
+    { key: "wo_count", label: "WOs", title: "Work orders", money: false },
+    { key: "asset_count", label: "Assets", title: "Assets", money: false },
   ];
 
   function sortedRankRows(rows) {
@@ -166,10 +166,12 @@
   function rankSortHeader(col) {
     const active = state.rankSort.key === col.key;
     const arrow = !active ? "" : state.rankSort.dir === "asc" ? " ↑" : " ↓";
-    return `<th class="dgs-field-num">
+    return `<th class="dgs-field-num dgs-capacity-rank-metric">
       <button type="button" class="dgs-capacity-rank-sort${
         active ? " is-active" : ""
-      }" data-sort-key="${esc(col.key)}" aria-pressed="${active ? "true" : "false"}">
+      }" data-sort-key="${esc(col.key)}" title="${esc(col.title || col.label)}" aria-pressed="${
+      active ? "true" : "false"
+    }">
         ${esc(col.label)}${arrow}
       </button>
     </th>`;
@@ -187,10 +189,12 @@
           row.key
         )}">
           <td>${esc(row.label)}</td>
-          <td class="dgs-field-num">${esc(fmtNum(row.downtime))}</td>
-          <td class="dgs-field-num">${esc(fmtMoney(row.part_cost))}</td>
-          <td class="dgs-field-num">${esc(fmtNum(row.wo_count ?? row.line_count, 0))}</td>
-          <td class="dgs-field-num">${esc(
+          <td class="dgs-field-num dgs-capacity-rank-metric">${esc(fmtNum(row.downtime))}</td>
+          <td class="dgs-field-num dgs-capacity-rank-metric">${esc(fmtMoney(row.part_cost))}</td>
+          <td class="dgs-field-num dgs-capacity-rank-metric">${esc(
+            fmtNum(row.wo_count ?? row.line_count, 0)
+          )}</td>
+          <td class="dgs-field-num dgs-capacity-rank-metric">${esc(
             row.asset_count == null ? "—" : fmtNum(row.asset_count, 0)
           )}</td>
         </tr>`;

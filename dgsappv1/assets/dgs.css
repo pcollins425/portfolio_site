@@ -2422,6 +2422,21 @@ body.dgs-dashboard-v2 .dgs-dashboard-mount:has(.dgs-capacity) {
 .dgs-capacity-grid .dgs-field-panel {
   max-height: 22rem;
 }
+.dgs-capacity-rank {
+  table-layout: fixed;
+  width: 100%;
+}
+.dgs-capacity-rank th:first-child,
+.dgs-capacity-rank td:first-child {
+  width: 34%;
+  padding-right: 0.7rem;
+}
+.dgs-capacity-rank th.dgs-capacity-rank-metric,
+.dgs-capacity-rank td.dgs-field-num {
+  width: 16.5%;
+  padding-left: 0.55rem;
+  padding-right: 0.35rem;
+}
 .dgs-capacity-rank-row {
   cursor: pointer;
 }
@@ -2429,6 +2444,8 @@ body.dgs-dashboard-v2 .dgs-dashboard-mount:has(.dgs-capacity) {
   background: rgba(147, 197, 253, 0.08);
 }
 .dgs-capacity-rank-sort {
+  display: block;
+  width: 100%;
   margin: 0;
   padding: 0;
   border: 0;
@@ -2438,7 +2455,8 @@ body.dgs-dashboard-v2 .dgs-dashboard-mount:has(.dgs-capacity) {
   font-weight: inherit;
   cursor: pointer;
   text-align: right;
-  white-space: nowrap;
+  white-space: normal;
+  line-height: 1.2;
 }
 .dgs-capacity-rank-sort:hover,
 .dgs-capacity-rank-sort:focus-visible {
