@@ -175,21 +175,29 @@ def _empty_day() -> dict[str, float | int]:
     return {"downtime": 0.0, "wo_count": 0, "part_cost": 0.0}
 
 
-def _daily_totals(start: date, end: date) -> dict[str, dict[str, float | int]]:
+def _daily_totals(
+    start: date,
+    end: date,
+    *,
+    filter_clause: str = "",
+    filter_params: list[Any] | tuple[Any, ...] = (),
+) -> dict[str, dict[str, float | int]]:
     out: dict[str, dict[str, float | int]] = {}
+    params = (start, end, *filter_params)
     rows = _query(
         f"""
         SELECT
             CONVERT(char(10), {_BUCKET}, 23) AS day_key,
             ISNULL(SUM(CAST(wo.hours AS float)), 0) AS downtime,
             COUNT(*) AS wo_count
-        FROM projects.work_orders AS wo
+        {_base_joins(with_part_cost=False)}
         WHERE {_INCLUDE}
           AND {_BUCKET} >= %s
           AND {_BUCKET} < DATEADD(day, 1, %s)
+          {filter_clause}
         GROUP BY CONVERT(char(10), {_BUCKET}, 23)
         """,
-        (start, end),
+        params,
     )
     for row in rows:
         key = _text(row.get("day_key"))
@@ -206,12 +214,20 @@ def _daily_totals(start: date, end: date) -> dict[str, dict[str, float | int]]:
             ISNULL(SUM(CAST(mat.ext_cost AS float)), 0) AS part_cost
         FROM projects.work_order_material AS mat
         INNER JOIN projects.work_orders AS wo ON wo.wo = mat.wo
+        LEFT JOIN clients.casinos AS cas ON cas.reference_key = wo.casino_id
+        LEFT JOIN clients.states AS st ON st.reference_key = cas.state_id
+        LEFT JOIN clients.tribes AS tr ON tr.reference_key = cas.tribe_id
+        LEFT JOIN inventory.assets AS ast ON ast.reference_key = wo.asset_id
+        LEFT JOIN vendors.vendors AS ven ON ven.reference_key = ast.vendor_id
+        LEFT JOIN vendors.cabinets AS cab ON cab.reference_key = ast.cabinet_id
+        LEFT JOIN vendors.themes AS th ON th.reference_key = wo.theme_id
         WHERE {_INCLUDE}
           AND {_BUCKET} >= %s
           AND {_BUCKET} < DATEADD(day, 1, %s)
+          {filter_clause}
         GROUP BY CONVERT(char(10), {_BUCKET}, 23)
         """,
-        (start, end),
+        params,
     )
     for row in cost_rows:
         key = _text(row.get("day_key"))
@@ -266,22 +282,30 @@ def _trend_point(
     }
 
 
-def _build_trailing12_trend(anchor_month_start: date, anchor_month_end: date) -> list[dict]:
+def _build_trailing12_trend(
+    anchor_month_start: date,
+    anchor_month_end: date,
+    *,
+    filter_clause: str = "",
+    filter_params: list[Any] | tuple[Any, ...] = (),
+) -> list[dict]:
     window_start = _add_months(anchor_month_start, -11)
+    params = (window_start, anchor_month_end, *filter_params)
     rows = _query(
         f"""
         SELECT
             CONVERT(char(7), {_BUCKET}, 126) AS month_key,
             ISNULL(SUM(CAST(wo.hours AS float)), 0) AS downtime,
             COUNT(*) AS wo_count
-        FROM projects.work_orders AS wo
+        {_base_joins(with_part_cost=False)}
         WHERE {_INCLUDE}
           AND {_BUCKET} >= %s
           AND {_BUCKET} < DATEADD(day, 1, %s)
+          {filter_clause}
         GROUP BY CONVERT(char(7), {_BUCKET}, 126)
         ORDER BY month_key
         """,
-        (window_start, anchor_month_end),
+        params,
     )
     by_month: dict[str, dict[str, float | int]] = {}
     for row in rows:
@@ -301,12 +325,20 @@ def _build_trailing12_trend(anchor_month_start: date, anchor_month_end: date) ->
             ISNULL(SUM(CAST(mat.ext_cost AS float)), 0) AS part_cost
         FROM projects.work_order_material AS mat
         INNER JOIN projects.work_orders AS wo ON wo.wo = mat.wo
+        LEFT JOIN clients.casinos AS cas ON cas.reference_key = wo.casino_id
+        LEFT JOIN clients.states AS st ON st.reference_key = cas.state_id
+        LEFT JOIN clients.tribes AS tr ON tr.reference_key = cas.tribe_id
+        LEFT JOIN inventory.assets AS ast ON ast.reference_key = wo.asset_id
+        LEFT JOIN vendors.vendors AS ven ON ven.reference_key = ast.vendor_id
+        LEFT JOIN vendors.cabinets AS cab ON cab.reference_key = ast.cabinet_id
+        LEFT JOIN vendors.themes AS th ON th.reference_key = wo.theme_id
         WHERE {_INCLUDE}
           AND {_BUCKET} >= %s
           AND {_BUCKET} < DATEADD(day, 1, %s)
+          {filter_clause}
         GROUP BY CONVERT(char(7), {_BUCKET}, 126)
         """,
-        (window_start, anchor_month_end),
+        params,
     )
     for row in cost_rows:
         key = _text(row.get("month_key"))
@@ -342,9 +374,17 @@ def _build_trailing12_trend(anchor_month_start: date, anchor_month_end: date) ->
     return out
 
 
-def _build_range_trend(start: date, end: date) -> tuple[ChartGrain, list[dict]]:
+def _build_range_trend(
+    start: date,
+    end: date,
+    *,
+    filter_clause: str = "",
+    filter_params: list[Any] | tuple[Any, ...] = (),
+) -> tuple[ChartGrain, list[dict]]:
     grain = _adaptive_grain(start, end)
-    daily = _daily_totals(start, end)
+    daily = _daily_totals(
+        start, end, filter_clause=filter_clause, filter_params=filter_params
+    )
     points: list[dict] = []
 
     if grain == "day":
@@ -451,21 +491,184 @@ def _ranked(rows: list[dict], *, limit: int | None = None) -> list[dict]:
     return out
 
 
-def _base_joins() -> str:
-    return f"""
-        FROM projects.work_orders AS wo
-        LEFT JOIN clients.casinos AS cas ON cas.reference_key = wo.casino_id
-        LEFT JOIN clients.states AS st ON st.reference_key = cas.state_id
-        LEFT JOIN inventory.assets AS ast ON ast.reference_key = wo.asset_id
-        LEFT JOIN vendors.vendors AS ven ON ven.reference_key = ast.vendor_id
-        LEFT JOIN vendors.cabinets AS cab ON cab.reference_key = ast.cabinet_id
-        LEFT JOIN vendors.themes AS th ON th.reference_key = wo.theme_id
+def _base_joins(*, with_part_cost: bool = True) -> str:
+    part = ""
+    if with_part_cost:
+        part = """
         LEFT JOIN (
             SELECT wo AS wo_key, SUM(CAST(ext_cost AS float)) AS part_cost
             FROM projects.work_order_material
             GROUP BY wo
         ) AS wpc ON wpc.wo_key = wo.wo
+        """
+    return f"""
+        FROM projects.work_orders AS wo
+        LEFT JOIN clients.casinos AS cas ON cas.reference_key = wo.casino_id
+        LEFT JOIN clients.states AS st ON st.reference_key = cas.state_id
+        LEFT JOIN clients.tribes AS tr ON tr.reference_key = cas.tribe_id
+        LEFT JOIN inventory.assets AS ast ON ast.reference_key = wo.asset_id
+        LEFT JOIN vendors.vendors AS ven ON ven.reference_key = ast.vendor_id
+        LEFT JOIN vendors.cabinets AS cab ON cab.reference_key = ast.cabinet_id
+        LEFT JOIN vendors.themes AS th ON th.reference_key = wo.theme_id
+        {part}
     """
+
+
+_FILTER_DIMS = ("region", "tribe", "state", "casino", "vendor", "cabinet", "theme")
+
+
+def _parse_csv_param(raw: str | None) -> list[str]:
+    if not raw:
+        return []
+    seen: set[str] = set()
+    out: list[str] = []
+    for part in str(raw).split(","):
+        value = part.strip()
+        if not value or value in seen:
+            continue
+        seen.add(value)
+        out.append(value)
+    return out
+
+
+def _collect_filters(
+    *,
+    region: str | None = None,
+    tribe: str | None = None,
+    state: str | None = None,
+    casino: str | None = None,
+    vendor: str | None = None,
+    cabinet: str | None = None,
+    theme: str | None = None,
+) -> dict[str, list[str]]:
+    raw = {
+        "region": region,
+        "tribe": tribe,
+        "state": state,
+        "casino": casino,
+        "vendor": vendor,
+        "cabinet": cabinet,
+        "theme": theme,
+    }
+    return {key: _parse_csv_param(value) for key, value in raw.items() if _parse_csv_param(value)}
+
+
+def _dim_expr(dim: str, region_sql: str) -> str:
+    mapping = {
+        "region": region_sql,
+        "tribe": "COALESCE(NULLIF(LTRIM(RTRIM(cas.tribe_id)), N''), N'Unassigned')",
+        "state": "COALESCE(NULLIF(LTRIM(RTRIM(st.reference_key)), N''), N'Unassigned')",
+        "casino": "COALESCE(NULLIF(LTRIM(RTRIM(wo.casino_id)), N''), N'Unassigned')",
+        "vendor": "COALESCE(NULLIF(LTRIM(RTRIM(ast.vendor_id)), N''), N'Unassigned')",
+        "cabinet": "COALESCE(NULLIF(LTRIM(RTRIM(ast.cabinet_id)), N''), N'Unassigned')",
+        "theme": "COALESCE(NULLIF(LTRIM(RTRIM(wo.theme_id)), N''), N'Unassigned')",
+    }
+    if dim not in mapping:
+        raise HTTPException(status_code=400, detail=f"unknown filter dim: {dim}")
+    return mapping[dim]
+
+
+def _dim_label_expr(dim: str, region_sql: str) -> str:
+    mapping = {
+        "region": region_sql,
+        "tribe": "COALESCE(NULLIF(LTRIM(RTRIM(tr.tribe_name)), N''), N'Unassigned')",
+        "state": "COALESCE(NULLIF(LTRIM(RTRIM(st.state)), N''), N'Unassigned')",
+        "casino": "COALESCE(NULLIF(LTRIM(RTRIM(cas.casino_name)), N''), N'Unassigned')",
+        "vendor": "COALESCE(NULLIF(LTRIM(RTRIM(ven.vendor_name)), N''), N'Unassigned')",
+        "cabinet": "COALESCE(NULLIF(LTRIM(RTRIM(cab.cabinet_name)), N''), N'Unassigned')",
+        "theme": (
+            "COALESCE(NULLIF(LTRIM(RTRIM(th.theme_name)), N''), "
+            "NULLIF(LTRIM(RTRIM(wo.comp_desc)), N''), N'Unassigned')"
+        ),
+    }
+    return mapping[dim]
+
+
+def _filter_sql(filters: dict[str, list[str]], region_sql: str) -> tuple[str, list[Any]]:
+    if not filters:
+        return "", []
+    parts: list[str] = []
+    params: list[Any] = []
+    for dim in _FILTER_DIMS:
+        values = filters.get(dim) or []
+        if not values:
+            continue
+        expr = _dim_expr(dim, region_sql)
+        placeholders = ", ".join(["%s"] * len(values))
+        parts.append(f"{expr} IN ({placeholders})")
+        params.extend(values)
+    if not parts:
+        return "", []
+    return " AND " + " AND ".join(parts), params
+
+
+def _query_filter_params(
+    region: str | None = None,
+    tribe: str | None = None,
+    state: str | None = None,
+    casino: str | None = None,
+    vendor: str | None = None,
+    cabinet: str | None = None,
+    theme: str | None = None,
+) -> tuple[dict[str, list[str]], str, list[Any]]:
+    filters = _collect_filters(
+        region=region,
+        tribe=tribe,
+        state=state,
+        casino=casino,
+        vendor=vendor,
+        cabinet=cabinet,
+        theme=theme,
+    )
+    clause, params = _filter_sql(filters, _region_case_sql())
+    return filters, clause, params
+
+
+@router.get("/filter-options")
+def capacity_filter_options(
+    start: Annotated[str | None, Query()] = None,
+    end: Annotated[str | None, Query()] = None,
+    month: Annotated[str | None, Query()] = None,
+    user: Annotated[dict[str, Any] | None, Depends(require_demo_user)] = None,
+):
+    del user
+    range_start, range_end, _month_key = _resolve_range(start, end, month)
+    region_sql = _region_case_sql()
+    options: dict[str, list[dict[str, str]]] = {}
+    for dim in _FILTER_DIMS:
+        key_expr = _dim_expr(dim, region_sql)
+        label_expr = _dim_label_expr(dim, region_sql)
+        rows = _query(
+            f"""
+            SELECT DISTINCT
+                {key_expr} AS value_key,
+                {label_expr} AS value_label
+            {_base_joins(with_part_cost=False)}
+            WHERE {_BUCKET} >= %s
+              AND {_BUCKET} < DATEADD(day, 1, %s)
+            ORDER BY value_label
+            """,
+            (range_start, range_end),
+        )
+        seen: set[str] = set()
+        items: list[dict[str, str]] = []
+        for row in rows:
+            value = _text(row.get("value_key")) or "Unassigned"
+            if value in seen:
+                continue
+            seen.add(value)
+            items.append(
+                {
+                    "value": value,
+                    "label": _text(row.get("value_label")) or value,
+                }
+            )
+        options[dim] = items
+    return {
+        "start": range_start.isoformat(),
+        "end": range_end.isoformat(),
+        "options": options,
+    }
 
 
 @router.get("")
@@ -474,6 +677,13 @@ def capacity_dashboard(
     end: Annotated[str | None, Query()] = None,
     month: Annotated[str | None, Query()] = None,
     chart: Annotated[str | None, Query()] = None,
+    region: Annotated[str | None, Query()] = None,
+    tribe: Annotated[str | None, Query()] = None,
+    state: Annotated[str | None, Query()] = None,
+    casino: Annotated[str | None, Query()] = None,
+    vendor: Annotated[str | None, Query()] = None,
+    cabinet: Annotated[str | None, Query()] = None,
+    theme: Annotated[str | None, Query()] = None,
     user: Annotated[dict[str, Any] | None, Depends(require_demo_user)] = None,
 ):
     del user
@@ -481,6 +691,16 @@ def capacity_dashboard(
     is_full = _is_full_month(range_start, range_end)
     chart_mode = _resolve_chart_mode(chart, is_full_month=is_full)
     region_sql = _region_case_sql()
+    active_filters, filter_clause, filter_params = _query_filter_params(
+        region=region,
+        tribe=tribe,
+        state=state,
+        casino=casino,
+        vendor=vendor,
+        cabinet=cabinet,
+        theme=theme,
+    )
+    range_params = (range_start, range_end, *filter_params)
 
     kpi_rows = _query(
         f"""
@@ -493,19 +713,28 @@ def capacity_dashboard(
         WHERE {_INCLUDE}
           AND {_BUCKET} >= %s
           AND {_BUCKET} < DATEADD(day, 1, %s)
+          {filter_clause}
         """,
-        (range_start, range_end),
+        range_params,
     )
     part_kpi = _query(
         f"""
         SELECT ISNULL(SUM(CAST(mat.ext_cost AS float)), 0) AS part_cost
         FROM projects.work_order_material AS mat
         INNER JOIN projects.work_orders AS wo ON wo.wo = mat.wo
+        LEFT JOIN clients.casinos AS cas ON cas.reference_key = wo.casino_id
+        LEFT JOIN clients.states AS st ON st.reference_key = cas.state_id
+        LEFT JOIN clients.tribes AS tr ON tr.reference_key = cas.tribe_id
+        LEFT JOIN inventory.assets AS ast ON ast.reference_key = wo.asset_id
+        LEFT JOIN vendors.vendors AS ven ON ven.reference_key = ast.vendor_id
+        LEFT JOIN vendors.cabinets AS cab ON cab.reference_key = ast.cabinet_id
+        LEFT JOIN vendors.themes AS th ON th.reference_key = wo.theme_id
         WHERE {_INCLUDE}
           AND {_BUCKET} >= %s
           AND {_BUCKET} < DATEADD(day, 1, %s)
+          {filter_clause}
         """,
-        (range_start, range_end),
+        range_params,
     )
     kpi = kpi_rows[0] if kpi_rows else {}
     downtime = _num(kpi.get("downtime"))
@@ -514,9 +743,19 @@ def capacity_dashboard(
 
     if chart_mode == "trailing12":
         chart_grain: ChartGrain = "month"
-        trend = _build_trailing12_trend(range_start, range_end)
+        trend = _build_trailing12_trend(
+            range_start,
+            range_end,
+            filter_clause=filter_clause,
+            filter_params=filter_params,
+        )
     else:
-        chart_grain, trend = _build_range_trend(range_start, range_end)
+        chart_grain, trend = _build_range_trend(
+            range_start,
+            range_end,
+            filter_clause=filter_clause,
+            filter_params=filter_params,
+        )
 
     def breakout(dim_key_sql: str, dim_label_sql: str) -> list[dict]:
         # All work orders in the selected period (not downtime-only), so part cost
@@ -533,10 +772,11 @@ def capacity_dashboard(
             {_base_joins()}
             WHERE {_BUCKET} >= %s
               AND {_BUCKET} < DATEADD(day, 1, %s)
+              {filter_clause}
             GROUP BY {dim_key_sql}, {dim_label_sql}
             ORDER BY downtime DESC, wo_count DESC
             """,
-            (range_start, range_end),
+            range_params,
         )
         return _ranked(rows)
 
@@ -586,10 +826,7 @@ def capacity_dashboard(
         "chart_title": chart_title,
         "chart_subtitle": chart_subtitle,
         "max_span_days": _MAX_SPAN_DAYS,
-        "bucket_rule": (
-            "Downtime is eMaint Downtime (Days) on work_orders.hours. "
-            "Full days attributed to COALESCE(downstart, date_wo) within the selected range."
-        ),
+        "filters": active_filters,
         "kpis": {
             "downtime": round(downtime, 2),
             "wo_count": wo_count,
@@ -613,6 +850,13 @@ def capacity_drill(
     month: Annotated[str | None, Query()] = None,
     dim: Annotated[str, Query()] = "",
     key: Annotated[str, Query()] = "",
+    region: Annotated[str | None, Query()] = None,
+    tribe: Annotated[str | None, Query()] = None,
+    state: Annotated[str | None, Query()] = None,
+    casino: Annotated[str | None, Query()] = None,
+    vendor: Annotated[str | None, Query()] = None,
+    cabinet: Annotated[str | None, Query()] = None,
+    theme: Annotated[str | None, Query()] = None,
     user: Annotated[dict[str, Any] | None, Depends(require_demo_user)] = None,
 ):
     del user
@@ -627,7 +871,7 @@ def capacity_drill(
         )
 
     region_sql = _region_case_sql()
-    filters = {
+    drill_exprs = {
         "region": region_sql,
         "state": "COALESCE(NULLIF(LTRIM(RTRIM(st.reference_key)), N''), N'Unassigned')",
         "casino": "COALESCE(NULLIF(LTRIM(RTRIM(wo.casino_id)), N''), N'Unassigned')",
@@ -635,10 +879,19 @@ def capacity_drill(
         "cabinet": "COALESCE(NULLIF(LTRIM(RTRIM(ast.cabinet_id)), N''), N'Unassigned')",
         "theme": "COALESCE(NULLIF(LTRIM(RTRIM(wo.theme_id)), N''), N'Unassigned')",
     }
+    _active_filters, filter_clause, filter_params = _query_filter_params(
+        region=region,
+        tribe=tribe,
+        state=state,
+        casino=casino,
+        vendor=vendor,
+        cabinet=cabinet,
+        theme=theme,
+    )
     dim_filter = ""
-    params: list[Any] = [range_start, range_end]
+    params: list[Any] = [range_start, range_end, *filter_params]
     if dim in _DRILL_DIMS:
-        dim_filter = f" AND {filters[dim]} = %s"
+        dim_filter = f" AND {drill_exprs[dim]} = %s"
         params.append(key)
 
     rows = _query(
@@ -664,6 +917,7 @@ def capacity_drill(
         {_base_joins()}
         WHERE {_BUCKET} >= %s
           AND {_BUCKET} < DATEADD(day, 1, %s)
+          {filter_clause}
           {dim_filter}
         ORDER BY ISNULL(wo.hours, 0) DESC, wo.downstart DESC, wo.wo DESC
         """,

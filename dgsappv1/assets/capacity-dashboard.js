@@ -405,6 +405,28 @@
 
   let trendResizeObserver = null;
 
+  const FILTER_DIMS = [
+    { key: "region", label: "Region" },
+    { key: "tribe", label: "Tribe" },
+    { key: "state", label: "State" },
+    { key: "casino", label: "Casino" },
+    { key: "vendor", label: "Vendor" },
+    { key: "cabinet", label: "Cabinet" },
+    { key: "theme", label: "Theme" },
+  ];
+
+  function emptyFilters() {
+    return {
+      region: [],
+      tribe: [],
+      state: [],
+      casino: [],
+      vendor: [],
+      cabinet: [],
+      theme: [],
+    };
+  }
+
   const defaults = currentMonthBounds();
   let state = {
     start: defaults.start,
@@ -414,7 +436,26 @@
     drill: null,
     error: "",
     rankSort: { key: "downtime", dir: "desc" },
+    filters: emptyFilters(),
+    filterOptions: null,
+    filterOptionsRange: "",
+    filterOpen: false,
+    filterCategory: null,
   };
+
+  function activeFilterCount() {
+    return FILTER_DIMS.reduce(
+      (sum, dim) => sum + ((state.filters[dim.key] || []).length),
+      0
+    );
+  }
+
+  function filterLabel(dim, value) {
+    const options =
+      (state.filterOptions && state.filterOptions[dim]) || [];
+    const hit = options.find((row) => row.value === value);
+    return (hit && hit.label) || value;
+  }
 
   function queryParams(extra) {
     const q = new URLSearchParams();
@@ -423,12 +464,43 @@
     if (isFullMonth(state.start, state.end)) {
       q.set("chart", state.chartMode === "range" ? "range" : "trailing12");
     }
+    FILTER_DIMS.forEach((dim) => {
+      const values = state.filters[dim.key] || [];
+      if (values.length) q.set(dim.key, values.join(","));
+    });
     if (extra) {
       Object.keys(extra).forEach((key) => {
         if (extra[key] != null && extra[key] !== "") q.set(key, extra[key]);
       });
     }
     return q.toString();
+  }
+
+  function filterIconSvg() {
+    return `<svg class="dgs-capacity-filter-icon" viewBox="0 0 20 20" aria-hidden="true" focusable="false">
+      <path d="M3 5h14M5.5 10h9M8 15h4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+    </svg>`;
+  }
+
+  function activeFilterChipsHtml() {
+    const chips = [];
+    FILTER_DIMS.forEach((dim) => {
+      (state.filters[dim.key] || []).forEach((value) => {
+        chips.push(
+          `<button type="button" class="dgs-capacity-filter-chip" data-filter-dim="${esc(
+            dim.key
+          )}" data-filter-value="${esc(value)}" title="Remove filter">
+            <span>${esc(dim.label)}: ${esc(filterLabel(dim.key, value))}</span>
+            <span class="dgs-capacity-filter-chip-x" aria-hidden="true">×</span>
+          </button>`
+        );
+      });
+    });
+    if (!chips.length) return "";
+    return `<div class="dgs-capacity-filter-chips" id="capacity-filter-chips">
+      ${chips.join("")}
+      <button type="button" class="dgs-v2-btn dgs-capacity-filter-clear-all" id="capacity-clear-all-filters">Clear all filters</button>
+    </div>`;
   }
 
   async function fetchJson(path) {
@@ -456,7 +528,10 @@
       backdrop.id = "capacity-drill-backdrop";
       backdrop.className = "dgs-capacity-drawer-backdrop";
       document.body.appendChild(backdrop);
-      backdrop.addEventListener("click", closeDrill);
+      backdrop.addEventListener("click", () => {
+        if (state.filterOpen) closeFilterPanel();
+        else closeDrill();
+      });
     }
     if (!drawer) {
       drawer = document.createElement("aside");
@@ -466,6 +541,7 @@
       document.body.appendChild(drawer);
       drawer.addEventListener("click", (event) => {
         if (event.target.closest("#capacity-drill-close")) closeDrill();
+        if (event.target.closest("#capacity-filter-close")) closeFilterPanel();
       });
     }
     return { backdrop, drawer };
@@ -473,9 +549,11 @@
 
   function closeDrill() {
     state.drill = null;
-    document.body.classList.remove("capacity-drill-open");
-    const drawer = document.getElementById("capacity-drill-drawer");
-    if (drawer) drawer.innerHTML = "";
+    if (!state.filterOpen) {
+      document.body.classList.remove("capacity-drill-open");
+      const drawer = document.getElementById("capacity-drill-drawer");
+      if (drawer) drawer.innerHTML = "";
+    }
     document.querySelectorAll(".dgs-capacity-trend-col.is-active").forEach((el) => {
       el.classList.remove("is-active");
     });
@@ -483,6 +561,270 @@
       el.classList.remove("is-active");
     });
     document.getElementById("capacity-range-drill")?.classList.remove("is-active");
+  }
+
+  function closeFilterPanel() {
+    state.filterOpen = false;
+    state.filterCategory = null;
+    document.body.classList.remove("capacity-drill-open");
+    const drawer = document.getElementById("capacity-drill-drawer");
+    if (drawer) {
+      drawer.classList.remove("is-filter");
+      drawer.innerHTML = "";
+    }
+    document.getElementById("capacity-filter-toggle")?.classList.remove("is-active");
+  }
+
+  function toggleFilterValue(dim, value, checked) {
+    const current = new Set(state.filters[dim] || []);
+    if (checked) current.add(value);
+    else current.delete(value);
+    state.filters[dim] = Array.from(current);
+  }
+
+  function clearFilterDim(dim) {
+    state.filters[dim] = [];
+  }
+
+  function clearAllFilters() {
+    state.filters = emptyFilters();
+  }
+
+  function removeFilterValue(dim, value) {
+    state.filters[dim] = (state.filters[dim] || []).filter((item) => item !== value);
+  }
+
+  async function ensureFilterOptions() {
+    const rangeKey = `${state.start}|${state.end}`;
+    if (state.filterOptions && state.filterOptionsRange === rangeKey) {
+      return state.filterOptions;
+    }
+    const data = await fetchJson(
+      `/api/capacity-dashboard/filter-options?${queryParams()}`
+    );
+    state.filterOptions = (data && data.options) || {};
+    state.filterOptionsRange = rangeKey;
+    return state.filterOptions;
+  }
+
+  function filterPanelHtml() {
+    const options = state.filterOptions || {};
+    const categories = FILTER_DIMS.map((dim) => {
+      const selected = new Set(state.filters[dim.key] || []);
+      const open = state.filterCategory === dim.key;
+      const items = options[dim.key] || [];
+      const count = selected.size;
+      const list = open
+        ? `<div class="dgs-capacity-filter-options">
+            <div class="dgs-capacity-filter-options-actions">
+              <button type="button" class="dgs-capacity-filter-clear-dim" data-clear-dim="${esc(
+                dim.key
+              )}">Clear selection</button>
+            </div>
+            <div class="dgs-capacity-filter-option-list">
+              ${
+                items.length
+                  ? items
+                      .map((item) => {
+                        const checked = selected.has(item.value);
+                        return `<label class="dgs-capacity-filter-option">
+                          <input type="checkbox" data-filter-dim="${esc(
+                            dim.key
+                          )}" data-filter-value="${esc(item.value)}"${
+                          checked ? " checked" : ""
+                        } />
+                          <span>${esc(item.label)}</span>
+                        </label>`;
+                      })
+                      .join("")
+                  : `<p class="dgs-field-empty">No values in this range.</p>`
+              }
+            </div>
+          </div>`
+        : "";
+      return `<div class="dgs-capacity-filter-cat${open ? " is-open" : ""}">
+        <button type="button" class="dgs-capacity-filter-cat-btn" data-filter-cat="${esc(
+          dim.key
+        )}" aria-expanded="${open ? "true" : "false"}">
+          <span>${esc(dim.label)}</span>
+          <span class="dgs-capacity-filter-cat-meta">${
+            count ? esc(String(count)) : ""
+          } <span class="dgs-capacity-filter-caret" aria-hidden="true">${
+            open ? "▾" : "▸"
+          }</span></span>
+        </button>
+        ${list}
+      </div>`;
+    }).join("");
+
+    const chips = [];
+    FILTER_DIMS.forEach((dim) => {
+      (state.filters[dim.key] || []).forEach((value) => {
+        chips.push(
+          `<button type="button" class="dgs-capacity-filter-chip" data-filter-dim="${esc(
+            dim.key
+          )}" data-filter-value="${esc(value)}">
+            <span>${esc(dim.label)}: ${esc(filterLabel(dim.key, value))}</span>
+            <span class="dgs-capacity-filter-chip-x" aria-hidden="true">×</span>
+          </button>`
+        );
+      });
+    });
+
+    return `
+      <div class="dgs-capacity-drawer-head">
+        <div>
+          <p class="dgs-capacity-drawer-kicker">Capacity filters</p>
+          <h2>Filter work orders</h2>
+          <p class="dgs-capacity-drawer-meta">${esc(state.start)} → ${esc(
+      state.end
+    )}</p>
+        </div>
+        <button type="button" class="dgs-v2-btn" id="capacity-filter-close">Close</button>
+      </div>
+      <div class="dgs-capacity-drawer-body dgs-capacity-filter-body">
+        <div class="dgs-capacity-filter-active">
+          <div class="dgs-capacity-filter-active-head">
+            <span>Active filters</span>
+            <button type="button" class="dgs-capacity-filter-clear-all" id="capacity-panel-clear-all"${
+              chips.length ? "" : " disabled"
+            }>Clear all filters</button>
+          </div>
+          <div class="dgs-capacity-filter-chip-row">
+            ${
+              chips.length
+                ? chips.join("")
+                : `<p class="dgs-capacity-filter-empty">No filters applied.</p>`
+            }
+          </div>
+        </div>
+        <div class="dgs-capacity-filter-cats">${categories}</div>
+      </div>`;
+  }
+
+  function wireFilterPanel(root, drawer) {
+    drawer.querySelectorAll("[data-filter-cat]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const dim = btn.getAttribute("data-filter-cat");
+        state.filterCategory = state.filterCategory === dim ? null : dim;
+        drawer.innerHTML = filterPanelHtml();
+        wireFilterPanel(root, drawer);
+      });
+    });
+    drawer.querySelectorAll('input[type="checkbox"][data-filter-dim]').forEach((input) => {
+      input.addEventListener("change", () => {
+        toggleFilterValue(
+          input.getAttribute("data-filter-dim"),
+          input.getAttribute("data-filter-value"),
+          input.checked
+        );
+        drawer.innerHTML = filterPanelHtml();
+        wireFilterPanel(root, drawer);
+        refreshFilterChrome(root);
+        load(root, { keepFilterOpen: true });
+      });
+    });
+    drawer.querySelectorAll("[data-clear-dim]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        clearFilterDim(btn.getAttribute("data-clear-dim"));
+        drawer.innerHTML = filterPanelHtml();
+        wireFilterPanel(root, drawer);
+        refreshFilterChrome(root);
+        load(root, { keepFilterOpen: true });
+      });
+    });
+    drawer.querySelectorAll(".dgs-capacity-filter-chip").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        removeFilterValue(
+          btn.getAttribute("data-filter-dim"),
+          btn.getAttribute("data-filter-value")
+        );
+        drawer.innerHTML = filterPanelHtml();
+        wireFilterPanel(root, drawer);
+        refreshFilterChrome(root);
+        load(root, { keepFilterOpen: true });
+      });
+    });
+    drawer
+      .querySelector("#capacity-panel-clear-all")
+      ?.addEventListener("click", () => {
+        clearAllFilters();
+        drawer.innerHTML = filterPanelHtml();
+        wireFilterPanel(root, drawer);
+        refreshFilterChrome(root);
+        load(root, { keepFilterOpen: true });
+      });
+  }
+
+  function refreshFilterChrome(root) {
+    const toggle = document.getElementById("capacity-filter-toggle");
+    if (toggle) {
+      const count = activeFilterCount();
+      toggle.classList.toggle("is-active", state.filterOpen || count > 0);
+      toggle.classList.toggle("has-filters", count > 0);
+      const badge = toggle.querySelector(".dgs-capacity-filter-badge");
+      if (badge) badge.textContent = count ? String(count) : "";
+    }
+    const host = root.querySelector(".dgs-capacity-filter-chips-host");
+    if (host) host.innerHTML = activeFilterChipsHtml();
+    wireFilterChips(root);
+  }
+
+  function wireFilterChips(root) {
+    root.querySelectorAll("#capacity-filter-chips .dgs-capacity-filter-chip").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        removeFilterValue(
+          btn.getAttribute("data-filter-dim"),
+          btn.getAttribute("data-filter-value")
+        );
+        if (state.filterOpen) {
+          const drawer = document.getElementById("capacity-drill-drawer");
+          if (drawer) {
+            drawer.innerHTML = filterPanelHtml();
+            wireFilterPanel(root, drawer);
+          }
+        }
+        refreshFilterChrome(root);
+        load(root, { keepFilterOpen: state.filterOpen });
+      });
+    });
+    document.getElementById("capacity-clear-all-filters")?.addEventListener("click", () => {
+      clearAllFilters();
+      if (state.filterOpen) {
+        const drawer = document.getElementById("capacity-drill-drawer");
+        if (drawer) {
+          drawer.innerHTML = filterPanelHtml();
+          wireFilterPanel(root, drawer);
+        }
+      }
+      refreshFilterChrome(root);
+      load(root, { keepFilterOpen: state.filterOpen });
+    });
+  }
+
+  async function openFilterPanel(root) {
+    closeDrill();
+    const { drawer } = ensureDrawer(root);
+    state.filterOpen = true;
+    document.body.classList.add("capacity-drill-open");
+    drawer.classList.add("is-filter");
+    drawer.setAttribute("aria-label", "Capacity filters");
+    drawer.innerHTML = `<div class="dgs-capacity-drawer-inner"><p class="dgs-v2-loading">Loading filters…</p></div>`;
+    document.getElementById("capacity-filter-toggle")?.classList.add("is-active");
+    try {
+      await ensureFilterOptions();
+      drawer.innerHTML = filterPanelHtml();
+      wireFilterPanel(root, drawer);
+    } catch (err) {
+      drawer.innerHTML = `
+        <div class="dgs-capacity-drawer-head">
+          <h2>Filters</h2>
+          <button type="button" class="dgs-v2-btn" id="capacity-filter-close">Close</button>
+        </div>
+        <div class="dgs-capacity-drawer-body"><p class="error-box">${esc(
+          err.message || err
+        )}</p></div>`;
+    }
   }
 
   function drillTitle(options) {
@@ -494,7 +836,10 @@
   }
 
   async function openDrill(root, options) {
-    const { drawer, backdrop } = ensureDrawer(root);
+    if (state.filterOpen) closeFilterPanel();
+    const { drawer } = ensureDrawer(root);
+    drawer.classList.remove("is-filter");
+    drawer.setAttribute("aria-label", "Work order detail");
     const start = options.start || state.start;
     const end = options.end || state.end;
     const dim = options.dim || "range";
@@ -694,6 +1039,7 @@
     const toggleLabel =
       chartMode === "trailing12" ? "Show range breakdown" : "Show trailing 12 months";
 
+    const filterCount = activeFilterCount();
     root.innerHTML = `
       <div class="dgs-capacity">
         <div class="dgs-capacity-toolbar">
@@ -703,6 +1049,16 @@
           <label class="dgs-capacity-date">To
             <input type="date" id="capacity-end" value="${esc(state.end)}" />
           </label>
+          <button type="button" class="dgs-capacity-filter-btn${
+            state.filterOpen || filterCount ? " is-active" : ""
+          }${filterCount ? " has-filters" : ""}" id="capacity-filter-toggle" title="Filters" aria-label="Filters" aria-expanded="${
+      state.filterOpen ? "true" : "false"
+    }">
+            ${filterIconSvg()}
+            <span class="dgs-capacity-filter-badge">${
+              filterCount ? esc(String(filterCount)) : ""
+            }</span>
+          </button>
           <button type="button" class="dgs-v2-btn" id="capacity-apply">Apply</button>
           <button type="button" class="dgs-v2-btn" id="capacity-whole-month">Whole month</button>
           ${
@@ -712,11 +1068,8 @@
                 )}</button>`
               : ""
           }
-          <p class="dgs-capacity-note">${esc(
-            (data && data.bucket_rule) ||
-              "Downtime is eMaint Downtime (Days). Full days attributed to COALESCE(downstart, date_wo) within the selected range."
-          )}</p>
         </div>
+        <div class="dgs-capacity-filter-chips-host">${activeFilterChipsHtml()}</div>
         ${
           state.error
             ? `<p class="error-box">${esc(state.error)}</p>`
@@ -755,6 +1108,10 @@
     document.getElementById("capacity-apply")?.addEventListener("click", () => {
       applyRangeInputs(root);
     });
+    document.getElementById("capacity-filter-toggle")?.addEventListener("click", () => {
+      if (state.filterOpen) closeFilterPanel();
+      else openFilterPanel(root);
+    });
     document.getElementById("capacity-whole-month")?.addEventListener("click", () => {
       const startEl = document.getElementById("capacity-start");
       const endEl = document.getElementById("capacity-end");
@@ -774,6 +1131,7 @@
     };
     document.getElementById("capacity-start")?.addEventListener("keydown", onEnter);
     document.getElementById("capacity-end")?.addEventListener("keydown", onEnter);
+    wireFilterChips(root);
     wireRanks(root);
     wireRankSort(root);
     wireChart(root);
@@ -787,12 +1145,25 @@
       trendResizeObserver = new ResizeObserver(() => layoutTrendLine(root));
       trendResizeObserver.observe(trendBody);
     }
+    if (state.filterOpen) {
+      const drawer = document.getElementById("capacity-drill-drawer");
+      if (drawer && drawer.classList.contains("is-filter")) {
+        drawer.innerHTML = filterPanelHtml();
+        wireFilterPanel(root, drawer);
+      }
+    }
   }
 
-  async function load(root) {
+  async function load(root, options) {
     if (!root || !window.DGSAuth) return;
-    closeDrill();
-    root.innerHTML = '<p class="dgs-v2-loading">Loading capacity…</p>';
+    const keepFilterOpen = !!(options && options.keepFilterOpen);
+    if (!keepFilterOpen) {
+      closeDrill();
+      if (state.filterOpen) closeFilterPanel();
+      root.innerHTML = '<p class="dgs-v2-loading">Loading capacity…</p>';
+    } else {
+      state.drill = null;
+    }
     try {
       state.data = await fetchJson(`/api/capacity-dashboard?${queryParams()}`);
       state.start = state.data.start || state.start;
@@ -801,16 +1172,43 @@
       state.error = "";
       state.drill = null;
       state.rankSort = { key: "downtime", dir: "desc" };
+      // Date-range change invalidates option cache.
+      if (!keepFilterOpen) state.filterOptionsRange = "";
+      if (keepFilterOpen) state.filterOpen = true;
       render(root);
+      if (keepFilterOpen) {
+        const drawer = document.getElementById("capacity-drill-drawer");
+        if (drawer) {
+          document.body.classList.add("capacity-drill-open");
+          drawer.classList.add("is-filter");
+          drawer.setAttribute("aria-label", "Capacity filters");
+          drawer.innerHTML = filterPanelHtml();
+          wireFilterPanel(root, drawer);
+        }
+      }
     } catch (err) {
-      root.innerHTML = `<p class="error-box">${esc(err.message || err)}</p>`;
+      if (keepFilterOpen) {
+        state.error = err.message || String(err);
+        state.filterOpen = true;
+        render(root);
+        const drawer = document.getElementById("capacity-drill-drawer");
+        if (drawer) {
+          document.body.classList.add("capacity-drill-open");
+          drawer.classList.add("is-filter");
+          drawer.innerHTML = filterPanelHtml();
+          wireFilterPanel(root, drawer);
+        }
+      } else {
+        root.innerHTML = `<p class="error-box">${esc(err.message || err)}</p>`;
+      }
     }
   }
 
   document.addEventListener("keydown", (event) => {
-    if (event.key === "Escape" && document.body.classList.contains("capacity-drill-open")) {
-      closeDrill();
-    }
+    if (event.key !== "Escape") return;
+    if (!document.body.classList.contains("capacity-drill-open")) return;
+    if (state.filterOpen) closeFilterPanel();
+    else closeDrill();
   });
 
   window.DGSCapacity = { load };

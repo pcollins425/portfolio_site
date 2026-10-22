@@ -2372,6 +2372,180 @@ body.dgs-dashboard-v2 .dgs-dashboard-mount:has(.dgs-capacity) {
 .dgs-capacity-toolbar .dgs-v2-btn {
   flex: 0 0 auto;
 }
+.dgs-capacity-filter-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.25rem;
+  min-width: 2.35rem;
+  height: 2.15rem;
+  padding: 0 0.55rem;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 6px;
+  background: #1a1f2a;
+  color: #c5cdd9;
+  cursor: pointer;
+}
+.dgs-capacity-filter-btn:hover,
+.dgs-capacity-filter-btn.is-active {
+  color: #f3f5f9;
+  border-color: rgba(147, 197, 253, 0.45);
+  background: rgba(147, 197, 253, 0.1);
+}
+.dgs-capacity-filter-btn.has-filters {
+  color: #93c5fd;
+}
+.dgs-capacity-filter-icon {
+  width: 1.05rem;
+  height: 1.05rem;
+  display: block;
+}
+.dgs-capacity-filter-badge {
+  min-width: 0.9rem;
+  font-size: 0.72rem;
+  font-weight: 600;
+  line-height: 1;
+}
+.dgs-capacity-filter-badge:empty {
+  display: none;
+}
+.dgs-capacity-filter-chips-host:empty {
+  display: none;
+}
+.dgs-capacity-filter-chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.45rem;
+}
+.dgs-capacity-filter-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  max-width: 100%;
+  padding: 0.28rem 0.5rem;
+  border: 1px solid rgba(147, 197, 253, 0.35);
+  border-radius: 999px;
+  background: rgba(147, 197, 253, 0.1);
+  color: #dbeafe;
+  font-size: 0.78rem;
+  cursor: pointer;
+}
+.dgs-capacity-filter-chip span:first-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.dgs-capacity-filter-chip-x {
+  color: #93c5fd;
+  font-size: 0.95rem;
+  line-height: 1;
+}
+.dgs-capacity-filter-clear-all,
+.dgs-capacity-filter-clear-dim {
+  border: 0;
+  background: transparent;
+  color: #93c5fd;
+  font-size: 0.78rem;
+  cursor: pointer;
+  padding: 0.2rem 0.15rem;
+}
+.dgs-capacity-filter-clear-all:disabled {
+  color: #5b6575;
+  cursor: default;
+}
+.dgs-capacity-drawer.is-filter {
+  width: min(420px, 96vw);
+}
+.dgs-capacity-filter-body {
+  display: grid;
+  gap: 1rem;
+  align-content: start;
+}
+.dgs-capacity-filter-active {
+  display: grid;
+  gap: 0.55rem;
+  padding-bottom: 0.85rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+.dgs-capacity-filter-active-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  color: #c5cdd9;
+  font-size: 0.82rem;
+}
+.dgs-capacity-filter-chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+.dgs-capacity-filter-empty {
+  margin: 0;
+  color: #8b96a8;
+  font-size: 0.8rem;
+}
+.dgs-capacity-filter-cats {
+  display: grid;
+  gap: 0.35rem;
+}
+.dgs-capacity-filter-cat {
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.02);
+  overflow: hidden;
+}
+.dgs-capacity-filter-cat-btn {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.7rem 0.85rem;
+  border: 0;
+  background: transparent;
+  color: #f3f5f9;
+  font-size: 0.92rem;
+  text-align: left;
+  cursor: pointer;
+}
+.dgs-capacity-filter-cat.is-open .dgs-capacity-filter-cat-btn {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+.dgs-capacity-filter-cat-meta {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  color: #8b96a8;
+  font-size: 0.78rem;
+}
+.dgs-capacity-filter-options {
+  padding: 0.55rem 0.7rem 0.75rem;
+}
+.dgs-capacity-filter-options-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 0.4rem;
+}
+.dgs-capacity-filter-option-list {
+  display: grid;
+  gap: 0.15rem;
+  max-height: min(42vh, 320px);
+  overflow: auto;
+}
+.dgs-capacity-filter-option {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.55rem;
+  padding: 0.35rem 0.25rem;
+  color: #d5dbe6;
+  font-size: 0.84rem;
+  cursor: pointer;
+}
+.dgs-capacity-filter-option input {
+  margin-top: 0.15rem;
+}
 .dgs-capacity-note {
   margin: 0;
   color: #8b96a8;
