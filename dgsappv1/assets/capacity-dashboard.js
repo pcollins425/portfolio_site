@@ -143,20 +143,19 @@
     return `<div class="dgs-field-scroll"><table class="dgs-field-table"><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table></div>`;
   }
 
-  function rankTable(dim, rows, valueKey, valueFmt) {
+  function rankTable(dim, rows) {
     if (!rows.length) {
       return `<p class="dgs-field-empty">No rows.</p>`;
     }
-    const head = `<tr><th>Name</th><th class="dgs-field-num">Downtime (days)</th><th class="dgs-field-num">WOs</th><th class="dgs-field-num">Assets</th></tr>`;
+    const head = `<tr><th>Name</th><th class="dgs-field-num">Downtime (days)</th><th class="dgs-field-num">Part cost</th><th class="dgs-field-num">WOs</th><th class="dgs-field-num">Assets</th></tr>`;
     const body = rows
       .map((row) => {
-        const value =
-          valueKey === "part_cost" ? valueFmt(row.part_cost) : valueFmt(row.downtime);
         return `<tr class="dgs-capacity-rank-row" data-dim="${esc(dim)}" data-key="${esc(
           row.key
         )}">
           <td>${esc(row.label)}</td>
-          <td class="dgs-field-num">${esc(value)}</td>
+          <td class="dgs-field-num">${esc(fmtNum(row.downtime))}</td>
+          <td class="dgs-field-num">${esc(fmtMoney(row.part_cost))}</td>
           <td class="dgs-field-num">${esc(fmtNum(row.wo_count ?? row.line_count, 0))}</td>
           <td class="dgs-field-num">${esc(
             row.asset_count == null ? "—" : fmtNum(row.asset_count, 0)
@@ -203,29 +202,74 @@
     return "Month";
   }
 
+  function fmtAxisMoney(n) {
+    const value = Number(n) || 0;
+    if (value >= 1000) {
+      return `$${Math.round(value / 100) / 10}k`;
+    }
+    return `$${Math.round(value)}`;
+  }
+
   function trendBars(trend, grain) {
     if (!trend.length) {
       return `<p class="dgs-field-empty">No downtime trend yet.</p>`;
     }
-    const rawMax = Math.max(...trend.map((row) => Number(row.downtime) || 0), 0);
-    const yMax = niceCeiling(rawMax || 1);
-    const ticks = [yMax, yMax * 0.75, yMax * 0.5, yMax * 0.25, 0];
-    const tickHtml = ticks
+    const costMax = niceCeiling(
+      Math.max(...trend.map((row) => Number(row.part_cost) || 0), 0) || 1
+    );
+    const downMax = niceCeiling(
+      Math.max(...trend.map((row) => Number(row.downtime) || 0), 0) || 1
+    );
+    const costTicks = [costMax, costMax * 0.75, costMax * 0.5, costMax * 0.25, 0];
+    const downTicks = [downMax, downMax * 0.75, downMax * 0.5, downMax * 0.25, 0];
+    const costTickHtml = costTicks
       .map(
         (tick) =>
-          `<div class="dgs-capacity-trend-tick"><span>${esc(fmtNum(tick))}</span></div>`
+          `<div class="dgs-capacity-trend-tick is-cost"><span>${esc(
+            fmtAxisMoney(tick)
+          )}</span></div>`
       )
       .join("");
-    const gridHtml = ticks
+    const downTickHtml = downTicks
       .map(
         (tick) =>
-          `<div class="dgs-capacity-trend-gridline" style="bottom:${(tick / yMax) * 100}%"></div>`
+          `<div class="dgs-capacity-trend-tick is-down"><span>${esc(
+            fmtNum(tick)
+          )}</span></div>`
       )
       .join("");
+    const gridHtml = costTicks
+      .map(
+        (tick) =>
+          `<div class="dgs-capacity-trend-gridline" style="bottom:${
+            (tick / costMax) * 100
+          }%"></div>`
+      )
+      .join("");
+
+    const n = trend.length;
+    const linePoints = trend
+      .map((row, i) => {
+        const downtime = Number(row.downtime) || 0;
+        const x = ((i + 0.5) / n) * 100;
+        const y = 100 - (downMax ? (downtime / downMax) * 100 : 0);
+        return `${x},${y}`;
+      })
+      .join(" ");
+    const lineDots = trend
+      .map((row, i) => {
+        const downtime = Number(row.downtime) || 0;
+        const x = ((i + 0.5) / n) * 100;
+        const y = downMax ? (downtime / downMax) * 100 : 0;
+        return `<span class="dgs-capacity-trend-dot" style="left:${x}%; bottom:${y}%"></span>`;
+      })
+      .join("");
+
     const cols = trend
       .map((row) => {
-        const value = Number(row.downtime) || 0;
-        const pct = yMax ? (value / yMax) * 100 : 0;
+        const cost = Number(row.part_cost) || 0;
+        const downtime = Number(row.downtime) || 0;
+        const pct = costMax ? (cost / costMax) * 100 : 0;
         const incomplete = !!row.incomplete;
         const rangeNote =
           row.start && row.end ? `${row.start} → ${row.end}` : row.key || "";
@@ -236,9 +280,9 @@
         const label = row.label || (row.month || "").slice(5) || row.key || "";
         return `<div class="dgs-capacity-trend-col${
           incomplete ? " is-incomplete" : ""
-        }" title="${esc(rangeNote)}: ${esc(fmtNum(value))} downtime days · ${esc(
-          fmtNum(row.wo_count, 0)
-        )} WOs${incompleteNote}">
+        }" title="${esc(rangeNote)}: ${esc(fmtMoney(cost))} part cost · ${esc(
+          fmtNum(downtime)
+        )} downtime days · ${esc(fmtNum(row.wo_count, 0))} WOs${incompleteNote}">
           <div class="dgs-capacity-trend-bar-wrap">
             <div class="${barCls}" style="height:${pct}%"></div>
           </div>
@@ -246,14 +290,25 @@
         </div>`;
       })
       .join("");
-    return `<div class="dgs-capacity-trend-chart" role="img" aria-label="Downtime days ${esc(
+
+    return `<div class="dgs-capacity-trend-chart is-combo" role="img" aria-label="Part cost and downtime ${esc(
       axisName(grain).toLowerCase()
     )}">
-      <div class="dgs-capacity-trend-yaxis-name">Downtime (days)</div>
-      <div class="dgs-capacity-trend-yaxis">${tickHtml}</div>
+      <div class="dgs-capacity-trend-yaxis-name is-cost">Part cost</div>
+      <div class="dgs-capacity-trend-yaxis is-cost">${costTickHtml}</div>
       <div class="dgs-capacity-trend-plot">
         <div class="dgs-capacity-trend-grid">${gridHtml}</div>
         <div class="dgs-capacity-trend">${cols}</div>
+        <svg class="dgs-capacity-trend-line" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+          <polyline points="${linePoints}" fill="none" vector-effect="non-scaling-stroke" />
+        </svg>
+        <div class="dgs-capacity-trend-dots" aria-hidden="true">${lineDots}</div>
+      </div>
+      <div class="dgs-capacity-trend-yaxis is-down">${downTickHtml}</div>
+      <div class="dgs-capacity-trend-yaxis-name is-down">Downtime (days)</div>
+      <div class="dgs-capacity-trend-legend">
+        <span class="is-cost">Part cost</span>
+        <span class="is-down">Downtime</span>
       </div>
       <div class="dgs-capacity-trend-xaxis-name">${esc(axisName(grain))}</div>
     </div>`;
@@ -400,7 +455,9 @@
     const chartMode = fullMonth ? state.chartMode : "range";
     const chartTitle =
       (data && data.chart_title) ||
-      (chartMode === "trailing12" ? "Downtime days by month" : "Downtime days");
+      (chartMode === "trailing12"
+        ? "Part cost & downtime by month"
+        : "Part cost & downtime");
     const chartSubtitle =
       (data && data.chart_subtitle) ||
       (chartMode === "trailing12" ? "trailing 12 mo" : "");
@@ -460,42 +517,27 @@
         <div class="dgs-capacity-grid">
           <section class="dgs-field-panel">
             <h2>Region</h2>
-            ${rankTable("region", (data && data.geo && data.geo.region) || [], "downtime", fmtNum)}
+            ${rankTable("region", (data && data.geo && data.geo.region) || [])}
           </section>
           <section class="dgs-field-panel">
             <h2>State</h2>
-            ${rankTable("state", (data && data.geo && data.geo.state) || [], "downtime", fmtNum)}
+            ${rankTable("state", (data && data.geo && data.geo.state) || [])}
           </section>
           <section class="dgs-field-panel">
             <h2>Casino</h2>
-            ${rankTable("casino", (data && data.geo && data.geo.casino) || [], "downtime", fmtNum)}
+            ${rankTable("casino", (data && data.geo && data.geo.casino) || [])}
           </section>
           <section class="dgs-field-panel">
             <h2>Vendor</h2>
-            ${rankTable(
-              "vendor",
-              (data && data.product && data.product.vendor) || [],
-              "downtime",
-              fmtNum
-            )}
+            ${rankTable("vendor", (data && data.product && data.product.vendor) || [])}
           </section>
           <section class="dgs-field-panel">
             <h2>Cabinet</h2>
-            ${rankTable(
-              "cabinet",
-              (data && data.product && data.product.cabinet) || [],
-              "downtime",
-              fmtNum
-            )}
+            ${rankTable("cabinet", (data && data.product && data.product.cabinet) || [])}
           </section>
           <section class="dgs-field-panel">
             <h2>Theme</h2>
-            ${rankTable(
-              "theme",
-              (data && data.product && data.product.theme) || [],
-              "downtime",
-              fmtNum
-            )}
+            ${rankTable("theme", (data && data.product && data.product.theme) || [])}
           </section>
         </div>
         <section class="dgs-field-panel dgs-capacity-panel">

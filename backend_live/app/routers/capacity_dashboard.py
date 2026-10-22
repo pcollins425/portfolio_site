@@ -171,7 +171,12 @@ def _iso_monday(day: date) -> date:
     return day - timedelta(days=day.weekday())
 
 
-def _daily_totals(start: date, end: date) -> dict[str, tuple[float, int]]:
+def _empty_day() -> dict[str, float | int]:
+    return {"downtime": 0.0, "wo_count": 0, "part_cost": 0.0}
+
+
+def _daily_totals(start: date, end: date) -> dict[str, dict[str, float | int]]:
+    out: dict[str, dict[str, float | int]] = {}
     rows = _query(
         f"""
         SELECT
@@ -186,30 +191,54 @@ def _daily_totals(start: date, end: date) -> dict[str, tuple[float, int]]:
         """,
         (start, end),
     )
-    out: dict[str, tuple[float, int]] = {}
     for row in rows:
         key = _text(row.get("day_key"))
         if not key:
             continue
-        out[key] = (round(_num(row.get("downtime")), 2), int(row.get("wo_count") or 0))
+        bucket = out.setdefault(key, _empty_day())
+        bucket["downtime"] = round(_num(row.get("downtime")), 2)
+        bucket["wo_count"] = int(row.get("wo_count") or 0)
+
+    cost_rows = _query(
+        f"""
+        SELECT
+            CONVERT(char(10), {_BUCKET}, 23) AS day_key,
+            ISNULL(SUM(CAST(mat.ext_cost AS float)), 0) AS part_cost
+        FROM projects.work_order_material AS mat
+        INNER JOIN projects.work_orders AS wo ON wo.wo = mat.wo
+        WHERE {_INCLUDE}
+          AND {_BUCKET} >= %s
+          AND {_BUCKET} < DATEADD(day, 1, %s)
+        GROUP BY CONVERT(char(10), {_BUCKET}, 23)
+        """,
+        (start, end),
+    )
+    for row in cost_rows:
+        key = _text(row.get("day_key"))
+        if not key:
+            continue
+        bucket = out.setdefault(key, _empty_day())
+        bucket["part_cost"] = round(_num(row.get("part_cost")), 2)
     return out
 
 
 def _sum_days(
-    daily: dict[str, tuple[float, int]],
+    daily: dict[str, dict[str, float | int]],
     bucket_start: date,
     bucket_end: date,
-) -> tuple[float, int]:
+) -> tuple[float, int, float]:
     downtime = 0.0
     wo_count = 0
+    part_cost = 0.0
     cursor = bucket_start
     while cursor <= bucket_end:
         hit = daily.get(cursor.isoformat())
         if hit:
-            downtime += hit[0]
-            wo_count += hit[1]
+            downtime += float(hit["downtime"])
+            wo_count += int(hit["wo_count"])
+            part_cost += float(hit["part_cost"])
         cursor += timedelta(days=1)
-    return round(downtime, 2), wo_count
+    return round(downtime, 2), wo_count, round(part_cost, 2)
 
 
 def _trend_point(
@@ -220,6 +249,7 @@ def _trend_point(
     bucket_end: date,
     downtime: float,
     wo_count: int,
+    part_cost: float,
     incomplete: bool,
 ) -> dict[str, Any]:
     return {
@@ -229,6 +259,7 @@ def _trend_point(
         "end": bucket_end.isoformat(),
         "downtime": downtime,
         "wo_count": wo_count,
+        "part_cost": part_cost,
         "incomplete": incomplete,
         # Legacy field used by older UI builds.
         "month": key if len(key) == 7 else None,
@@ -237,7 +268,6 @@ def _trend_point(
 
 def _build_trailing12_trend(anchor_month_start: date, anchor_month_end: date) -> list[dict]:
     window_start = _add_months(anchor_month_start, -11)
-    # Prefer SQL month window matching prior behavior, then fill empty months.
     rows = _query(
         f"""
         SELECT
@@ -253,14 +283,38 @@ def _build_trailing12_trend(anchor_month_start: date, anchor_month_end: date) ->
         """,
         (window_start, anchor_month_end),
     )
-    by_month = {
-        (_text(row.get("month_key")) or ""): (
-            round(_num(row.get("downtime")), 2),
-            int(row.get("wo_count") or 0),
-        )
-        for row in rows
-        if _text(row.get("month_key"))
-    }
+    by_month: dict[str, dict[str, float | int]] = {}
+    for row in rows:
+        key = _text(row.get("month_key"))
+        if not key:
+            continue
+        by_month[key] = {
+            "downtime": round(_num(row.get("downtime")), 2),
+            "wo_count": int(row.get("wo_count") or 0),
+            "part_cost": 0.0,
+        }
+
+    cost_rows = _query(
+        f"""
+        SELECT
+            CONVERT(char(7), {_BUCKET}, 126) AS month_key,
+            ISNULL(SUM(CAST(mat.ext_cost AS float)), 0) AS part_cost
+        FROM projects.work_order_material AS mat
+        INNER JOIN projects.work_orders AS wo ON wo.wo = mat.wo
+        WHERE {_INCLUDE}
+          AND {_BUCKET} >= %s
+          AND {_BUCKET} < DATEADD(day, 1, %s)
+        GROUP BY CONVERT(char(7), {_BUCKET}, 126)
+        """,
+        (window_start, anchor_month_end),
+    )
+    for row in cost_rows:
+        key = _text(row.get("month_key"))
+        if not key:
+            continue
+        bucket = by_month.setdefault(key, _empty_day())
+        bucket["part_cost"] = round(_num(row.get("part_cost")), 2)
+
     out: list[dict] = []
     year, mon = window_start.year, window_start.month
     for _ in range(12):
@@ -268,15 +322,16 @@ def _build_trailing12_trend(anchor_month_start: date, anchor_month_end: date) ->
         last = monthrange(year, mon)[1]
         b_start = date(year, mon, 1)
         b_end = date(year, mon, last)
-        downtime, wo_count = by_month.get(key, (0.0, 0))
+        hit = by_month.get(key, _empty_day())
         out.append(
             _trend_point(
                 key=key,
                 label=f"{mon:02d}",
                 bucket_start=b_start,
                 bucket_end=b_end,
-                downtime=downtime,
-                wo_count=wo_count,
+                downtime=float(hit["downtime"]),
+                wo_count=int(hit["wo_count"]),
+                part_cost=float(hit["part_cost"]),
                 incomplete=False,
             )
         )
@@ -295,15 +350,16 @@ def _build_range_trend(start: date, end: date) -> tuple[ChartGrain, list[dict]]:
     if grain == "day":
         cursor = start
         while cursor <= end:
-            downtime, wo_count = daily.get(cursor.isoformat(), (0.0, 0))
+            hit = daily.get(cursor.isoformat(), _empty_day())
             points.append(
                 _trend_point(
                     key=cursor.isoformat(),
                     label=f"{cursor.month}/{cursor.day}",
                     bucket_start=cursor,
                     bucket_end=cursor,
-                    downtime=downtime,
-                    wo_count=wo_count,
+                    downtime=float(hit["downtime"]),
+                    wo_count=int(hit["wo_count"]),
+                    part_cost=float(hit["part_cost"]),
                     incomplete=False,
                 )
             )
@@ -317,7 +373,7 @@ def _build_range_trend(start: date, end: date) -> tuple[ChartGrain, list[dict]]:
             clipped_start = max(week_start, start)
             clipped_end = min(week_end, end)
             if clipped_start <= clipped_end:
-                downtime, wo_count = _sum_days(daily, clipped_start, clipped_end)
+                downtime, wo_count, part_cost = _sum_days(daily, clipped_start, clipped_end)
                 incomplete = clipped_start != week_start or clipped_end != week_end
                 label = (
                     f"{clipped_start.month}/{clipped_start.day}"
@@ -332,6 +388,7 @@ def _build_range_trend(start: date, end: date) -> tuple[ChartGrain, list[dict]]:
                         bucket_end=clipped_end,
                         downtime=downtime,
                         wo_count=wo_count,
+                        part_cost=part_cost,
                         incomplete=incomplete,
                     )
                 )
@@ -346,7 +403,7 @@ def _build_range_trend(start: date, end: date) -> tuple[ChartGrain, list[dict]]:
         month_end = date(year, mon, last)
         clipped_start = max(month_start, start)
         clipped_end = min(month_end, end)
-        downtime, wo_count = _sum_days(daily, clipped_start, clipped_end)
+        downtime, wo_count, part_cost = _sum_days(daily, clipped_start, clipped_end)
         incomplete = clipped_start != month_start or clipped_end != month_end
         key = f"{year:04d}-{mon:02d}"
         points.append(
@@ -357,6 +414,7 @@ def _build_range_trend(start: date, end: date) -> tuple[ChartGrain, list[dict]]:
                 bucket_end=clipped_end,
                 downtime=downtime,
                 wo_count=wo_count,
+                part_cost=part_cost,
                 incomplete=incomplete,
             )
         )
@@ -386,6 +444,7 @@ def _ranked(rows: list[dict], *, limit: int = 25) -> list[dict]:
                 "downtime": round(_num(row.get("downtime")), 2),
                 "wo_count": int(row.get("wo_count") or 0),
                 "asset_count": int(row.get("asset_count") or 0),
+                "part_cost": round(_num(row.get("part_cost")), 2),
             }
         )
     return out
@@ -400,6 +459,11 @@ def _base_joins() -> str:
         LEFT JOIN vendors.vendors AS ven ON ven.reference_key = ast.vendor_id
         LEFT JOIN vendors.cabinets AS cab ON cab.reference_key = ast.cabinet_id
         LEFT JOIN vendors.themes AS th ON th.reference_key = wo.theme_id
+        LEFT JOIN (
+            SELECT wo AS wo_key, SUM(CAST(ext_cost AS float)) AS part_cost
+            FROM projects.work_order_material
+            GROUP BY wo
+        ) AS wpc ON wpc.wo_key = wo.wo
     """
 
 
@@ -461,7 +525,8 @@ def capacity_dashboard(
                 {dim_label_sql} AS dim_label,
                 ISNULL(SUM(CAST(wo.hours AS float)), 0) AS downtime,
                 COUNT(*) AS wo_count,
-                COUNT(DISTINCT COALESCE(NULLIF(LTRIM(RTRIM(wo.asset_id)), N''), wo.compid)) AS asset_count
+                COUNT(DISTINCT COALESCE(NULLIF(LTRIM(RTRIM(wo.asset_id)), N''), wo.compid)) AS asset_count,
+                ISNULL(SUM(ISNULL(wpc.part_cost, 0)), 0) AS part_cost
             {_base_joins()}
             WHERE {_INCLUDE}
               AND {_BUCKET} >= %s
@@ -531,10 +596,10 @@ def capacity_dashboard(
 
     grain_label = {"day": "by day", "week": "by week", "month": "by month"}[chart_grain]
     if chart_mode == "trailing12":
-        chart_title = "Downtime days by month"
+        chart_title = "Part cost & downtime by month"
         chart_subtitle = "trailing 12 mo"
     else:
-        chart_title = f"Downtime days {grain_label}"
+        chart_title = f"Part cost & downtime {grain_label}"
         chart_subtitle = grain_label
 
     return {
