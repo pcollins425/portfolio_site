@@ -260,12 +260,12 @@
       .map((row, i) => {
         const downtime = Number(row.downtime) || 0;
         const x = ((i + 0.5) / n) * 100;
-        const y = downMax ? (downtime / downMax) * 100 : 0;
-        return `<span class="dgs-capacity-trend-dot" style="left:${x}%; bottom:${y}%"></span>`;
+        const y = 100 - (downMax ? (downtime / downMax) * 100 : 0);
+        return `<circle class="dgs-capacity-trend-dot" cx="${x}" cy="${y}" r="1.6" />`;
       })
       .join("");
 
-    const cols = trend
+    const barCols = trend
       .map((row) => {
         const cost = Number(row.part_cost) || 0;
         const downtime = Number(row.downtime) || 0;
@@ -277,7 +277,6 @@
         const barCls = incomplete
           ? "dgs-capacity-trend-bar is-incomplete"
           : "dgs-capacity-trend-bar";
-        const label = row.label || (row.month || "").slice(5) || row.key || "";
         return `<div class="dgs-capacity-trend-col${
           incomplete ? " is-incomplete" : ""
         }" title="${esc(rangeNote)}: ${esc(fmtMoney(cost))} part cost · ${esc(
@@ -286,8 +285,16 @@
           <div class="dgs-capacity-trend-bar-wrap">
             <div class="${barCls}" style="height:${pct}%"></div>
           </div>
-          <div class="dgs-capacity-trend-label">${esc(label)}</div>
         </div>`;
+      })
+      .join("");
+    const labelCols = trend
+      .map((row) => {
+        const incomplete = !!row.incomplete;
+        const label = row.label || (row.month || "").slice(5) || row.key || "";
+        return `<div class="dgs-capacity-trend-label${
+          incomplete ? " is-incomplete" : ""
+        }">${esc(label)}</div>`;
       })
       .join("");
 
@@ -297,12 +304,15 @@
       <div class="dgs-capacity-trend-yaxis-name is-cost">Part cost</div>
       <div class="dgs-capacity-trend-yaxis is-cost">${costTickHtml}</div>
       <div class="dgs-capacity-trend-plot">
-        <div class="dgs-capacity-trend-grid">${gridHtml}</div>
-        <div class="dgs-capacity-trend">${cols}</div>
-        <svg class="dgs-capacity-trend-line" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
-          <polyline points="${linePoints}" fill="none" vector-effect="non-scaling-stroke" />
-        </svg>
-        <div class="dgs-capacity-trend-dots" aria-hidden="true">${lineDots}</div>
+        <div class="dgs-capacity-trend-body">
+          <div class="dgs-capacity-trend-grid">${gridHtml}</div>
+          <div class="dgs-capacity-trend" style="--capacity-trend-n:${n}">${barCols}</div>
+          <svg class="dgs-capacity-trend-line" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+            <polyline points="${linePoints}" fill="none" vector-effect="non-scaling-stroke" />
+            ${lineDots}
+          </svg>
+        </div>
+        <div class="dgs-capacity-trend-labels" style="--capacity-trend-n:${n}">${labelCols}</div>
       </div>
       <div class="dgs-capacity-trend-yaxis is-down">${downTickHtml}</div>
       <div class="dgs-capacity-trend-yaxis-name is-down">Downtime (days)</div>

@@ -2403,7 +2403,7 @@ body.dgs-dashboard-v2 .dgs-dashboard-mount:has(.dgs-capacity) {
   display: flex;
   flex-direction: column;
   justify-content: space-between;
-  padding: 0.1rem 0 1.35rem;
+  padding: 0.1rem 0 1.45rem;
 }
 .dgs-capacity-trend-yaxis.is-down {
   grid-column: 4;
@@ -2425,20 +2425,26 @@ body.dgs-dashboard-v2 .dgs-dashboard-mount:has(.dgs-capacity) {
 .dgs-capacity-trend-plot {
   grid-row: 1;
   grid-column: 3;
-  position: relative;
+  display: flex;
+  flex-direction: column;
   min-width: 0;
+  min-height: 0;
   border-left: 1px solid rgba(255, 255, 255, 0.14);
   border-right: 1px solid rgba(255, 255, 255, 0.14);
   border-bottom: 1px solid rgba(255, 255, 255, 0.14);
-  padding: 0 0.2rem 0;
+  padding: 0.1rem 0.2rem 0;
+}
+.dgs-capacity-trend-body {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+  width: 100%;
 }
 .dgs-capacity-trend-grid {
   position: absolute;
-  left: 0;
-  right: 0;
-  top: 0;
-  bottom: 1.35rem;
+  inset: 0;
   pointer-events: none;
+  z-index: 0;
 }
 .dgs-capacity-trend-gridline {
   position: absolute;
@@ -2449,20 +2455,19 @@ body.dgs-dashboard-v2 .dgs-dashboard-mount:has(.dgs-capacity) {
 .dgs-capacity-trend {
   position: relative;
   z-index: 1;
-  display: flex;
+  display: grid;
+  grid-template-columns: repeat(var(--capacity-trend-n, 12), minmax(0, 1fr));
   align-items: stretch;
-  gap: 0.35rem;
   height: 100%;
-  padding: 0.1rem 0.1rem 0;
+  width: 100%;
 }
 .dgs-capacity-trend-col {
-  flex: 1;
   min-width: 0;
   height: 100%;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 0.3rem;
+  padding: 0 0.12rem;
 }
 .dgs-capacity-trend-bar-wrap {
   flex: 1;
@@ -2491,40 +2496,46 @@ body.dgs-dashboard-v2 .dgs-dashboard-mount:has(.dgs-capacity) {
 }
 .dgs-capacity-trend-line {
   position: absolute;
-  left: 0.2rem;
-  right: 0.2rem;
-  top: 0.1rem;
-  bottom: 1.35rem;
-  width: auto;
-  height: auto;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
   overflow: visible;
   pointer-events: none;
   z-index: 2;
 }
 .dgs-capacity-trend-line polyline {
   stroke: #93c5fd;
-  stroke-width: 2.5;
+  stroke-width: 2.25;
   stroke-linejoin: round;
   stroke-linecap: round;
 }
-.dgs-capacity-trend-dots {
-  position: absolute;
-  left: 0.2rem;
-  right: 0.2rem;
-  top: 0.1rem;
-  bottom: 1.35rem;
-  pointer-events: none;
-  z-index: 3;
-}
 .dgs-capacity-trend-dot {
-  position: absolute;
-  width: 7px;
-  height: 7px;
-  margin-left: -3.5px;
-  margin-bottom: -3.5px;
-  border-radius: 50%;
-  background: #93c5fd;
-  box-shadow: 0 0 0 2px rgba(14, 17, 23, 0.85);
+  fill: #93c5fd;
+  stroke: #0e1117;
+  stroke-width: 0.7;
+}
+.dgs-capacity-trend-labels {
+  display: grid;
+  grid-template-columns: repeat(var(--capacity-trend-n, 12), minmax(0, 1fr));
+  flex: 0 0 1.25rem;
+  align-items: center;
+  margin-top: 0.15rem;
+}
+.dgs-capacity-trend-label {
+  color: #8b96a8;
+  font-size: 0.7rem;
+  line-height: 1.1rem;
+  text-align: center;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding: 0 0.12rem;
+}
+.dgs-capacity-trend-label.is-incomplete {
+  color: #b7c0cf;
+  font-style: italic;
 }
 .dgs-capacity-trend-legend {
   grid-row: 2;
@@ -2551,21 +2562,6 @@ body.dgs-dashboard-v2 .dgs-dashboard-mount:has(.dgs-capacity) {
 .dgs-capacity-trend-legend .is-down::before {
   background: #93c5fd;
   border-radius: 50%;
-}
-.dgs-capacity-trend-col.is-incomplete .dgs-capacity-trend-label {
-  color: #b7c0cf;
-  font-style: italic;
-}
-.dgs-capacity-trend-label {
-  flex: 0 0 1.1rem;
-  color: #8b96a8;
-  font-size: 0.7rem;
-  line-height: 1.1rem;
-  text-align: center;
-  max-width: 100%;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 .dgs-capacity-trend-xaxis-name {
   grid-row: 3;
