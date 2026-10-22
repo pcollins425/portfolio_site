@@ -7,9 +7,12 @@ import os
 import re
 from calendar import monthrange
 from datetime import date, datetime, timedelta
+from io import BytesIO
 from typing import Annotated, Any, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import StreamingResponse
+from openpyxl import Workbook
 
 from app import mssql
 from app import permission_catalog as cat
@@ -25,6 +28,7 @@ router = APIRouter(
 _MONTH_RE = re.compile(r"^\d{4}-\d{2}$")
 _DAY_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 _MAX_SPAN_DAYS = 365
+_MAX_EXPORT_SPAN_DAYS = 3650  # 10 years — export-only ceiling beyond the dashboard cap
 
 _INCLUDE = """
     (
@@ -122,6 +126,8 @@ def _resolve_range(
     start_q: str | None,
     end_q: str | None,
     month_q: str | None,
+    *,
+    max_span_days: int | None = _MAX_SPAN_DAYS,
 ) -> tuple[date, date, str | None]:
     start_raw = (start_q or "").strip()
     end_raw = (end_q or "").strip()
@@ -132,10 +138,10 @@ def _resolve_range(
         end = _parse_day(end_raw, "end")
         if end < start:
             raise HTTPException(status_code=400, detail="end must be on or after start")
-        if _span_days(start, end) > _MAX_SPAN_DAYS:
+        if max_span_days is not None and _span_days(start, end) > max_span_days:
             raise HTTPException(
                 status_code=400,
-                detail=f"range cannot exceed {_MAX_SPAN_DAYS} days",
+                detail=f"range cannot exceed {max_span_days} days",
             )
         month_key = _month_key(start) if _is_full_month(start, end) else None
         return start, end, month_key
@@ -951,3 +957,153 @@ def capacity_drill(
             for row in rows
         ],
     }
+
+
+_EXPORT_HEADERS = (
+    "WO #",
+    "WO date",
+    "Downtime (days)",
+    "Part cost",
+    "Down start",
+    "Down end",
+    "Region",
+    "Tribe",
+    "State",
+    "Casino",
+    "Serial",
+    "Vendor",
+    "Cabinet",
+    "Theme",
+)
+
+
+def _line_rows_for_export(
+    range_start: date,
+    range_end: date,
+    *,
+    filter_clause: str,
+    filter_params: list[Any] | tuple[Any, ...],
+) -> list[dict[str, Any]]:
+    region_sql = _region_case_sql()
+    rows = _query(
+        f"""
+        SELECT
+            wo.wo,
+            wo.date_wo,
+            wo.hours,
+            wo.downstart,
+            wo.downend,
+            {region_sql} AS region_name,
+            COALESCE(NULLIF(LTRIM(RTRIM(tr.tribe_name)), N''), N'Unassigned') AS tribe_name,
+            COALESCE(NULLIF(LTRIM(RTRIM(st.state)), N''), N'Unassigned') AS state_name,
+            COALESCE(NULLIF(LTRIM(RTRIM(cas.casino_name)), N''), N'Unassigned') AS casino_name,
+            COALESCE(ast.serial_number, wo.compid) AS serial,
+            ven.vendor_name,
+            cab.cabinet_name,
+            COALESCE(th.theme_name, wo.comp_desc) AS theme_name,
+            ISNULL(wpc.part_cost, 0) AS part_cost
+        {_base_joins()}
+        WHERE {_BUCKET} >= %s
+          AND {_BUCKET} < DATEADD(day, 1, %s)
+          {filter_clause}
+        ORDER BY ISNULL(wo.hours, 0) DESC, wo.downstart DESC, wo.wo DESC
+        """,
+        (range_start, range_end, *filter_params),
+    )
+    return [
+        {
+            "wo": _text(row.get("wo")),
+            "date_wo": _day(row.get("date_wo")),
+            "hours": round(_num(row.get("hours")), 2) if row.get("hours") is not None else None,
+            "part_cost": round(_num(row.get("part_cost")), 2),
+            "downstart": _day(row.get("downstart")),
+            "downend": _day(row.get("downend")),
+            "region": _text(row.get("region_name")) or "Unassigned",
+            "tribe": _text(row.get("tribe_name")) or "Unassigned",
+            "state": _text(row.get("state_name")) or "Unassigned",
+            "casino": _text(row.get("casino_name")) or "Unassigned",
+            "serial": _text(row.get("serial")),
+            "vendor": _text(row.get("vendor_name")),
+            "cabinet": _text(row.get("cabinet_name")),
+            "theme": _text(row.get("theme_name")),
+        }
+        for row in rows
+    ]
+
+
+def _export_workbook_bytes(rows: list[dict[str, Any]]) -> bytes:
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Work orders"
+    ws.append(list(_EXPORT_HEADERS))
+    for row in rows:
+        ws.append(
+            [
+                row.get("wo"),
+                row.get("date_wo"),
+                row.get("hours"),
+                row.get("part_cost"),
+                row.get("downstart"),
+                row.get("downend"),
+                row.get("region"),
+                row.get("tribe"),
+                row.get("state"),
+                row.get("casino"),
+                row.get("serial"),
+                row.get("vendor"),
+                row.get("cabinet"),
+                row.get("theme"),
+            ]
+        )
+    buffer = BytesIO()
+    wb.save(buffer)
+    return buffer.getvalue()
+
+
+@router.get("/export")
+def capacity_export(
+    start: Annotated[str | None, Query()] = None,
+    end: Annotated[str | None, Query()] = None,
+    month: Annotated[str | None, Query()] = None,
+    region: Annotated[str | None, Query()] = None,
+    tribe: Annotated[str | None, Query()] = None,
+    state: Annotated[str | None, Query()] = None,
+    casino: Annotated[str | None, Query()] = None,
+    vendor: Annotated[str | None, Query()] = None,
+    cabinet: Annotated[str | None, Query()] = None,
+    theme: Annotated[str | None, Query()] = None,
+    user: Annotated[dict[str, Any] | None, Depends(require_demo_user)] = None,
+):
+    """Download work-order line data for the current filters. Date span may exceed the dashboard 365-day cap."""
+    del user
+    range_start, range_end, _month_key = _resolve_range(
+        start, end, month, max_span_days=_MAX_EXPORT_SPAN_DAYS
+    )
+    _active_filters, filter_clause, filter_params = _query_filter_params(
+        region=region,
+        tribe=tribe,
+        state=state,
+        casino=casino,
+        vendor=vendor,
+        cabinet=cabinet,
+        theme=theme,
+    )
+    try:
+        rows = _line_rows_for_export(
+            range_start,
+            range_end,
+            filter_clause=filter_clause,
+            filter_params=filter_params,
+        )
+        content = _export_workbook_bytes(rows)
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=503, detail=f"database error: {exc}") from exc
+
+    filename = f"capacity-work-orders-{range_start.isoformat()}-to-{range_end.isoformat()}.xlsx"
+    return StreamingResponse(
+        BytesIO(content),
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )

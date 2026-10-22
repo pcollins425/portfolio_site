@@ -3,6 +3,7 @@
   "use strict";
 
   const MAX_SPAN_DAYS = 365;
+  const MAX_EXPORT_SPAN_DAYS = 3650;
 
   function esc(value) {
     return String(value == null ? "" : value)
@@ -441,6 +442,11 @@
     filterOptionsRange: "",
     filterOpen: false,
     filterCategory: null,
+    exportOpen: false,
+    exportStart: defaults.start,
+    exportEnd: defaults.end,
+    exportBusy: false,
+    exportError: "",
   };
 
   function activeFilterCount() {
@@ -530,6 +536,7 @@
       document.body.appendChild(backdrop);
       backdrop.addEventListener("click", () => {
         if (state.filterOpen) closeFilterPanel();
+        else if (state.exportOpen) closeExportPanel();
         else closeDrill();
       });
     }
@@ -542,6 +549,7 @@
       drawer.addEventListener("click", (event) => {
         if (event.target.closest("#capacity-drill-close")) closeDrill();
         if (event.target.closest("#capacity-filter-close")) closeFilterPanel();
+        if (event.target.closest("#capacity-export-close")) closeExportPanel();
       });
     }
     return { backdrop, drawer };
@@ -549,10 +557,13 @@
 
   function closeDrill() {
     state.drill = null;
-    if (!state.filterOpen) {
+    if (!state.filterOpen && !state.exportOpen) {
       document.body.classList.remove("capacity-drill-open");
       const drawer = document.getElementById("capacity-drill-drawer");
-      if (drawer) drawer.innerHTML = "";
+      if (drawer) {
+        drawer.classList.remove("is-filter", "is-export");
+        drawer.innerHTML = "";
+      }
     }
     document.querySelectorAll(".dgs-capacity-trend-col.is-active").forEach((el) => {
       el.classList.remove("is-active");
@@ -566,13 +577,200 @@
   function closeFilterPanel() {
     state.filterOpen = false;
     state.filterCategory = null;
-    document.body.classList.remove("capacity-drill-open");
-    const drawer = document.getElementById("capacity-drill-drawer");
-    if (drawer) {
-      drawer.classList.remove("is-filter");
-      drawer.innerHTML = "";
+    if (!state.exportOpen) {
+      document.body.classList.remove("capacity-drill-open");
+      const drawer = document.getElementById("capacity-drill-drawer");
+      if (drawer) {
+        drawer.classList.remove("is-filter", "is-export");
+        drawer.innerHTML = "";
+      }
     }
     document.getElementById("capacity-filter-toggle")?.classList.remove("is-active");
+  }
+
+  function closeExportPanel() {
+    state.exportOpen = false;
+    state.exportBusy = false;
+    state.exportError = "";
+    if (!state.filterOpen) {
+      document.body.classList.remove("capacity-drill-open");
+      const drawer = document.getElementById("capacity-drill-drawer");
+      if (drawer) {
+        drawer.classList.remove("is-filter", "is-export");
+        drawer.innerHTML = "";
+      }
+    }
+    document.getElementById("capacity-export-toggle")?.classList.remove("is-active");
+  }
+
+  function parseFilename(disposition, fallback) {
+    if (!disposition) return fallback;
+    const utf = /filename\*=UTF-8''([^;]+)/i.exec(disposition);
+    if (utf) {
+      try {
+        return decodeURIComponent(utf[1].trim());
+      } catch (_) {
+        /* keep looking */
+      }
+    }
+    const plain = /filename="?([^";]+)"?/i.exec(disposition);
+    return plain ? plain[1].trim() : fallback;
+  }
+
+  function exportFilterSummaryHtml() {
+    const chips = [];
+    FILTER_DIMS.forEach((dim) => {
+      (state.filters[dim.key] || []).forEach((value) => {
+        chips.push(
+          `<span class="dgs-capacity-filter-chip is-readonly">
+            <span>${esc(dim.label)}: ${esc(filterLabel(dim.key, value))}</span>
+          </span>`
+        );
+      });
+    });
+    if (!chips.length) {
+      return `<p class="dgs-capacity-filter-empty">No dimension filters — all properties in range.</p>`;
+    }
+    return `<div class="dgs-capacity-filter-chip-row">${chips.join("")}</div>`;
+  }
+
+  function exportPanelHtml() {
+    return `
+      <div class="dgs-capacity-drawer-head">
+        <div>
+          <p class="dgs-capacity-drawer-kicker">Capacity export</p>
+          <h2>Export work orders</h2>
+          <p class="dgs-capacity-drawer-meta">Line data for the current filters</p>
+        </div>
+        <button type="button" class="dgs-v2-btn" id="capacity-export-close">Close</button>
+      </div>
+      <div class="dgs-capacity-drawer-body dgs-capacity-export-body">
+        <div class="dgs-capacity-export-section">
+          <div class="dgs-capacity-filter-active-head">
+            <span>Filters (from dashboard)</span>
+          </div>
+          ${exportFilterSummaryHtml()}
+        </div>
+        <div class="dgs-capacity-export-section">
+          <div class="dgs-capacity-filter-active-head">
+            <span>Time frame</span>
+          </div>
+          <p class="dgs-capacity-export-hint">Can extend past the dashboard’s ${MAX_SPAN_DAYS}-day view (up to ${MAX_EXPORT_SPAN_DAYS} days).</p>
+          <div class="dgs-capacity-export-dates">
+            <label class="dgs-capacity-date">From
+              <input type="date" id="capacity-export-start" value="${esc(state.exportStart)}" />
+            </label>
+            <label class="dgs-capacity-date">To
+              <input type="date" id="capacity-export-end" value="${esc(state.exportEnd)}" />
+            </label>
+          </div>
+        </div>
+        ${
+          state.exportError
+            ? `<p class="error-box">${esc(state.exportError)}</p>`
+            : ""
+        }
+        <button type="button" class="dgs-v2-btn dgs-v2-btn--primary" id="capacity-export-download"${
+          state.exportBusy ? " disabled" : ""
+        }>${state.exportBusy ? "Downloading…" : "Download Excel"}</button>
+      </div>`;
+  }
+
+  function wireExportPanel(root, drawer) {
+    drawer.querySelector("#capacity-export-close")?.addEventListener("click", () => {
+      closeExportPanel();
+    });
+    drawer.querySelector("#capacity-export-download")?.addEventListener("click", () => {
+      runExportDownload(root, drawer);
+    });
+  }
+
+  async function runExportDownload(root, drawer) {
+    const startEl = drawer.querySelector("#capacity-export-start");
+    const endEl = drawer.querySelector("#capacity-export-end");
+    const start = startEl && startEl.value;
+    const end = endEl && endEl.value;
+    if (!start || !end) {
+      state.exportError = "Start and end dates are required.";
+      drawer.innerHTML = exportPanelHtml();
+      wireExportPanel(root, drawer);
+      return;
+    }
+    if (end < start) {
+      state.exportError = "End must be on or after start.";
+      drawer.innerHTML = exportPanelHtml();
+      wireExportPanel(root, drawer);
+      return;
+    }
+    if (spanDays(start, end) > MAX_EXPORT_SPAN_DAYS) {
+      state.exportError = `Export range cannot exceed ${MAX_EXPORT_SPAN_DAYS} days.`;
+      drawer.innerHTML = exportPanelHtml();
+      wireExportPanel(root, drawer);
+      return;
+    }
+    state.exportStart = start;
+    state.exportEnd = end;
+    state.exportError = "";
+    state.exportBusy = true;
+    drawer.innerHTML = exportPanelHtml();
+    wireExportPanel(root, drawer);
+    try {
+      const res = await fetch(
+        `${DGSAuth.apiBase()}/api/capacity-dashboard/export?${queryParams({
+          start,
+          end,
+        })}`,
+        { headers: DGSAuth.authHeaders() }
+      );
+      if (!res.ok) {
+        let detail = await res.text();
+        try {
+          const parsed = JSON.parse(detail);
+          if (parsed && parsed.detail) detail = parsed.detail;
+        } catch (_) {
+          /* keep text */
+        }
+        throw new Error(detail || `Export failed (${res.status})`);
+      }
+      const blob = await res.blob();
+      const filename = parseFilename(
+        res.headers.get("Content-Disposition"),
+        `capacity-work-orders-${start}-to-${end}.xlsx`
+      );
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = filename;
+      link.click();
+      URL.revokeObjectURL(url);
+      state.exportBusy = false;
+      state.exportError = "";
+      drawer.innerHTML = exportPanelHtml();
+      wireExportPanel(root, drawer);
+    } catch (err) {
+      state.exportBusy = false;
+      state.exportError = err.message || String(err);
+      drawer.innerHTML = exportPanelHtml();
+      wireExportPanel(root, drawer);
+    }
+  }
+
+  function openExportPanel(root) {
+    closeDrill();
+    if (state.filterOpen) closeFilterPanel();
+    const { drawer } = ensureDrawer(root);
+    state.exportOpen = true;
+    state.exportStart = state.start;
+    state.exportEnd = state.end;
+    state.exportBusy = false;
+    state.exportError = "";
+    document.body.classList.add("capacity-drill-open");
+    drawer.classList.remove("is-filter");
+    drawer.classList.add("is-export");
+    drawer.setAttribute("aria-label", "Capacity export");
+    drawer.innerHTML = exportPanelHtml();
+    wireExportPanel(root, drawer);
+    document.getElementById("capacity-export-toggle")?.classList.add("is-active");
   }
 
   function toggleFilterValue(dim, value, checked) {
@@ -804,9 +1002,11 @@
 
   async function openFilterPanel(root) {
     closeDrill();
+    if (state.exportOpen) closeExportPanel();
     const { drawer } = ensureDrawer(root);
     state.filterOpen = true;
     document.body.classList.add("capacity-drill-open");
+    drawer.classList.remove("is-export");
     drawer.classList.add("is-filter");
     drawer.setAttribute("aria-label", "Capacity filters");
     drawer.innerHTML = `<div class="dgs-capacity-drawer-inner"><p class="dgs-v2-loading">Loading filters…</p></div>`;
@@ -837,8 +1037,9 @@
 
   async function openDrill(root, options) {
     if (state.filterOpen) closeFilterPanel();
+    if (state.exportOpen) closeExportPanel();
     const { drawer } = ensureDrawer(root);
-    drawer.classList.remove("is-filter");
+    drawer.classList.remove("is-filter", "is-export");
     drawer.setAttribute("aria-label", "Work order detail");
     const start = options.start || state.start;
     const end = options.end || state.end;
@@ -1060,6 +1261,9 @@
             }</span>
           </button>
           <button type="button" class="dgs-v2-btn" id="capacity-apply">Apply</button>
+          <button type="button" class="dgs-v2-btn${
+            state.exportOpen ? " is-active" : ""
+          }" id="capacity-export-toggle">Export</button>
           <button type="button" class="dgs-v2-btn" id="capacity-whole-month">Whole month</button>
           ${
             fullMonth
@@ -1112,6 +1316,10 @@
       if (state.filterOpen) closeFilterPanel();
       else openFilterPanel(root);
     });
+    document.getElementById("capacity-export-toggle")?.addEventListener("click", () => {
+      if (state.exportOpen) closeExportPanel();
+      else openExportPanel(root);
+    });
     document.getElementById("capacity-whole-month")?.addEventListener("click", () => {
       const startEl = document.getElementById("capacity-start");
       const endEl = document.getElementById("capacity-end");
@@ -1160,6 +1368,7 @@
     if (!keepFilterOpen) {
       closeDrill();
       if (state.filterOpen) closeFilterPanel();
+      if (state.exportOpen) closeExportPanel();
       root.innerHTML = '<p class="dgs-v2-loading">Loading capacity…</p>';
     } else {
       state.drill = null;
@@ -1208,6 +1417,7 @@
     if (event.key !== "Escape") return;
     if (!document.body.classList.contains("capacity-drill-open")) return;
     if (state.filterOpen) closeFilterPanel();
+    else if (state.exportOpen) closeExportPanel();
     else closeDrill();
   });
 

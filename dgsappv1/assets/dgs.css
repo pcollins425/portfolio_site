@@ -2454,8 +2454,37 @@ body.dgs-dashboard-v2 .dgs-dashboard-mount:has(.dgs-capacity) {
   color: #5b6575;
   cursor: default;
 }
-.dgs-capacity-drawer.is-filter {
+.dgs-capacity-drawer.is-filter,
+.dgs-capacity-drawer.is-export {
   width: min(420px, 96vw);
+}
+.dgs-capacity-export-body {
+  display: grid;
+  gap: 1.1rem;
+  align-content: start;
+}
+.dgs-capacity-export-section {
+  display: grid;
+  gap: 0.55rem;
+}
+.dgs-capacity-export-hint {
+  margin: 0;
+  color: #8b96a8;
+  font-size: 0.78rem;
+  line-height: 1.4;
+}
+.dgs-capacity-export-dates {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem 1rem;
+}
+.dgs-capacity-filter-chip.is-readonly {
+  cursor: default;
+}
+.dgs-capacity-toolbar .dgs-v2-btn.is-active {
+  border-color: rgba(147, 197, 253, 0.45);
+  background: rgba(147, 197, 253, 0.1);
+  color: #f3f5f9;
 }
 .dgs-capacity-filter-body {
   display: grid;
