@@ -2372,6 +2372,9 @@ body.dgs-dashboard-v2 .dgs-dashboard-mount:has(.dgs-capacity) {
 .dgs-capacity-toolbar .dgs-v2-btn {
   flex: 0 0 auto;
 }
+.dgs-capacity-toolbar .dgs-capacity-export {
+  margin-left: auto;
+}
 .dgs-capacity-filter-btn {
   display: inline-flex;
   align-items: center;
@@ -2481,7 +2484,7 @@ body.dgs-dashboard-v2 .dgs-dashboard-mount:has(.dgs-capacity) {
 .dgs-capacity-filter-chip.is-readonly {
   cursor: default;
 }
-.dgs-capacity-toolbar .dgs-v2-btn.is-active {
+.dgs-capacity-toolbar .dgs-v2-btn.is-active:not(.dgs-v2-btn--primary) {
   border-color: rgba(147, 197, 253, 0.45);
   background: rgba(147, 197, 253, 0.1);
   color: #f3f5f9;

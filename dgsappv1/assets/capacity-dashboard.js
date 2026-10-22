@@ -1261,9 +1261,6 @@
             }</span>
           </button>
           <button type="button" class="dgs-v2-btn" id="capacity-apply">Apply</button>
-          <button type="button" class="dgs-v2-btn${
-            state.exportOpen ? " is-active" : ""
-          }" id="capacity-export-toggle">Export</button>
           <button type="button" class="dgs-v2-btn" id="capacity-whole-month">Whole month</button>
           ${
             fullMonth
@@ -1272,6 +1269,13 @@
                 )}</button>`
               : ""
           }
+          <div class="dgs-capacity-export dgs-v2-export">
+            <button type="button" class="dgs-v2-btn dgs-v2-btn--primary${
+              state.exportOpen ? " is-active" : ""
+            }" id="capacity-export-toggle" aria-expanded="${
+      state.exportOpen ? "true" : "false"
+    }">Export</button>
+          </div>
         </div>
         <div class="dgs-capacity-filter-chips-host">${activeFilterChipsHtml()}</div>
         ${
