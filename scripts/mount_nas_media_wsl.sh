@@ -1,12 +1,16 @@
 #!/usr/bin/env bash
-# Mount NAS tableau images into WSL, for Docker Desktop bind-mount on Windows hosts.
+# Mount Analytics NAS into WSL for Docker Desktop binds (media + Compliance).
 # Docker Desktop cannot CIFS-mount inside the container ("Unable to apply new capability set").
+# Direct UNC binds from compose also land empty on Docker Desktop Windows — use this path.
 #
 # Usage (from repo root, in WSL or via scripts/mount_nas_media_wsl.cmd):
 #   bash scripts/mount_nas_media_wsl.sh
 #
 # Requires NAS_MEDIA_* in backend_live/.env (same vars as container mount).
-# Creates /mnt/dgs-nas (CIFS) and /mnt/dgs-nas-media -> subpath symlink (no spaces in bind path).
+# Creates:
+#   /mnt/dgs-nas              — CIFS mount of DGS_Analytics (files stay on NAS)
+#   /mnt/dgs-nas-media        — symlink → tableau images subpath
+#   /mnt/dgs-nas-compliance   — symlink → Compliance (Par Sheets / Lab Letters / Slicks)
 
 set -euo pipefail
 
@@ -32,6 +36,7 @@ SHARE="${NAS_MEDIA_SHARE:-//192.168.1.99/DGS_Analytics}"
 SUBPATH="${NAS_MEDIA_SUBPATH:-Paul Collins/tableau images}"
 MOUNT_ROOT="/mnt/dgs-nas"
 LINK="/mnt/dgs-nas-media"
+COMPLIANCE_LINK="/mnt/dgs-nas-compliance"
 PROBE="${MEDIA_HEALTH_PROBE:-logos/logo_AGS.png}"
 
 if [[ -z "${NAS_MEDIA_USERNAME:-}" || -z "${NAS_MEDIA_PASSWORD:-}" ]]; then
@@ -72,15 +77,22 @@ fi
 
 sudo ln -sfn "$resolved" "$LINK"
 
+compliance_resolved="${MOUNT_ROOT}/Compliance"
+if [[ ! -d "$compliance_resolved" ]]; then
+  echo "NAS Compliance folder not found: $compliance_resolved" >&2
+  exit 1
+fi
+sudo ln -sfn "$compliance_resolved" "$COMPLIANCE_LINK"
+
 if [[ ! -f "${LINK}/${PROBE}" ]]; then
   echo "WARNING: probe file missing: ${LINK}/${PROBE}" >&2
   exit 1
 fi
 
+wsl_distro="${WSL_DISTRO_NAME:-Ubuntu}"
 echo "NAS media ready at $LINK"
+echo "NAS Compliance ready at $COMPLIANCE_LINK (live share, not a copy)"
 echo "Set in backend_live/.env for Docker bind:"
 echo "  NAS_MEDIA_MODE=wsl"
-echo "  NAS_MEDIA_WSL_BIND=//wsl.localhost/\$(wsl.exe echo -n '\$WSL_DISTRO_NAME')/mnt/dgs-nas-media"
-wsl_distro="${WSL_DISTRO_NAME:-Ubuntu}"
-echo "  (this distro: $wsl_distro)"
 echo "  NAS_MEDIA_WSL_BIND=//wsl.localhost/${wsl_distro}/mnt/dgs-nas-media"
+echo "  COMPLIANCE_HOST=//wsl.localhost/${wsl_distro}/mnt/dgs-nas-compliance"

@@ -64,8 +64,10 @@ services:
       # Parts catalog photos on Analytics NAS. UNC default (not X: / Z:).
       # Override with PARTS_PHOTOS_HOST if needed (e.g. X:/parts_photos).
       - ${PARTS_PHOTOS_HOST:-//192.168.1.99/DGS_Analytics/parts_photos}:/media/parts-photos:ro
-      # Compliance library (Par Sheets / Lab Letters / Slicks). UNC default.
-      - ${COMPLIANCE_HOST:-//192.168.1.99/DGS_Analytics/Compliance}:/media/compliance:ro
+      # Compliance on Analytics NAS (Par Sheets / Lab Letters / Slicks). Files stay on the share.
+      # Docker Desktop UNC binds land empty — mount via WSL CIFS first (scripts/mount_nas_media_wsl.cmd),
+      # then set COMPLIANCE_HOST=//wsl.localhost/Ubuntu/mnt/dgs-nas-compliance in backend_live/.env.
+      - ${COMPLIANCE_HOST:-//wsl.localhost/Ubuntu/mnt/dgs-nas-compliance}:/media/compliance:ro
 
 volumes:
   assistant_sessions:
