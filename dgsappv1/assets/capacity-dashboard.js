@@ -261,15 +261,20 @@
         const barCls = incomplete
           ? "dgs-capacity-trend-bar is-incomplete"
           : "dgs-capacity-trend-bar";
-        return `<div class="dgs-capacity-trend-col${
+        const label = row.label || (row.month || "").slice(5) || row.key || "";
+        return `<button type="button" class="dgs-capacity-trend-col${
           incomplete ? " is-incomplete" : ""
-        }" title="${esc(rangeNote)}: ${esc(fmtMoney(cost))} part cost · ${esc(
-          fmtNum(downtime)
-        )} downtime days · ${esc(fmtNum(row.wo_count, 0))} WOs${incompleteNote}">
+        }" data-start="${esc(row.start || "")}" data-end="${esc(
+          row.end || ""
+        )}" data-label="${esc(label)}" title="${esc(rangeNote)}: ${esc(
+          fmtMoney(cost)
+        )} part cost · ${esc(fmtNum(downtime))} downtime days · ${esc(
+          fmtNum(row.wo_count, 0)
+        )} WOs${incompleteNote}">
           <div class="dgs-capacity-trend-bar-wrap">
             <div class="${barCls}" style="height:${pct}%"></div>
           </div>
-        </div>`;
+        </button>`;
       })
       .join("");
     const labelCols = trend
@@ -278,7 +283,9 @@
         const label = row.label || (row.month || "").slice(5) || row.key || "";
         return `<div class="dgs-capacity-trend-label${
           incomplete ? " is-incomplete" : ""
-        }">${esc(label)}</div>`;
+        }" data-start="${esc(row.start || "")}" data-end="${esc(
+          row.end || ""
+        )}">${esc(label)}</div>`;
       })
       .join("");
 
@@ -372,7 +379,9 @@
       q.set("chart", state.chartMode === "range" ? "range" : "trailing12");
     }
     if (extra) {
-      Object.keys(extra).forEach((key) => q.set(key, extra[key]));
+      Object.keys(extra).forEach((key) => {
+        if (extra[key] != null && extra[key] !== "") q.set(key, extra[key]);
+      });
     }
     return q.toString();
   }
@@ -394,62 +403,180 @@
     return res.json();
   }
 
-  async function loadDrill(dim, key) {
-    const panel = document.getElementById("capacity-drill");
-    if (!panel) return;
-    panel.innerHTML = `<p class="dgs-v2-loading">Loading work orders…</p>`;
+  function ensureDrawer(root) {
+    let backdrop = document.getElementById("capacity-drill-backdrop");
+    let drawer = document.getElementById("capacity-drill-drawer");
+    if (!backdrop) {
+      backdrop = document.createElement("div");
+      backdrop.id = "capacity-drill-backdrop";
+      backdrop.className = "dgs-capacity-drawer-backdrop";
+      backdrop.hidden = true;
+      document.body.appendChild(backdrop);
+      backdrop.addEventListener("click", closeDrill);
+    }
+    if (!drawer) {
+      drawer = document.createElement("aside");
+      drawer.id = "capacity-drill-drawer";
+      drawer.className = "dgs-capacity-drawer";
+      drawer.setAttribute("aria-label", "Work order detail");
+      drawer.hidden = true;
+      document.body.appendChild(drawer);
+    }
+    return { backdrop, drawer };
+  }
+
+  function closeDrill() {
+    state.drill = null;
+    document.body.classList.remove("capacity-drill-open");
+    const backdrop = document.getElementById("capacity-drill-backdrop");
+    const drawer = document.getElementById("capacity-drill-drawer");
+    if (backdrop) backdrop.hidden = true;
+    if (drawer) {
+      drawer.hidden = true;
+      drawer.innerHTML = "";
+    }
+    document.querySelectorAll(".dgs-capacity-trend-col.is-active").forEach((el) => {
+      el.classList.remove("is-active");
+    });
+    document.querySelectorAll(".dgs-capacity-rank-row.is-active").forEach((el) => {
+      el.classList.remove("is-active");
+    });
+    document.getElementById("capacity-range-drill")?.classList.remove("is-active");
+  }
+
+  function drillTitle(options) {
+    if (options.dim && options.dim !== "range") {
+      return `Work orders · ${options.dim} · ${options.key || ""}`;
+    }
+    if (options.label) return `Work orders · ${options.label}`;
+    return `Work orders · ${options.start || state.start} → ${options.end || state.end}`;
+  }
+
+  async function openDrill(root, options) {
+    const { drawer, backdrop } = ensureDrawer(root);
+    const start = options.start || state.start;
+    const end = options.end || state.end;
+    const dim = options.dim || "range";
+    const key = options.key || "";
+    document.querySelectorAll(".dgs-capacity-trend-col.is-active").forEach((el) => {
+      el.classList.remove("is-active");
+    });
+    document.querySelectorAll(".dgs-capacity-rank-row.is-active").forEach((el) => {
+      el.classList.remove("is-active");
+    });
+    document.getElementById("capacity-range-drill")?.classList.remove("is-active");
+    if (options.sourceEl) options.sourceEl.classList.add("is-active");
+
+    document.body.classList.add("capacity-drill-open");
+    backdrop.hidden = false;
+    drawer.hidden = false;
+    drawer.innerHTML = `<div class="dgs-capacity-drawer-inner"><p class="dgs-v2-loading">Loading work orders…</p></div>`;
+
     try {
-      const data = await fetchJson(
-        `/api/capacity-dashboard/drill?${queryParams({
-          dim,
-          key,
-        })}`
-      );
+      const params = { start, end, dim };
+      if (dim !== "range") params.key = key;
+      const data = await fetchJson(`/api/capacity-dashboard/drill?${queryParams(params)}`);
       state.drill = data;
       const orders = data.orders || [];
-      panel.innerHTML = `
-        <div class="dgs-capacity-drill-head">
-          <h2>Work orders · ${esc(dim)} · ${esc(key)} <span>${orders.length}</span></h2>
+      drawer.innerHTML = `
+        <div class="dgs-capacity-drawer-head">
+          <div>
+            <p class="dgs-capacity-drawer-kicker">Capacity detail</p>
+            <h2>${esc(drillTitle({ ...options, start, end, dim, key }))}</h2>
+            <p class="dgs-capacity-drawer-meta">${esc(start)} → ${esc(end)} · ${orders.length} shown</p>
+          </div>
           <button type="button" class="dgs-v2-btn" id="capacity-drill-close">Close</button>
         </div>
-        ${table(
-          [
-            { label: "WO #", cls: "dgs-field-num" },
-            { label: "Downtime (days)", cls: "dgs-field-num" },
-            { label: "Down start", cls: "dgs-field-date" },
-            { label: "Down end", cls: "dgs-field-date" },
-            { label: "Casino" },
-            { label: "Serial" },
-            { label: "Vendor" },
-            { label: "Cabinet" },
-            { label: "Theme" },
-          ],
-          orders.map((row) => [
-            row.wo,
-            row.hours == null ? "—" : fmtNum(row.hours),
-            row.downstart,
-            row.downend,
-            { html: propertyCell(row) },
-            { html: serialCell(row) },
-            { html: vendorCell(row) },
-            { html: cabinetCell(row) },
-            { html: themeCell(row) },
-          ]),
-          "No work orders in this breakout."
-        )}`;
-      document.getElementById("capacity-drill-close")?.addEventListener("click", () => {
-        state.drill = null;
-        panel.innerHTML = `<p class="dgs-field-empty">Select a Region, State, Casino, Vendor, Cabinet, or Theme row to list work orders with downtime days and down start/end.</p>`;
-      });
+        <div class="dgs-capacity-drawer-body">
+          ${table(
+            [
+              { label: "WO #", cls: "dgs-field-num" },
+              { label: "Downtime (days)", cls: "dgs-field-num" },
+              { label: "Part cost", cls: "dgs-field-num" },
+              { label: "Down start", cls: "dgs-field-date" },
+              { label: "Down end", cls: "dgs-field-date" },
+              { label: "Casino" },
+              { label: "Serial" },
+              { label: "Vendor" },
+              { label: "Cabinet" },
+              { label: "Theme" },
+            ],
+            orders.map((row) => [
+              row.wo,
+              row.hours == null ? "—" : fmtNum(row.hours),
+              fmtMoney(row.part_cost),
+              row.downstart,
+              row.downend,
+              { html: propertyCell(row) },
+              { html: serialCell(row) },
+              { html: vendorCell(row) },
+              { html: cabinetCell(row) },
+              { html: themeCell(row) },
+            ]),
+            "No work orders in this selection."
+          )}
+        </div>`;
+      document.getElementById("capacity-drill-close")?.addEventListener("click", closeDrill);
     } catch (err) {
-      panel.innerHTML = `<p class="error-box">${esc(err.message || err)}</p>`;
+      drawer.innerHTML = `
+        <div class="dgs-capacity-drawer-head">
+          <h2>Work orders</h2>
+          <button type="button" class="dgs-v2-btn" id="capacity-drill-close">Close</button>
+        </div>
+        <div class="dgs-capacity-drawer-body"><p class="error-box">${esc(
+          err.message || err
+        )}</p></div>`;
+      document.getElementById("capacity-drill-close")?.addEventListener("click", closeDrill);
     }
   }
 
   function wireRanks(root) {
     root.querySelectorAll(".dgs-capacity-rank-row").forEach((row) => {
       row.addEventListener("click", () => {
-        loadDrill(row.getAttribute("data-dim"), row.getAttribute("data-key"));
+        openDrill(root, {
+          dim: row.getAttribute("data-dim"),
+          key: row.getAttribute("data-key"),
+          start: state.start,
+          end: state.end,
+          sourceEl: row,
+        });
+      });
+    });
+  }
+
+  function wireChart(root) {
+    root.querySelectorAll(".dgs-capacity-trend-col").forEach((col) => {
+      col.addEventListener("mouseenter", () => {
+        const start = col.getAttribute("data-start");
+        root.querySelectorAll(".dgs-capacity-trend-label").forEach((label) => {
+          label.classList.toggle(
+            "is-hover",
+            label.getAttribute("data-start") === start
+          );
+        });
+      });
+      col.addEventListener("mouseleave", () => {
+        root.querySelectorAll(".dgs-capacity-trend-label.is-hover").forEach((label) => {
+          label.classList.remove("is-hover");
+        });
+      });
+      col.addEventListener("click", () => {
+        openDrill(root, {
+          dim: "range",
+          start: col.getAttribute("data-start"),
+          end: col.getAttribute("data-end"),
+          label: col.getAttribute("data-label"),
+          sourceEl: col,
+        });
+      });
+    });
+    document.getElementById("capacity-range-drill")?.addEventListener("click", () => {
+      openDrill(root, {
+        dim: "range",
+        start: state.start,
+        end: state.end,
+        label: `${state.start} → ${state.end}`,
+        sourceEl: document.getElementById("capacity-range-drill"),
       });
     });
   }
@@ -551,7 +678,13 @@
           )}</div></div>
         </div>
         <section class="dgs-field-panel dgs-capacity-panel">
-          <h2>${esc(chartTitle)} <span>${esc(chartSubtitle)}</span></h2>
+          <h2 class="dgs-capacity-chart-heading">
+            <button type="button" class="dgs-capacity-chart-select" id="capacity-range-drill" title="List all work orders in the selected date range">
+              ${esc(chartTitle)}
+            </button>
+            <span>${esc(chartSubtitle)}</span>
+          </h2>
+          <p class="dgs-capacity-chart-hint">Hover a period to highlight · click a bar or the title for work orders</p>
           ${trendBars((data && data.trend) || [], grain)}
         </section>
         <div class="dgs-capacity-grid">
@@ -584,9 +717,6 @@
           <h2>Part cost by casino</h2>
           ${partTable((data && data.part_costs) || [])}
         </section>
-        <section class="dgs-field-panel dgs-capacity-panel" id="capacity-drill">
-          <p class="dgs-field-empty">Select a Region, State, Casino, Vendor, Cabinet, or Theme row to list work orders with downtime days and down start/end.</p>
-        </section>
       </div>`;
 
     document.getElementById("capacity-apply")?.addEventListener("click", () => {
@@ -612,6 +742,7 @@
     document.getElementById("capacity-start")?.addEventListener("keydown", onEnter);
     document.getElementById("capacity-end")?.addEventListener("keydown", onEnter);
     wireRanks(root);
+    wireChart(root);
     layoutTrendLine(root);
     if (trendResizeObserver) {
       trendResizeObserver.disconnect();
@@ -626,6 +757,7 @@
 
   async function load(root) {
     if (!root || !window.DGSAuth) return;
+    closeDrill();
     root.innerHTML = '<p class="dgs-v2-loading">Loading capacity…</p>';
     try {
       state.data = await fetchJson(`/api/capacity-dashboard?${queryParams()}`);
@@ -639,6 +771,12 @@
       root.innerHTML = `<p class="error-box">${esc(err.message || err)}</p>`;
     }
   }
+
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && document.body.classList.contains("capacity-drill-open")) {
+      closeDrill();
+    }
+  });
 
   window.DGSCapacity = { load };
 })();

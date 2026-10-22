@@ -648,8 +648,12 @@ def capacity_drill(
     range_start, range_end, month_key = _resolve_range(start, end, month)
     dim = (dim or "").strip().lower()
     key = (key or "").strip() or "Unassigned"
-    if dim not in _DRILL_DIMS:
-        raise HTTPException(status_code=400, detail="dim must be region, state, casino, vendor, cabinet, or theme")
+    # Blank / "range" = all work orders in the date window (chart title / bucket click).
+    if dim and dim not in _DRILL_DIMS and dim != "range":
+        raise HTTPException(
+            status_code=400,
+            detail="dim must be region, state, casino, vendor, cabinet, theme, range, or omitted",
+        )
 
     region_sql = _region_case_sql()
     filters = {
@@ -660,6 +664,12 @@ def capacity_drill(
         "cabinet": "COALESCE(NULLIF(LTRIM(RTRIM(ast.cabinet_id)), N''), N'Unassigned')",
         "theme": "COALESCE(NULLIF(LTRIM(RTRIM(wo.theme_id)), N''), N'Unassigned')",
     }
+    dim_filter = ""
+    params: list[Any] = [range_start, range_end]
+    if dim in _DRILL_DIMS:
+        dim_filter = f" AND {filters[dim]} = %s"
+        params.append(key)
+
     rows = _query(
         f"""
         SELECT TOP 300
@@ -678,22 +688,23 @@ def capacity_drill(
             ven.vendor_name,
             cab.cabinet_name,
             COALESCE(th.theme_name, wo.comp_desc) AS theme_name,
-            cas.casino_name
+            cas.casino_name,
+            ISNULL(wpc.part_cost, 0) AS part_cost
         {_base_joins()}
         WHERE {_INCLUDE}
           AND {_BUCKET} >= %s
           AND {_BUCKET} < DATEADD(day, 1, %s)
-          AND {filters[dim]} = %s
+          {dim_filter}
         ORDER BY ISNULL(wo.hours, 0) DESC, wo.downstart DESC, wo.wo DESC
         """,
-        (range_start, range_end, key),
+        tuple(params),
     )
     return {
         "month": month_key,
         "start": range_start.isoformat(),
         "end": range_end.isoformat(),
-        "dim": dim,
-        "key": key,
+        "dim": dim or "range",
+        "key": key if dim in _DRILL_DIMS else "range",
         "orders": [
             {
                 "wo": _text(row.get("wo")),
@@ -711,6 +722,7 @@ def capacity_drill(
                 "vendor": _text(row.get("vendor_name")),
                 "cabinet": _text(row.get("cabinet_name")),
                 "theme": _text(row.get("theme_name")),
+                "part_cost": round(_num(row.get("part_cost")), 2),
             }
             for row in rows
         ],
