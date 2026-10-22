@@ -3168,6 +3168,33 @@ body.wo-detail-open .dgs-capacity-drawer {
   color: #f3f5f9;
   padding-top: 0.55rem;
 }
+.dgs-wo-mat-wrap {
+  display: grid;
+  gap: 0.65rem;
+}
+.dgs-wo-mat-card-costs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem 1rem;
+  color: #c5cdd9;
+  font-size: 0.82rem;
+  font-variant-numeric: tabular-nums;
+}
+.dgs-wo-mat-total {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.75rem 0.9rem;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 12px;
+  background: rgba(147, 197, 253, 0.08);
+  color: #c5cdd9;
+  font-size: 0.88rem;
+}
+.dgs-wo-mat-total strong {
+  color: #f3f5f9;
+  font-variant-numeric: tabular-nums;
+}
 .dgs-wo-fields {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
@@ -3261,10 +3288,12 @@ body.dgs-work-orders-v2 .dgs-wo-root {
     grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
   }
 
-  body.wo-detail-open .dgs-capacity-drawer.is-wo-detail .dgs-wo-mat-table {
-    display: block;
-    overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
+  body.wo-detail-open .dgs-capacity-drawer.is-wo-detail .dgs-wo-desktop-table {
+    display: none;
+  }
+
+  body.wo-detail-open .dgs-capacity-drawer.is-wo-detail .dgs-wo-mat-cards {
+    display: flex;
   }
 
   body.dgs-work-orders-v2 .dgs-v2-main {

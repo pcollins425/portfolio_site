@@ -163,7 +163,47 @@
         : `<tfoot><tr><td colspan="3">Total</td><td class="dgs-field-num">${esc(
             fmtMoney(total)
           )}</td><td colspan="2"></td></tr></tfoot>`;
-    return `<div class="dgs-field-scroll"><table class="dgs-field-table dgs-wo-mat-table"><thead>${head}</thead><tbody>${body}</tbody>${foot}</table></div>`;
+    const cards = materials
+      .map((row) => {
+        const qty =
+          row.qty_issued != null && Number(row.qty_issued) !== 0
+            ? row.qty_issued
+            : row.qty_requested;
+        const meta = [row.mfr, row.mfrpartno].filter(Boolean).join(" · ");
+        const source = sourceLabel(row.source);
+        const status = row.status || "";
+        const lineMeta = [source, status].filter(Boolean).join(" · ");
+        return `<article class="dgs-wo-card dgs-wo-mat-card">
+          <div class="dgs-wo-card-top">
+            <span class="dgs-wo-card-wo">${esc(row.item || "—")}</span>
+            <span class="dgs-wo-card-date">${esc(fmtMoney(row.ext_cost))}</span>
+          </div>
+          ${
+            row.descrip
+              ? `<div class="dgs-wo-card-property">${esc(row.descrip)}</div>`
+              : ""
+          }
+          ${meta ? `<div class="dgs-wo-card-meta">${esc(meta)}</div>` : ""}
+          <div class="dgs-wo-mat-card-costs">
+            <span>Qty ${esc(fmtNum(qty, 2))}</span>
+            <span>Unit ${esc(fmtMoney(row.unit_cost))}</span>
+          </div>
+          ${lineMeta ? `<div class="dgs-wo-card-meta">${esc(lineMeta)}</div>` : ""}
+        </article>`;
+      })
+      .join("");
+    const totalCard =
+      total == null
+        ? ""
+        : `<div class="dgs-wo-mat-total">Total <strong>${esc(fmtMoney(total))}</strong></div>`;
+    return `<div class="dgs-wo-mat-wrap">
+      <div class="dgs-wo-desktop-table">
+        <div class="dgs-field-scroll">
+          <table class="dgs-field-table dgs-wo-mat-table"><thead>${head}</thead><tbody>${body}</tbody>${foot}</table>
+        </div>
+      </div>
+      <div class="dgs-wo-card-list dgs-wo-mat-cards" aria-label="Charge lines">${cards}${totalCard}</div>
+    </div>`;
   }
 
   function close() {
