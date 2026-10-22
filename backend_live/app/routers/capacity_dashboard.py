@@ -566,36 +566,6 @@ def capacity_dashboard(
         ),
     }
 
-    part_rows = _query(
-        f"""
-        SELECT
-            COALESCE(NULLIF(LTRIM(RTRIM(wo.casino_id)), N''), N'Unassigned') AS dim_key,
-            COALESCE(NULLIF(LTRIM(RTRIM(cas.casino_name)), N''), N'Unassigned') AS dim_label,
-            ISNULL(SUM(CAST(mat.ext_cost AS float)), 0) AS part_cost,
-            COUNT(*) AS line_count
-        FROM projects.work_order_material AS mat
-        INNER JOIN projects.work_orders AS wo ON wo.wo = mat.wo
-        LEFT JOIN clients.casinos AS cas ON cas.reference_key = wo.casino_id
-        WHERE {_INCLUDE}
-          AND {_BUCKET} >= %s
-          AND {_BUCKET} < DATEADD(day, 1, %s)
-        GROUP BY
-            COALESCE(NULLIF(LTRIM(RTRIM(wo.casino_id)), N''), N'Unassigned'),
-            COALESCE(NULLIF(LTRIM(RTRIM(cas.casino_name)), N''), N'Unassigned')
-        ORDER BY part_cost DESC, line_count DESC
-        """,
-        (range_start, range_end),
-    )
-    part_costs = [
-        {
-            "key": _text(row.get("dim_key")) or "Unassigned",
-            "label": _text(row.get("dim_label")) or "Unassigned",
-            "part_cost": round(_num(row.get("part_cost")), 2),
-            "line_count": int(row.get("line_count") or 0),
-        }
-        for row in part_rows[:40]
-    ]
-
     grain_label = {"day": "by day", "week": "by week", "month": "by month"}[chart_grain]
     if chart_mode == "trailing12":
         chart_title = "Part cost & downtime by month"
@@ -630,7 +600,6 @@ def capacity_dashboard(
         "trend": trend,
         "geo": geo,
         "product": product,
-        "part_costs": part_costs,
     }
 
 

@@ -232,28 +232,6 @@
     </div>`;
   }
 
-  function partTable(rows) {
-    if (!rows.length) {
-      return `<p class="dgs-field-empty">No part cost for this range.</p>`;
-    }
-    const head = `<tr><th>Casino</th><th class="dgs-field-num">Part cost</th><th class="dgs-field-num">Lines</th></tr>`;
-    const body = rows
-      .map((row) => {
-        const href =
-          row.key && row.key !== "Unassigned" && window.DGSCasinoNav
-            ? DGSCasinoNav.hubHref(row.key)
-            : "";
-        const name = href ? hubCell(href, row.label) : esc(row.label);
-        return `<tr>
-          <td>${name}</td>
-          <td class="dgs-field-num">${esc(fmtMoney(row.part_cost))}</td>
-          <td class="dgs-field-num">${esc(fmtNum(row.line_count, 0))}</td>
-        </tr>`;
-      })
-      .join("");
-    return `<div class="dgs-field-scroll"><table class="dgs-field-table"><thead>${head}</thead><tbody>${body}</tbody></table></div>`;
-  }
-
   function niceCeiling(value) {
     const n = Math.max(Number(value) || 0, 1);
     const mag = Math.pow(10, Math.floor(Math.log10(n)));
@@ -772,10 +750,6 @@
           ${trendBars((data && data.trend) || [], grain)}
         </section>
         ${rankGridHtml(data)}
-        <section class="dgs-field-panel dgs-capacity-panel">
-          <h2>Part cost by casino</h2>
-          ${partTable((data && data.part_costs) || [])}
-        </section>
       </div>`;
 
     document.getElementById("capacity-apply")?.addEventListener("click", () => {
