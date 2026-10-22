@@ -87,6 +87,12 @@
       items: [
         { id: "projects", label: "Projects", href: "projects.html" },
         {
+          id: "work_orders",
+          label: "Work Orders",
+          href: "work-orders.html",
+          requireAnyOf: ["dgs_work_orders"],
+        },
+        {
           id: "project_workbench",
           label: "Project Workbench",
           href: "project-workbench.html",
