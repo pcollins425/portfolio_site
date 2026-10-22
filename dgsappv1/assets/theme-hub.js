@@ -55,8 +55,25 @@
     return body;
   }
 
-  function docHref(path) {
-    return `${apiBase()}/api/documents/${String(path || "").split("/").map(encodeURIComponent).join("/")}`;
+  function docApiPath(path) {
+    return `${apiBase()}/api/documents/${String(path || "")
+      .split("/")
+      .map(encodeURIComponent)
+      .join("/")}`;
+  }
+
+  async function openDocument(relPath) {
+    if (!relPath) return;
+    const headers = window.DGSAuth ? DGSAuth.authHeaders() : {};
+    const res = await fetch(docApiPath(relPath), { headers });
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      const msg = body.detail || body.message || res.statusText;
+      throw new Error(typeof msg === "string" ? msg : JSON.stringify(msg));
+    }
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    window.open(url, "_blank", "noopener");
   }
 
   async function loadMediaUrl(relPath) {
@@ -455,9 +472,9 @@
           <td>${esc(doc.doc_kind)}</td>
           <td>${esc(doc.jurisdiction_label || "—")}</td>
           <td>${esc(doc.software_id || doc.cabinet_name || "—")}</td>
-          <td><a href="${docHref(doc.nas_rel_path)}" target="_blank" rel="noopener">${esc(
-            doc.original_filename || doc.document_key
-          )}</a></td>
+          <td><button type="button" class="th-doc-link" data-doc-path="${esc(
+            doc.nas_rel_path || ""
+          )}">${esc(doc.original_filename || doc.document_key)}</button></td>
         </tr>`
       )
       .join("");
@@ -631,6 +648,16 @@
   }
 
   function wireHubForms() {
+    document.querySelectorAll(".th-doc-link").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        try {
+          showError("");
+          await openDocument(btn.getAttribute("data-doc-path"));
+        } catch (err) {
+          showError(err.message || String(err));
+        }
+      });
+    });
     document.querySelectorAll(".th-picks").forEach((picks) => {
       const form = picks.closest("form");
       const input = form.querySelector("[name=cabinet_q]");

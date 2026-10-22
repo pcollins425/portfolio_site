@@ -1545,12 +1545,20 @@ body.dgs-theme-hub .dgs-v2-hub-tile-body {
   overflow-x: auto;
 }
 
-body.dgs-theme-hub .th-table a.dgs-v2-hub-serial-link {
+body.dgs-theme-hub .th-table a.dgs-v2-hub-serial-link,
+body.dgs-theme-hub .th-table button.th-doc-link {
   color: var(--dgs-v2-accent);
   text-decoration: none;
+  background: none;
+  border: 0;
+  padding: 0;
+  font: inherit;
+  cursor: pointer;
+  text-align: left;
 }
 
-body.dgs-theme-hub .th-table a.dgs-v2-hub-serial-link:hover {
+body.dgs-theme-hub .th-table a.dgs-v2-hub-serial-link:hover,
+body.dgs-theme-hub .th-table button.th-doc-link:hover {
   text-decoration: underline;
 }
 

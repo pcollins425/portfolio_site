@@ -65,7 +65,6 @@ def get_document(
     document_path: str,
     user: Annotated[dict[str, Any] | None, Depends(require_demo_user)] = None,
 ):
-    org.assert_contracts_read(user)
     try:
         rel = normalize_relative_path(document_path)
     except ValueError as exc:
@@ -74,7 +73,14 @@ def get_document(
     if not is_registered_document_path(rel):
         raise HTTPException(status_code=404, detail="document not found")
 
+    # Contracts gate is for agreement/BOL library paths. Theme Hub Compliance
+    # (par / lab / slick) only needs a signed-in user — same as Theme Hub itself.
+    if not (rel == "Compliance" or rel.startswith("Compliance/")):
+        org.assert_contracts_read(user)
+
     media_type, _ = mimetypes.guess_type(rel)
+    if not media_type:
+        media_type = "application/pdf"
     headers = {
         "Cache-Control": "private, max-age=3600",
         "Content-Disposition": "inline",
