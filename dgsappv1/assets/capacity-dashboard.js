@@ -2,6 +2,8 @@
 (function () {
   "use strict";
 
+  const MAX_SPAN_DAYS = 365;
+
   function esc(value) {
     return String(value == null ? "" : value)
       .replace(/&/g, "&amp;")
@@ -25,8 +27,55 @@
     })}`;
   }
 
-  function monthInputValue(ym) {
-    return ym || new Date().toISOString().slice(0, 7);
+  function isoDay(d) {
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    return `${y}-${m}-${day}`;
+  }
+
+  function parseIsoDay(value) {
+    const text = String(value || "").slice(0, 10);
+    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(text);
+    if (!m) return null;
+    const d = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+    if (Number.isNaN(d.getTime())) return null;
+    return d;
+  }
+
+  function currentMonthBounds() {
+    const now = new Date();
+    const start = new Date(now.getFullYear(), now.getMonth(), 1);
+    const end = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+    return { start: isoDay(start), end: isoDay(end) };
+  }
+
+  function monthBoundsFor(dayIso) {
+    const d = parseIsoDay(dayIso) || new Date();
+    const start = new Date(d.getFullYear(), d.getMonth(), 1);
+    const end = new Date(d.getFullYear(), d.getMonth() + 1, 0);
+    return { start: isoDay(start), end: isoDay(end) };
+  }
+
+  function isFullMonth(startIso, endIso) {
+    const start = parseIsoDay(startIso);
+    const end = parseIsoDay(endIso);
+    if (!start || !end) return false;
+    if (
+      start.getFullYear() !== end.getFullYear() ||
+      start.getMonth() !== end.getMonth()
+    ) {
+      return false;
+    }
+    const last = new Date(start.getFullYear(), start.getMonth() + 1, 0).getDate();
+    return start.getDate() === 1 && end.getDate() === last;
+  }
+
+  function spanDays(startIso, endIso) {
+    const start = parseIsoDay(startIso);
+    const end = parseIsoDay(endIso);
+    if (!start || !end) return 0;
+    return Math.floor((end - start) / 86400000) + 1;
   }
 
   function hubCell(href, text) {
@@ -120,7 +169,7 @@
 
   function partTable(rows) {
     if (!rows.length) {
-      return `<p class="dgs-field-empty">No part cost for this month.</p>`;
+      return `<p class="dgs-field-empty">No part cost for this range.</p>`;
     }
     const head = `<tr><th>Casino</th><th class="dgs-field-num">Part cost</th><th class="dgs-field-num">Lines</th></tr>`;
     const body = rows
@@ -129,9 +178,7 @@
           row.key && row.key !== "Unassigned" && window.DGSCasinoNav
             ? DGSCasinoNav.hubHref(row.key)
             : "";
-        const name = href
-          ? hubCell(href, row.label)
-          : esc(row.label);
+        const name = href ? hubCell(href, row.label) : esc(row.label);
         return `<tr>
           <td>${name}</td>
           <td class="dgs-field-num">${esc(fmtMoney(row.part_cost))}</td>
@@ -150,7 +197,13 @@
     return nice * mag;
   }
 
-  function trendBars(trend) {
+  function axisName(grain) {
+    if (grain === "day") return "Day";
+    if (grain === "week") return "Week";
+    return "Month";
+  }
+
+  function trendBars(trend, grain) {
     if (!trend.length) {
       return `<p class="dgs-field-empty">No downtime trend yet.</p>`;
     }
@@ -173,39 +226,74 @@
       .map((row) => {
         const value = Number(row.downtime) || 0;
         const pct = yMax ? (value / yMax) * 100 : 0;
-        return `<div class="dgs-capacity-trend-col" title="${esc(row.month)}: ${esc(
-          fmtNum(value)
-        )} downtime days · ${esc(fmtNum(row.wo_count, 0))} WOs">
+        const incomplete = !!row.incomplete;
+        const rangeNote =
+          row.start && row.end ? `${row.start} → ${row.end}` : row.key || "";
+        const incompleteNote = incomplete ? " · incomplete" : "";
+        const barCls = incomplete
+          ? "dgs-capacity-trend-bar is-incomplete"
+          : "dgs-capacity-trend-bar";
+        const label = row.label || (row.month || "").slice(5) || row.key || "";
+        return `<div class="dgs-capacity-trend-col${
+          incomplete ? " is-incomplete" : ""
+        }" title="${esc(rangeNote)}: ${esc(fmtNum(value))} downtime days · ${esc(
+          fmtNum(row.wo_count, 0)
+        )} WOs${incompleteNote}">
           <div class="dgs-capacity-trend-bar-wrap">
-            <div class="dgs-capacity-trend-bar" style="height:${pct}%"></div>
+            <div class="${barCls}" style="height:${pct}%"></div>
           </div>
-          <div class="dgs-capacity-trend-label">${esc((row.month || "").slice(5))}</div>
+          <div class="dgs-capacity-trend-label">${esc(label)}</div>
         </div>`;
       })
       .join("");
-    return `<div class="dgs-capacity-trend-chart" role="img" aria-label="Downtime days by month">
+    return `<div class="dgs-capacity-trend-chart" role="img" aria-label="Downtime days ${esc(
+      axisName(grain).toLowerCase()
+    )}">
       <div class="dgs-capacity-trend-yaxis-name">Downtime (days)</div>
       <div class="dgs-capacity-trend-yaxis">${tickHtml}</div>
       <div class="dgs-capacity-trend-plot">
         <div class="dgs-capacity-trend-grid">${gridHtml}</div>
         <div class="dgs-capacity-trend">${cols}</div>
       </div>
-      <div class="dgs-capacity-trend-xaxis-name">Month</div>
+      <div class="dgs-capacity-trend-xaxis-name">${esc(axisName(grain))}</div>
     </div>`;
   }
 
+  const defaults = currentMonthBounds();
   let state = {
-    month: monthInputValue(),
+    start: defaults.start,
+    end: defaults.end,
+    chartMode: "trailing12",
     data: null,
     drill: null,
+    error: "",
   };
+
+  function queryParams(extra) {
+    const q = new URLSearchParams();
+    q.set("start", state.start);
+    q.set("end", state.end);
+    if (isFullMonth(state.start, state.end)) {
+      q.set("chart", state.chartMode === "range" ? "range" : "trailing12");
+    }
+    if (extra) {
+      Object.keys(extra).forEach((key) => q.set(key, extra[key]));
+    }
+    return q.toString();
+  }
 
   async function fetchJson(path) {
     const res = await fetch(`${DGSAuth.apiBase()}${path}`, {
       headers: DGSAuth.authHeaders(),
     });
     if (!res.ok) {
-      const detail = await res.text();
+      let detail = await res.text();
+      try {
+        const parsed = JSON.parse(detail);
+        if (parsed && parsed.detail) detail = parsed.detail;
+      } catch (_) {
+        /* keep text */
+      }
       throw new Error(detail || `Request failed (${res.status})`);
     }
     return res.json();
@@ -217,9 +305,10 @@
     panel.innerHTML = `<p class="dgs-v2-loading">Loading work orders…</p>`;
     try {
       const data = await fetchJson(
-        `/api/capacity-dashboard/drill?month=${encodeURIComponent(
-          state.month
-        )}&dim=${encodeURIComponent(dim)}&key=${encodeURIComponent(key)}`
+        `/api/capacity-dashboard/drill?${queryParams({
+          dim,
+          key,
+        })}`
       );
       state.drill = data;
       const orders = data.orders || [];
@@ -270,20 +359,83 @@
     });
   }
 
+  function applyRangeInputs(root, options) {
+    const startEl = document.getElementById("capacity-start");
+    const endEl = document.getElementById("capacity-end");
+    if (!startEl || !endEl) return;
+    let start = startEl.value;
+    let end = endEl.value;
+    if (!start || !end) {
+      state.error = "Start and end dates are required.";
+      render(root);
+      return;
+    }
+    if (end < start) {
+      state.error = "End must be on or after start.";
+      render(root);
+      return;
+    }
+    if (spanDays(start, end) > MAX_SPAN_DAYS) {
+      state.error = `Range cannot exceed ${MAX_SPAN_DAYS} days.`;
+      render(root);
+      return;
+    }
+    state.error = "";
+    state.start = start;
+    state.end = end;
+    if (!isFullMonth(start, end)) {
+      state.chartMode = "range";
+    } else if (options && options.forceTrailing12) {
+      state.chartMode = "trailing12";
+    } else if (state.chartMode !== "range") {
+      state.chartMode = "trailing12";
+    }
+    load(root);
+  }
+
   function render(root) {
     const data = state.data;
-    const k = data.kpis || {};
+    const k = (data && data.kpis) || {};
+    const fullMonth = isFullMonth(state.start, state.end);
+    const chartMode = fullMonth ? state.chartMode : "range";
+    const chartTitle =
+      (data && data.chart_title) ||
+      (chartMode === "trailing12" ? "Downtime days by month" : "Downtime days");
+    const chartSubtitle =
+      (data && data.chart_subtitle) ||
+      (chartMode === "trailing12" ? "trailing 12 mo" : "");
+    const grain = (data && data.chart_grain) || "month";
+    const toggleLabel =
+      chartMode === "trailing12" ? "Show range breakdown" : "Show trailing 12 months";
+
     root.innerHTML = `
       <div class="dgs-capacity">
         <div class="dgs-capacity-toolbar">
-          <label class="dgs-capacity-month">Month
-            <input type="month" id="capacity-month" value="${esc(state.month)}" />
+          <label class="dgs-capacity-date">From
+            <input type="date" id="capacity-start" value="${esc(state.start)}" />
           </label>
+          <label class="dgs-capacity-date">To
+            <input type="date" id="capacity-end" value="${esc(state.end)}" />
+          </label>
+          <button type="button" class="dgs-v2-btn" id="capacity-apply">Apply</button>
+          <button type="button" class="dgs-v2-btn" id="capacity-whole-month">Whole month</button>
+          ${
+            fullMonth
+              ? `<button type="button" class="dgs-v2-btn" id="capacity-chart-toggle">${esc(
+                  toggleLabel
+                )}</button>`
+              : ""
+          }
           <p class="dgs-capacity-note">${esc(
-            data.bucket_rule ||
-              "Downtime is eMaint Downtime (Days). Full days attributed to the month of COALESCE(downstart, date_wo)."
+            (data && data.bucket_rule) ||
+              "Downtime is eMaint Downtime (Days). Full days attributed to COALESCE(downstart, date_wo) within the selected range."
           )}</p>
         </div>
+        ${
+          state.error
+            ? `<p class="error-box">${esc(state.error)}</p>`
+            : ""
+        }
         <div class="dgs-capacity-kpis">
           <div class="dgs-capacity-kpi"><div class="label">Downtime (days)</div><div class="value">${esc(
             fmtNum(k.downtime)
@@ -302,47 +454,81 @@
           )}</div></div>
         </div>
         <section class="dgs-field-panel dgs-capacity-panel">
-          <h2>Downtime days by month <span>12 mo</span></h2>
-          ${trendBars(data.trend || [])}
+          <h2>${esc(chartTitle)} <span>${esc(chartSubtitle)}</span></h2>
+          ${trendBars((data && data.trend) || [], grain)}
         </section>
         <div class="dgs-capacity-grid">
           <section class="dgs-field-panel">
             <h2>Region</h2>
-            ${rankTable("region", (data.geo && data.geo.region) || [], "downtime", fmtNum)}
+            ${rankTable("region", (data && data.geo && data.geo.region) || [], "downtime", fmtNum)}
           </section>
           <section class="dgs-field-panel">
             <h2>State</h2>
-            ${rankTable("state", (data.geo && data.geo.state) || [], "downtime", fmtNum)}
+            ${rankTable("state", (data && data.geo && data.geo.state) || [], "downtime", fmtNum)}
           </section>
           <section class="dgs-field-panel">
             <h2>Casino</h2>
-            ${rankTable("casino", (data.geo && data.geo.casino) || [], "downtime", fmtNum)}
+            ${rankTable("casino", (data && data.geo && data.geo.casino) || [], "downtime", fmtNum)}
           </section>
           <section class="dgs-field-panel">
             <h2>Vendor</h2>
-            ${rankTable("vendor", (data.product && data.product.vendor) || [], "downtime", fmtNum)}
+            ${rankTable(
+              "vendor",
+              (data && data.product && data.product.vendor) || [],
+              "downtime",
+              fmtNum
+            )}
           </section>
           <section class="dgs-field-panel">
             <h2>Cabinet</h2>
-            ${rankTable("cabinet", (data.product && data.product.cabinet) || [], "downtime", fmtNum)}
+            ${rankTable(
+              "cabinet",
+              (data && data.product && data.product.cabinet) || [],
+              "downtime",
+              fmtNum
+            )}
           </section>
           <section class="dgs-field-panel">
             <h2>Theme</h2>
-            ${rankTable("theme", (data.product && data.product.theme) || [], "downtime", fmtNum)}
+            ${rankTable(
+              "theme",
+              (data && data.product && data.product.theme) || [],
+              "downtime",
+              fmtNum
+            )}
           </section>
         </div>
         <section class="dgs-field-panel dgs-capacity-panel">
           <h2>Part cost by casino</h2>
-          ${partTable(data.part_costs || [])}
+          ${partTable((data && data.part_costs) || [])}
         </section>
         <section class="dgs-field-panel dgs-capacity-panel" id="capacity-drill">
           <p class="dgs-field-empty">Select a Region, State, Casino, Vendor, Cabinet, or Theme row to list work orders with downtime days and down start/end.</p>
         </section>
       </div>`;
-    document.getElementById("capacity-month")?.addEventListener("change", (event) => {
-      state.month = monthInputValue(event.target.value);
+
+    document.getElementById("capacity-apply")?.addEventListener("click", () => {
+      applyRangeInputs(root);
+    });
+    document.getElementById("capacity-whole-month")?.addEventListener("click", () => {
+      const startEl = document.getElementById("capacity-start");
+      const endEl = document.getElementById("capacity-end");
+      const anchor = (endEl && endEl.value) || (startEl && startEl.value) || state.end;
+      const bounds = monthBoundsFor(anchor);
+      if (startEl) startEl.value = bounds.start;
+      if (endEl) endEl.value = bounds.end;
+      state.chartMode = "trailing12";
+      applyRangeInputs(root, { forceTrailing12: true });
+    });
+    document.getElementById("capacity-chart-toggle")?.addEventListener("click", () => {
+      state.chartMode = state.chartMode === "trailing12" ? "range" : "trailing12";
       load(root);
     });
+    const onEnter = (event) => {
+      if (event.key === "Enter") applyRangeInputs(root);
+    };
+    document.getElementById("capacity-start")?.addEventListener("keydown", onEnter);
+    document.getElementById("capacity-end")?.addEventListener("keydown", onEnter);
     wireRanks(root);
   }
 
@@ -350,10 +536,12 @@
     if (!root || !window.DGSAuth) return;
     root.innerHTML = '<p class="dgs-v2-loading">Loading capacity…</p>';
     try {
-      state.data = await fetchJson(
-        `/api/capacity-dashboard?month=${encodeURIComponent(state.month)}`
-      );
-      state.month = state.data.month || state.month;
+      state.data = await fetchJson(`/api/capacity-dashboard?${queryParams()}`);
+      state.start = state.data.start || state.start;
+      state.end = state.data.end || state.end;
+      if (state.data.chart_mode) state.chartMode = state.data.chart_mode;
+      state.error = "";
+      state.drill = null;
       render(root);
     } catch (err) {
       root.innerHTML = `<p class="error-box">${esc(err.message || err)}</p>`;

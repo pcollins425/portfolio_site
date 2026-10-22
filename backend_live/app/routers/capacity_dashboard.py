@@ -6,8 +6,8 @@ import html
 import os
 import re
 from calendar import monthrange
-from datetime import date, datetime
-from typing import Annotated, Any
+from datetime import date, datetime, timedelta
+from typing import Annotated, Any, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
@@ -23,6 +23,8 @@ router = APIRouter(
 )
 
 _MONTH_RE = re.compile(r"^\d{4}-\d{2}$")
+_DAY_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+_MAX_SPAN_DAYS = 365
 
 _INCLUDE = """
     (
@@ -33,6 +35,9 @@ _INCLUDE = """
 """
 
 _BUCKET = "COALESCE(wo.downstart, wo.date_wo)"
+
+ChartMode = Literal["trailing12", "range"]
+ChartGrain = Literal["day", "week", "month"]
 
 
 def _catalog() -> str:
@@ -69,6 +74,16 @@ def _num(value: Any) -> float:
         return 0.0
 
 
+def _parse_day(raw: str, name: str) -> date:
+    text = (raw or "").strip()
+    if not _DAY_RE.match(text):
+        raise HTTPException(status_code=400, detail=f"{name} must be YYYY-MM-DD")
+    try:
+        return date.fromisoformat(text)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=f"{name} must be a valid date") from exc
+
+
 def _parse_month(month: str | None) -> tuple[str, date, date]:
     today = date.today()
     raw = (month or "").strip() or today.strftime("%Y-%m")
@@ -80,6 +95,276 @@ def _parse_month(month: str | None) -> tuple[str, date, date]:
     start = date(year, mon, 1)
     end = date(year, mon, monthrange(year, mon)[1])
     return raw, start, end
+
+
+def _is_full_month(start: date, end: date) -> bool:
+    if start.year != end.year or start.month != end.month:
+        return False
+    last = monthrange(start.year, start.month)[1]
+    return start.day == 1 and end.day == last
+
+
+def _span_days(start: date, end: date) -> int:
+    return (end - start).days + 1
+
+
+def _month_key(day: date) -> str:
+    return f"{day.year:04d}-{day.month:02d}"
+
+
+def _add_months(day: date, months: int) -> date:
+    year = day.year + (day.month - 1 + months) // 12
+    month = (day.month - 1 + months) % 12 + 1
+    return date(year, month, 1)
+
+
+def _resolve_range(
+    start_q: str | None,
+    end_q: str | None,
+    month_q: str | None,
+) -> tuple[date, date, str | None]:
+    start_raw = (start_q or "").strip()
+    end_raw = (end_q or "").strip()
+    if start_raw or end_raw:
+        if not start_raw or not end_raw:
+            raise HTTPException(status_code=400, detail="start and end are both required")
+        start = _parse_day(start_raw, "start")
+        end = _parse_day(end_raw, "end")
+        if end < start:
+            raise HTTPException(status_code=400, detail="end must be on or after start")
+        if _span_days(start, end) > _MAX_SPAN_DAYS:
+            raise HTTPException(
+                status_code=400,
+                detail=f"range cannot exceed {_MAX_SPAN_DAYS} days",
+            )
+        month_key = _month_key(start) if _is_full_month(start, end) else None
+        return start, end, month_key
+    month_key, start, end = _parse_month(month_q)
+    return start, end, month_key
+
+
+def _resolve_chart_mode(
+    chart: str | None,
+    *,
+    is_full_month: bool,
+) -> ChartMode:
+    raw = (chart or "").strip().lower()
+    if raw not in ("", "trailing12", "range"):
+        raise HTTPException(status_code=400, detail="chart must be trailing12 or range")
+    if not is_full_month:
+        return "range"
+    if raw == "range":
+        return "range"
+    return "trailing12"
+
+
+def _adaptive_grain(start: date, end: date) -> ChartGrain:
+    n = _span_days(start, end)
+    if n <= 14:
+        return "day"
+    if n <= 84:
+        return "week"
+    return "month"
+
+
+def _iso_monday(day: date) -> date:
+    return day - timedelta(days=day.weekday())
+
+
+def _daily_totals(start: date, end: date) -> dict[str, tuple[float, int]]:
+    rows = _query(
+        f"""
+        SELECT
+            CONVERT(char(10), {_BUCKET}, 23) AS day_key,
+            ISNULL(SUM(CAST(wo.hours AS float)), 0) AS downtime,
+            COUNT(*) AS wo_count
+        FROM projects.work_orders AS wo
+        WHERE {_INCLUDE}
+          AND {_BUCKET} >= %s
+          AND {_BUCKET} < DATEADD(day, 1, %s)
+        GROUP BY CONVERT(char(10), {_BUCKET}, 23)
+        """,
+        (start, end),
+    )
+    out: dict[str, tuple[float, int]] = {}
+    for row in rows:
+        key = _text(row.get("day_key"))
+        if not key:
+            continue
+        out[key] = (round(_num(row.get("downtime")), 2), int(row.get("wo_count") or 0))
+    return out
+
+
+def _sum_days(
+    daily: dict[str, tuple[float, int]],
+    bucket_start: date,
+    bucket_end: date,
+) -> tuple[float, int]:
+    downtime = 0.0
+    wo_count = 0
+    cursor = bucket_start
+    while cursor <= bucket_end:
+        hit = daily.get(cursor.isoformat())
+        if hit:
+            downtime += hit[0]
+            wo_count += hit[1]
+        cursor += timedelta(days=1)
+    return round(downtime, 2), wo_count
+
+
+def _trend_point(
+    *,
+    key: str,
+    label: str,
+    bucket_start: date,
+    bucket_end: date,
+    downtime: float,
+    wo_count: int,
+    incomplete: bool,
+) -> dict[str, Any]:
+    return {
+        "key": key,
+        "label": label,
+        "start": bucket_start.isoformat(),
+        "end": bucket_end.isoformat(),
+        "downtime": downtime,
+        "wo_count": wo_count,
+        "incomplete": incomplete,
+        # Legacy field used by older UI builds.
+        "month": key if len(key) == 7 else None,
+    }
+
+
+def _build_trailing12_trend(anchor_month_start: date, anchor_month_end: date) -> list[dict]:
+    window_start = _add_months(anchor_month_start, -11)
+    # Prefer SQL month window matching prior behavior, then fill empty months.
+    rows = _query(
+        f"""
+        SELECT
+            CONVERT(char(7), {_BUCKET}, 126) AS month_key,
+            ISNULL(SUM(CAST(wo.hours AS float)), 0) AS downtime,
+            COUNT(*) AS wo_count
+        FROM projects.work_orders AS wo
+        WHERE {_INCLUDE}
+          AND {_BUCKET} >= %s
+          AND {_BUCKET} < DATEADD(day, 1, %s)
+        GROUP BY CONVERT(char(7), {_BUCKET}, 126)
+        ORDER BY month_key
+        """,
+        (window_start, anchor_month_end),
+    )
+    by_month = {
+        (_text(row.get("month_key")) or ""): (
+            round(_num(row.get("downtime")), 2),
+            int(row.get("wo_count") or 0),
+        )
+        for row in rows
+        if _text(row.get("month_key"))
+    }
+    out: list[dict] = []
+    year, mon = window_start.year, window_start.month
+    for _ in range(12):
+        key = f"{year:04d}-{mon:02d}"
+        last = monthrange(year, mon)[1]
+        b_start = date(year, mon, 1)
+        b_end = date(year, mon, last)
+        downtime, wo_count = by_month.get(key, (0.0, 0))
+        out.append(
+            _trend_point(
+                key=key,
+                label=f"{mon:02d}",
+                bucket_start=b_start,
+                bucket_end=b_end,
+                downtime=downtime,
+                wo_count=wo_count,
+                incomplete=False,
+            )
+        )
+        mon += 1
+        if mon > 12:
+            mon = 1
+            year += 1
+    return out
+
+
+def _build_range_trend(start: date, end: date) -> tuple[ChartGrain, list[dict]]:
+    grain = _adaptive_grain(start, end)
+    daily = _daily_totals(start, end)
+    points: list[dict] = []
+
+    if grain == "day":
+        cursor = start
+        while cursor <= end:
+            downtime, wo_count = daily.get(cursor.isoformat(), (0.0, 0))
+            points.append(
+                _trend_point(
+                    key=cursor.isoformat(),
+                    label=f"{cursor.month}/{cursor.day}",
+                    bucket_start=cursor,
+                    bucket_end=cursor,
+                    downtime=downtime,
+                    wo_count=wo_count,
+                    incomplete=False,
+                )
+            )
+            cursor += timedelta(days=1)
+        return grain, points
+
+    if grain == "week":
+        week_start = _iso_monday(start)
+        while week_start <= end:
+            week_end = week_start + timedelta(days=6)
+            clipped_start = max(week_start, start)
+            clipped_end = min(week_end, end)
+            if clipped_start <= clipped_end:
+                downtime, wo_count = _sum_days(daily, clipped_start, clipped_end)
+                incomplete = clipped_start != week_start or clipped_end != week_end
+                label = (
+                    f"{clipped_start.month}/{clipped_start.day}"
+                    if clipped_start == clipped_end
+                    else f"{clipped_start.month}/{clipped_start.day}–{clipped_end.month}/{clipped_end.day}"
+                )
+                points.append(
+                    _trend_point(
+                        key=week_start.isoformat(),
+                        label=label,
+                        bucket_start=clipped_start,
+                        bucket_end=clipped_end,
+                        downtime=downtime,
+                        wo_count=wo_count,
+                        incomplete=incomplete,
+                    )
+                )
+            week_start += timedelta(days=7)
+        return grain, points
+
+    # month
+    year, mon = start.year, start.month
+    while date(year, mon, 1) <= end:
+        last = monthrange(year, mon)[1]
+        month_start = date(year, mon, 1)
+        month_end = date(year, mon, last)
+        clipped_start = max(month_start, start)
+        clipped_end = min(month_end, end)
+        downtime, wo_count = _sum_days(daily, clipped_start, clipped_end)
+        incomplete = clipped_start != month_start or clipped_end != month_end
+        key = f"{year:04d}-{mon:02d}"
+        points.append(
+            _trend_point(
+                key=key,
+                label=f"{mon:02d}",
+                bucket_start=clipped_start,
+                bucket_end=clipped_end,
+                downtime=downtime,
+                wo_count=wo_count,
+                incomplete=incomplete,
+            )
+        )
+        mon += 1
+        if mon > 12:
+            mon = 1
+            year += 1
+    return grain, points
 
 
 def _region_case_sql(expr: str = "st.state") -> str:
@@ -120,11 +405,16 @@ def _base_joins() -> str:
 
 @router.get("")
 def capacity_dashboard(
+    start: Annotated[str | None, Query()] = None,
+    end: Annotated[str | None, Query()] = None,
     month: Annotated[str | None, Query()] = None,
+    chart: Annotated[str | None, Query()] = None,
     user: Annotated[dict[str, Any] | None, Depends(require_demo_user)] = None,
 ):
     del user
-    month_key, start, end = _parse_month(month)
+    range_start, range_end, month_key = _resolve_range(start, end, month)
+    is_full = _is_full_month(range_start, range_end)
+    chart_mode = _resolve_chart_mode(chart, is_full_month=is_full)
     region_sql = _region_case_sql()
 
     kpi_rows = _query(
@@ -139,7 +429,7 @@ def capacity_dashboard(
           AND {_BUCKET} >= %s
           AND {_BUCKET} < DATEADD(day, 1, %s)
         """,
-        (start, end),
+        (range_start, range_end),
     )
     part_kpi = _query(
         f"""
@@ -150,36 +440,18 @@ def capacity_dashboard(
           AND {_BUCKET} >= %s
           AND {_BUCKET} < DATEADD(day, 1, %s)
         """,
-        (start, end),
+        (range_start, range_end),
     )
     kpi = kpi_rows[0] if kpi_rows else {}
     downtime = _num(kpi.get("downtime"))
     wo_count = int(kpi.get("wo_count") or 0)
     avg = _num(kpi.get("avg_downtime")) if wo_count else 0.0
 
-    trend_rows = _query(
-        f"""
-        SELECT
-            CONVERT(char(7), {_BUCKET}, 126) AS month_key,
-            ISNULL(SUM(CAST(wo.hours AS float)), 0) AS downtime,
-            COUNT(*) AS wo_count
-        FROM projects.work_orders AS wo
-        WHERE {_INCLUDE}
-          AND {_BUCKET} >= DATEADD(month, -11, %s)
-          AND {_BUCKET} < DATEADD(day, 1, %s)
-        GROUP BY CONVERT(char(7), {_BUCKET}, 126)
-        ORDER BY month_key
-        """,
-        (start, end),
-    )
-    trend = [
-        {
-            "month": _text(row.get("month_key")),
-            "downtime": round(_num(row.get("downtime")), 2),
-            "wo_count": int(row.get("wo_count") or 0),
-        }
-        for row in trend_rows
-    ]
+    if chart_mode == "trailing12":
+        chart_grain: ChartGrain = "month"
+        trend = _build_trailing12_trend(range_start, range_end)
+    else:
+        chart_grain, trend = _build_range_trend(range_start, range_end)
 
     def breakout(dim_key_sql: str, dim_label_sql: str) -> list[dict]:
         rows = _query(
@@ -197,7 +469,7 @@ def capacity_dashboard(
             GROUP BY {dim_key_sql}, {dim_label_sql}
             ORDER BY downtime DESC, wo_count DESC
             """,
-            (start, end),
+            (range_start, range_end),
         )
         return _ranked(rows)
 
@@ -245,7 +517,7 @@ def capacity_dashboard(
             COALESCE(NULLIF(LTRIM(RTRIM(cas.casino_name)), N''), N'Unassigned')
         ORDER BY part_cost DESC, line_count DESC
         """,
-        (start, end),
+        (range_start, range_end),
     )
     part_costs = [
         {
@@ -257,11 +529,30 @@ def capacity_dashboard(
         for row in part_rows[:40]
     ]
 
+    grain_label = {"day": "by day", "week": "by week", "month": "by month"}[chart_grain]
+    if chart_mode == "trailing12":
+        chart_title = "Downtime days by month"
+        chart_subtitle = "trailing 12 mo"
+    else:
+        chart_title = f"Downtime days {grain_label}"
+        chart_subtitle = grain_label
+
     return {
         "month": month_key,
-        "month_start": start.isoformat(),
-        "month_end": end.isoformat(),
-        "bucket_rule": "Downtime is eMaint Downtime (Days) on work_orders.hours. Full days attributed to the month of COALESCE(downstart, date_wo).",
+        "start": range_start.isoformat(),
+        "end": range_end.isoformat(),
+        "month_start": range_start.isoformat(),
+        "month_end": range_end.isoformat(),
+        "is_full_month": is_full,
+        "chart_mode": chart_mode,
+        "chart_grain": chart_grain,
+        "chart_title": chart_title,
+        "chart_subtitle": chart_subtitle,
+        "max_span_days": _MAX_SPAN_DAYS,
+        "bucket_rule": (
+            "Downtime is eMaint Downtime (Days) on work_orders.hours. "
+            "Full days attributed to COALESCE(downstart, date_wo) within the selected range."
+        ),
         "kpis": {
             "downtime": round(downtime, 2),
             "wo_count": wo_count,
@@ -281,13 +572,15 @@ _DRILL_DIMS = frozenset({"region", "state", "casino", "vendor", "cabinet", "them
 
 @router.get("/drill")
 def capacity_drill(
+    start: Annotated[str | None, Query()] = None,
+    end: Annotated[str | None, Query()] = None,
     month: Annotated[str | None, Query()] = None,
     dim: Annotated[str, Query()] = "",
     key: Annotated[str, Query()] = "",
     user: Annotated[dict[str, Any] | None, Depends(require_demo_user)] = None,
 ):
     del user
-    month_key, start, end = _parse_month(month)
+    range_start, range_end, month_key = _resolve_range(start, end, month)
     dim = (dim or "").strip().lower()
     key = (key or "").strip() or "Unassigned"
     if dim not in _DRILL_DIMS:
@@ -328,10 +621,12 @@ def capacity_drill(
           AND {filters[dim]} = %s
         ORDER BY ISNULL(wo.hours, 0) DESC, wo.downstart DESC, wo.wo DESC
         """,
-        (start, end, key),
+        (range_start, range_end, key),
     )
     return {
         "month": month_key,
+        "start": range_start.isoformat(),
+        "end": range_end.isoformat(),
         "dim": dim,
         "key": key,
         "orders": [
