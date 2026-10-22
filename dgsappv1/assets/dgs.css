@@ -3066,6 +3066,60 @@ body.wo-detail-open .dgs-capacity-drawer {
 .dgs-capacity-drawer.is-wo-detail {
   width: min(720px, 96vw);
 }
+.dgs-wo-desktop-table {
+  display: block;
+}
+.dgs-wo-card-list {
+  display: none;
+  flex-direction: column;
+  gap: 0.65rem;
+}
+.dgs-wo-card {
+  display: grid;
+  gap: 0.35rem;
+  padding: 0.85rem 0.9rem;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.03);
+  color: inherit;
+  text-align: left;
+}
+.dgs-wo-card.is-active,
+.dgs-wo-card.dgs-field-wo-row.is-active {
+  border-color: rgba(147, 197, 253, 0.45);
+  background: rgba(147, 197, 253, 0.1);
+}
+.dgs-wo-card-top {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+.dgs-wo-card-wo {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: #f3f5f9;
+}
+.dgs-wo-card-date {
+  color: #8b96a8;
+  font-size: 0.78rem;
+  white-space: nowrap;
+}
+.dgs-wo-card-property {
+  color: #e8edf5;
+  font-size: 0.92rem;
+  font-weight: 600;
+}
+.dgs-wo-card-meta {
+  color: #8b96a8;
+  font-size: 0.78rem;
+  line-height: 1.35;
+}
+.dgs-wo-card-desc {
+  color: #c5cdd9;
+  font-size: 0.84rem;
+  line-height: 1.4;
+}
 .dgs-wo-detail-body {
   display: grid;
   gap: 1.1rem;
@@ -3169,4 +3223,129 @@ body.dgs-work-orders-v2 .dgs-wo-root {
   flex: 1;
   min-height: 0;
   overflow: auto;
+}
+
+/* Field / Work Orders / WO detail — phone + tablet compact */
+@media (max-width: 1366px) {
+  body.wo-detail-open .dgs-capacity-drawer.is-wo-detail {
+    top: auto;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    width: 100%;
+    max-width: 100%;
+    height: min(92dvh, 860px);
+    border-left: none;
+    border-top: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 16px 16px 0 0;
+    box-shadow: 0 -10px 40px rgba(0, 0, 0, 0.45);
+  }
+
+  body.wo-detail-open .dgs-capacity-drawer.is-wo-detail .dgs-capacity-drawer-body {
+    padding: 0.85rem 1rem calc(1rem + var(--dgs-v2-system-nav-clear, 28px));
+    -webkit-overflow-scrolling: touch;
+  }
+
+  body.wo-detail-open .dgs-capacity-drawer.is-wo-detail .dgs-wo-fields {
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  }
+
+  body.wo-detail-open .dgs-capacity-drawer.is-wo-detail .dgs-wo-mat-table {
+    display: block;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  body.dgs-work-orders-v2 .dgs-v2-main {
+    padding: 12px 14px 16px;
+    gap: 12px;
+  }
+
+  body.dgs-work-orders-v2 .dgs-wo-root {
+    padding-bottom: var(--dgs-v2-system-nav-clear-tablet, 36px);
+  }
+
+  body.dgs-dashboard-v2 .dgs-dashboard-mount:has(.dgs-field-pair) {
+    overflow: auto;
+    -webkit-overflow-scrolling: touch;
+    padding: 0.75rem 0.85rem var(--dgs-v2-system-nav-clear-tablet, 36px);
+  }
+
+  .dgs-field-pair {
+    grid-template-columns: 1fr;
+    flex: none;
+    min-height: auto;
+    overflow: visible;
+  }
+
+  .dgs-field-panel {
+    flex: none;
+    max-height: none;
+  }
+
+  .dgs-field-scroll {
+    flex: none;
+    overflow: visible;
+  }
+}
+
+@media (max-width: 900px) {
+  .dgs-wo-desktop-table {
+    display: none;
+  }
+
+  .dgs-wo-card-list {
+    display: flex;
+  }
+
+  body.dgs-dashboard-v2 .dgs-dashboard-mount:has(.dgs-field-pair) {
+    padding-bottom: var(--dgs-v2-system-nav-clear, 28px);
+  }
+
+  body.dgs-work-orders-v2 .dgs-wo-root {
+    padding-bottom: var(--dgs-v2-system-nav-clear, 28px);
+  }
+
+  body.wo-detail-open .dgs-capacity-drawer.is-wo-detail .dgs-capacity-drawer-body {
+    padding-bottom: calc(1rem + var(--dgs-v2-system-nav-clear, 28px));
+  }
+
+  .dgs-wo-toolbar {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.55rem;
+  }
+
+  .dgs-wo-toolbar input[type="search"] {
+    grid-column: 1 / -1;
+    min-width: 0;
+    flex: none;
+  }
+
+  .dgs-wo-toolbar #wo-apply {
+    grid-column: 1 / -1;
+  }
+
+  .dgs-wo-meta {
+    grid-column: 1 / -1;
+  }
+
+  .dgs-wo-pager {
+    justify-content: space-between;
+    flex-wrap: wrap;
+  }
+
+  .dgs-wo-fields {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+@media (max-width: 640px) {
+  .dgs-wo-fields {
+    grid-template-columns: 1fr;
+  }
+
+  body.wo-detail-open .dgs-capacity-drawer.is-wo-detail {
+    height: min(94dvh, 920px);
+  }
 }

@@ -56,10 +56,7 @@
     return { text: row.theme || row.theme_id, href };
   }
 
-  function table(headers, rows, empty, options) {
-    if (!rows.length) {
-      return `<p class="dgs-field-empty">${esc(empty)}</p>`;
-    }
+  function tableMarkup(headers, rows, options) {
     const opts = options || {};
     const rowClass = opts.rowClass || "";
     const head = headers
@@ -78,12 +75,83 @@
           .join("")}</tr>`;
       })
       .join("");
-    return `<div class="dgs-field-scroll"><table class="dgs-field-table"><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table></div>`;
+    return `<table class="dgs-field-table"><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table>`;
+  }
+
+  function panelList(headers, rows, empty, cardsHtml, options) {
+    if (!rows.length) {
+      return `<p class="dgs-field-empty">${esc(empty)}</p>`;
+    }
+    return `<div class="dgs-field-scroll">
+      <div class="dgs-wo-desktop-table">${tableMarkup(headers, rows, options)}</div>
+      ${cardsHtml || ""}
+    </div>`;
   }
 
   function openWoDetail(wo) {
     if (!wo || !window.DGSWorkOrderDetail) return;
     DGSWorkOrderDetail.open(wo);
+  }
+
+  function linkOrText(value) {
+    if (value && typeof value === "object") {
+      const text = value.text == null || value.text === "" ? "—" : value.text;
+      if (!value.href) return esc(text);
+      return `<a class="dgs-field-asset" href="${esc(value.href)}">${esc(text)}</a>`;
+    }
+    return esc(value == null || value === "" ? "—" : value);
+  }
+
+  function woCards(orders) {
+    if (!orders.length) return "";
+    return `<div class="dgs-wo-card-list" aria-label="Open work orders">
+      ${orders
+        .map((row) => {
+          const serial = linkOrText(serialCell(row));
+          const rest = [row.vendor, row.cabinet, row.theme].filter(Boolean).join(" · ");
+          const meta = rest ? `${serial} · ${esc(rest)}` : serial;
+          return `<article class="dgs-wo-card dgs-field-wo-row" data-wo="${esc(
+            row.wo
+          )}" tabindex="0" role="button" aria-label="Open work order ${esc(
+            row.wo || ""
+          )}">
+            <div class="dgs-wo-card-top">
+              <span class="dgs-wo-card-wo">${esc(row.wo || "—")}</span>
+              <span class="dgs-wo-card-date">${esc(row.date_wo || "—")}</span>
+            </div>
+            <div class="dgs-wo-card-property">${linkOrText(propertyCell(row))}</div>
+            <div class="dgs-wo-card-meta">${meta}</div>
+            ${
+              row.description
+                ? `<div class="dgs-wo-card-desc">${esc(row.description)}</div>`
+                : ""
+            }
+          </article>`;
+        })
+        .join("")}
+    </div>`;
+  }
+
+  function projectCards(projects) {
+    if (!projects.length) return "";
+    return `<div class="dgs-wo-card-list dgs-field-project-cards" aria-label="Upcoming projects">
+      ${projects
+        .map(
+          (row) => `<article class="dgs-wo-card dgs-field-project-card">
+            <div class="dgs-wo-card-top">
+              <span class="dgs-wo-card-wo">${esc(row.project_number || "—")}</span>
+              <span class="dgs-wo-card-date">${esc(row.start_date || "—")}</span>
+            </div>
+            <div class="dgs-wo-card-property">${esc(row.property || "—")}</div>
+            ${
+              row.description
+                ? `<div class="dgs-wo-card-desc">${esc(row.description)}</div>`
+                : ""
+            }
+          </article>`
+        )
+        .join("")}
+    </div>`;
   }
 
   function bindWoRows(root) {
@@ -119,7 +187,7 @@
         <div class="dgs-field-pair">
           <section class="dgs-field-panel">
             <h2>Upcoming projects <span>${projects.length}</span></h2>
-            ${table(
+            ${panelList(
               [
                 { label: "Start Date", cls: "dgs-field-date" },
                 { label: "Project Number", cls: "dgs-field-num" },
@@ -132,12 +200,13 @@
                 row.property,
                 row.description,
               ]),
-              "No upcoming projects."
+              "No upcoming projects.",
+              projectCards(projects)
             )}
           </section>
           <section class="dgs-field-panel">
             <h2>Open work orders <span>${orders.length}</span></h2>
-            ${table(
+            ${panelList(
               [
                 { label: "Work Order Date", cls: "dgs-field-date" },
                 { label: "WO #", cls: "dgs-field-num" },
@@ -164,7 +233,8 @@
                   row.description,
                 ],
               })),
-              "No open work orders."
+              "No open work orders.",
+              woCards(orders)
             )}
           </section>
         </div>`;

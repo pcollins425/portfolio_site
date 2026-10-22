@@ -136,6 +136,37 @@
       })
       .join("");
 
+    const cards = state.orders
+      .map((row) => {
+        const active = state.selectedWo === row.wo ? " is-active" : "";
+        const badges = [];
+        if (row.moneypenny) badges.push(`<span class="dgs-wo-badge">MP</span>`);
+        if (state.hasPriority && row.priority) {
+          badges.push(
+            `<span class="dgs-wo-badge is-priority">P${esc(row.priority)}</span>`
+          );
+        }
+        if (row.wo_type) badges.push(`<span class="dgs-wo-badge">${esc(row.wo_type)}</span>`);
+        const meta = [statusLabel(row), row.assignto].filter(Boolean).join(" · ");
+        return `<article class="dgs-wo-card dgs-wo-row${active}" data-wo="${esc(
+          row.wo
+        )}" tabindex="0" role="button" aria-label="Open work order ${esc(row.wo || "")}">
+          <div class="dgs-wo-card-top">
+            <span class="dgs-wo-card-wo">${esc(row.wo || "—")}</span>
+            <span class="dgs-wo-card-date">${esc(row.date_wo || "—")}</span>
+          </div>
+          <div class="dgs-wo-card-property">${propertyHtml(row)}</div>
+          ${badges.length ? `<div class="dgs-wo-badges">${badges.join("")}</div>` : ""}
+          ${meta ? `<div class="dgs-wo-card-meta">${esc(meta)}</div>` : ""}
+          ${
+            row.brief_desc
+              ? `<div class="dgs-wo-card-desc">${esc(row.brief_desc)}</div>`
+              : ""
+          }
+        </article>`;
+      })
+      .join("");
+
     root.innerHTML = `
       <div class="dgs-wo">
         <div class="dgs-wo-toolbar">
@@ -157,19 +188,24 @@
         <section class="dgs-field-panel dgs-wo-panel">
           ${
             state.orders.length
-              ? `<div class="dgs-field-scroll"><table class="dgs-field-table dgs-wo-table">
-                  <thead><tr>
-                    <th class="dgs-field-date">Date</th>
-                    <th class="dgs-field-num">WO #</th>
-                    <th>Property</th>
-                    <th>Serial</th>
-                    <th>Status</th>
-                    <th>Type</th>
-                    <th>Assigned</th>
-                    <th>Brief</th>
-                  </tr></thead>
-                  <tbody>${rows}</tbody>
-                </table></div>`
+              ? `<div class="dgs-field-scroll">
+                  <div class="dgs-wo-desktop-table">
+                    <table class="dgs-field-table dgs-wo-table">
+                      <thead><tr>
+                        <th class="dgs-field-date">Date</th>
+                        <th class="dgs-field-num">WO #</th>
+                        <th>Property</th>
+                        <th>Serial</th>
+                        <th>Status</th>
+                        <th>Type</th>
+                        <th>Assigned</th>
+                        <th>Brief</th>
+                      </tr></thead>
+                      <tbody>${rows}</tbody>
+                    </table>
+                  </div>
+                  <div class="dgs-wo-card-list" aria-label="Work orders">${cards}</div>
+                </div>`
               : `<p class="dgs-field-empty">${
                   state.loading ? "Loading…" : "No work orders for this filter."
                 }</p>`
@@ -206,9 +242,15 @@
       state.offset += PAGE_SIZE;
       loadList(root);
     });
-    root.querySelectorAll(".dgs-wo-row").forEach((row) => {
+    root.querySelectorAll(".dgs-wo-row[data-wo]").forEach((row) => {
       row.addEventListener("click", (event) => {
         if (event.target.closest("a")) return;
+        openDetail(row.getAttribute("data-wo"));
+      });
+      row.addEventListener("keydown", (event) => {
+        if (event.key !== "Enter" && event.key !== " ") return;
+        if (event.target.closest("a")) return;
+        event.preventDefault();
         openDetail(row.getAttribute("data-wo"));
       });
     });
