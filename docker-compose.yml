@@ -49,6 +49,8 @@ services:
       # Always the in-container path. Host folder comes from PARTS_PHOTOS_HOST bind below.
       # Do not interpolate PARTS_PHOTOS_ROOT from .env (often Z:\… which is invalid in Linux).
       PARTS_PHOTOS_ROOT: /media/parts-photos
+      # Theme Hub / lab / par / slick PDFs under Analytics Compliance.
+      COMPLIANCE_ROOT: /media/compliance
       # Page Ask AI — Ollama on host (override in backend_live/.env if needed).
       OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
       OLLAMA_MODEL: ${OLLAMA_MODEL:-llama3.2:3b}
@@ -62,6 +64,8 @@ services:
       # Parts catalog photos on Analytics NAS. UNC default (not X: / Z:).
       # Override with PARTS_PHOTOS_HOST if needed (e.g. X:/parts_photos).
       - ${PARTS_PHOTOS_HOST:-//192.168.1.99/DGS_Analytics/parts_photos}:/media/parts-photos:ro
+      # Compliance library (Par Sheets / Lab Letters / Slicks). UNC default.
+      - ${COMPLIANCE_HOST:-//192.168.1.99/DGS_Analytics/Compliance}:/media/compliance:ro
 
 volumes:
   assistant_sessions:
