@@ -300,7 +300,15 @@ body.dgs-rail-collapsed .dgs-sidebar-account {
   line-height: 1.35;
 }
 
-.dgs-sidebar-signout {
+.dgs-sidebar-account-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.dgs-sidebar-signout,
+.dgs-sidebar-dev-view {
   align-self: flex-start;
   border: 1px solid rgba(255, 255, 255, 0.16);
   background: transparent;
@@ -311,8 +319,25 @@ body.dgs-rail-collapsed .dgs-sidebar-account {
   cursor: pointer;
 }
 
-.dgs-sidebar-signout:hover {
+.dgs-sidebar-signout:hover,
+.dgs-sidebar-dev-view:hover,
+.dgs-sidebar-dev-view:focus-visible {
   background: rgba(255, 255, 255, 0.06);
+  outline: none;
+}
+
+.dgs-sidebar-dev-view.is-active,
+.dgs-sidebar-dev-view[aria-expanded="true"] {
+  background: rgba(147, 197, 253, 0.14);
+  border-color: rgba(147, 197, 253, 0.35);
+  color: #dbeafe;
+}
+
+body:has(.dgs-dev-view.is-previewing) .dgs-sidebar-dev-view,
+body:has(.dgs-dev-view.is-previewing) .dgs-mobile-dev-view {
+  background: rgba(248, 236, 212, 0.12);
+  border-color: rgba(248, 236, 212, 0.35);
+  color: #f8ecd4;
 }
 
 /* Mobile top navigation (default on ≤900px; opt out with body.dgs-no-mobile-top-nav) */
@@ -450,6 +475,13 @@ body.dgs-rail-collapsed .dgs-sidebar-account {
   padding: 4px 2px;
 }
 
+.dgs-mobile-menu-account-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
 .dgs-mobile-menu-user {
   font-size: 13px;
   color: var(--dgs-rail-muted);
@@ -459,7 +491,8 @@ body.dgs-rail-collapsed .dgs-sidebar-account {
   white-space: nowrap;
 }
 
-.dgs-mobile-signout {
+.dgs-mobile-signout,
+.dgs-mobile-dev-view {
   padding: 8px 12px;
   border-radius: 8px;
   border: 1px solid var(--dgs-rail-border);
@@ -2085,61 +2118,31 @@ body.login-page {
   }
 }
 
-/* Dev view — signed-in preview of another employee's grants (toggle; pushes layout when open) */
+/* Dev view panel — opened from sidebar/mobile Dev button; pushes layout when open */
 .dgs-dev-view {
   position: fixed;
   top: 0;
   left: 0;
+  right: 0;
   z-index: 80;
+  display: none;
   font-size: 13px;
 }
 
-.dgs-dev-view-toggle {
-  margin: 8px 0 0 10px;
-  padding: 6px 10px;
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  border-radius: 999px;
-  background: #243044;
-  color: #d5deea;
-  font: inherit;
-  font-size: 11px;
-  font-weight: 650;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  cursor: pointer;
-  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.28);
-}
-
-.dgs-dev-view-toggle:hover,
-.dgs-dev-view-toggle:focus-visible {
-  background: #2e3c55;
-  outline: none;
-}
-
-.dgs-dev-view.is-previewing:not(.is-expanded) .dgs-dev-view-toggle {
-  background: #4a3414;
-  color: #f8ecd4;
-  border-color: rgba(248, 236, 212, 0.35);
+.dgs-dev-view.is-expanded {
+  display: block;
 }
 
 .dgs-dev-view-panel {
-  display: none;
+  display: flex;
   align-items: center;
   gap: 12px;
   flex-wrap: wrap;
-  width: 100vw;
+  width: 100%;
   padding: 8px 14px;
   background: #243044;
   color: #d5deea;
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-}
-
-.dgs-dev-view.is-expanded .dgs-dev-view-toggle {
-  display: none;
-}
-
-.dgs-dev-view.is-expanded .dgs-dev-view-panel {
-  display: flex;
 }
 
 .dgs-dev-view.is-expanded.is-previewing .dgs-dev-view-panel {

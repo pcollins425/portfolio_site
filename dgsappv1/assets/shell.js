@@ -411,13 +411,22 @@
 
     const account = document.getElementById("sidebar-account");
     if (account && !account.hidden) {
+      const canDev =
+        window.DGSAuth && DGSAuth.getCanViewAs && DGSAuth.getCanViewAs();
       menu.insertAdjacentHTML(
         "beforeend",
         `<section class="dgs-mobile-menu-group dgs-mobile-menu-account">
           <div class="dgs-mobile-menu-group-label">Account</div>
           <div class="dgs-mobile-menu-account-row">
             <span class="dgs-mobile-menu-user" id="dgs-mobile-user-label"></span>
-            <button type="button" id="dgs-mobile-sign-out" class="dgs-mobile-signout">Sign out</button>
+            <div class="dgs-mobile-menu-account-actions">
+              <button type="button" id="dgs-mobile-sign-out" class="dgs-mobile-signout">Sign out</button>
+              ${
+                canDev
+                  ? `<button type="button" id="dgs-mobile-dev-view" class="dgs-mobile-dev-view" aria-expanded="false">Dev</button>`
+                  : ""
+              }
+            </div>
           </div>
         </section>`
       );
@@ -428,6 +437,16 @@
       const signOut = document.getElementById("btn-sign-out");
       if (mobileSignOut && signOut) {
         mobileSignOut.onclick = () => signOut.click();
+      }
+      const mobileDev = document.getElementById("dgs-mobile-dev-view");
+      const desktopDev = document.getElementById("dgs-dev-view-toggle");
+      if (mobileDev && desktopDev) {
+        mobileDev.onclick = () => desktopDev.click();
+        mobileDev.setAttribute(
+          "aria-expanded",
+          desktopDev.getAttribute("aria-expanded") || "false"
+        );
+        mobileDev.classList.toggle("is-active", desktopDev.classList.contains("is-active"));
       }
     }
   }
@@ -849,9 +868,36 @@
     } catch (_err) {
       /* ignore */
     }
-    const toggle = bar.querySelector("#dgs-dev-view-toggle");
-    if (toggle) toggle.setAttribute("aria-expanded", expanded ? "true" : "false");
+    document.querySelectorAll("#dgs-dev-view-toggle, #dgs-mobile-dev-view").forEach((toggle) => {
+      toggle.setAttribute("aria-expanded", expanded ? "true" : "false");
+      toggle.classList.toggle("is-active", !!expanded);
+    });
     syncDevViewOffset(bar);
+  }
+
+  function ensureDevViewToggle() {
+    const account = document.getElementById("sidebar-account");
+    const signOut = document.getElementById("btn-sign-out");
+    if (!account || !signOut) return null;
+    let actions = account.querySelector(".dgs-sidebar-account-actions");
+    if (!actions) {
+      actions = document.createElement("div");
+      actions.className = "dgs-sidebar-account-actions";
+      signOut.replaceWith(actions);
+      actions.appendChild(signOut);
+    }
+    let toggle = document.getElementById("dgs-dev-view-toggle");
+    if (!toggle) {
+      toggle = document.createElement("button");
+      toggle.type = "button";
+      toggle.id = "dgs-dev-view-toggle";
+      toggle.className = "dgs-sidebar-dev-view";
+      toggle.setAttribute("aria-expanded", "false");
+      toggle.setAttribute("aria-controls", "dgs-dev-view-panel");
+      toggle.textContent = "Dev";
+      actions.appendChild(toggle);
+    }
+    return toggle;
   }
 
   function preferredDevViewExpanded(current) {
@@ -867,17 +913,19 @@
     const existing = document.getElementById("dgs-dev-view");
     if (!window.DGSAuth || !DGSAuth.getCanViewAs || !DGSAuth.getCanViewAs()) {
       if (existing) existing.remove();
+      document.getElementById("dgs-dev-view-toggle")?.remove();
+      document.getElementById("dgs-mobile-dev-view")?.remove();
       document.body.classList.remove("dgs-dev-view-on");
       document.documentElement.style.setProperty("--dgs-dev-view-h", "0px");
       return;
     }
+    const toggle = ensureDevViewToggle();
     let bar = existing;
     if (!bar) {
       bar = document.createElement("div");
       bar.id = "dgs-dev-view";
       bar.className = "dgs-dev-view";
       bar.innerHTML = `
-        <button type="button" class="dgs-dev-view-toggle" id="dgs-dev-view-toggle" aria-expanded="false" aria-controls="dgs-dev-view-panel">Dev view</button>
         <div class="dgs-dev-view-panel" id="dgs-dev-view-panel">
           <span class="dgs-dev-view-kicker">Dev view</span>
           <label class="dgs-dev-view-field">
@@ -892,11 +940,14 @@
       bar.querySelector("#dgs-dev-view-select").addEventListener("change", (event) => {
         DGSAuth.setViewAs(event.target.value);
       });
-      bar.querySelector("#dgs-dev-view-toggle").addEventListener("click", () => {
-        setDevViewExpanded(bar, true);
-      });
       bar.querySelector("#dgs-dev-view-hide").addEventListener("click", () => {
         setDevViewExpanded(bar, false);
+      });
+    }
+    if (toggle && !toggle.dataset.dgsWired) {
+      toggle.dataset.dgsWired = "1";
+      toggle.addEventListener("click", () => {
+        setDevViewExpanded(bar, !bar.classList.contains("is-expanded"));
       });
     }
     if (!bar.dataset.dgsOffsetWired) {
