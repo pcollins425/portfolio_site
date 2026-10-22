@@ -2428,6 +2428,26 @@ body.dgs-dashboard-v2 .dgs-dashboard-mount:has(.dgs-capacity) {
 .dgs-capacity-rank-row:hover td {
   background: rgba(147, 197, 253, 0.08);
 }
+.dgs-capacity-rank-sort {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-weight: inherit;
+  cursor: pointer;
+  text-align: right;
+  white-space: nowrap;
+}
+.dgs-capacity-rank-sort:hover,
+.dgs-capacity-rank-sort:focus-visible {
+  color: #93c5fd;
+  outline: none;
+}
+.dgs-capacity-rank-sort.is-active {
+  color: #93c5fd;
+}
 .dgs-capacity-trend-chart {
   display: grid;
   grid-template-columns: 1.6rem 3.2rem minmax(0, 1fr);

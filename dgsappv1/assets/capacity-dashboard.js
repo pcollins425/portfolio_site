@@ -143,12 +143,45 @@
     return `<div class="dgs-field-scroll"><table class="dgs-field-table"><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table></div>`;
   }
 
+  const RANK_SORT_COLS = [
+    { key: "downtime", label: "Downtime (days)", money: false },
+    { key: "part_cost", label: "Part cost", money: true },
+    { key: "wo_count", label: "WOs", money: false },
+    { key: "asset_count", label: "Assets", money: false },
+  ];
+
+  function sortedRankRows(rows) {
+    const key = state.rankSort.key;
+    const dir = state.rankSort.dir === "asc" ? 1 : -1;
+    return [...(rows || [])].sort((a, b) => {
+      const av = Number(a[key]) || 0;
+      const bv = Number(b[key]) || 0;
+      if (av !== bv) return (av - bv) * dir;
+      return String(a.label || "").localeCompare(String(b.label || ""), undefined, {
+        sensitivity: "base",
+      });
+    });
+  }
+
+  function rankSortHeader(col) {
+    const active = state.rankSort.key === col.key;
+    const arrow = !active ? "" : state.rankSort.dir === "asc" ? " ↑" : " ↓";
+    return `<th class="dgs-field-num">
+      <button type="button" class="dgs-capacity-rank-sort${
+        active ? " is-active" : ""
+      }" data-sort-key="${esc(col.key)}" aria-pressed="${active ? "true" : "false"}">
+        ${esc(col.label)}${arrow}
+      </button>
+    </th>`;
+  }
+
   function rankTable(dim, rows) {
-    if (!rows.length) {
+    const sorted = sortedRankRows(rows);
+    if (!sorted.length) {
       return `<p class="dgs-field-empty">No rows.</p>`;
     }
-    const head = `<tr><th>Name</th><th class="dgs-field-num">Downtime (days)</th><th class="dgs-field-num">Part cost</th><th class="dgs-field-num">WOs</th><th class="dgs-field-num">Assets</th></tr>`;
-    const body = rows
+    const head = `<tr><th>Name</th>${RANK_SORT_COLS.map(rankSortHeader).join("")}</tr>`;
+    const body = sorted
       .map((row) => {
         return `<tr class="dgs-capacity-rank-row" data-dim="${esc(dim)}" data-key="${esc(
           row.key
@@ -164,6 +197,35 @@
       })
       .join("");
     return `<div class="dgs-field-scroll"><table class="dgs-field-table dgs-capacity-rank"><thead>${head}</thead><tbody>${body}</tbody></table></div>`;
+  }
+
+  function rankGridHtml(data) {
+    return `<div class="dgs-capacity-grid">
+      <section class="dgs-field-panel">
+        <h2>Region</h2>
+        ${rankTable("region", (data && data.geo && data.geo.region) || [])}
+      </section>
+      <section class="dgs-field-panel">
+        <h2>State</h2>
+        ${rankTable("state", (data && data.geo && data.geo.state) || [])}
+      </section>
+      <section class="dgs-field-panel">
+        <h2>Casino</h2>
+        ${rankTable("casino", (data && data.geo && data.geo.casino) || [])}
+      </section>
+      <section class="dgs-field-panel">
+        <h2>Vendor</h2>
+        ${rankTable("vendor", (data && data.product && data.product.vendor) || [])}
+      </section>
+      <section class="dgs-field-panel">
+        <h2>Cabinet</h2>
+        ${rankTable("cabinet", (data && data.product && data.product.cabinet) || [])}
+      </section>
+      <section class="dgs-field-panel">
+        <h2>Theme</h2>
+        ${rankTable("theme", (data && data.product && data.product.theme) || [])}
+      </section>
+    </div>`;
   }
 
   function partTable(rows) {
@@ -369,6 +431,7 @@
     data: null,
     drill: null,
     error: "",
+    rankSort: { key: "downtime", dir: "desc" },
   };
 
   function queryParams(extra) {
@@ -536,6 +599,31 @@
     });
   }
 
+  function refreshRankGrid(root) {
+    const grid = root.querySelector(".dgs-capacity-grid");
+    if (!grid || !state.data) return;
+    grid.outerHTML = rankGridHtml(state.data);
+    wireRanks(root);
+    wireRankSort(root);
+  }
+
+  function wireRankSort(root) {
+    root.querySelectorAll(".dgs-capacity-rank-sort").forEach((btn) => {
+      btn.addEventListener("click", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        const key = btn.getAttribute("data-sort-key");
+        if (!key) return;
+        if (state.rankSort.key === key) {
+          state.rankSort.dir = state.rankSort.dir === "desc" ? "asc" : "desc";
+        } else {
+          state.rankSort = { key, dir: "desc" };
+        }
+        refreshRankGrid(root);
+      });
+    });
+  }
+
   function wireChart(root) {
     root.querySelectorAll(".dgs-capacity-trend-col").forEach((col) => {
       col.addEventListener("mouseenter", () => {
@@ -679,32 +767,7 @@
           <p class="dgs-capacity-chart-hint">Hover a period to highlight · click a bar or the title for work orders</p>
           ${trendBars((data && data.trend) || [], grain)}
         </section>
-        <div class="dgs-capacity-grid">
-          <section class="dgs-field-panel">
-            <h2>Region</h2>
-            ${rankTable("region", (data && data.geo && data.geo.region) || [])}
-          </section>
-          <section class="dgs-field-panel">
-            <h2>State</h2>
-            ${rankTable("state", (data && data.geo && data.geo.state) || [])}
-          </section>
-          <section class="dgs-field-panel">
-            <h2>Casino</h2>
-            ${rankTable("casino", (data && data.geo && data.geo.casino) || [])}
-          </section>
-          <section class="dgs-field-panel">
-            <h2>Vendor</h2>
-            ${rankTable("vendor", (data && data.product && data.product.vendor) || [])}
-          </section>
-          <section class="dgs-field-panel">
-            <h2>Cabinet</h2>
-            ${rankTable("cabinet", (data && data.product && data.product.cabinet) || [])}
-          </section>
-          <section class="dgs-field-panel">
-            <h2>Theme</h2>
-            ${rankTable("theme", (data && data.product && data.product.theme) || [])}
-          </section>
-        </div>
+        ${rankGridHtml(data)}
         <section class="dgs-field-panel dgs-capacity-panel">
           <h2>Part cost by casino</h2>
           ${partTable((data && data.part_costs) || [])}
@@ -734,6 +797,7 @@
     document.getElementById("capacity-start")?.addEventListener("keydown", onEnter);
     document.getElementById("capacity-end")?.addEventListener("keydown", onEnter);
     wireRanks(root);
+    wireRankSort(root);
     wireChart(root);
     layoutTrendLine(root);
     if (trendResizeObserver) {
@@ -758,6 +822,7 @@
       if (state.data.chart_mode) state.chartMode = state.data.chart_mode;
       state.error = "";
       state.drill = null;
+      state.rankSort = { key: "downtime", dir: "desc" };
       render(root);
     } catch (err) {
       root.innerHTML = `<p class="error-box">${esc(err.message || err)}</p>`;

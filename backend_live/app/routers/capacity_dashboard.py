@@ -432,9 +432,10 @@ def _region_case_sql(expr: str = "st.state") -> str:
     return f"CASE LOWER(RTRIM({expr})) " + " ".join(whens) + " ELSE N'Unassigned' END"
 
 
-def _ranked(rows: list[dict], *, limit: int = 25) -> list[dict]:
+def _ranked(rows: list[dict], *, limit: int | None = None) -> list[dict]:
     out = []
-    for row in rows[:limit]:
+    selected = rows if limit is None else rows[:limit]
+    for row in selected:
         key = _text(row.get("dim_key")) or "Unassigned"
         label = _text(row.get("dim_label")) or key
         out.append(
@@ -518,6 +519,8 @@ def capacity_dashboard(
         chart_grain, trend = _build_range_trend(range_start, range_end)
 
     def breakout(dim_key_sql: str, dim_label_sql: str) -> list[dict]:
+        # All work orders in the selected period (not downtime-only), so part cost
+        # and zero-downtime WOs still appear. Default order is downtime desc.
         rows = _query(
             f"""
             SELECT
@@ -528,8 +531,7 @@ def capacity_dashboard(
                 COUNT(DISTINCT COALESCE(NULLIF(LTRIM(RTRIM(wo.asset_id)), N''), wo.compid)) AS asset_count,
                 ISNULL(SUM(ISNULL(wpc.part_cost, 0)), 0) AS part_cost
             {_base_joins()}
-            WHERE {_INCLUDE}
-              AND {_BUCKET} >= %s
+            WHERE {_BUCKET} >= %s
               AND {_BUCKET} < DATEADD(day, 1, %s)
             GROUP BY {dim_key_sql}, {dim_label_sql}
             ORDER BY downtime DESC, wo_count DESC
@@ -691,8 +693,7 @@ def capacity_drill(
             cas.casino_name,
             ISNULL(wpc.part_cost, 0) AS part_cost
         {_base_joins()}
-        WHERE {_INCLUDE}
-          AND {_BUCKET} >= %s
+        WHERE {_BUCKET} >= %s
           AND {_BUCKET} < DATEADD(day, 1, %s)
           {dim_filter}
         ORDER BY ISNULL(wo.hours, 0) DESC, wo.downstart DESC, wo.wo DESC
