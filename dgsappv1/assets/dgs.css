@@ -3125,3 +3125,15 @@ body.capacity-drill-open .dgs-capacity-drawer {
   margin-left: 0.25rem;
   vertical-align: middle;
 }
+.dgs-wo-table td {
+  color: #c5cdd9;
+}
+.dgs-wo-root,
+.dgs-wo {
+  color: #c5cdd9;
+}
+body.dgs-work-orders-v2 .dgs-wo-root {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
