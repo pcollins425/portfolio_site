@@ -154,6 +154,8 @@
     </div>`;
   }
 
+  const PANE_KEY = "dgs-field-pane";
+
   function bindWoRows(root) {
     root.querySelectorAll(".dgs-field-wo-row[data-wo]").forEach((row) => {
       row.addEventListener("click", (event) => {
@@ -167,6 +169,89 @@
         openWoDetail(row.getAttribute("data-wo"));
       });
     });
+  }
+
+  function savedPane() {
+    try {
+      const value = sessionStorage.getItem(PANE_KEY);
+      return value === "orders" ? "orders" : "projects";
+    } catch (_) {
+      return "projects";
+    }
+  }
+
+  function rememberPane(pane) {
+    try {
+      sessionStorage.setItem(PANE_KEY, pane);
+    } catch (_) {
+      /* ignore */
+    }
+  }
+
+  function setActiveSegment(root, pane) {
+    root.querySelectorAll(".dgs-field-segment").forEach((btn) => {
+      const active = btn.getAttribute("data-pane") === pane;
+      btn.classList.toggle("is-active", active);
+      btn.setAttribute("aria-selected", active ? "true" : "false");
+    });
+    rememberPane(pane);
+  }
+
+  function scrollToPane(track, pane, behavior) {
+    const panel = track.querySelector(`.dgs-field-panel[data-pane="${pane}"]`);
+    if (!panel) return;
+    const left = panel.offsetLeft;
+    if (typeof track.scrollTo === "function") {
+      track.scrollTo({ left, behavior: behavior || "smooth" });
+    } else {
+      track.scrollLeft = left;
+    }
+  }
+
+  function paneFromScroll(track) {
+    const mid = track.scrollLeft + track.clientWidth / 2;
+    const panels = Array.from(track.querySelectorAll(".dgs-field-panel[data-pane]"));
+    let best = "projects";
+    let bestDist = Infinity;
+    panels.forEach((panel) => {
+      const center = panel.offsetLeft + panel.clientWidth / 2;
+      const dist = Math.abs(center - mid);
+      if (dist < bestDist) {
+        bestDist = dist;
+        best = panel.getAttribute("data-pane") || "projects";
+      }
+    });
+    return best;
+  }
+
+  function bindSwipe(root) {
+    const track = root.querySelector(".dgs-field-swipe");
+    if (!track) return;
+
+    const initial = savedPane();
+    setActiveSegment(root, initial);
+    // Instant jump before paint settles — avoid flash of projects when WOs remembered.
+    requestAnimationFrame(() => scrollToPane(track, initial, "auto"));
+
+    root.querySelectorAll(".dgs-field-segment").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const pane = btn.getAttribute("data-pane") || "projects";
+        setActiveSegment(root, pane);
+        scrollToPane(track, pane, "smooth");
+      });
+    });
+
+    let scrollTimer = null;
+    track.addEventListener(
+      "scroll",
+      () => {
+        if (scrollTimer) window.clearTimeout(scrollTimer);
+        scrollTimer = window.setTimeout(() => {
+          setActiveSegment(root, paneFromScroll(track));
+        }, 60);
+      },
+      { passive: true }
+    );
   }
 
   async function load(root) {
@@ -183,62 +268,82 @@
       const data = await res.json();
       const projects = data.projects || [];
       const orders = data.work_orders || [];
+      const active = savedPane();
       root.innerHTML = `
-        <div class="dgs-field-pair">
-          <section class="dgs-field-panel">
-            <h2>Upcoming projects <span>${projects.length}</span></h2>
-            ${panelList(
-              [
-                { label: "Start Date", cls: "dgs-field-date" },
-                { label: "Project Number", cls: "dgs-field-num" },
-                { label: "Property" },
-                { label: "Description" },
-              ],
-              projects.map((row) => [
-                row.start_date,
-                row.project_number,
-                row.property,
-                row.description,
-              ]),
-              "No upcoming projects.",
-              projectCards(projects)
-            )}
-          </section>
-          <section class="dgs-field-panel">
-            <h2>Open work orders <span>${orders.length}</span></h2>
-            ${panelList(
-              [
-                { label: "Work Order Date", cls: "dgs-field-date" },
-                { label: "WO #", cls: "dgs-field-num" },
-                { label: "Property" },
-                { label: "Serial" },
-                { label: "Vendor" },
-                { label: "Cabinet" },
-                { label: "Theme" },
-                { label: "Description" },
-              ],
-              orders.map((row) => ({
-                rowClass: "dgs-field-wo-row",
-                attrs: ` data-wo="${esc(row.wo)}" tabindex="0" role="button" aria-label="Open work order ${esc(
-                  row.wo || ""
-                )}"`,
-                cells: [
-                  row.date_wo,
-                  row.wo,
-                  propertyCell(row),
-                  serialCell(row),
-                  vendorCell(row),
-                  cabinetCell(row),
-                  themeCell(row),
-                  row.description,
+        <div class="dgs-field-shell">
+          <div class="dgs-field-segments" role="tablist" aria-label="Field groups">
+            <button type="button" class="dgs-field-segment${
+              active === "projects" ? " is-active" : ""
+            }" role="tab" aria-selected="${
+        active === "projects" ? "true" : "false"
+      }" data-pane="projects">
+              Projects <span>${projects.length}</span>
+            </button>
+            <button type="button" class="dgs-field-segment${
+              active === "orders" ? " is-active" : ""
+            }" role="tab" aria-selected="${
+        active === "orders" ? "true" : "false"
+      }" data-pane="orders">
+              Work orders <span>${orders.length}</span>
+            </button>
+          </div>
+          <div class="dgs-field-pair dgs-field-swipe">
+            <section class="dgs-field-panel" data-pane="projects">
+              <h2>Upcoming projects <span>${projects.length}</span></h2>
+              ${panelList(
+                [
+                  { label: "Start Date", cls: "dgs-field-date" },
+                  { label: "Project Number", cls: "dgs-field-num" },
+                  { label: "Property" },
+                  { label: "Description" },
                 ],
-              })),
-              "No open work orders.",
-              woCards(orders)
-            )}
-          </section>
+                projects.map((row) => [
+                  row.start_date,
+                  row.project_number,
+                  row.property,
+                  row.description,
+                ]),
+                "No upcoming projects.",
+                projectCards(projects)
+              )}
+            </section>
+            <section class="dgs-field-panel" data-pane="orders">
+              <h2>Open work orders <span>${orders.length}</span></h2>
+              ${panelList(
+                [
+                  { label: "Work Order Date", cls: "dgs-field-date" },
+                  { label: "WO #", cls: "dgs-field-num" },
+                  { label: "Property" },
+                  { label: "Serial" },
+                  { label: "Vendor" },
+                  { label: "Cabinet" },
+                  { label: "Theme" },
+                  { label: "Description" },
+                ],
+                orders.map((row) => ({
+                  rowClass: "dgs-field-wo-row",
+                  attrs: ` data-wo="${esc(row.wo)}" tabindex="0" role="button" aria-label="Open work order ${esc(
+                    row.wo || ""
+                  )}"`,
+                  cells: [
+                    row.date_wo,
+                    row.wo,
+                    propertyCell(row),
+                    serialCell(row),
+                    vendorCell(row),
+                    cabinetCell(row),
+                    themeCell(row),
+                    row.description,
+                  ],
+                })),
+                "No open work orders.",
+                woCards(orders)
+              )}
+            </section>
+          </div>
         </div>`;
       bindWoRows(root);
+      bindSwipe(root);
     } catch (err) {
       root.innerHTML = `<p class="error-box">${esc(err.message || err)}</p>`;
     }

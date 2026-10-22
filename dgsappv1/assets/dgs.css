@@ -2236,13 +2236,24 @@ body.dgs-hide-workbench #workbench-link {
   display: none !important;
 }
 
-body.dgs-dashboard-v2 .dgs-dashboard-mount:has(.dgs-field-pair) {
+body.dgs-dashboard-v2 .dgs-dashboard-mount:has(.dgs-field-pair),
+body.dgs-dashboard-v2 .dgs-dashboard-mount:has(.dgs-field-shell) {
   display: flex;
   flex-direction: column;
   overflow: hidden;
   border: 0;
   background: transparent;
   border-radius: 0;
+}
+.dgs-field-shell {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+.dgs-field-segments {
+  display: none;
 }
 .dgs-field-pair {
   flex: 1;
@@ -3265,27 +3276,92 @@ body.dgs-work-orders-v2 .dgs-wo-root {
     padding-bottom: var(--dgs-v2-system-nav-clear-tablet, 36px);
   }
 
-  body.dgs-dashboard-v2 .dgs-dashboard-mount:has(.dgs-field-pair) {
-    overflow: auto;
+  body.dgs-dashboard-v2 .dgs-dashboard-mount:has(.dgs-field-shell) {
+    overflow: hidden;
+    padding: 0.75rem 0.85rem 0;
+  }
+
+  .dgs-field-shell {
+    padding-bottom: var(--dgs-v2-system-nav-clear-tablet, 36px);
+  }
+
+  .dgs-field-segments {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.35rem;
+    padding: 0.25rem;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 12px;
+    background: #12161e;
+    flex: 0 0 auto;
+  }
+
+  .dgs-field-segment {
+    margin: 0;
+    border: 0;
+    border-radius: 9px;
+    padding: 0.65rem 0.7rem;
+    background: transparent;
+    color: #8b96a8;
+    font: inherit;
+    font-size: 0.86rem;
+    font-weight: 650;
+    cursor: pointer;
+  }
+
+  .dgs-field-segment span {
+    margin-left: 0.3rem;
+    color: inherit;
+    font-variant-numeric: tabular-nums;
+    opacity: 0.85;
+  }
+
+  .dgs-field-segment.is-active {
+    background: rgba(147, 197, 253, 0.16);
+    color: #f3f5f9;
+  }
+
+  .dgs-field-pair.dgs-field-swipe {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: nowrap;
+    gap: 0;
+    overflow-x: auto;
+    overflow-y: hidden;
+    scroll-snap-type: x mandatory;
+    scroll-behavior: smooth;
     -webkit-overflow-scrolling: touch;
-    padding: 0.75rem 0.85rem var(--dgs-v2-system-nav-clear-tablet, 36px);
+    overscroll-behavior-x: contain;
+    scrollbar-width: none;
   }
 
-  .dgs-field-pair {
-    grid-template-columns: 1fr;
-    flex: none;
-    min-height: auto;
-    overflow: visible;
+  .dgs-field-pair.dgs-field-swipe::-webkit-scrollbar {
+    display: none;
   }
 
-  .dgs-field-panel {
-    flex: none;
+  .dgs-field-pair.dgs-field-swipe .dgs-field-panel {
+    flex: 0 0 100%;
+    width: 100%;
+    max-width: 100%;
+    min-width: 100%;
     max-height: none;
+    height: 100%;
+    scroll-snap-align: start;
+    scroll-snap-stop: always;
+    border-radius: 12px;
   }
 
-  .dgs-field-scroll {
-    flex: none;
-    overflow: visible;
+  .dgs-field-pair.dgs-field-swipe .dgs-field-panel h2 {
+    display: none;
+  }
+
+  .dgs-field-pair.dgs-field-swipe .dgs-field-scroll {
+    flex: 1;
+    min-height: 0;
+    overflow-x: hidden;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: 0.5rem;
   }
 }
 
@@ -3298,8 +3374,12 @@ body.dgs-work-orders-v2 .dgs-wo-root {
     display: flex;
   }
 
-  body.dgs-dashboard-v2 .dgs-dashboard-mount:has(.dgs-field-pair) {
+  .dgs-field-shell {
     padding-bottom: var(--dgs-v2-system-nav-clear, 28px);
+  }
+
+  body.dgs-dashboard-v2 .dgs-dashboard-mount:has(.dgs-field-shell) {
+    padding-bottom: 0;
   }
 
   body.dgs-work-orders-v2 .dgs-wo-root {
