@@ -2496,9 +2496,8 @@ body.dgs-dashboard-v2 .dgs-dashboard-mount:has(.dgs-capacity) {
 }
 .dgs-capacity-trend-line {
   position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
+  left: 0;
+  top: 0;
   display: block;
   overflow: visible;
   pointer-events: none;
@@ -2513,7 +2512,7 @@ body.dgs-dashboard-v2 .dgs-dashboard-mount:has(.dgs-capacity) {
 .dgs-capacity-trend-dot {
   fill: #93c5fd;
   stroke: #0e1117;
-  stroke-width: 0.7;
+  stroke-width: 1.5;
 }
 .dgs-capacity-trend-labels {
   display: grid;

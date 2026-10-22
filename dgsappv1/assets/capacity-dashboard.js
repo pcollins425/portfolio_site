@@ -248,23 +248,7 @@
       .join("");
 
     const n = trend.length;
-    const linePoints = trend
-      .map((row, i) => {
-        const downtime = Number(row.downtime) || 0;
-        const x = ((i + 0.5) / n) * 100;
-        const y = 100 - (downMax ? (downtime / downMax) * 100 : 0);
-        return `${x},${y}`;
-      })
-      .join(" ");
-    const lineDots = trend
-      .map((row, i) => {
-        const downtime = Number(row.downtime) || 0;
-        const x = ((i + 0.5) / n) * 100;
-        const y = 100 - (downMax ? (downtime / downMax) * 100 : 0);
-        return `<circle class="dgs-capacity-trend-dot" cx="${x}" cy="${y}" r="1.6" />`;
-      })
-      .join("");
-
+    const downSeries = trend.map((row) => Number(row.downtime) || 0);
     const barCols = trend
       .map((row) => {
         const cost = Number(row.part_cost) || 0;
@@ -304,13 +288,12 @@
       <div class="dgs-capacity-trend-yaxis-name is-cost">Part cost</div>
       <div class="dgs-capacity-trend-yaxis is-cost">${costTickHtml}</div>
       <div class="dgs-capacity-trend-plot">
-        <div class="dgs-capacity-trend-body">
+        <div class="dgs-capacity-trend-body" data-down-max="${esc(String(downMax))}" data-down-series="${esc(
+      JSON.stringify(downSeries)
+    )}">
           <div class="dgs-capacity-trend-grid">${gridHtml}</div>
           <div class="dgs-capacity-trend" style="--capacity-trend-n:${n}">${barCols}</div>
-          <svg class="dgs-capacity-trend-line" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
-            <polyline points="${linePoints}" fill="none" vector-effect="non-scaling-stroke" />
-            ${lineDots}
-          </svg>
+          <svg class="dgs-capacity-trend-line" aria-hidden="true"></svg>
         </div>
         <div class="dgs-capacity-trend-labels" style="--capacity-trend-n:${n}">${labelCols}</div>
       </div>
@@ -323,6 +306,53 @@
       <div class="dgs-capacity-trend-xaxis-name">${esc(axisName(grain))}</div>
     </div>`;
   }
+
+  function layoutTrendLine(root) {
+    const body = root.querySelector(".dgs-capacity-trend-body");
+    const svg = root.querySelector("svg.dgs-capacity-trend-line");
+    if (!body || !svg) return;
+    let series = [];
+    try {
+      series = JSON.parse(body.getAttribute("data-down-series") || "[]");
+    } catch (_) {
+      series = [];
+    }
+    if (!Array.isArray(series) || !series.length) {
+      svg.replaceChildren();
+      return;
+    }
+    const downMax = Number(body.getAttribute("data-down-max")) || 1;
+    const width = Math.max(body.clientWidth || 0, 1);
+    const height = Math.max(body.clientHeight || 0, 1);
+    const n = series.length;
+    const points = series.map((value, i) => {
+      const x = ((i + 0.5) / n) * width;
+      const y = height - ((Number(value) || 0) / downMax) * height;
+      return [x, y];
+    });
+    const ns = "http://www.w3.org/2000/svg";
+    svg.setAttribute("viewBox", `0 0 ${width} ${height}`);
+    svg.setAttribute("width", String(width));
+    svg.setAttribute("height", String(height));
+    svg.removeAttribute("preserveAspectRatio");
+    svg.replaceChildren();
+
+    const line = document.createElementNS(ns, "polyline");
+    line.setAttribute("fill", "none");
+    line.setAttribute("points", points.map(([x, y]) => `${x},${y}`).join(" "));
+    svg.appendChild(line);
+
+    points.forEach(([x, y]) => {
+      const dot = document.createElementNS(ns, "circle");
+      dot.setAttribute("class", "dgs-capacity-trend-dot");
+      dot.setAttribute("cx", String(x));
+      dot.setAttribute("cy", String(y));
+      dot.setAttribute("r", "3.5");
+      svg.appendChild(dot);
+    });
+  }
+
+  let trendResizeObserver = null;
 
   const defaults = currentMonthBounds();
   let state = {
@@ -582,6 +612,16 @@
     document.getElementById("capacity-start")?.addEventListener("keydown", onEnter);
     document.getElementById("capacity-end")?.addEventListener("keydown", onEnter);
     wireRanks(root);
+    layoutTrendLine(root);
+    if (trendResizeObserver) {
+      trendResizeObserver.disconnect();
+      trendResizeObserver = null;
+    }
+    const trendBody = root.querySelector(".dgs-capacity-trend-body");
+    if (trendBody && typeof ResizeObserver !== "undefined") {
+      trendResizeObserver = new ResizeObserver(() => layoutTrendLine(root));
+      trendResizeObserver.observe(trendBody);
+    }
   }
 
   async function load(root) {
