@@ -410,7 +410,6 @@
       backdrop = document.createElement("div");
       backdrop.id = "capacity-drill-backdrop";
       backdrop.className = "dgs-capacity-drawer-backdrop";
-      backdrop.hidden = true;
       document.body.appendChild(backdrop);
       backdrop.addEventListener("click", closeDrill);
     }
@@ -419,8 +418,10 @@
       drawer.id = "capacity-drill-drawer";
       drawer.className = "dgs-capacity-drawer";
       drawer.setAttribute("aria-label", "Work order detail");
-      drawer.hidden = true;
       document.body.appendChild(drawer);
+      drawer.addEventListener("click", (event) => {
+        if (event.target.closest("#capacity-drill-close")) closeDrill();
+      });
     }
     return { backdrop, drawer };
   }
@@ -428,13 +429,8 @@
   function closeDrill() {
     state.drill = null;
     document.body.classList.remove("capacity-drill-open");
-    const backdrop = document.getElementById("capacity-drill-backdrop");
     const drawer = document.getElementById("capacity-drill-drawer");
-    if (backdrop) backdrop.hidden = true;
-    if (drawer) {
-      drawer.hidden = true;
-      drawer.innerHTML = "";
-    }
+    if (drawer) drawer.innerHTML = "";
     document.querySelectorAll(".dgs-capacity-trend-col.is-active").forEach((el) => {
       el.classList.remove("is-active");
     });
@@ -468,8 +464,6 @@
     if (options.sourceEl) options.sourceEl.classList.add("is-active");
 
     document.body.classList.add("capacity-drill-open");
-    backdrop.hidden = false;
-    drawer.hidden = false;
     drawer.innerHTML = `<div class="dgs-capacity-drawer-inner"><p class="dgs-v2-loading">Loading work orders…</p></div>`;
 
     try {
@@ -516,7 +510,6 @@
             "No work orders in this selection."
           )}
         </div>`;
-      document.getElementById("capacity-drill-close")?.addEventListener("click", closeDrill);
     } catch (err) {
       drawer.innerHTML = `
         <div class="dgs-capacity-drawer-head">
@@ -526,7 +519,6 @@
         <div class="dgs-capacity-drawer-body"><p class="error-box">${esc(
           err.message || err
         )}</p></div>`;
-      document.getElementById("capacity-drill-close")?.addEventListener("click", closeDrill);
     }
   }
 

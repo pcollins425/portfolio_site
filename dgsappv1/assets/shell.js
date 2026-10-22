@@ -828,11 +828,47 @@
     return person.role ? `${name} · ${person.role}` : name;
   }
 
+  const DEV_VIEW_EXPANDED_KEY = "dgs_dev_view_expanded";
+
+  function syncDevViewOffset(bar) {
+    if (!bar) {
+      document.documentElement.style.setProperty("--dgs-dev-view-h", "0px");
+      return;
+    }
+    const expanded = bar.classList.contains("is-expanded");
+    document.body.classList.toggle("dgs-dev-view-on", expanded);
+    const height = expanded ? bar.offsetHeight : 0;
+    document.documentElement.style.setProperty("--dgs-dev-view-h", `${height}px`);
+  }
+
+  function setDevViewExpanded(bar, expanded) {
+    if (!bar) return;
+    bar.classList.toggle("is-expanded", !!expanded);
+    try {
+      sessionStorage.setItem(DEV_VIEW_EXPANDED_KEY, expanded ? "1" : "0");
+    } catch (_err) {
+      /* ignore */
+    }
+    const toggle = bar.querySelector("#dgs-dev-view-toggle");
+    if (toggle) toggle.setAttribute("aria-expanded", expanded ? "true" : "false");
+    syncDevViewOffset(bar);
+  }
+
+  function preferredDevViewExpanded(current) {
+    if (current && current.employee_id) return true;
+    try {
+      return sessionStorage.getItem(DEV_VIEW_EXPANDED_KEY) === "1";
+    } catch (_err) {
+      return false;
+    }
+  }
+
   async function renderDevView() {
     const existing = document.getElementById("dgs-dev-view");
     if (!window.DGSAuth || !DGSAuth.getCanViewAs || !DGSAuth.getCanViewAs()) {
       if (existing) existing.remove();
       document.body.classList.remove("dgs-dev-view-on");
+      document.documentElement.style.setProperty("--dgs-dev-view-h", "0px");
       return;
     }
     let bar = existing;
@@ -841,26 +877,31 @@
       bar.id = "dgs-dev-view";
       bar.className = "dgs-dev-view";
       bar.innerHTML = `
-        <span class="dgs-dev-view-kicker">Dev view</span>
-        <label class="dgs-dev-view-field">
-          <span class="dgs-dev-view-caption">View as</span>
-          <select id="dgs-dev-view-select"></select>
-        </label>
-        <span class="dgs-dev-view-note" id="dgs-dev-view-note"></span>
+        <button type="button" class="dgs-dev-view-toggle" id="dgs-dev-view-toggle" aria-expanded="false" aria-controls="dgs-dev-view-panel">Dev view</button>
+        <div class="dgs-dev-view-panel" id="dgs-dev-view-panel">
+          <span class="dgs-dev-view-kicker">Dev view</span>
+          <label class="dgs-dev-view-field">
+            <span class="dgs-dev-view-caption">View as</span>
+            <select id="dgs-dev-view-select"></select>
+          </label>
+          <span class="dgs-dev-view-note" id="dgs-dev-view-note"></span>
+          <button type="button" class="dgs-dev-view-hide" id="dgs-dev-view-hide">Hide</button>
+        </div>
       `;
       document.body.prepend(bar);
       bar.querySelector("#dgs-dev-view-select").addEventListener("change", (event) => {
         DGSAuth.setViewAs(event.target.value);
       });
+      bar.querySelector("#dgs-dev-view-toggle").addEventListener("click", () => {
+        setDevViewExpanded(bar, true);
+      });
+      bar.querySelector("#dgs-dev-view-hide").addEventListener("click", () => {
+        setDevViewExpanded(bar, false);
+      });
     }
-    document.body.classList.add("dgs-dev-view-on");
-    const syncOffset = () => {
-      document.documentElement.style.setProperty("--dgs-dev-view-h", `${bar.offsetHeight}px`);
-    };
-    syncOffset();
     if (!bar.dataset.dgsOffsetWired) {
       bar.dataset.dgsOffsetWired = "1";
-      window.addEventListener("resize", syncOffset);
+      window.addEventListener("resize", () => syncDevViewOffset(bar));
     }
     const select = bar.querySelector("#dgs-dev-view-select");
     const note = bar.querySelector("#dgs-dev-view-note");
@@ -912,7 +953,7 @@
     } catch (_err) {
       /* picker still has the current person; exit stays available */
     }
-    syncOffset();
+    setDevViewExpanded(bar, preferredDevViewExpanded(current));
   }
 
   async function boot(activeId, onReady) {

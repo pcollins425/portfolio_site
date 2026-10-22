@@ -2085,22 +2085,66 @@ body.login-page {
   }
 }
 
-/* Dev view — signed-in preview of another employee's grants */
+/* Dev view — signed-in preview of another employee's grants (toggle; pushes layout when open) */
 .dgs-dev-view {
   position: fixed;
   top: 0;
   left: 0;
-  right: 0;
   z-index: 80;
-  display: flex;
+  font-size: 13px;
+}
+
+.dgs-dev-view-toggle {
+  margin: 8px 0 0 10px;
+  padding: 6px 10px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 999px;
+  background: #243044;
+  color: #d5deea;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 650;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  cursor: pointer;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.28);
+}
+
+.dgs-dev-view-toggle:hover,
+.dgs-dev-view-toggle:focus-visible {
+  background: #2e3c55;
+  outline: none;
+}
+
+.dgs-dev-view.is-previewing:not(.is-expanded) .dgs-dev-view-toggle {
+  background: #4a3414;
+  color: #f8ecd4;
+  border-color: rgba(248, 236, 212, 0.35);
+}
+
+.dgs-dev-view-panel {
+  display: none;
   align-items: center;
   gap: 12px;
   flex-wrap: wrap;
+  width: 100vw;
   padding: 8px 14px;
   background: #243044;
   color: #d5deea;
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-  font-size: 13px;
+}
+
+.dgs-dev-view.is-expanded .dgs-dev-view-toggle {
+  display: none;
+}
+
+.dgs-dev-view.is-expanded .dgs-dev-view-panel {
+  display: flex;
+}
+
+.dgs-dev-view.is-expanded.is-previewing .dgs-dev-view-panel {
+  background: #4a3414;
+  color: #f8ecd4;
 }
 
 body.dgs-dev-view-on.dgs-app {
@@ -2110,11 +2154,6 @@ body.dgs-dev-view-on.dgs-app {
 body.dgs-dev-view-on .dgs-sidebar {
   top: var(--dgs-dev-view-h, 42px);
   height: calc(100vh - var(--dgs-dev-view-h, 42px));
-}
-
-.dgs-dev-view.is-previewing {
-  background: #4a3414;
-  color: #f8ecd4;
 }
 
 .dgs-dev-view-kicker {
@@ -2156,9 +2195,30 @@ body.dgs-dev-view-on .dgs-sidebar {
   opacity: 0.9;
 }
 
+.dgs-dev-view-hide {
+  margin-left: auto;
+  padding: 5px 10px;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  border-radius: 8px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.dgs-dev-view-hide:hover,
+.dgs-dev-view-hide:focus-visible {
+  background: rgba(255, 255, 255, 0.08);
+  outline: none;
+}
+
 @media (max-width: 900px) {
   .dgs-dev-view-note {
     flex-basis: 100%;
+  }
+  .dgs-dev-view-hide {
+    margin-left: 0;
   }
 }
 
@@ -2590,24 +2650,31 @@ body.dgs-dashboard-v2 .dgs-dashboard-mount:has(.dgs-capacity) {
   background: rgba(147, 197, 253, 0.12);
 }
 .dgs-capacity-drawer-backdrop {
+  display: none;
   position: fixed;
   inset: 0;
   background: rgba(8, 10, 14, 0.55);
-  z-index: 55;
+  z-index: 89;
 }
 .dgs-capacity-drawer {
+  display: none;
   position: fixed;
   top: 0;
   right: 0;
   width: min(920px, 96vw);
   height: 100vh;
-  z-index: 56;
-  display: flex;
+  z-index: 90;
   flex-direction: column;
   background: #12161e;
   border-left: 1px solid rgba(255, 255, 255, 0.1);
   box-shadow: -12px 0 32px rgba(0, 0, 0, 0.35);
   color: #f3f5f9;
+}
+body.capacity-drill-open .dgs-capacity-drawer-backdrop {
+  display: block;
+}
+body.capacity-drill-open .dgs-capacity-drawer {
+  display: flex;
 }
 .dgs-capacity-drawer-head {
   display: flex;
