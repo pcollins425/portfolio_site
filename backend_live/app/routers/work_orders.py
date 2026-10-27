@@ -363,6 +363,46 @@ def _load_wo_for_part_request(
     return row
 
 
+_PART_SEARCH_TOKEN = re.compile(r"[^a-zA-Z0-9._/-]+")
+
+
+def _parts_search_selector(needle: str, limit: int) -> str:
+    """Build an AppSheet Find selector that techs can actually use.
+
+    AppSheet REST ``CONTAINS([Part Name], …)`` returns empty for this Parts
+    table; ``FIND(token, LOWER(blob)) > 0`` works. Multi-word queries become
+    AND'd tokens so ``AGS Button`` matches name/mfr/label/id fields.
+    """
+    cleaned = (needle or "").replace('"', "").replace("\\", "").strip()
+    raw_tokens = [t for t in re.split(r"\s+", cleaned) if t]
+    tokens: list[str] = []
+    for raw in raw_tokens:
+        tok = _PART_SEARCH_TOKEN.sub("", raw).lower()
+        if len(tok) >= 2:
+            tokens.append(tok)
+        elif len(tok) == 1 and tokens:
+            # Keep single-char add-ons only when paired with a longer token.
+            tokens.append(tok)
+    if not tokens:
+        # Fall back to whole needle if stripping wiped tokens (e.g. "10867").
+        fallback = _PART_SEARCH_TOKEN.sub("", cleaned).lower()
+        if len(fallback) >= 2:
+            tokens = [fallback]
+    if not tokens:
+        return f"TOP(FILTER({appsheet_client.PARTS_TABLE}, TRUE), {int(limit)})"
+
+    blob = (
+        "LOWER("
+        '[Part ID (Key)] & " " & [Part Number] & " " & [Part Name] & " " & '
+        '[Manufacturer] & " " & [MFR Part No.] & " " & [Type to Search] & " " & '
+        '[Parts_Dropdown_Label] & " " & [Category] & " " & [Part Category]'
+        ")"
+    )
+    conditions = [f'FIND("{tok}", {blob}) > 0' for tok in tokens[:6]]
+    expr = conditions[0] if len(conditions) == 1 else f"AND({', '.join(conditions)})"
+    return f"TOP(FILTER({appsheet_client.PARTS_TABLE}, {expr}), {int(limit)})"
+
+
 @router.get("/part-catalog/search")
 def part_catalog_search(
     q: str = Query("", max_length=80),
@@ -371,17 +411,10 @@ def part_catalog_search(
 ):
     """Search AppSheet Parts (Tech app) for DGS Part # picker."""
     _require_part_request_write(user)
-    needle = (q or "").strip().replace('"', "")
+    needle = (q or "").strip()
     if len(needle) < 2:
         return {"q": needle or None, "parts": []}
-    # Escape for AppSheet expression; keep simple CONTAINS on key + name.
-    safe = needle.replace("\\", "")
-    selector = (
-        f'TOP(FILTER({appsheet_client.PARTS_TABLE}, '
-        f'OR(CONTAINS([Part ID (Key)], "{safe}"), '
-        f'CONTAINS(LOWER([Part Name]), LOWER("{safe}"))), '
-        f"{int(limit)})"
-    )
+    selector = _parts_search_selector(needle, limit)
     try:
         rows = appsheet_client.find_rows(
             appsheet_client.PARTS_TABLE,
@@ -407,7 +440,7 @@ def part_catalog_search(
                 "stock": _text(row.get("Stock")),
             }
         )
-    return {"q": needle, "parts": parts}
+    return {"q": needle, "parts": parts, "count": len(parts)}
 
 
 @router.get("/{wo}/part-requests")

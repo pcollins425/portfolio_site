@@ -277,27 +277,39 @@
         }
         return;
       }
+      if (!results) return;
+      results.hidden = false;
+      results.innerHTML = `<p class="dgs-field-empty">Searching parts…</p>`;
+      setStatus("", false);
       try {
         const payload = await fetchJson(
-          `/api/work-orders/part-catalog/search?q=${encodeURIComponent(q.trim())}&limit=15`
+          `/api/work-orders/part-catalog/search?q=${encodeURIComponent(q.trim())}&limit=25`
         );
         const parts = (payload && payload.parts) || [];
-        if (!results) return;
         if (!parts.length) {
-          results.hidden = false;
-          results.innerHTML = `<p class="dgs-field-empty">No parts matched.</p>`;
+          results.innerHTML = `<p class="dgs-field-empty">No parts matched “${esc(
+            q.trim()
+          )}”. Try fewer words or a part #.</p>`;
           return;
         }
-        results.hidden = false;
         results.innerHTML = parts
           .map((p) => {
+            const stock =
+              p.stock != null && p.stock !== "" ? ` · stock ${p.stock}` : "";
             const label = [p.item, p.name, p.mfr].filter(Boolean).join(" · ");
             return `<button type="button" class="dgs-wo-pr-hit" data-item="${esc(
               p.item
-            )}">${esc(label)}</button>`;
+            )}"><span class="dgs-wo-pr-hit-main">${esc(
+              label
+            )}</span><span class="dgs-wo-pr-hit-meta">${esc(
+              stock
+            )}</span></button>`;
           })
           .join("");
       } catch (err) {
+        results.innerHTML = `<p class="error-box">${esc(
+          err.message || String(err)
+        )}</p>`;
         setStatus(err.message || String(err), true);
       }
     }
@@ -308,7 +320,14 @@
     if (searchInput) {
       searchInput.addEventListener("input", () => {
         clearTimeout(searchTimer);
-        searchTimer = setTimeout(runSearch, 280);
+        searchTimer = setTimeout(runSearch, 350);
+      });
+      searchInput.addEventListener("keydown", (event) => {
+        if (event.key === "Enter") {
+          event.preventDefault();
+          clearTimeout(searchTimer);
+          runSearch();
+        }
       });
     }
     if (results) {

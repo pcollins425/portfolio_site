@@ -3191,6 +3191,9 @@ body.wo-detail-open .dgs-capacity-drawer {
   overflow: auto;
 }
 .dgs-wo-pr-hit {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
   text-align: left;
   padding: 0.45rem 0.55rem;
   border-radius: 6px;
@@ -3203,6 +3206,10 @@ body.wo-detail-open .dgs-capacity-drawer {
 }
 .dgs-wo-pr-hit:hover {
   background: rgba(255, 255, 255, 0.09);
+}
+.dgs-wo-pr-hit-meta {
+  color: rgba(232, 237, 245, 0.55);
+  font-size: 0.78rem;
 }
 .dgs-wo-pr-status {
   margin: 0;
