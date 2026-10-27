@@ -63,6 +63,21 @@ def require_area_read(area: str):
     return _dependency
 
 
+def require_area_write(area: str):
+    """Close a route unless the effective map has write on ``area``."""
+
+    def _dependency(
+        user: Annotated[dict[str, Any] | None, Depends(require_demo_user)],
+    ) -> dict[str, Any] | None:
+        if user is None:
+            return None
+        if not cat.has_area_write(user.get("permissions") or {}, area):
+            raise HTTPException(status_code=403, detail="Not available for this account")
+        return user
+
+    return _dependency
+
+
 def require_table_read(
     table_id: str,
     user: Annotated[dict[str, Any] | None, Depends(require_demo_user)],

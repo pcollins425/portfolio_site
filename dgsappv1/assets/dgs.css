@@ -3147,6 +3147,59 @@ body.wo-detail-open .dgs-capacity-drawer {
   color: #8b96a8;
   font-size: 0.78rem;
 }
+.dgs-wo-part-request {
+  margin-top: 0.85rem;
+  padding-top: 0.85rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  display: grid;
+  gap: 0.75rem;
+}
+.dgs-wo-part-request .dgs-v2-input,
+.dgs-wo-part-request input,
+.dgs-wo-part-request select,
+.dgs-wo-part-request textarea {
+  width: 100%;
+  box-sizing: border-box;
+  margin-top: 0.25rem;
+  padding: 0.45rem 0.55rem;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(0, 0, 0, 0.25);
+  color: #f3f5f9;
+  font: inherit;
+}
+.dgs-wo-pr-results {
+  display: grid;
+  gap: 0.35rem;
+  max-height: 12rem;
+  overflow: auto;
+}
+.dgs-wo-pr-hit {
+  text-align: left;
+  padding: 0.45rem 0.55rem;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.04);
+  color: #e8edf5;
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.84rem;
+}
+.dgs-wo-pr-hit:hover {
+  background: rgba(255, 255, 255, 0.09);
+}
+.dgs-wo-pr-status {
+  margin: 0;
+  font-size: 0.84rem;
+  color: #9fd4a7;
+}
+.dgs-wo-pr-status.is-error {
+  color: #f0a8a8;
+}
+.dgs-wo-pr-actions {
+  display: flex;
+  gap: 0.5rem;
+}
 .dgs-wo-mat-item {
   font-weight: 600;
   color: #f3f5f9;

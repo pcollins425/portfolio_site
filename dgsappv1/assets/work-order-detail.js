@@ -71,9 +71,15 @@
     return hubCell(href, row.theme);
   }
 
-  async function fetchJson(path) {
+  async function fetchJson(path, options) {
+    const opts = options || {};
     const res = await fetch(`${DGSAuth.apiBase()}${path}`, {
-      headers: DGSAuth.authHeaders(),
+      method: opts.method || "GET",
+      headers: {
+        ...DGSAuth.authHeaders(),
+        ...(opts.body ? { "Content-Type": "application/json" } : {}),
+      },
+      body: opts.body ? JSON.stringify(opts.body) : undefined,
     });
     if (!res.ok) {
       let detail = await res.text();
@@ -85,6 +91,7 @@
       }
       throw new Error(detail || `Request failed (${res.status})`);
     }
+    if (res.status === 204) return null;
     return res.json();
   }
 
@@ -128,6 +135,190 @@
     if (raw === "EMAINT") return "eMaint";
     if (raw === "APPSHEET") return "AppSheet";
     return source || "—";
+  }
+
+  function partRequestsListHtml(requests) {
+    if (!requests || !requests.length) {
+      return `<p class="dgs-field-empty">No part requests on this work order yet.</p>`;
+    }
+    const rows = requests
+      .map((row) => {
+        return `<tr>
+          <td>${esc(row.tech_order || "—")}</td>
+          <td>${esc(row.dgs_part || "—")}${
+          row.part_description
+            ? `<div class="dgs-wo-mat-descrip">${esc(row.part_description)}</div>`
+            : ""
+        }</td>
+          <td class="dgs-field-num">${esc(row.quantity || "—")}</td>
+          <td>${esc(row.status || "—")}</td>
+          <td>${esc(row.date || "—")}</td>
+        </tr>`;
+      })
+      .join("");
+    return `<div class="dgs-field-scroll"><table class="dgs-field-table">
+      <thead><tr><th>Order #</th><th>Part</th><th class="dgs-field-num">Qty</th><th>Status</th><th>Date</th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table></div>`;
+  }
+
+  function partRequestFormHtml(data) {
+    const pr = data.part_requests || {};
+    if (!pr.can_write) return "";
+    if (!pr.wo_ready) {
+      return `<p class="dgs-field-empty">Part requests need a 5-digit eMaint WO # on this order.</p>`;
+    }
+    return `
+      <div class="dgs-wo-part-request" id="wo-part-request">
+        <div class="dgs-wo-fields">
+          <label class="dgs-wo-field">
+            <span class="dgs-wo-field-label">Part search</span>
+            <input type="search" id="wo-pr-search" class="dgs-v2-input" placeholder="Part # or name" autocomplete="off" />
+          </label>
+          <div id="wo-pr-results" class="dgs-wo-pr-results" hidden></div>
+          <label class="dgs-wo-field">
+            <span class="dgs-wo-field-label">DGS Part #</span>
+            <input type="text" id="wo-pr-part" class="dgs-v2-input" required />
+          </label>
+          <label class="dgs-wo-field">
+            <span class="dgs-wo-field-label">Quantity</span>
+            <input type="number" id="wo-pr-qty" class="dgs-v2-input" min="1" step="1" value="1" required />
+          </label>
+          <label class="dgs-wo-field">
+            <span class="dgs-wo-field-label">Importance</span>
+            <select id="wo-pr-importance" class="dgs-v2-input">
+              <option value="">—</option>
+              <option>Cabinet Down - Urgent</option>
+              <option>Needed Soon</option>
+              <option>When Available</option>
+            </select>
+          </label>
+          <label class="dgs-wo-field">
+            <span class="dgs-wo-field-label">Notes</span>
+            <textarea id="wo-pr-notes" class="dgs-v2-input" rows="2"></textarea>
+          </label>
+        </div>
+        <p class="dgs-wo-pr-status" id="wo-pr-status" hidden></p>
+        <div class="dgs-wo-pr-actions">
+          <button type="button" class="dgs-v2-btn dgs-v2-btn-primary" id="wo-pr-submit">Submit request</button>
+        </div>
+      </div>`;
+  }
+
+  function bindPartRequestUi(drawer, data) {
+    const pr = data.part_requests || {};
+    if (!pr.can_write || !pr.wo_ready) return;
+    const wo = data.wo;
+    const searchInput = drawer.querySelector("#wo-pr-search");
+    const results = drawer.querySelector("#wo-pr-results");
+    const partInput = drawer.querySelector("#wo-pr-part");
+    const statusEl = drawer.querySelector("#wo-pr-status");
+    const submitBtn = drawer.querySelector("#wo-pr-submit");
+    let searchTimer = null;
+
+    function setStatus(msg, isError) {
+      if (!statusEl) return;
+      statusEl.hidden = !msg;
+      statusEl.textContent = msg || "";
+      statusEl.classList.toggle("is-error", !!isError);
+    }
+
+    async function runSearch() {
+      const q = (searchInput && searchInput.value) || "";
+      if (q.trim().length < 2) {
+        if (results) {
+          results.hidden = true;
+          results.innerHTML = "";
+        }
+        return;
+      }
+      try {
+        const payload = await fetchJson(
+          `/api/work-orders/part-catalog/search?q=${encodeURIComponent(q.trim())}&limit=15`
+        );
+        const parts = (payload && payload.parts) || [];
+        if (!results) return;
+        if (!parts.length) {
+          results.hidden = false;
+          results.innerHTML = `<p class="dgs-field-empty">No parts matched.</p>`;
+          return;
+        }
+        results.hidden = false;
+        results.innerHTML = parts
+          .map((p) => {
+            const label = [p.item, p.name, p.mfr].filter(Boolean).join(" · ");
+            return `<button type="button" class="dgs-wo-pr-hit" data-item="${esc(
+              p.item
+            )}">${esc(label)}</button>`;
+          })
+          .join("");
+      } catch (err) {
+        setStatus(err.message || String(err), true);
+      }
+    }
+
+    if (searchInput) {
+      searchInput.addEventListener("input", () => {
+        clearTimeout(searchTimer);
+        searchTimer = setTimeout(runSearch, 280);
+      });
+    }
+    if (results) {
+      results.addEventListener("click", (event) => {
+        const btn = event.target.closest(".dgs-wo-pr-hit");
+        if (!btn || !partInput) return;
+        partInput.value = btn.getAttribute("data-item") || "";
+        results.hidden = true;
+        results.innerHTML = "";
+      });
+    }
+    if (submitBtn) {
+      submitBtn.addEventListener("click", async () => {
+        const dgsPart = (partInput && partInput.value) || "";
+        const qty = Number((drawer.querySelector("#wo-pr-qty") || {}).value || 1);
+        const importance = (drawer.querySelector("#wo-pr-importance") || {}).value || "";
+        const notes = (drawer.querySelector("#wo-pr-notes") || {}).value || "";
+        if (!dgsPart.trim()) {
+          setStatus("Choose a DGS Part #.", true);
+          return;
+        }
+        submitBtn.disabled = true;
+        setStatus("Submitting…", false);
+        try {
+          const created = await fetchJson(
+            `/api/work-orders/${encodeURIComponent(wo)}/part-requests`,
+            {
+              method: "POST",
+              body: {
+                dgs_part: dgsPart.trim(),
+                quantity: qty,
+                importance: importance || null,
+                notes: notes || null,
+                job_type: "Repair",
+              },
+            }
+          );
+          setStatus(
+            `Submitted ${created.tech_order || "request"} for part ${created.dgs_part}.`,
+            false
+          );
+          if (partInput) partInput.value = "";
+          const notesEl = drawer.querySelector("#wo-pr-notes");
+          if (notesEl) notesEl.value = "";
+          const listHost = drawer.querySelector("#wo-pr-list");
+          if (listHost) {
+            const listed = await fetchJson(
+              `/api/work-orders/${encodeURIComponent(wo)}/part-requests`
+            );
+            listHost.innerHTML = partRequestsListHtml(listed.requests || []);
+          }
+        } catch (err) {
+          setStatus(err.message || String(err), true);
+        } finally {
+          submitBtn.disabled = false;
+        }
+      });
+    }
   }
 
   function materialsHtml(materials, total) {
@@ -310,6 +501,12 @@
             <p class="dgs-wo-section-note">Charge lines from eMaint and AppSheet.</p>
             ${materialsHtml(data.materials, data.materials_total)}
           </section>
+          <section class="dgs-wo-section" id="wo-part-requests-section">
+            <h3>Part requests</h3>
+            <p class="dgs-wo-section-note">Sent to inventory (AppSheet Part Orders). Pilot: Paul + Kevin.</p>
+            <div id="wo-pr-list"><p class="dgs-v2-loading">Loading requests…</p></div>
+            ${partRequestFormHtml(data)}
+          </section>
           <section class="dgs-wo-section">
             <h3>Record</h3>
             <div class="dgs-wo-fields">
@@ -323,6 +520,17 @@
             </div>
           </section>
         </div>`;
+      bindPartRequestUi(drawer, data);
+      const listHost = drawer.querySelector("#wo-pr-list");
+      if (listHost && data.wo) {
+        fetchJson(`/api/work-orders/${encodeURIComponent(data.wo)}/part-requests`)
+          .then((listed) => {
+            listHost.innerHTML = partRequestsListHtml(listed.requests || []);
+          })
+          .catch((err) => {
+            listHost.innerHTML = `<p class="error-box">${esc(err.message || err)}</p>`;
+          });
+      }
     } catch (err) {
       drawer.innerHTML = `
         <div class="dgs-capacity-drawer-head">

@@ -8,11 +8,15 @@ from __future__ import annotations
 
 import html
 import os
+import re
+import uuid
 from datetime import date, datetime
 from typing import Annotated, Any, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from pydantic import BaseModel, Field
 
+from app import appsheet_client
 from app import mssql
 from app import permission_catalog as cat
 from app.auth_deps import require_area_read, require_demo_user
@@ -30,6 +34,18 @@ router = APIRouter(
 )
 
 StatusFilter = Literal["open", "closed", "all"]
+
+_WO_DIGITS = re.compile(r"^\d{5}$")
+
+
+class PartRequestIn(BaseModel):
+    dgs_part: str = Field(min_length=1, max_length=80)
+    quantity: float = Field(default=1, gt=0, le=9999)
+    job_type: str = Field(default="Repair", max_length=40)
+    importance: str | None = Field(default=None, max_length=80)
+    notes: str | None = Field(default=None, max_length=2000)
+    ship_to_category: str | None = Field(default="Primary Location", max_length=80)
+
 
 _OPEN = """
     wo.workstatus = N'O'
@@ -298,6 +314,229 @@ def work_orders_meta(
     }
 
 
+def _can_write_part_requests(user: dict[str, Any] | None) -> bool:
+    if user is None:
+        return False
+    return cat.has_area_write(user.get("permissions") or {}, cat.PART_REQUESTS_AREA)
+
+
+def _require_part_request_write(user: dict[str, Any] | None) -> dict[str, Any]:
+    if user is None or not _can_write_part_requests(user):
+        raise HTTPException(status_code=403, detail="Part request write not available")
+    return user
+
+
+def _load_wo_for_part_request(
+    wo: str,
+    user: dict[str, Any] | None,
+) -> dict[str, Any]:
+    key = (wo or "").strip()
+    if not key:
+        raise HTTPException(status_code=400, detail="wo is required")
+    scope_sql, scope_params = _detail_scope(user)
+    rows = _query(
+        f"""
+        SELECT
+            wo.wo,
+            wo.reference_key,
+            wo.property,
+            wo.compid,
+            wo.asset_id,
+            wo.project_no,
+            wo.assignto,
+            COALESCE(ast.serial_number, wo.compid) AS serial
+        {_base_joins()}
+        WHERE (wo.wo = %s OR wo.reference_key = %s)
+        {scope_sql}
+        """,
+        (key, key, *scope_params),
+    )
+    if not rows:
+        raise HTTPException(status_code=404, detail="Work order not found")
+    row = rows[0]
+    wo_num = _text(row.get("wo"))
+    if not wo_num or not _WO_DIGITS.match(wo_num):
+        raise HTTPException(
+            status_code=400,
+            detail="Work order needs a 5-digit eMaint WO # before a part request",
+        )
+    return row
+
+
+@router.get("/part-catalog/search")
+def part_catalog_search(
+    q: str = Query("", max_length=80),
+    limit: int = Query(20, ge=1, le=50),
+    user: Annotated[dict[str, Any] | None, Depends(require_demo_user)] = None,
+):
+    """Search AppSheet Parts (Tech app) for DGS Part # picker."""
+    _require_part_request_write(user)
+    needle = (q or "").strip().replace('"', "")
+    if len(needle) < 2:
+        return {"q": needle or None, "parts": []}
+    # Escape for AppSheet expression; keep simple CONTAINS on key + name.
+    safe = needle.replace("\\", "")
+    selector = (
+        f'TOP(FILTER({appsheet_client.PARTS_TABLE}, '
+        f'OR(CONTAINS([Part ID (Key)], "{safe}"), '
+        f'CONTAINS(LOWER([Part Name]), LOWER("{safe}"))), '
+        f"{int(limit)})"
+    )
+    try:
+        rows = appsheet_client.find_rows(
+            appsheet_client.PARTS_TABLE,
+            selector=selector,
+        )
+    except appsheet_client.AppSheetError as exc:
+        raise HTTPException(
+            status_code=502,
+            detail=f"Parts search failed: {exc}",
+        ) from exc
+    parts = []
+    for row in rows:
+        item = _text(row.get("Part ID (Key)"))
+        if not item:
+            continue
+        parts.append(
+            {
+                "item": item,
+                "name": _text(row.get("Part Name")),
+                "mfr": _text(row.get("Manufacturer")),
+                "mfr_part": _text(row.get("MFR Part No.")),
+                "category": _text(row.get("Category")),
+                "stock": _text(row.get("Stock")),
+            }
+        )
+    return {"q": needle, "parts": parts}
+
+
+@router.get("/{wo}/part-requests")
+def list_part_requests(
+    wo: str,
+    user: Annotated[dict[str, Any] | None, Depends(require_demo_user)] = None,
+):
+    row = _load_wo_for_part_request(wo, user)
+    wo_num = _text(row.get("wo"))
+    assert wo_num
+    selector = (
+        f'FILTER({appsheet_client.TECH_ORDER_TABLE}, '
+        f'[Work Order #] = "{wo_num}")'
+    )
+    try:
+        rows = appsheet_client.find_rows(
+            appsheet_client.TECH_ORDER_TABLE,
+            selector=selector,
+        )
+    except appsheet_client.AppSheetError as exc:
+        raise HTTPException(
+            status_code=502,
+            detail=f"Part request list failed: {exc}",
+        ) from exc
+    out = []
+    for r in rows:
+        out.append(
+            {
+                "tech_order": _text(r.get("Tech Order #")),
+                "dgs_part": _text(r.get("DGS Part #")),
+                "quantity": _text(r.get("Quantity")),
+                "status": _text(r.get("Status")),
+                "status_2": _text(r.get("Status 2")),
+                "date": _text(r.get("Date")),
+                "tech_name": _text(r.get("Tech Name")),
+                "part_description": _text(r.get("Part Description"))
+                or _text(r.get("Description")),
+                "importance": _text(r.get("Importance")),
+            }
+        )
+    return {
+        "wo": wo_num,
+        "can_write": _can_write_part_requests(user),
+        "requests": out,
+    }
+
+
+@router.post("/{wo}/part-requests")
+def create_part_request(
+    wo: str,
+    body: PartRequestIn,
+    user: Annotated[dict[str, Any] | None, Depends(require_demo_user)] = None,
+):
+    user = _require_part_request_write(user)
+    row = _load_wo_for_part_request(wo, user)
+    wo_num = _text(row.get("wo"))
+    assert wo_num
+
+    part_id = (body.dgs_part or "").strip()
+    try:
+        part_rows = appsheet_client.find_rows(
+            appsheet_client.PARTS_TABLE,
+            selector=(
+                f'FILTER({appsheet_client.PARTS_TABLE}, '
+                f'[Part ID (Key)] = "{part_id.replace(chr(34), "")}")'
+            ),
+        )
+    except appsheet_client.AppSheetError as exc:
+        raise HTTPException(status_code=502, detail=f"Part lookup failed: {exc}") from exc
+    if not part_rows:
+        raise HTTPException(status_code=400, detail=f"Unknown DGS part # {part_id}")
+
+    part_name = _text(part_rows[0].get("Part Name"))
+    today = date.today().isoformat()
+    tech_name = _text(user.get("name")) or "DGS App"
+    tech_email = _text(user.get("email"))
+    initials = "".join(
+        p[0] for p in re.split(r"\s+", tech_name) if p
+    ).upper()[:3] or "DG"
+    tech_order = f"TO{initials}{uuid.uuid4().hex[:5].upper()}{wo_num}"
+
+    asset = _text(row.get("serial")) or _text(row.get("compid"))
+    payload = {
+        "Tech Order #": tech_order,
+        "Work Order #": wo_num,
+        "DGS Part #": part_id,
+        "Quantity": str(int(body.quantity) if float(body.quantity).is_integer() else body.quantity),
+        "Status": "Open",
+        "Status 2": "Open",
+        "Date": today,
+        "Tech Name": tech_name,
+        "Job Type": (body.job_type or "Repair").strip() or "Repair",
+        "Part Description": part_name or "",
+        "Entered By Email": tech_email or "",
+        "Tech Email": tech_email or "",
+        "Tech Initials": initials,
+        "Ship To Catagory": (body.ship_to_category or "Primary Location").strip(),
+    }
+    if asset:
+        payload["Asset ID"] = asset
+    if _text(row.get("project_no")):
+        payload["Project #"] = _text(row.get("project_no"))
+    if body.importance and body.importance.strip():
+        payload["Importance"] = body.importance.strip()
+    if body.notes and body.notes.strip():
+        payload["Notes"] = body.notes.strip()
+
+    try:
+        created = appsheet_client.add_rows(
+            appsheet_client.TECH_ORDER_TABLE,
+            [payload],
+        )
+    except appsheet_client.AppSheetError as exc:
+        raise HTTPException(
+            status_code=502,
+            detail=f"Part request create failed: {exc} {exc.body[:300]}",
+        ) from exc
+
+    created_row = created[0] if created else payload
+    return {
+        "ok": True,
+        "wo": wo_num,
+        "tech_order": _text(created_row.get("Tech Order #")) or tech_order,
+        "dgs_part": part_id,
+        "quantity": payload["Quantity"],
+        "status": "Open",
+    }
+
+
 @router.get("/{wo}")
 def work_order_detail(
     wo: str,
@@ -493,6 +732,10 @@ def work_order_detail(
         "moneypenny": bool(row.get("moneypenny")),
         "materials": materials,
         "materials_total": materials_total,
+        "part_requests": {
+            "can_write": _can_write_part_requests(user),
+            "wo_ready": bool(wo_key and _WO_DIGITS.match(wo_key)),
+        },
     }
     if include_priority:
         detail["priority"] = _text(row.get("priority"))
