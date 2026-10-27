@@ -295,7 +295,6 @@ def work_orders_meta(
     user: Annotated[dict[str, Any] | None, Depends(require_demo_user)] = None,
 ):
     """Filter options for the browse toolbar."""
-    del user
     types = _query(
         """
         SELECT DISTINCT wo_type AS value
@@ -304,14 +303,167 @@ def work_orders_meta(
         ORDER BY wo_type
         """
     )
+    probs = _query(
+        """
+        SELECT DISTINCT TOP 40 probtype AS value
+        FROM projects.work_orders
+        WHERE NULLIF(LTRIM(RTRIM(probtype)), N'') IS NOT NULL
+        ORDER BY probtype
+        """
+    )
     return {
         "wo_types": [_text(row.get("value")) for row in types if _text(row.get("value"))],
+        "prob_types": [_text(row.get("value")) for row in probs if _text(row.get("value"))],
         "has_priority": _has_priority_column(),
+        "can_create": True,  # UI scaffold; eMaint create API still next
+        "create_preview_only": True,
+        "scope": "route" if assigned_employee_id(user) else "all",
         "statuses": [
             {"value": "open", "label": "Open"},
             {"value": "closed", "label": "Closed"},
             {"value": "all", "label": "All"},
         ],
+    }
+
+
+def _asset_resolve_row(row: dict[str, Any]) -> dict[str, Any]:
+    serial = _text(row.get("serial_number")) or _text(row.get("asset_no"))
+    cabinet = " · ".join(
+        p
+        for p in (
+            _text(row.get("vendor_name")),
+            _text(row.get("cabinet_name")),
+        )
+        if p
+    )
+    return {
+        "asset_id": _text(row.get("asset_id")),
+        "asset_no": _text(row.get("asset_no")),
+        "compid": serial,
+        "serial": serial,
+        "casino_id": _text(row.get("casino_id")),
+        "casino_name": _text(row.get("casino_name")),
+        "casino_short": _text(row.get("casino_short")),
+        "property": _text(row.get("emaint_property")) or _text(row.get("casino_name")),
+        "theme": _text(row.get("theme_name")),
+        "theme_id": _text(row.get("theme_id")),
+        "cabinet": cabinet or None,
+        "bank": _text(row.get("bank")),
+        "location": _text(row.get("location")),
+        "zone": _text(row.get("zone")),
+        "label": " · ".join(
+            p
+            for p in (
+                serial,
+                cabinet or None,
+                _text(row.get("theme_name")),
+                _text(row.get("casino_short")) or _text(row.get("casino_name")),
+            )
+            if p
+        ),
+    }
+
+
+@router.get("/create/resolve-asset")
+def create_resolve_asset(
+    q: str = Query("", max_length=80),
+    limit: int = Query(15, ge=1, le=40),
+    user: Annotated[dict[str, Any] | None, Depends(require_demo_user)] = None,
+):
+    """Find active floor machines for Add WO (route-scoped for techs)."""
+    needle = (q or "").strip()
+    if len(needle) < 2:
+        return {"q": needle or None, "matches": []}
+    scope_sql, scope_params = _route_scope(user)
+    like = f"%{needle.replace('[', '[[]').replace('%', '[%]').replace('_', '[_]')}%"
+    rows = _query(
+        f"""
+        SELECT TOP ({int(limit)})
+            sm.asset_id,
+            sm.asset_no,
+            sm.casino_id,
+            sm.theme_id,
+            sm.bank,
+            sm.location,
+            sm.zone,
+            ast.serial_number,
+            cas.casino_name,
+            cas.casino_short,
+            cas.emaint_property,
+            ven.vendor_name,
+            cab.cabinet_name,
+            th.theme_name
+        FROM inventory.slot_master_migration AS sm
+        INNER JOIN clients.casinos AS cas ON cas.reference_key = sm.casino_id
+        LEFT JOIN inventory.assets AS ast ON ast.reference_key = sm.asset_id
+        LEFT JOIN vendors.vendors AS ven ON ven.reference_key = ast.vendor_id
+        LEFT JOIN vendors.cabinets AS cab ON cab.reference_key = ast.cabinet_id
+        LEFT JOIN vendors.themes AS th ON th.reference_key = sm.theme_id
+        WHERE sm.is_active = 1
+          AND (
+            sm.asset_no LIKE %s
+            OR ast.serial_number LIKE %s
+            OR cas.casino_name LIKE %s
+            OR cas.casino_short LIKE %s
+            OR th.theme_name LIKE %s
+          )
+          {scope_sql}
+        ORDER BY
+          CASE
+            WHEN sm.asset_no = %s OR ast.serial_number = %s THEN 0
+            WHEN sm.asset_no LIKE %s OR ast.serial_number LIKE %s THEN 1
+            ELSE 2
+          END,
+          cas.casino_name,
+          sm.asset_no
+        """,
+        (like, like, like, like, like, *scope_params, needle, needle, f"{needle}%", f"{needle}%"),
+    )
+    return {"q": needle, "matches": [_asset_resolve_row(r) for r in rows]}
+
+
+@router.get("/create/casino-assets")
+def create_casino_assets(
+    casino_id: str = Query(..., min_length=1, max_length=40),
+    limit: int = Query(80, ge=1, le=200),
+    user: Annotated[dict[str, Any] | None, Depends(require_demo_user)] = None,
+):
+    """Active machines at one casino (route-scoped)."""
+    cid = casino_id.strip()
+    scope_sql, scope_params = _route_scope(user)
+    rows = _query(
+        f"""
+        SELECT TOP ({int(limit)})
+            sm.asset_id,
+            sm.asset_no,
+            sm.casino_id,
+            sm.theme_id,
+            sm.bank,
+            sm.location,
+            sm.zone,
+            ast.serial_number,
+            cas.casino_name,
+            cas.casino_short,
+            cas.emaint_property,
+            ven.vendor_name,
+            cab.cabinet_name,
+            th.theme_name
+        FROM inventory.slot_master_migration AS sm
+        INNER JOIN clients.casinos AS cas ON cas.reference_key = sm.casino_id
+        LEFT JOIN inventory.assets AS ast ON ast.reference_key = sm.asset_id
+        LEFT JOIN vendors.vendors AS ven ON ven.reference_key = ast.vendor_id
+        LEFT JOIN vendors.cabinets AS cab ON cab.reference_key = ast.cabinet_id
+        LEFT JOIN vendors.themes AS th ON th.reference_key = sm.theme_id
+        WHERE sm.is_active = 1
+          AND sm.casino_id = %s
+          {scope_sql}
+        ORDER BY sm.asset_no, ast.serial_number
+        """,
+        (cid, *scope_params),
+    )
+    return {
+        "casino_id": cid,
+        "assets": [_asset_resolve_row(r) for r in rows],
     }
 
 

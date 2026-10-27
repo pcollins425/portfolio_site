@@ -2929,11 +2929,13 @@ body.dgs-dashboard-v2 .dgs-dashboard-mount:has(.dgs-capacity) {
   color: #f3f5f9;
 }
 body.capacity-drill-open .dgs-capacity-drawer-backdrop,
-body.wo-detail-open .dgs-capacity-drawer-backdrop {
+body.wo-detail-open .dgs-capacity-drawer-backdrop,
+body.wo-create-open .dgs-capacity-drawer-backdrop {
   display: block;
 }
 body.capacity-drill-open .dgs-capacity-drawer,
-body.wo-detail-open .dgs-capacity-drawer {
+body.wo-detail-open .dgs-capacity-drawer,
+body.wo-create-open .dgs-capacity-drawer.is-wo-create {
   display: flex;
 }
 .dgs-capacity-drawer-head {
@@ -3074,8 +3076,31 @@ body.wo-detail-open .dgs-capacity-drawer {
   color: #8b96a8;
   font-size: 0.82rem;
 }
-.dgs-capacity-drawer.is-wo-detail {
+.dgs-capacity-drawer.is-wo-detail,
+.dgs-capacity-drawer.is-wo-create {
   width: min(720px, 96vw);
+}
+.dgs-wo-create-body {
+  display: grid;
+  gap: 1rem;
+}
+.dgs-wo-create-summary {
+  margin-top: 0.35rem;
+  padding: 0.55rem 0.65rem;
+  border-radius: 6px;
+  background: rgba(147, 197, 253, 0.1);
+  border: 1px solid rgba(147, 197, 253, 0.25);
+  font-size: 0.88rem;
+}
+.dgs-wo-create-place {
+  margin-top: 0.85rem;
+  display: grid;
+  gap: 0.65rem;
+}
+.dgs-wo-create-place-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 0.65rem;
 }
 .dgs-wo-desktop-table {
   display: block;

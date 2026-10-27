@@ -180,6 +180,9 @@
           </select>
           <select id="wo-type" aria-label="Type">${typeOptions}</select>
           <button type="button" class="dgs-v2-btn" id="wo-apply">Apply</button>
+          <button type="button" class="dgs-v2-btn dgs-v2-btn-primary" id="wo-add">
+            Add work order
+          </button>
           <span class="dgs-wo-meta">${esc(scopeNote)} · ${esc(
       String(state.total)
     )} match${state.total === 1 ? "" : "es"}</span>
@@ -230,6 +233,10 @@
       state.woType = document.getElementById("wo-type")?.value || "";
       state.offset = 0;
       loadList(root);
+    });
+    document.getElementById("wo-add")?.addEventListener("click", () => {
+      if (!window.DGSWorkOrderCreate) return;
+      DGSWorkOrderCreate.open({ meta: state.meta });
     });
     document.getElementById("wo-search")?.addEventListener("keydown", (event) => {
       if (event.key === "Enter") document.getElementById("wo-apply")?.click();
