@@ -3,10 +3,10 @@
   "use strict";
 
   let meta = null;
-  let selected = null;
-  let searchTimer = null;
+  let places = { states: [], tribes: [], casinos: [] };
   let assetMap = {};
-  let syncingPlace = false;
+  let searchTimer = null;
+  let syncing = false;
 
   function esc(value) {
     return String(value == null ? "" : value)
@@ -67,7 +67,6 @@
     document.body.classList.remove("wo-create-open");
     const drawer = document.getElementById("wo-create-drawer");
     if (drawer) drawer.innerHTML = "";
-    selected = null;
     assetMap = {};
   }
 
@@ -76,117 +75,148 @@
     if (el) el.value = value == null ? "" : String(value);
   }
 
-  function applyAsset(drawer, match, opts) {
-    const options = opts || {};
-    selected = match || null;
-    if (!match) {
-      if (!options.keepPlace) {
-        setVal(drawer, "wo-cr-property", "");
-        setVal(drawer, "wo-cr-compid", "");
-        setVal(drawer, "wo-cr-cabinet", "");
-        setVal(drawer, "wo-cr-theme", "");
-        setVal(drawer, "wo-cr-bank-loc", "");
-        setVal(drawer, "wo-cr-asset-id", "");
-      }
-      return;
-    }
-    setVal(drawer, "wo-cr-compid", match.compid || match.asset_no || "");
-    setVal(drawer, "wo-cr-property", match.property || "");
-    setVal(drawer, "wo-cr-cabinet", match.cabinet || "");
-    setVal(drawer, "wo-cr-theme", match.theme || "");
+  function casinoById(id) {
+    return (places.casinos || []).find((c) => c.casino_id === id) || null;
+  }
+
+  function filteredTribes(stateId) {
+    const all = places.tribes || [];
+    if (!stateId) return all;
+    return all.filter((t) => t.state_id === stateId);
+  }
+
+  function filteredCasinos(stateId, tribeId) {
+    let list = places.casinos || [];
+    if (stateId) list = list.filter((c) => c.state_id === stateId);
+    if (tribeId) list = list.filter((c) => c.tribe_id === tribeId);
+    return list;
+  }
+
+  function fillSelect(el, items, valueKey, labelKey, selected) {
+    if (!el) return;
+    const opts = [`<option value="">—</option>`].concat(
+      (items || []).map((item) => {
+        const value = item[valueKey];
+        const sel = selected && value === selected ? " selected" : "";
+        return `<option value="${esc(value)}"${sel}>${esc(item[labelKey])}</option>`;
+      })
+    );
+    el.innerHTML = opts.join("");
+  }
+
+  function refreshPlaceSelects(drawer, prefer) {
+    const pref = prefer || {};
+    const stateEl = drawer.querySelector("#wo-cr-state");
+    const tribeEl = drawer.querySelector("#wo-cr-tribe");
+    const casinoEl = drawer.querySelector("#wo-cr-casino");
+    const stateId = pref.state_id != null ? pref.state_id : stateEl?.value || "";
+    const tribeId = pref.tribe_id != null ? pref.tribe_id : tribeEl?.value || "";
+    const casinoId =
+      pref.casino_id != null ? pref.casino_id : casinoEl?.value || "";
+
+    fillSelect(stateEl, places.states, "state_id", "state_name", stateId);
+    fillSelect(
+      tribeEl,
+      filteredTribes(stateId),
+      "tribe_id",
+      "tribe_name",
+      tribeId
+    );
+    fillSelect(
+      casinoEl,
+      filteredCasinos(stateId, tribeId),
+      "casino_id",
+      "casino_name",
+      casinoId
+    );
+  }
+
+  function setContext(drawer, match) {
+    setVal(drawer, "wo-cr-cabinet", (match && match.cabinet) || "");
+    setVal(drawer, "wo-cr-theme", (match && match.theme) || "");
     setVal(
       drawer,
       "wo-cr-bank-loc",
-      match.bank && match.location ? `${match.bank} / ${match.location}` : match.bank || match.location || ""
+      match && match.bank && match.location
+        ? `${match.bank} / ${match.location}`
+        : (match && (match.bank || match.location)) || ""
     );
-    setVal(drawer, "wo-cr-asset-id", match.asset_id || "");
-    setVal(drawer, "wo-cr-casino-id", match.casino_id || "");
-
-    const assetInput = drawer.querySelector("#wo-cr-asset");
-    if (assetInput && options.fromSearch !== false) {
-      assetInput.value = match.compid || match.asset_no || match.label || "";
-    }
-
-    const hits = drawer.querySelector("#wo-cr-asset-hits");
-    if (hits) {
-      hits.hidden = true;
-      hits.innerHTML = "";
-    }
-
-    // Align place selects when we know casino
-    if (match.casino_id && !options.skipPlaceSync) {
-      syncPlaceFromCasino(drawer, match.casino_id, match);
-    }
+    setVal(drawer, "wo-cr-asset-id", (match && match.asset_id) || "");
   }
 
-  async function syncPlaceFromCasino(drawer, casinoId, match) {
-    if (syncingPlace) return;
-    const casinoEl = drawer.querySelector("#wo-cr-casino");
-    if (!casinoEl) return;
-    // If casino already selected and matches, just set asset option
-    if (casinoEl.value === casinoId) {
-      ensureAssetOption(drawer, match);
-      return;
-    }
-    // We don't have state/tribe on the match — leave place filters as user set,
-    // but load assets for that casino into the Asset datalist source map.
-    try {
-      syncingPlace = true;
-      await loadCasinoAssets(drawer, casinoId, match);
-    } finally {
-      syncingPlace = false;
-    }
-  }
-
-  function ensureAssetOption(drawer, match) {
-    if (!match) return;
-    const key = match.asset_id || match.compid;
-    if (!key) return;
-    assetMap[key] = match;
-  }
-
-  function fillSelect(el, items, valueKey, labelKey, placeholder) {
-    if (!el) return;
-    const current = el.value;
-    const opts = [`<option value="">${esc(placeholder || "—")}</option>`].concat(
-      (items || []).map(
-        (item) =>
-          `<option value="${esc(item[valueKey])}">${esc(item[labelKey])}</option>`
-      )
-    );
-    el.innerHTML = opts.join("");
-    el.disabled = false;
-    if (current && [...el.options].some((o) => o.value === current)) {
-      el.value = current;
-    }
-  }
-
-  function clearDownstream(drawer, from) {
-    const tribeEl = drawer.querySelector("#wo-cr-tribe");
-    const casinoEl = drawer.querySelector("#wo-cr-casino");
-    if (from === "state") {
-      fillSelect(tribeEl, [], "tribe_id", "tribe_name", "—");
-      fillSelect(casinoEl, [], "casino_id", "casino_name", "—");
-      assetMap = {};
-    } else if (from === "tribe") {
-      fillSelect(casinoEl, [], "casino_id", "casino_name", "—");
-      assetMap = {};
-    } else if (from === "casino") {
-      assetMap = {};
-    }
-  }
-
-  async function loadCasinoAssets(drawer, casinoId, prefer) {
+  async function loadCasinoAssets(casinoId) {
     if (!casinoId) {
       assetMap = {};
-      return;
+      return [];
     }
     const data = await fetchJson(
       `/api/work-orders/create/casino-assets?casino_id=${encodeURIComponent(casinoId)}`
     );
     const assets = data.assets || [];
     assetMap = Object.fromEntries(assets.map((a) => [a.asset_id || a.compid, a]));
-    if (prefer) ensureAssetOption(drawer, prefer);
+    return assets;
+  }
+
+  function showAssetHits(drawer, matches) {
+    const hits = drawer.querySelector("#wo-cr-asset-hits");
+    if (!hits) return;
+    if (!matches.length) {
+      hits.hidden = false;
+      hits.innerHTML = `<p class="dgs-wo-create-hit-empty">No machines matched.</p>`;
+      return;
+    }
+    matches.forEach((m) => {
+      const key = m.asset_id || m.compid;
+      if (key) assetMap[key] = m;
+    });
+    hits.hidden = false;
+    hits.innerHTML = matches
+      .slice(0, 25)
+      .map(
+        (m) =>
+          `<button type="button" class="dgs-wo-create-hit" data-key="${esc(
+            m.asset_id || m.compid
+          )}">${esc(m.label || m.compid)}</button>`
+      )
+      .join("");
+  }
+
+  function hideAssetHits(drawer) {
+    const hits = drawer.querySelector("#wo-cr-asset-hits");
+    if (!hits) return;
+    hits.hidden = true;
+    hits.innerHTML = "";
+  }
+
+  async function applyAsset(drawer, match) {
+    if (!match) {
+      setVal(drawer, "wo-cr-asset", "");
+      setContext(drawer, null);
+      return;
+    }
+    const serial = match.compid || match.asset_no || "";
+    setVal(drawer, "wo-cr-asset", serial);
+    setContext(drawer, match);
+    hideAssetHits(drawer);
+
+    const casinoId = match.casino_id;
+    if (!casinoId) return;
+    const casino = casinoById(casinoId);
+    if (!casino) return;
+    syncing = true;
+    try {
+      refreshPlaceSelects(drawer, {
+        state_id: casino.state_id || "",
+        tribe_id: casino.tribe_id || "",
+        casino_id: casino.casino_id,
+      });
+      await loadCasinoAssets(casino.casino_id);
+      if (match.asset_id || match.compid) {
+        assetMap[match.asset_id || match.compid] = match;
+      }
+    } finally {
+      syncing = false;
+    }
   }
 
   function formHtml() {
@@ -215,30 +245,22 @@
         <div class="dgs-wo-create-stack">
           <label class="dgs-wo-create-field">
             <span class="dgs-wo-create-label">State</span>
-            <select id="wo-cr-state" class="dgs-wo-create-control"><option value="">—</option></select>
+            <select id="wo-cr-state" class="dgs-wo-create-control"></select>
           </label>
           <label class="dgs-wo-create-field">
             <span class="dgs-wo-create-label">Tribe</span>
-            <select id="wo-cr-tribe" class="dgs-wo-create-control"><option value="">—</option></select>
+            <select id="wo-cr-tribe" class="dgs-wo-create-control"></select>
           </label>
           <label class="dgs-wo-create-field">
             <span class="dgs-wo-create-label">Casino</span>
-            <select id="wo-cr-casino" class="dgs-wo-create-control"><option value="">—</option></select>
+            <select id="wo-cr-casino" class="dgs-wo-create-control"></select>
           </label>
           <label class="dgs-wo-create-field">
             <span class="dgs-wo-create-label">Asset</span>
-            <input type="search" id="wo-cr-asset" class="dgs-wo-create-control" placeholder="House # or serial" autocomplete="off" />
+            <input type="search" id="wo-cr-asset" class="dgs-wo-create-control" placeholder="Type or pick house # / serial" autocomplete="off" />
           </label>
           <div id="wo-cr-asset-hits" class="dgs-wo-create-hits" hidden></div>
 
-          <label class="dgs-wo-create-field">
-            <span class="dgs-wo-create-label">Property</span>
-            <input type="text" id="wo-cr-property" class="dgs-wo-create-control is-readonly" readonly />
-          </label>
-          <label class="dgs-wo-create-field">
-            <span class="dgs-wo-create-label">Serial / compid</span>
-            <input type="text" id="wo-cr-compid" class="dgs-wo-create-control is-readonly" readonly />
-          </label>
           <label class="dgs-wo-create-field">
             <span class="dgs-wo-create-label">Cabinet</span>
             <input type="text" id="wo-cr-cabinet" class="dgs-wo-create-control is-readonly" readonly />
@@ -252,7 +274,6 @@
             <input type="text" id="wo-cr-bank-loc" class="dgs-wo-create-control is-readonly" readonly />
           </label>
           <input type="hidden" id="wo-cr-asset-id" />
-          <input type="hidden" id="wo-cr-casino-id" />
 
           <label class="dgs-wo-create-field">
             <span class="dgs-wo-create-label">Brief description</span>
@@ -329,152 +350,151 @@
       assign.value = me.name || me.email || "";
     }
 
-    // game_oos mirrors asst_dwn on create (same meaning for techs)
-    drawer.querySelector("#wo-cr-asst-dwn")?.addEventListener("change", () => {
-      /* value read at submit time as both asst_dwn and game_oos */
-    });
-
     const stateEl = drawer.querySelector("#wo-cr-state");
     const tribeEl = drawer.querySelector("#wo-cr-tribe");
     const casinoEl = drawer.querySelector("#wo-cr-casino");
     const assetInput = drawer.querySelector("#wo-cr-asset");
     const hits = drawer.querySelector("#wo-cr-asset-hits");
 
-    stateEl?.addEventListener("change", async () => {
-      clearDownstream(drawer, "state");
-      applyAsset(drawer, null, { keepPlace: true });
+    refreshPlaceSelects(drawer);
+
+    stateEl?.addEventListener("change", () => {
+      if (syncing) return;
+      const stateId = stateEl.value;
+      refreshPlaceSelects(drawer, {
+        state_id: stateId,
+        tribe_id: "",
+        casino_id: "",
+      });
+      assetMap = {};
       setVal(drawer, "wo-cr-asset", "");
-      const sid = stateEl.value;
-      if (!sid) return;
-      try {
-        const data = await fetchJson(
-          `/api/slot-master/tribes?state_id=${encodeURIComponent(sid)}`
-        );
-        fillSelect(tribeEl, data.items || [], "tribe_id", "tribe_name", "—");
-      } catch (err) {
-        setStatus(drawer, err.message || String(err), true);
-      }
+      setContext(drawer, null);
+      hideAssetHits(drawer);
     });
 
-    tribeEl?.addEventListener("change", async () => {
-      clearDownstream(drawer, "tribe");
-      applyAsset(drawer, null, { keepPlace: true });
-      setVal(drawer, "wo-cr-asset", "");
-      const tid = tribeEl.value;
-      if (!tid) return;
-      try {
-        const data = await fetchJson(
-          `/api/slot-master/casinos?tribe_id=${encodeURIComponent(tid)}`
-        );
-        fillSelect(casinoEl, data.items || [], "casino_id", "casino_name", "—");
-      } catch (err) {
-        setStatus(drawer, err.message || String(err), true);
+    tribeEl?.addEventListener("change", () => {
+      if (syncing) return;
+      const stateId = stateEl.value;
+      const tribeId = tribeEl.value;
+      // Picking tribe alone can imply state
+      let nextState = stateId;
+      if (tribeId && !nextState) {
+        const tribe = (places.tribes || []).find((t) => t.tribe_id === tribeId);
+        if (tribe) nextState = tribe.state_id || "";
       }
+      refreshPlaceSelects(drawer, {
+        state_id: nextState,
+        tribe_id: tribeId,
+        casino_id: "",
+      });
+      assetMap = {};
+      setVal(drawer, "wo-cr-asset", "");
+      setContext(drawer, null);
+      hideAssetHits(drawer);
     });
 
     casinoEl?.addEventListener("change", async () => {
-      clearDownstream(drawer, "casino");
-      applyAsset(drawer, null, { keepPlace: true });
+      if (syncing) return;
+      const casinoId = casinoEl.value;
+      const casino = casinoById(casinoId);
+      if (casino) {
+        syncing = true;
+        try {
+          refreshPlaceSelects(drawer, {
+            state_id: casino.state_id || "",
+            tribe_id: casino.tribe_id || "",
+            casino_id: casino.casino_id,
+          });
+        } finally {
+          syncing = false;
+        }
+      }
       setVal(drawer, "wo-cr-asset", "");
-      const cid = casinoEl.value;
-      setVal(drawer, "wo-cr-casino-id", cid);
-      if (!cid) return;
+      setContext(drawer, null);
+      hideAssetHits(drawer);
+      if (!casinoId) {
+        assetMap = {};
+        return;
+      }
       try {
-        await loadCasinoAssets(drawer, cid);
+        const assets = await loadCasinoAssets(casinoId);
+        // Open dropdown so tech sees options immediately
+        if (assets.length) showAssetHits(drawer, assets);
       } catch (err) {
         setStatus(drawer, err.message || String(err), true);
       }
     });
 
-    assetInput?.addEventListener("input", () => {
-      clearTimeout(searchTimer);
+    async function runAssetSearch(showAllAtCasino) {
       const q = (assetInput.value || "").trim();
-      searchTimer = setTimeout(async () => {
-        if (q.length < 2) {
-          if (hits) {
-            hits.hidden = true;
-            hits.innerHTML = "";
-          }
-          return;
-        }
-        // Prefer in-casino map filter when casino is set
-        const cid = casinoEl?.value;
-        if (cid && Object.keys(assetMap).length) {
-          const needle = q.toLowerCase();
-          const local = Object.values(assetMap).filter((a) => {
+      const casinoId = casinoEl?.value || "";
+
+      if (casinoId && Object.keys(assetMap).length) {
+        const needle = q.toLowerCase();
+        let local = Object.values(assetMap);
+        if (needle) {
+          local = local.filter((a) => {
             const blob = [a.compid, a.asset_no, a.label, a.theme, a.cabinet]
               .filter(Boolean)
               .join(" ")
               .toLowerCase();
             return blob.includes(needle);
           });
-          hits.hidden = false;
-          if (!local.length) {
-            hits.innerHTML = `<p class="dgs-wo-create-hit-empty">No machines at this casino.</p>`;
-            return;
-          }
-          hits.innerHTML = local
-            .slice(0, 20)
-            .map(
-              (m) =>
-                `<button type="button" class="dgs-wo-create-hit" data-key="${esc(
-                  m.asset_id || m.compid
-                )}">${esc(m.label || m.compid)}</button>`
-            )
-            .join("");
+        } else if (!showAllAtCasino) {
+          hideAssetHits(drawer);
           return;
         }
-        hits.hidden = false;
-        hits.innerHTML = `<p class="dgs-wo-create-hit-empty">Searching…</p>`;
-        try {
-          const data = await fetchJson(
-            `/api/work-orders/create/resolve-asset?q=${encodeURIComponent(q)}&limit=15`
-          );
-          const matches = data.matches || [];
-          matches.forEach((m) => ensureAssetOption(drawer, m));
-          if (!matches.length) {
-            hits.innerHTML = `<p class="dgs-wo-create-hit-empty">No machines matched.</p>`;
-            return;
-          }
-          hits.innerHTML = matches
-            .map(
-              (m) =>
-                `<button type="button" class="dgs-wo-create-hit" data-key="${esc(
-                  m.asset_id || m.compid
-                )}">${esc(m.label || m.compid)}</button>`
-            )
-            .join("");
-        } catch (err) {
-          hits.innerHTML = `<p class="dgs-wo-create-hit-empty is-error">${esc(
-            err.message || err
-          )}</p>`;
-        }
-      }, 280);
+        showAssetHits(drawer, local);
+        return;
+      }
+
+      if (q.length < 2) {
+        hideAssetHits(drawer);
+        return;
+      }
+      hits.hidden = false;
+      hits.innerHTML = `<p class="dgs-wo-create-hit-empty">Searching…</p>`;
+      try {
+        const data = await fetchJson(
+          `/api/work-orders/create/resolve-asset?q=${encodeURIComponent(q)}&limit=20`
+        );
+        showAssetHits(drawer, data.matches || []);
+      } catch (err) {
+        hits.innerHTML = `<p class="dgs-wo-create-hit-empty is-error">${esc(
+          err.message || err
+        )}</p>`;
+      }
+    }
+
+    assetInput?.addEventListener("focus", () => {
+      const casinoId = casinoEl?.value || "";
+      if (casinoId && Object.keys(assetMap).length) {
+        showAssetHits(drawer, Object.values(assetMap));
+      }
+    });
+    assetInput?.addEventListener("input", () => {
+      clearTimeout(searchTimer);
+      searchTimer = setTimeout(() => runAssetSearch(false), 220);
     });
 
     hits?.addEventListener("click", (event) => {
       const btn = event.target.closest(".dgs-wo-create-hit");
       if (!btn) return;
-      const key = btn.getAttribute("data-key");
-      const match = assetMap[key];
-      if (match) applyAsset(drawer, match, { skipPlaceSync: false });
+      const match = assetMap[btn.getAttribute("data-key")];
+      if (match) applyAsset(drawer, match);
     });
-
-    fetchJson("/api/slot-master/states")
-      .then((data) => {
-        fillSelect(stateEl, data.items || [], "state_id", "state_name", "—");
-      })
-      .catch((err) => setStatus(drawer, err.message || String(err), true));
   }
 
-  /** Values for future create POST — game_oos mirrors asst_dwn. */
   function collectPayload(drawer) {
     const down = (drawer.querySelector("#wo-cr-asst-dwn") || {}).value || "No";
+    const casinoId = (drawer.querySelector("#wo-cr-casino") || {}).value || "";
+    const casino = casinoById(casinoId);
+    const serial = (drawer.querySelector("#wo-cr-asset") || {}).value || "";
     return {
-      property: (drawer.querySelector("#wo-cr-property") || {}).value || "",
-      compid: (drawer.querySelector("#wo-cr-compid") || {}).value || "",
+      property: (casino && casino.property) || (casino && casino.casino_name) || "",
+      casino_id: casinoId,
+      compid: serial,
       asset_id: (drawer.querySelector("#wo-cr-asset-id") || {}).value || "",
-      casino_id: (drawer.querySelector("#wo-cr-casino-id") || {}).value || "",
       brief_desc: (drawer.querySelector("#wo-cr-brief") || {}).value || "",
       work_desc: (drawer.querySelector("#wo-cr-work") || {}).value || "",
       wo_type: (drawer.querySelector("#wo-cr-type") || {}).value || "",
@@ -498,13 +518,20 @@
         meta = { create_preview_only: true, wo_types: [], prob_types: [] };
       }
     }
+    try {
+      places = await fetchJson("/api/work-orders/create/places");
+    } catch (err) {
+      places = { states: [], tribes: [], casinos: [] };
+    }
     const { drawer } = ensureDrawer();
-    selected = null;
     assetMap = {};
     drawer.innerHTML = formHtml();
     document.body.classList.add("wo-create-open");
     bind(drawer);
-    drawer.querySelector("#wo-cr-asset")?.focus();
+    if (!places.casinos || !places.casinos.length) {
+      setStatus(drawer, "No casinos available for your route.", true);
+    }
+    drawer.querySelector("#wo-cr-casino")?.focus();
   }
 
   window.DGSWorkOrderCreate = { open, close, collectPayload };

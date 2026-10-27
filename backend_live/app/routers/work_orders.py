@@ -364,6 +364,75 @@ def _asset_resolve_row(row: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+@router.get("/create/places")
+def create_places(
+    user: Annotated[dict[str, Any] | None, Depends(require_demo_user)] = None,
+):
+    """Route-scoped state / tribe / casino lists for Add WO (any order)."""
+    employee_id = assigned_employee_id(user)
+    if employee_id:
+        scope_sql = f" AND {sql_predicate('c')}"
+        scope_params = sql_params(employee_id)
+    else:
+        scope_sql = ""
+        scope_params = ()
+    rows = _query(
+        f"""
+        SELECT DISTINCT
+            st.reference_key AS state_id,
+            st.state AS state_name,
+            t.reference_key AS tribe_id,
+            t.tribe_name,
+            c.reference_key AS casino_id,
+            c.casino_name,
+            c.casino_short,
+            c.emaint_property
+        FROM clients.casinos AS c
+        LEFT JOIN clients.states AS st ON st.reference_key = c.state_id
+        LEFT JOIN clients.tribes AS t ON t.reference_key = c.tribe_id
+        WHERE c.reference_key IS NOT NULL
+          {scope_sql}
+        ORDER BY st.state, t.tribe_name, c.casino_name
+        """,
+        scope_params or None,
+    )
+    states: dict[str, dict[str, Any]] = {}
+    tribes: dict[str, dict[str, Any]] = {}
+    casinos: list[dict[str, Any]] = []
+    for row in rows:
+        sid = _text(row.get("state_id"))
+        tid = _text(row.get("tribe_id"))
+        cid = _text(row.get("casino_id"))
+        if sid and sid not in states:
+            states[sid] = {
+                "state_id": sid,
+                "state_name": _text(row.get("state_name")) or sid,
+            }
+        if tid and tid not in tribes:
+            tribes[tid] = {
+                "tribe_id": tid,
+                "tribe_name": _text(row.get("tribe_name")) or tid,
+                "state_id": sid,
+            }
+        if cid:
+            casinos.append(
+                {
+                    "casino_id": cid,
+                    "casino_name": _text(row.get("casino_name")) or cid,
+                    "casino_short": _text(row.get("casino_short")),
+                    "property": _text(row.get("emaint_property"))
+                    or _text(row.get("casino_name")),
+                    "state_id": sid,
+                    "tribe_id": tid,
+                }
+            )
+    return {
+        "states": sorted(states.values(), key=lambda r: (r.get("state_name") or "")),
+        "tribes": sorted(tribes.values(), key=lambda r: (r.get("tribe_name") or "")),
+        "casinos": casinos,
+    }
+
+
 @router.get("/create/resolve-asset")
 def create_resolve_asset(
     q: str = Query("", max_length=80),
