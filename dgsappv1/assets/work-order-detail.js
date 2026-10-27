@@ -147,9 +147,23 @@
     return source || "—";
   }
 
-  function partRequestsListHtml(requests) {
-    if (!requests || !requests.length) {
-      return `<p class="dgs-field-empty">No part requests on this work order yet.</p>`;
+  function partRequestStatusLabel(row) {
+    const s2 = (row.status_2 || "").trim();
+    const s1 = (row.status || "").trim();
+    if (s2 && s1 && s2.toLowerCase() !== s1.toLowerCase()) {
+      return `${s1} · ${s2}`;
+    }
+    return s2 || s1 || "—";
+  }
+
+  function partRequestsListHtml(listed) {
+    const requests = (listed && listed.requests) || listed || [];
+    const hidden = (listed && listed.hidden_done) || 0;
+    if (!requests.length) {
+      const note = hidden
+        ? `No active part requests (${hidden} completed/cancelled hidden).`
+        : "No part requests on this work order yet.";
+      return `<p class="dgs-field-empty">${esc(note)}</p>`;
     }
     const rows = requests
       .map((row) => {
@@ -161,12 +175,17 @@
             : ""
         }</td>
           <td class="dgs-field-num">${esc(row.quantity || "—")}</td>
-          <td>${esc(row.status || "—")}</td>
+          <td>${esc(partRequestStatusLabel(row))}</td>
           <td>${esc(row.date || "—")}</td>
         </tr>`;
       })
       .join("");
-    return `<div class="dgs-field-scroll"><table class="dgs-field-table">
+    const foot = hidden
+      ? `<p class="dgs-wo-section-note">${esc(
+          `${hidden} completed/cancelled request${hidden === 1 ? "" : "s"} hidden.`
+        )}</p>`
+      : "";
+    return `${foot}<div class="dgs-field-scroll"><table class="dgs-field-table">
       <thead><tr><th>Order #</th><th>Part</th><th class="dgs-field-num">Qty</th><th>Status</th><th>Date</th></tr></thead>
       <tbody>${rows}</tbody>
     </table></div>`;
@@ -275,7 +294,7 @@
       const listed = await fetchJson(
         `/api/work-orders/${encodeURIComponent(wo)}/part-requests`
       );
-      listHost.innerHTML = partRequestsListHtml(listed.requests || []);
+      listHost.innerHTML = partRequestsListHtml(listed);
     }
 
     async function runSearch() {
@@ -604,7 +623,7 @@
       if (listHost && data.wo) {
         fetchJson(`/api/work-orders/${encodeURIComponent(data.wo)}/part-requests`)
           .then((listed) => {
-            listHost.innerHTML = partRequestsListHtml(listed.requests || []);
+            listHost.innerHTML = partRequestsListHtml(listed);
           })
           .catch((err) => {
             listHost.innerHTML = `<p class="error-box">${esc(err.message || err)}</p>`;

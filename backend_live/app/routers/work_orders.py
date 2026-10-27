@@ -552,9 +552,23 @@ def part_catalog_search(
     return {"q": needle, "parts": parts, "count": len(parts)}
 
 
+def _part_request_is_active(status: str, status_2: str) -> bool:
+    """Match AppSheet active Orders visibility (2026-10-27).
+
+    Hide done: Status Cancelled, Status 2 Complete.
+    Keep Tech Received Part (soft-complete — revisit later).
+    """
+    if (status or "").strip().casefold() == "cancelled":
+        return False
+    if (status_2 or "").strip().casefold() == "complete":
+        return False
+    return True
+
+
 @router.get("/{wo}/part-requests")
 def list_part_requests(
     wo: str,
+    include_done: bool = Query(False),
     user: Annotated[dict[str, Any] | None, Depends(require_demo_user)] = None,
 ):
     row = _load_wo_for_part_request(wo, user)
@@ -575,24 +589,34 @@ def list_part_requests(
             detail=f"Part request list failed: {exc}",
         ) from exc
     out = []
+    hidden = 0
     for r in rows:
+        status = _text(r.get("Status"))
+        status_2 = _text(r.get("Status 2"))
+        active = _part_request_is_active(status, status_2)
+        if not include_done and not active:
+            hidden += 1
+            continue
         out.append(
             {
                 "tech_order": _text(r.get("Tech Order #")),
                 "dgs_part": _text(r.get("DGS Part #")),
                 "quantity": _text(r.get("Quantity")),
-                "status": _text(r.get("Status")),
-                "status_2": _text(r.get("Status 2")),
+                "status": status,
+                "status_2": status_2,
                 "date": _text(r.get("Date")),
                 "tech_name": _text(r.get("Tech Name")),
                 "part_description": _text(r.get("Part Description"))
                 or _text(r.get("Description")),
                 "importance": _text(r.get("Importance")),
+                "active": active,
             }
         )
     return {
         "wo": wo_num,
         "can_write": _can_write_part_requests(user),
+        "include_done": include_done,
+        "hidden_done": hidden,
         "requests": out,
     }
 
