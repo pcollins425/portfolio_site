@@ -73,14 +73,24 @@
 
   async function fetchJson(path, options) {
     const opts = options || {};
-    const res = await fetch(`${DGSAuth.apiBase()}${path}`, {
-      method: opts.method || "GET",
-      headers: {
-        ...DGSAuth.authHeaders(),
-        ...(opts.body ? { "Content-Type": "application/json" } : {}),
-      },
-      body: opts.body ? JSON.stringify(opts.body) : undefined,
-    });
+    let res;
+    try {
+      res = await fetch(`${DGSAuth.apiBase()}${path}`, {
+        method: opts.method || "GET",
+        headers: {
+          ...DGSAuth.authHeaders(),
+          ...(opts.body ? { "Content-Type": "application/json" } : {}),
+        },
+        body: opts.body ? JSON.stringify(opts.body) : undefined,
+      });
+    } catch (err) {
+      const msg = err && err.message ? err.message : String(err);
+      throw new Error(
+        msg === "Failed to fetch"
+          ? "Could not reach the API (network or gateway). Try again."
+          : msg
+      );
+    }
     if (!res.ok) {
       let detail = await res.text();
       try {
@@ -194,8 +204,8 @@
             <select id="wo-pr-importance" class="dgs-v2-input">
               <option value="">—</option>
               <option>Cabinet Down - Urgent</option>
-              <option>Needed Soon</option>
-              <option>When Available</option>
+              <option>Cosmetic - High Priority</option>
+              <option>Cosmetic - Low Priority</option>
             </select>
           </label>
           <label class="dgs-wo-field">

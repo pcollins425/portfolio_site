@@ -7,6 +7,7 @@ Other roles with the grant see every row. Write path comes later.
 from __future__ import annotations
 
 import html
+import json
 import os
 import re
 import uuid
@@ -365,6 +366,114 @@ def _load_wo_for_part_request(
 
 _PART_SEARCH_TOKEN = re.compile(r"[^a-zA-Z0-9._/-]+")
 
+# Tech Order Form AppSheet Importance enum (AllowOtherValues=false).
+_PART_REQUEST_IMPORTANCE = {
+    "Cabinet Down - Urgent",
+    "Cosmetic - High Priority",
+    "Cosmetic - Low Priority",
+}
+
+
+def _appsheet_user_detail(exc: appsheet_client.AppSheetError, *, fallback: str) -> str:
+    """Prefer AppSheet's validation message over a raw HTTP wrapper."""
+    body = (exc.body or "").strip()
+    if body:
+        try:
+            parsed = json.loads(body)
+            if isinstance(parsed, dict) and parsed.get("detail"):
+                return str(parsed["detail"]).strip()
+        except Exception:
+            pass
+        if "invalid value" in body.lower() or "doesn't support value" in body.lower():
+            return body[:500]
+    msg = str(exc).strip()
+    return f"{fallback}: {msg}" if msg else fallback
+
+
+def _format_street_address(address: str, city: str, zip_code: Any, state: str = "") -> str:
+    street = (address or "").strip()
+    city_s = (city or "").strip()
+    zip_s = str(zip_code or "").strip()
+    state_s = (state or "").strip()
+    locality = ", ".join(p for p in (city_s, state_s) if p)
+    if locality and zip_s:
+        locality = f"{locality} {zip_s}"
+    elif zip_s:
+        locality = zip_s
+    return ", ".join(p for p in (street, locality) if p)
+
+
+def _casino_ship_address(property_name: str | None) -> str:
+    prop = (property_name or "").strip()
+    if not prop:
+        return ""
+    rows = _query(
+        """
+        SELECT TOP 1
+            c.address,
+            c.city,
+            c.zip,
+            s.state_abbreviation AS state_abbr
+        FROM clients.casinos AS c
+        LEFT JOIN clients.states AS s ON s.reference_key = c.state_id
+        WHERE c.emaint_property = %s
+           OR c.casino_name = %s
+           OR c.reference_key = %s
+        """,
+        (prop, prop, prop),
+    )
+    if not rows:
+        return ""
+    row = rows[0]
+    return _format_street_address(
+        _text(row.get("address")),
+        _text(row.get("city")),
+        row.get("zip"),
+        _text(row.get("state_abbr")),
+    )
+
+
+def _resolve_tech_location(email: str, name: str) -> dict[str, str]:
+    """Best-effort Locations row for ship-to / Tech Name."""
+    email_l = (email or "").strip().lower()
+    name_s = (name or "").strip()
+    try:
+        if email_l:
+            safe = email_l.replace('"', "")
+            rows = appsheet_client.find_rows(
+                appsheet_client.LOCATIONS_TABLE,
+                selector=(
+                    f'TOP(FILTER({appsheet_client.LOCATIONS_TABLE}, '
+                    f'FIND("{safe}", LOWER([Assigned User (Email)])) > 0), 5)'
+                ),
+            )
+            if rows:
+                row = rows[0]
+                return {
+                    "name": _text(row.get("Name")),
+                    "address": _text(row.get("Tech Address")),
+                    "initials": _text(row.get("Tech Initial")),
+                }
+        if name_s:
+            safe = name_s.replace('"', "")
+            rows = appsheet_client.find_rows(
+                appsheet_client.LOCATIONS_TABLE,
+                selector=(
+                    f'FILTER({appsheet_client.LOCATIONS_TABLE}, '
+                    f'[Name] = "{safe}")'
+                ),
+            )
+            if rows:
+                row = rows[0]
+                return {
+                    "name": _text(row.get("Name")),
+                    "address": _text(row.get("Tech Address")),
+                    "initials": _text(row.get("Tech Initial")),
+                }
+    except appsheet_client.AppSheetError:
+        return {}
+    return {}
+
 
 def _parts_search_selector(needle: str, limit: int) -> str:
     """Build an AppSheet Find selector that techs can actually use.
@@ -515,14 +624,44 @@ def create_part_request(
 
     part_name = _text(part_rows[0].get("Part Name"))
     today = date.today().isoformat()
-    tech_name = _text(user.get("name")) or "DGS App"
     tech_email = _text(user.get("email"))
-    initials = "".join(
-        p[0] for p in re.split(r"\s+", tech_name) if p
-    ).upper()[:3] or "DG"
+    user_name = _text(user.get("name")) or "DGS App"
+    loc = _resolve_tech_location(tech_email, user_name)
+    tech_name = loc.get("name") or user_name
+    initials = (loc.get("initials") or "").strip() or (
+        "".join(p[0] for p in re.split(r"\s+", user_name) if p).upper()[:3] or "DG"
+    )
     tech_order = f"TO{initials}{uuid.uuid4().hex[:5].upper()}{wo_num}"
 
     asset = _text(row.get("serial")) or _text(row.get("compid"))
+    job_type = (body.job_type or "Repair").strip() or "Repair"
+    if job_type == "Repair" and not asset:
+        raise HTTPException(
+            status_code=400,
+            detail="This work order has no Asset/serial — required for Repair part requests",
+        )
+
+    casino_address = _casino_ship_address(_text(row.get("property")))
+    tech_address = loc.get("address") or ""
+    ship_to = (body.ship_to_category or "Primary Location").strip() or "Primary Location"
+    if ship_to == "Primary Location" and not tech_address and casino_address:
+        # Office / non-tech pilots often have no Locations row — ship to property.
+        ship_to = "Casino"
+    if ship_to == "Primary Location":
+        send_to = tech_address
+    elif ship_to == "Casino":
+        send_to = casino_address
+    else:
+        send_to = tech_address or casino_address
+    if not send_to:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "No ship-to address found (tech Locations address or casino address). "
+                "Add your tech location in AppSheet or use a WO with a property address."
+            ),
+        )
+
     payload = {
         "Tech Order #": tech_order,
         "Work Order #": wo_num,
@@ -532,19 +671,33 @@ def create_part_request(
         "Status 2": "Open",
         "Date": today,
         "Tech Name": tech_name,
-        "Job Type": (body.job_type or "Repair").strip() or "Repair",
+        "Job Type": job_type,
         "Part Description": part_name or "",
         "Entered By Email": tech_email or "",
         "Tech Email": tech_email or "",
         "Tech Initials": initials,
-        "Ship To Catagory": (body.ship_to_category or "Primary Location").strip(),
+        "Ship To Catagory": ship_to,
+        "Send to Address": send_to,
     }
     if asset:
         payload["Asset ID"] = asset
+    if tech_address:
+        payload["Tech Address"] = tech_address
+    if casino_address:
+        payload["Casino Address"] = casino_address
     if _text(row.get("project_no")):
         payload["Project #"] = _text(row.get("project_no"))
     if body.importance and body.importance.strip():
-        payload["Importance"] = body.importance.strip()
+        importance = body.importance.strip()
+        if importance not in _PART_REQUEST_IMPORTANCE:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    "Importance must be one of: "
+                    + ", ".join(sorted(_PART_REQUEST_IMPORTANCE))
+                ),
+            )
+        payload["Importance"] = importance
     if body.notes and body.notes.strip():
         payload["Notes"] = body.notes.strip()
 
@@ -554,10 +707,10 @@ def create_part_request(
             [payload],
         )
     except appsheet_client.AppSheetError as exc:
-        raise HTTPException(
-            status_code=502,
-            detail=f"Part request create failed: {exc} {exc.body[:300]}",
-        ) from exc
+        detail = _appsheet_user_detail(exc, fallback="Part request create failed")
+        # AppSheet validation (bad enum, required field) → 400; transport → 502.
+        status = 400 if exc.status_code and 400 <= exc.status_code < 500 else 502
+        raise HTTPException(status_code=status, detail=detail) from exc
 
     created_row = created[0] if created else payload
     return {

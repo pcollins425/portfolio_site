@@ -15,6 +15,7 @@ import requests
 DEFAULT_BASE_URL = "https://api.appsheet.com/api/v2"
 TECH_ORDER_TABLE = "Tech Order Form"
 PARTS_TABLE = "Parts"
+LOCATIONS_TABLE = "Locations"
 
 
 class AppSheetError(RuntimeError):
