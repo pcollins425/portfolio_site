@@ -3147,12 +3147,28 @@ body.wo-detail-open .dgs-capacity-drawer {
   color: #8b96a8;
   font-size: 0.78rem;
 }
+.dgs-wo-section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+.dgs-wo-pr-toolbar {
+  margin-top: 0.85rem;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.65rem;
+}
 .dgs-wo-part-request {
   margin-top: 0.85rem;
   padding-top: 0.85rem;
   border-top: 1px solid rgba(255, 255, 255, 0.08);
   display: grid;
   gap: 0.75rem;
+}
+.dgs-wo-part-request[hidden] {
+  display: none !important;
 }
 .dgs-wo-part-request .dgs-v2-input,
 .dgs-wo-part-request input,

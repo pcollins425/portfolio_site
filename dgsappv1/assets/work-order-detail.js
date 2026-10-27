@@ -162,14 +162,19 @@
     </table></div>`;
   }
 
-  function partRequestFormHtml(data) {
+  function partRequestAddControlsHtml(data) {
     const pr = data.part_requests || {};
     if (!pr.can_write) return "";
     if (!pr.wo_ready) {
       return `<p class="dgs-field-empty">Part requests need a 5-digit eMaint WO # on this order.</p>`;
     }
     return `
-      <div class="dgs-wo-part-request" id="wo-part-request">
+      <div class="dgs-wo-pr-toolbar">
+        <button type="button" class="dgs-v2-btn dgs-v2-btn-primary" id="wo-pr-open">
+          Add part request
+        </button>
+      </div>
+      <div class="dgs-wo-part-request" id="wo-part-request" hidden>
         <div class="dgs-wo-fields">
           <label class="dgs-wo-field">
             <span class="dgs-wo-field-label">Part search</span>
@@ -201,6 +206,7 @@
         <p class="dgs-wo-pr-status" id="wo-pr-status" hidden></p>
         <div class="dgs-wo-pr-actions">
           <button type="button" class="dgs-v2-btn dgs-v2-btn-primary" id="wo-pr-submit">Submit request</button>
+          <button type="button" class="dgs-v2-btn" id="wo-pr-cancel">Cancel</button>
         </div>
       </div>`;
   }
@@ -209,6 +215,9 @@
     const pr = data.part_requests || {};
     if (!pr.can_write || !pr.wo_ready) return;
     const wo = data.wo;
+    const openBtn = drawer.querySelector("#wo-pr-open");
+    const form = drawer.querySelector("#wo-part-request");
+    const cancelBtn = drawer.querySelector("#wo-pr-cancel");
     const searchInput = drawer.querySelector("#wo-pr-search");
     const results = drawer.querySelector("#wo-pr-results");
     const partInput = drawer.querySelector("#wo-pr-part");
@@ -221,6 +230,42 @@
       statusEl.hidden = !msg;
       statusEl.textContent = msg || "";
       statusEl.classList.toggle("is-error", !!isError);
+    }
+
+    function showForm() {
+      if (!form) return;
+      form.hidden = false;
+      if (openBtn) openBtn.hidden = true;
+      setStatus("", false);
+      if (searchInput) searchInput.focus();
+    }
+
+    function hideForm() {
+      if (!form) return;
+      form.hidden = true;
+      if (openBtn) openBtn.hidden = false;
+      setStatus("", false);
+      if (results) {
+        results.hidden = true;
+        results.innerHTML = "";
+      }
+      if (searchInput) searchInput.value = "";
+      if (partInput) partInput.value = "";
+      const qty = drawer.querySelector("#wo-pr-qty");
+      if (qty) qty.value = "1";
+      const importance = drawer.querySelector("#wo-pr-importance");
+      if (importance) importance.value = "";
+      const notesEl = drawer.querySelector("#wo-pr-notes");
+      if (notesEl) notesEl.value = "";
+    }
+
+    async function refreshList() {
+      const listHost = drawer.querySelector("#wo-pr-list");
+      if (!listHost) return;
+      const listed = await fetchJson(
+        `/api/work-orders/${encodeURIComponent(wo)}/part-requests`
+      );
+      listHost.innerHTML = partRequestsListHtml(listed.requests || []);
     }
 
     async function runSearch() {
@@ -256,6 +301,9 @@
         setStatus(err.message || String(err), true);
       }
     }
+
+    if (openBtn) openBtn.addEventListener("click", showForm);
+    if (cancelBtn) cancelBtn.addEventListener("click", hideForm);
 
     if (searchInput) {
       searchInput.addEventListener("input", () => {
@@ -298,19 +346,19 @@
               },
             }
           );
-          setStatus(
-            `Submitted ${created.tech_order || "request"} for part ${created.dgs_part}.`,
-            false
-          );
-          if (partInput) partInput.value = "";
-          const notesEl = drawer.querySelector("#wo-pr-notes");
-          if (notesEl) notesEl.value = "";
-          const listHost = drawer.querySelector("#wo-pr-list");
-          if (listHost) {
-            const listed = await fetchJson(
-              `/api/work-orders/${encodeURIComponent(wo)}/part-requests`
-            );
-            listHost.innerHTML = partRequestsListHtml(listed.requests || []);
+          await refreshList();
+          hideForm();
+          const toolbar = drawer.querySelector(".dgs-wo-pr-toolbar");
+          if (toolbar) {
+            drawer.querySelector("#wo-pr-flash")?.remove();
+            const flash = document.createElement("p");
+            flash.id = "wo-pr-flash";
+            flash.className = "dgs-wo-pr-status";
+            flash.textContent = `Submitted ${created.tech_order || "request"} for part ${
+              created.dgs_part
+            }.`;
+            toolbar.prepend(flash);
+            setTimeout(() => flash.remove(), 5000);
           }
         } catch (err) {
           setStatus(err.message || String(err), true);
@@ -502,10 +550,12 @@
             ${materialsHtml(data.materials, data.materials_total)}
           </section>
           <section class="dgs-wo-section" id="wo-part-requests-section">
-            <h3>Part requests</h3>
+            <div class="dgs-wo-section-head">
+              <h3>Part requests</h3>
+            </div>
             <p class="dgs-wo-section-note">Sent to inventory (AppSheet Part Orders). Pilot: Paul + Kevin.</p>
             <div id="wo-pr-list"><p class="dgs-v2-loading">Loading requests…</p></div>
-            ${partRequestFormHtml(data)}
+            ${partRequestAddControlsHtml(data)}
           </section>
           <section class="dgs-wo-section">
             <h3>Record</h3>
