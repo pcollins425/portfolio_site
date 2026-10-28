@@ -1203,6 +1203,7 @@ def _load_wo_for_part_request(
             wo.compid,
             wo.asset_id,
             wo.project_no,
+            wo.wo_type,
             wo.assignto,
             COALESCE(ast.serial_number, wo.compid) AS serial
         {_base_joins()}
@@ -1334,21 +1335,36 @@ def _resolve_tech_location(email: str, name: str) -> dict[str, str]:
     return {}
 
 
+def _map_part_request_job_type(wo_type: str | None) -> str:
+    """Option 2: use Repair/Stock/Install when wo_type matches; else Repair."""
+    raw = (wo_type or "").strip()
+    if not raw:
+        return "Repair"
+    for allowed in _PART_REQUEST_JOB_TYPES:
+        if raw.casefold() == allowed.casefold():
+            return allowed
+    return "Repair"
+
+
 def _part_request_defaults(user: dict[str, Any] | None, row: dict[str, Any]) -> dict[str, Any]:
-    """Prefill values for the Tech Order fields AppSheet does not autofill from WO."""
+    """Prefill locked Tech Order context from WO + Locations."""
     user = user or {}
     tech_email = _text(user.get("email"))
     user_name = _text(user.get("name")) or ""
     loc = _resolve_tech_location(tech_email, user_name)
     tech_name = loc.get("name") or user_name
     asset = _text(row.get("serial")) or _text(row.get("compid"))
+    wo_type = _text(row.get("wo_type"))
     casino_address = _casino_ship_address(_text(row.get("property")))
     tech_address = loc.get("address") or ""
     ship_to = "Primary Location" if tech_address else ("Casino" if casino_address else "Primary Location")
     return {
         "tech_name": tech_name,
-        "job_type": "Repair",
+        "job_type": _map_part_request_job_type(wo_type),
+        "wo_type": wo_type,
         "asset_id": asset,
+        "wo": _text(row.get("wo")),
+        "project_no": _text(row.get("project_no")),
         "tech_address": tech_address,
         "casino_address": casino_address,
         "ship_to_category": ship_to,
@@ -1578,12 +1594,8 @@ def create_part_request(
     if body.quantity is None or float(body.quantity) <= 0:
         raise HTTPException(status_code=400, detail="Quantity is required")
 
-    job_type = (body.job_type or "Repair").strip() or "Repair"
-    if job_type not in _PART_REQUEST_JOB_TYPES:
-        raise HTTPException(
-            status_code=400,
-            detail="Job Type must be Repair, Stock, or Install",
-        )
+    # Locked: Job Type comes from WO wo_type map (Repair/Stock/Install or Repair).
+    job_type = _map_part_request_job_type(_text(row.get("wo_type")))
 
     importance = (body.importance or "").strip()
     if job_type == "Repair":

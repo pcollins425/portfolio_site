@@ -191,6 +191,25 @@
     </table></div>`;
   }
 
+  function partRequestContextHtml(data) {
+    const pr = data.part_requests || {};
+    if (!pr.can_write || !pr.wo_ready) return "";
+    const d = pr.defaults || {};
+    const contextFields = [
+      textField("Tech Name", d.tech_name),
+      textField("Job Type", d.job_type),
+      textField("Asset ID", d.asset_id),
+      textField("Work Order #", d.wo || data.wo),
+      textField("Project #", d.project_no),
+      textField("WO Type", d.wo_type),
+    ]
+      .filter(Boolean)
+      .join("");
+    return `<div class="dgs-wo-fields dgs-wo-pr-context">${
+      contextFields || `<p class="dgs-field-empty">No order context available.</p>`
+    }</div>`;
+  }
+
   function partRequestAddControlsHtml(data) {
     const pr = data.part_requests || {};
     if (!pr.can_write) return "";
@@ -198,8 +217,6 @@
       return `<p class="dgs-field-empty">Part requests need a 5-digit eMaint WO # on this order.</p>`;
     }
     const d = pr.defaults || {};
-    const techName = esc(d.tech_name || "");
-    const assetId = esc(d.asset_id || "");
     const shipTo = d.ship_to_category || "Primary Location";
     const shipOpts = ["Primary Location", "Casino", "Other"]
       .map(
@@ -208,36 +225,31 @@
       )
       .join("");
     const sendTo = esc(d.send_to_address || "");
+    const importanceRequired = (d.job_type || "Repair") === "Repair";
     return `
       <div class="dgs-wo-pr-toolbar">
         <button type="button" class="dgs-v2-btn dgs-v2-btn-primary" id="wo-pr-open">
           Add part request
         </button>
       </div>
-      <div class="dgs-wo-part-request" id="wo-part-request" hidden
+      <div class="dgs-wo-part-request dgs-wo-pr-card" id="wo-part-request" hidden
+        data-tech-name="${esc(d.tech_name || "")}"
+        data-job-type="${esc(d.job_type || "Repair")}"
+        data-asset-id="${esc(d.asset_id || "")}"
         data-tech-address="${esc(d.tech_address || "")}"
         data-casino-address="${esc(d.casino_address || "")}">
-        <p class="dgs-wo-section-note">Required fields match the Tech Order Form (*). Work Order # and catalog stamps are filled for you.</p>
+        <h4 class="dgs-wo-pr-card-title">Parts Order</h4>
+        <p class="dgs-wo-section-note">Fill the fields inventory still needs. Context above is locked from this work order.</p>
         <div class="dgs-wo-fields">
           <label class="dgs-wo-field">
-            <span class="dgs-wo-field-label">Tech Name <span class="dgs-wo-req" aria-hidden="true">*</span></span>
-            <input type="text" id="wo-pr-tech-name" class="dgs-v2-input" value="${techName}" required />
-          </label>
-          <label class="dgs-wo-field">
-            <span class="dgs-wo-field-label">Job Type <span class="dgs-wo-req" aria-hidden="true">*</span></span>
-            <select id="wo-pr-job-type" class="dgs-v2-input" required>
-              <option value="Repair" selected>Repair</option>
-              <option value="Stock">Stock</option>
-              <option value="Install">Install</option>
-            </select>
-          </label>
-          <label class="dgs-wo-field">
-            <span class="dgs-wo-field-label">Asset ID <span class="dgs-wo-req" aria-hidden="true">*</span></span>
-            <input type="text" id="wo-pr-asset" class="dgs-v2-input" value="${assetId}" readonly />
-          </label>
-          <label class="dgs-wo-field">
-            <span class="dgs-wo-field-label">Importance <span class="dgs-wo-req" aria-hidden="true">*</span></span>
-            <select id="wo-pr-importance" class="dgs-v2-input" required>
+            <span class="dgs-wo-field-label">Importance${
+              importanceRequired
+                ? ` <span class="dgs-wo-req" aria-hidden="true">*</span>`
+                : ""
+            }</span>
+            <select id="wo-pr-importance" class="dgs-v2-input"${
+              importanceRequired ? " required" : ""
+            }>
               <option value="">—</option>
               <option>Cabinet Down - Urgent</option>
               <option>Cosmetic - High Priority</option>
@@ -310,8 +322,6 @@
     const results = drawer.querySelector("#wo-pr-results");
     const partInput = drawer.querySelector("#wo-pr-part");
     const descInput = drawer.querySelector("#wo-pr-description");
-    const techNameInput = drawer.querySelector("#wo-pr-tech-name");
-    const jobTypeSelect = drawer.querySelector("#wo-pr-job-type");
     const shipToSelect = drawer.querySelector("#wo-pr-ship-to");
     const sendToInput = drawer.querySelector("#wo-pr-send-to");
     const statusEl = drawer.querySelector("#wo-pr-status");
@@ -324,6 +334,30 @@
     let partLookupTimer = null;
     let selectedHasPhoto = null;
     let picDataUrls = [];
+
+    function lockedTechName() {
+      return (
+        (form && form.getAttribute("data-tech-name")) ||
+        defaults.tech_name ||
+        ""
+      ).trim();
+    }
+
+    function lockedJobType() {
+      return (
+        (form && form.getAttribute("data-job-type")) ||
+        defaults.job_type ||
+        "Repair"
+      ).trim();
+    }
+
+    function lockedAssetId() {
+      return (
+        (form && form.getAttribute("data-asset-id")) ||
+        defaults.asset_id ||
+        ""
+      ).trim();
+    }
 
     function setStatus(msg, isError) {
       if (!statusEl) return;
@@ -477,7 +511,9 @@
       if (openBtn) openBtn.hidden = true;
       setStatus("", false);
       syncSendToAddress();
-      if (techNameInput) techNameInput.focus();
+      const importance = drawer.querySelector("#wo-pr-importance");
+      if (importance) importance.focus();
+      else if (searchInput) searchInput.focus();
     }
 
     function hideForm() {
@@ -492,8 +528,6 @@
       if (searchInput) searchInput.value = "";
       if (partInput) partInput.value = "";
       if (descInput) descInput.value = "";
-      if (techNameInput) techNameInput.value = defaults.tech_name || "";
-      if (jobTypeSelect) jobTypeSelect.value = "Repair";
       const qty = drawer.querySelector("#wo-pr-qty");
       if (qty) qty.value = "1";
       const importance = drawer.querySelector("#wo-pr-importance");
@@ -608,8 +642,9 @@
     }
     if (submitBtn) {
       submitBtn.addEventListener("click", async () => {
-        const techName = ((techNameInput && techNameInput.value) || "").trim();
-        const jobType = ((jobTypeSelect && jobTypeSelect.value) || "Repair").trim();
+        const techName = lockedTechName();
+        const jobType = lockedJobType();
+        const assetId = lockedAssetId();
         const dgsPart = (partInput && partInput.value) || "";
         const description = ((descInput && descInput.value) || "").trim();
         const qty = Number((drawer.querySelector("#wo-pr-qty") || {}).value || 0);
@@ -618,15 +653,10 @@
         const shipAddress = ((sendToInput && sendToInput.value) || "").trim();
         const notes = (drawer.querySelector("#wo-pr-notes") || {}).value || "";
         if (!techName) {
-          setStatus("Tech Name is required.", true);
-          if (techNameInput) techNameInput.focus();
+          setStatus("Tech Name is missing from order context.", true);
           return;
         }
-        if (!jobType) {
-          setStatus("Job Type is required.", true);
-          return;
-        }
-        if (jobType === "Repair" && !(defaults.asset_id || "").trim()) {
+        if (jobType === "Repair" && !assetId) {
           setStatus("Asset ID is required for Repair — this WO has no serial.", true);
           return;
         }
@@ -889,6 +919,7 @@
               <h3>Part requests</h3>
             </div>
             <p class="dgs-wo-section-note">Sent to inventory (AppSheet Part Orders). Pilot: Paul + Kevin.</p>
+            ${partRequestContextHtml(data)}
             <div id="wo-pr-list"><p class="dgs-v2-loading">Loading requests…</p></div>
             ${partRequestAddControlsHtml(data)}
           </section>
