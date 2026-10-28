@@ -41,6 +41,9 @@
       "add-stock-panel",
       "add-stock-form",
       "add-to-label",
+      "add-part-search",
+      "add-part-results",
+      "add-part-label",
       "add-item",
       "add-qty",
       "add-from",
@@ -48,6 +51,78 @@
     ].forEach((id) => {
       els[id.replace(/-/g, "_")] = $(id);
     });
+  }
+
+  let partSearchTimer = null;
+
+  function clearSelectedPart() {
+    if (els.add_item) els.add_item.value = "";
+    if (els.add_part_label) {
+      els.add_part_label.hidden = true;
+      els.add_part_label.textContent = "";
+    }
+  }
+
+  function selectPart(part) {
+    const item = (part && part.item) || "";
+    if (els.add_item) els.add_item.value = item;
+    if (els.add_part_search) els.add_part_search.value = item;
+    if (els.add_part_results) {
+      els.add_part_results.hidden = true;
+      els.add_part_results.innerHTML = "";
+    }
+    if (els.add_part_label) {
+      const bits = [part.name || part.descrip, part.mfr].filter(Boolean);
+      if (bits.length) {
+        els.add_part_label.hidden = false;
+        els.add_part_label.textContent = bits.join(" · ");
+      } else {
+        els.add_part_label.hidden = true;
+        els.add_part_label.textContent = "";
+      }
+    }
+  }
+
+  async function runPartSearch() {
+    const q = (els.add_part_search && els.add_part_search.value) || "";
+    if (!els.add_part_results) return;
+    if (q.trim().length < 2) {
+      els.add_part_results.hidden = true;
+      els.add_part_results.innerHTML = "";
+      return;
+    }
+    els.add_part_results.hidden = false;
+    els.add_part_results.innerHTML = `<p class="dgs-field-empty">Searching parts…</p>`;
+    try {
+      const payload = await fetchJson(
+        `/api/work-orders/part-catalog/search?q=${encodeURIComponent(q.trim())}&limit=25`
+      );
+      const parts = (payload && payload.parts) || [];
+      if (!parts.length) {
+        els.add_part_results.innerHTML = `<p class="dgs-field-empty">No parts matched “${esc(
+          q.trim()
+        )}”.</p>`;
+        return;
+      }
+      els.add_part_results.innerHTML = parts
+        .map((p) => {
+          const label = [p.item, p.name, p.mfr].filter(Boolean).join(" · ");
+          const stock =
+            p.stock != null && p.stock !== "" ? ` · stock ${esc(p.stock)}` : "";
+          return `<button type="button" class="dgs-wo-pr-hit" data-item="${esc(
+            p.item
+          )}" data-name="${esc(p.name || "")}" data-mfr="${esc(
+            p.mfr || ""
+          )}"><span class="dgs-wo-pr-hit-main">${esc(
+            label
+          )}</span><span class="dgs-wo-pr-hit-meta">${stock}</span></button>`;
+        })
+        .join("");
+    } catch (err) {
+      els.add_part_results.innerHTML = `<p class="error-box">${esc(
+        err.message || String(err)
+      )}</p>`;
+    }
   }
 
   function apiUrl(path) {
@@ -270,7 +345,8 @@
       showOk(
         `Added ${result.qty} × ${result.item} from ${result.from_bucket} → ${result.to_bucket} (truck available now ${result.truck_available}).`
       );
-      if (els.add_item) els.add_item.value = "";
+      clearSelectedPart();
+      if (els.add_part_search) els.add_part_search.value = "";
       if (els.add_qty) els.add_qty.value = "1";
       await loadSources();
       await load();
@@ -282,6 +358,33 @@
   }
 
   function wire() {
+    if (els.add_part_search) {
+      els.add_part_search.addEventListener("input", () => {
+        clearSelectedPart();
+        clearTimeout(partSearchTimer);
+        partSearchTimer = setTimeout(() => {
+          runPartSearch().catch((err) => showError(err.message || String(err)));
+        }, 300);
+      });
+      els.add_part_search.addEventListener("keydown", (event) => {
+        if (event.key === "Enter") {
+          event.preventDefault();
+          clearTimeout(partSearchTimer);
+          runPartSearch().catch((err) => showError(err.message || String(err)));
+        }
+      });
+    }
+    if (els.add_part_results) {
+      els.add_part_results.addEventListener("click", (event) => {
+        const btn = event.target.closest(".dgs-wo-pr-hit");
+        if (!btn) return;
+        selectPart({
+          item: btn.getAttribute("data-item") || "",
+          name: btn.getAttribute("data-name") || "",
+          mfr: btn.getAttribute("data-mfr") || "",
+        });
+      });
+    }
     if (els.search_btn) {
       els.search_btn.addEventListener("click", () => {
         state.search = (els.search_input && els.search_input.value) || "";

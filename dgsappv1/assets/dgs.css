@@ -3335,8 +3335,20 @@ body.wo-pr-open .dgs-capacity-drawer.is-wo-pr {
   margin: 0;
   min-width: 8rem;
 }
-.dgs-truck-add-form .dgs-wo-field:first-child {
-  flex: 1 1 10rem;
+.dgs-truck-add-part {
+  flex: 1 1 16rem;
+  min-width: 14rem;
+  display: grid;
+  gap: 0.4rem;
+}
+.dgs-truck-add-part .dgs-wo-field {
+  min-width: 0;
+}
+.dgs-truck-add-results {
+  margin: 0;
+}
+.dgs-truck-add-results:not([hidden]) {
+  padding: 0.35rem 0;
 }
 .dgs-truck-add-note {
   padding: 0 1rem 0.85rem;
