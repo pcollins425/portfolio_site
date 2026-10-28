@@ -231,6 +231,14 @@
             <span class="dgs-wo-field-label">Notes</span>
             <textarea id="wo-pr-notes" class="dgs-v2-input" rows="2"></textarea>
           </label>
+          <div class="dgs-wo-field" id="wo-pr-pics-wrap">
+            <span class="dgs-wo-field-label">Pictures <span id="wo-pr-pics-req" hidden>(required — no catalog photo)</span></span>
+            <input type="file" id="wo-pr-pics" class="dgs-v2-input" accept="image/*" multiple />
+            <p class="dgs-wo-section-note" id="wo-pr-pics-note">
+              Up to 3 photos. Required when the part has no catalog Photo (same as Tech Order Form).
+            </p>
+            <div id="wo-pr-pics-preview" class="dgs-wo-pr-pics-preview" hidden></div>
+          </div>
         </div>
         <p class="dgs-wo-pr-status" id="wo-pr-status" hidden></p>
         <div class="dgs-wo-pr-actions">
@@ -252,13 +260,74 @@
     const partInput = drawer.querySelector("#wo-pr-part");
     const statusEl = drawer.querySelector("#wo-pr-status");
     const submitBtn = drawer.querySelector("#wo-pr-submit");
+    const picsInput = drawer.querySelector("#wo-pr-pics");
+    const picsReq = drawer.querySelector("#wo-pr-pics-req");
+    const picsPreview = drawer.querySelector("#wo-pr-pics-preview");
     let searchTimer = null;
+    let selectedHasPhoto = true;
+    let picDataUrls = [];
 
     function setStatus(msg, isError) {
       if (!statusEl) return;
       statusEl.hidden = !msg;
       statusEl.textContent = msg || "";
       statusEl.classList.toggle("is-error", !!isError);
+    }
+
+    function setPhotoRequired(required) {
+      selectedHasPhoto = !required;
+      if (picsReq) picsReq.hidden = !required;
+    }
+
+    function clearPics() {
+      picDataUrls = [];
+      if (picsInput) picsInput.value = "";
+      if (picsPreview) {
+        picsPreview.hidden = true;
+        picsPreview.innerHTML = "";
+      }
+      setPhotoRequired(false);
+    }
+
+    function readFilesAsDataUrls(fileList) {
+      const files = Array.from(fileList || []).slice(0, 3);
+      return Promise.all(
+        files.map(
+          (file) =>
+            new Promise((resolve, reject) => {
+              const reader = new FileReader();
+              reader.onload = () => resolve(String(reader.result || ""));
+              reader.onerror = () => reject(new Error(`Could not read ${file.name}`));
+              reader.readAsDataURL(file);
+            })
+        )
+      );
+    }
+
+    async function onPicsChange() {
+      if (!picsInput || !picsInput.files || !picsInput.files.length) {
+        picDataUrls = [];
+        if (picsPreview) {
+          picsPreview.hidden = true;
+          picsPreview.innerHTML = "";
+        }
+        return;
+      }
+      try {
+        picDataUrls = await readFilesAsDataUrls(picsInput.files);
+        if (picsPreview) {
+          picsPreview.hidden = false;
+          picsPreview.innerHTML = picDataUrls
+            .map(
+              (src) =>
+                `<img class="dgs-wo-pr-pic-thumb" src="${esc(src)}" alt="Part picture preview" />`
+            )
+            .join("");
+        }
+      } catch (err) {
+        picDataUrls = [];
+        setStatus(err.message || String(err), true);
+      }
     }
 
     function showForm() {
@@ -286,6 +355,7 @@
       if (importance) importance.value = "";
       const notesEl = drawer.querySelector("#wo-pr-notes");
       if (notesEl) notesEl.value = "";
+      clearPics();
     }
 
     async function refreshList() {
@@ -325,13 +395,14 @@
           .map((p) => {
             const stock =
               p.stock != null && p.stock !== "" ? ` · stock ${p.stock}` : "";
+            const needPic = p.photo_required ? " · pic required" : "";
             const label = [p.item, p.name, p.mfr].filter(Boolean).join(" · ");
             return `<button type="button" class="dgs-wo-pr-hit" data-item="${esc(
               p.item
-            )}"><span class="dgs-wo-pr-hit-main">${esc(
+            )}" data-photo-required="${p.photo_required ? "1" : "0"}"><span class="dgs-wo-pr-hit-main">${esc(
               label
             )}</span><span class="dgs-wo-pr-hit-meta">${esc(
-              stock
+              stock + needPic
             )}</span></button>`;
           })
           .join("");
@@ -345,6 +416,7 @@
 
     if (openBtn) openBtn.addEventListener("click", showForm);
     if (cancelBtn) cancelBtn.addEventListener("click", hideForm);
+    if (picsInput) picsInput.addEventListener("change", onPicsChange);
 
     if (searchInput) {
       searchInput.addEventListener("input", () => {
@@ -364,6 +436,7 @@
         const btn = event.target.closest(".dgs-wo-pr-hit");
         if (!btn || !partInput) return;
         partInput.value = btn.getAttribute("data-item") || "";
+        setPhotoRequired(btn.getAttribute("data-photo-required") === "1");
         results.hidden = true;
         results.innerHTML = "";
       });
@@ -376,6 +449,10 @@
         const notes = (drawer.querySelector("#wo-pr-notes") || {}).value || "";
         if (!dgsPart.trim()) {
           setStatus("Choose a DGS Part #.", true);
+          return;
+        }
+        if (!selectedHasPhoto && !picDataUrls.length) {
+          setStatus("Add at least one picture — this part has no catalog photo.", true);
           return;
         }
         submitBtn.disabled = true;
@@ -391,6 +468,7 @@
                 importance: importance || null,
                 notes: notes || null,
                 job_type: "Repair",
+                pics: picDataUrls.length ? picDataUrls : null,
               },
             }
           );

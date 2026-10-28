@@ -6,15 +6,18 @@ Other roles with the grant see every row. Write path comes later.
 
 from __future__ import annotations
 
+import base64
 import html
 import json
 import os
 import re
 import uuid
 from datetime import date, datetime
+from pathlib import Path
 from typing import Annotated, Any, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 
 from app import appsheet_client
@@ -47,6 +50,8 @@ class PartRequestIn(BaseModel):
     importance: str | None = Field(default=None, max_length=80)
     notes: str | None = Field(default=None, max_length=2000)
     ship_to_category: str | None = Field(default="Primary Location", max_length=80)
+    # data URLs or raw base64 — stored locally and passed to AppSheet as public image URLs
+    pics: list[str] | None = Field(default=None, max_length=3)
 
 
 class WorkOrderCreateIn(BaseModel):
@@ -566,7 +571,7 @@ def _emaint_compinfo_assignment(compid: str) -> dict[str, str | None]:
     try:
         rows = emaint_client.get_any_data(
             table="COMPINFO",
-            columns="compid,assignto,assigntype,assignid,property",
+            columns="compid,assignto,assigntype,assignid,property,state",
             filters=[{"field": "compid", "operator": "eq", "value": serial}],
             page_size=1,
         )
@@ -581,7 +586,82 @@ def _emaint_compinfo_assignment(compid: str) -> dict[str, str | None]:
         "assigntype": _text(row.get("assigntype")) or "Employee",
         "assignid": _text(row.get("assignid")),
         "property": _text(row.get("property")),
+        "state": _text(row.get("state")),
     }
+
+
+_PART_PIC_DIR = Path(
+    (os.environ.get("PART_REQUEST_PIC_DIR") or "").strip()
+    # Prefer the assistant_sessions volume so pics survive container rebuilds long
+    # enough for AppSheet to fetch the public image URL.
+    or "/app/data/assistant_sessions/part_request_pics"
+)
+_PART_PIC_RE = re.compile(
+    r"^data:(image/(?:jpeg|jpg|png|webp|gif));base64,(.+)$",
+    re.IGNORECASE | re.DOTALL,
+)
+_PART_PIC_EXT = {
+    "image/jpeg": ".jpg",
+    "image/jpg": ".jpg",
+    "image/png": ".png",
+    "image/webp": ".webp",
+    "image/gif": ".gif",
+}
+
+
+def _public_api_base() -> str:
+    return (
+        (os.environ.get("PUBLIC_API_BASE") or "").strip().rstrip("/")
+        or "https://api.collinsmediallc.com"
+    )
+
+
+def _store_part_request_pic(data_url: str) -> str:
+    """Persist a browser data-URL image; return a public HTTPS URL for AppSheet Image fields."""
+    raw = (data_url or "").strip()
+    if not raw:
+        raise HTTPException(status_code=400, detail="Empty picture payload")
+    mime = "image/jpeg"
+    b64 = raw
+    match = _PART_PIC_RE.match(raw)
+    if match:
+        mime = match.group(1).lower()
+        b64 = match.group(2)
+    elif raw.startswith("data:"):
+        raise HTTPException(status_code=400, detail="Unsupported picture format")
+    try:
+        content = base64.b64decode(b64, validate=False)
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail="Invalid picture encoding") from exc
+    if not content:
+        raise HTTPException(status_code=400, detail="Empty picture data")
+    if len(content) > 8 * 1024 * 1024:
+        raise HTTPException(status_code=400, detail="Picture too large (max 8 MB)")
+    ext = _PART_PIC_EXT.get(mime, ".jpg")
+    _PART_PIC_DIR.mkdir(parents=True, exist_ok=True)
+    file_id = f"{uuid.uuid4().hex}{ext}"
+    path = _PART_PIC_DIR / file_id
+    path.write_bytes(content)
+    return f"{_public_api_base()}/api/work-orders/part-request-files/{file_id}"
+
+
+@router.get("/part-request-files/{file_id}")
+def get_part_request_file(file_id: str):
+    """Public image fetch for AppSheet Image columns (unguessable UUID filenames)."""
+    name = (file_id or "").strip()
+    if not re.fullmatch(r"[a-f0-9]{32}\.(jpg|jpeg|png|webp|gif)", name, re.I):
+        raise HTTPException(status_code=404, detail="Not found")
+    path = _PART_PIC_DIR / name
+    if not path.is_file():
+        raise HTTPException(status_code=404, detail="Not found")
+    media = {
+        ".jpg": "image/jpeg",
+        ".jpeg": "image/jpeg",
+        ".png": "image/png",
+        ".webp": "image/webp",
+        ".gif": "image/gif",
+    }.get(path.suffix.lower(), "application/octet-stream")
+    return FileResponse(path, media_type=media)
 
 
 def _emaint_adduser_for_account(user: dict[str, Any] | None) -> str | None:
@@ -698,8 +778,11 @@ def _load_casino_for_create(
             c.reference_key AS casino_id,
             c.casino_name,
             c.casino_short,
-            c.emaint_property
+            c.emaint_property,
+            st.state AS state_name,
+            st.reference_key AS state_id
         FROM clients.casinos AS c
+        LEFT JOIN clients.states AS st ON st.reference_key = c.state_id
         WHERE c.reference_key = %s
           {scope_sql}
         """,
@@ -809,14 +892,14 @@ def _insert_work_order_sql(row: dict[str, Any]) -> dict[str, Any]:
         cur.execute(
             """
             INSERT INTO projects.work_orders (
-                wo, property, casino_id, asset_id, theme_id, compid, comp_desc,
+                wo, property, state, casino_id, asset_id, theme_id, compid, comp_desc,
                 bank, location, brief_desc, work_desc, wo_type, probtype,
                 asst_dwn, game_oos, assignto, assignid, assigntype, adduser,
                 requestor, req_tele, drivetime, workmhours, hours,
                 workstatus, stattype, date_wo, adddate
             )
             VALUES (
-                %s, %s, %s, %s, %s, %s, %s,
+                %s, %s, %s, %s, %s, %s, %s, %s,
                 %s, %s, %s, %s, %s, %s,
                 %s, %s, %s, %s, %s, %s,
                 %s, %s, %s, %s, %s,
@@ -826,6 +909,7 @@ def _insert_work_order_sql(row: dict[str, Any]) -> dict[str, Any]:
             (
                 row["wo"],
                 row.get("property"),
+                row.get("state"),
                 row.get("casino_id"),
                 row.get("asset_id"),
                 row.get("theme_id"),
@@ -942,6 +1026,11 @@ def create_work_order(
     ci_assign = _emaint_compinfo_assignment(serial) if serial else {}
     if ci_assign.get("property"):
         property_name = ci_assign["property"] or property_name
+    # eMaint WORK.state is the full name (Oklahoma, California, …).
+    state_name = (
+        ci_assign.get("state")
+        or _text(casino.get("state_name"))
+    )
     assigntype = "Employee"
     assignto = _text(body.assignto) or ci_assign.get("assignto")
     assignid = _text(body.assignid) or ci_assign.get("assignid")
@@ -971,6 +1060,8 @@ def create_work_order(
     }
     if serial:
         emaint_payload["compid"] = serial
+    if state_name:
+        emaint_payload["state"] = state_name
     if adduser:
         emaint_payload["adduser"] = adduser
     if _text(body.wo_type):
@@ -1024,6 +1115,7 @@ def create_work_order(
     sql_row = {
         "wo": str(assigned_wo),
         "property": property_name,
+        "state": state_name,
         "casino_id": casino_id,
         "asset_id": asset_id,
         "theme_id": theme_id,
@@ -1299,6 +1391,7 @@ def part_catalog_search(
         item = _text(row.get("Part ID (Key)"))
         if not item:
             continue
+        photo = _text(row.get("Photo"))
         parts.append(
             {
                 "item": item,
@@ -1307,6 +1400,8 @@ def part_catalog_search(
                 "mfr_part": _text(row.get("MFR Part No.")),
                 "category": _text(row.get("Category")),
                 "stock": _text(row.get("Stock")),
+                "has_photo": bool(photo),
+                "photo_required": not bool(photo),
             }
         )
     return {"q": needle, "parts": parts, "count": len(parts)}
@@ -1407,6 +1502,19 @@ def create_part_request(
         raise HTTPException(status_code=400, detail=f"Unknown DGS part # {part_id}")
 
     part_name = _text(part_rows[0].get("Part Name"))
+    catalog_photo = _text(part_rows[0].get("Photo"))
+    pic_inputs = [p for p in (body.pics or []) if (p or "").strip()]
+    if len(pic_inputs) > 3:
+        raise HTTPException(status_code=400, detail="At most 3 pictures allowed")
+    if not catalog_photo and not pic_inputs:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "This part has no catalog photo — add at least one picture "
+                "(same rule as the Tech Order Form)."
+            ),
+        )
+    pic_urls = [_store_part_request_pic(p) for p in pic_inputs]
     today = date.today().isoformat()
     tech_email = _text(user.get("email"))
     user_name = _text(user.get("name")) or "DGS App"
@@ -1484,6 +1592,9 @@ def create_part_request(
         payload["Importance"] = importance
     if body.notes and body.notes.strip():
         payload["Notes"] = body.notes.strip()
+    pic_fields = ("Pics", "Pics 2", "Pics 3")
+    for field_name, url in zip(pic_fields, pic_urls):
+        payload[field_name] = url
 
     try:
         created = appsheet_client.add_rows(
