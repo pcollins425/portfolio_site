@@ -19,9 +19,14 @@ from openpyxl.utils import get_column_letter
 from pydantic import BaseModel, Field
 
 from app import employee_directory, mssql, resend_mail
-from app.auth_deps import require_demo_user
+from app import permission_catalog as cat
+from app.auth_deps import require_area_read, require_demo_user
 
-router = APIRouter(prefix="/api/warehouse-inventory", tags=["warehouse-inventory"])
+router = APIRouter(
+    prefix="/api/warehouse-inventory",
+    tags=["warehouse-inventory"],
+    dependencies=[Depends(require_area_read(cat.WAREHOUSE_AREA))],
+)
 
 # Locked column order (live count order as of 2026-08-07) with To Be Refurbished
 # wedged between OKC and Western. Unknown properties append alphabetically.

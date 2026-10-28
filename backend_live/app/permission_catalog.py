@@ -46,6 +46,8 @@ WORK_ORDERS_AREA = "dgs_work_orders"
 PART_REQUESTS_AREA = "dgs_part_requests"
 TRUCK_INVENTORY_AREA = "dgs_truck_inventory"
 PARTS_INVENTORY_AREA = "dgs_parts_inventory"
+WAREHOUSE_AREA = "dgs_warehouse"
+ASSETS_AREA = "dgs_assets"
 ASSISTANT_AREA = "dgs_assistant"
 ASSISTANT_SECRETS_AREA = "dgs_assistant_secrets"
 MAIL_INTAKE_AREA = "dgs_mail_intake"
@@ -105,6 +107,18 @@ PERMISSION_CATALOG: tuple[CatalogArea, ...] = (
     CatalogArea(
         PARTS_INVENTORY_AREA,
         "Inventory · Parts",
+        "inventory",
+        (LEVEL_READ,),
+    ),
+    CatalogArea(
+        WAREHOUSE_AREA,
+        "Inventory · Warehouse",
+        "inventory",
+        (LEVEL_READ,),
+    ),
+    CatalogArea(
+        ASSETS_AREA,
+        "Inventory · Assets",
         "inventory",
         (LEVEL_READ,),
     ),

@@ -35,9 +35,19 @@ COMMISSION_AREA = "dgs_commission"
 EXPENSES_AREA = "expenses"
 EXPENSES_MASS_EDIT_AREA = "dgs_expenses_mass_edit"
 FINANCE_DASHBOARD_AREA = "dgs_finance_dashboard"
+PERFORMANCE_AREA = "dgs_performance"
+CONTRACTS_AREA = "dgs_contracts"
+DEALS_AREA = "dgs_deals"
+SOFTWARE_VAULT_AREA = "dgs_software_vault"
+WORKBENCH_AREA = "dgs_projects_workbench"
+TECH_DASHBOARD_AREA = "dgs_tech_dashboard"
 CAPACITY_DASHBOARD_AREA = "dgs_capacity_dashboard"
+WORK_ORDERS_AREA = "dgs_work_orders"
+PART_REQUESTS_AREA = "dgs_part_requests"
 TRUCK_INVENTORY_AREA = "dgs_truck_inventory"
 PARTS_INVENTORY_AREA = "dgs_parts_inventory"
+WAREHOUSE_AREA = "dgs_warehouse"
+ASSETS_AREA = "dgs_assets"
 ASSISTANT_AREA = "dgs_assistant"
 ASSISTANT_SECRETS_AREA = "dgs_assistant_secrets"
 MAIL_INTAKE_AREA = "dgs_mail_intake"
@@ -65,8 +75,6 @@ PERMISSION_CATALOG: tuple[CatalogArea, ...] = (
     CatalogArea("slot_master", "Slot Master", "inventory"),
     CatalogArea("casino_master", "Casino Master", "inventory", (LEVEL_ADDS_UPDATES, LEVEL_ALL)),
     CatalogArea("full_slot_master", "Full Slot Master", "inventory", (LEVEL_ADDS_UPDATES, LEVEL_ALL)),
-    CatalogArea(TRUCK_INVENTORY_AREA, "Inventory · Truck", "inventory", (LEVEL_READ,)),
-    CatalogArea(PARTS_INVENTORY_AREA, "Inventory · Parts", "inventory", (LEVEL_READ,)),
     CatalogArea("compliance", "Compliance", "compliance"),
     CatalogArea("bill_validators", "Bill Validators", "peripherals"),
     CatalogArea("printers", "Printers", "peripherals"),
@@ -76,7 +84,44 @@ PERMISSION_CATALOG: tuple[CatalogArea, ...] = (
     CatalogArea(EXPENSES_AREA, "Expenses · Browse", "finance"),
     CatalogArea(EXPENSES_MASS_EDIT_AREA, "Expenses · Mass Edit", "finance"),
     CatalogArea(FINANCE_DASHBOARD_AREA, "Finance · Dashboard billing", "finance"),
+    CatalogArea(PERFORMANCE_AREA, "Performance & finance figures", "finance"),
+    CatalogArea(CONTRACTS_AREA, "Contracts", "finance"),
+    CatalogArea(DEALS_AREA, "Deals", "finance"),
+    CatalogArea(SOFTWARE_VAULT_AREA, "Software Vault", "dgs_app"),
+    CatalogArea(WORKBENCH_AREA, "Projects · Workbench", "dgs_app"),
+    CatalogArea(TECH_DASHBOARD_AREA, "Dashboard · Field", "dgs_app"),
     CatalogArea(CAPACITY_DASHBOARD_AREA, "Dashboard · Capacity", "dgs_app"),
+    CatalogArea(WORK_ORDERS_AREA, "Work Orders", "dgs_app"),
+    CatalogArea(
+        PART_REQUESTS_AREA,
+        "Work Orders · Part requests",
+        "dgs_app",
+        (LEVEL_READ, LEVEL_UPDATES, LEVEL_ADDS_UPDATES, LEVEL_ALL),
+    ),
+    CatalogArea(
+        TRUCK_INVENTORY_AREA,
+        "Inventory · Truck",
+        "inventory",
+        (LEVEL_READ,),
+    ),
+    CatalogArea(
+        PARTS_INVENTORY_AREA,
+        "Inventory · Parts",
+        "inventory",
+        (LEVEL_READ,),
+    ),
+    CatalogArea(
+        WAREHOUSE_AREA,
+        "Inventory · Warehouse",
+        "inventory",
+        (LEVEL_READ,),
+    ),
+    CatalogArea(
+        ASSETS_AREA,
+        "Inventory · Assets",
+        "inventory",
+        (LEVEL_READ,),
+    ),
     CatalogArea(ASSISTANT_AREA, "Assistant", "workspace"),
     CatalogArea(ASSISTANT_SECRETS_AREA, "Assistant · Secrets", "workspace"),
     CatalogArea(MAIL_INTAKE_AREA, "Mail Intake", "workspace"),

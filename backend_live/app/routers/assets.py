@@ -7,11 +7,17 @@ import os
 from datetime import date, datetime
 from decimal import Decimal
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 
 from app import mssql
+from app import permission_catalog as cat
+from app.auth_deps import require_area_read
 
-router = APIRouter(prefix="/api/assets", tags=["assets"])
+router = APIRouter(
+    prefix="/api/assets",
+    tags=["assets"],
+    dependencies=[Depends(require_area_read(cat.ASSETS_AREA))],
+)
 
 _ASSET_FROM = """
     FROM inventory.compinfo_landing AS ci
