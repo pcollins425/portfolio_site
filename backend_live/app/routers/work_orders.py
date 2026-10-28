@@ -61,6 +61,8 @@ class WorkOrderCreateIn(BaseModel):
     asst_dwn: str = Field(default="No", max_length=20)
     game_oos: str | None = Field(default=None, max_length=3)
     assignto: str | None = Field(default=None, max_length=100)
+    assignid: str | None = Field(default=None, max_length=10)
+    assigntype: str | None = Field(default=None, max_length=15)
     requestor: str | None = Field(default=None, max_length=50)
     req_tele: str | None = Field(default=None, max_length=20)
     drivetime: float | None = Field(default=None, ge=0, le=999)
@@ -556,6 +558,52 @@ def create_casino_assets(
     }
 
 
+def _emaint_compinfo_assignment(compid: str) -> dict[str, str | None]:
+    """Pull WORK assignment defaults from eMaint COMPINFO (not mirrored in SQL landing)."""
+    serial = (compid or "").strip()
+    if not serial:
+        return {}
+    try:
+        rows = emaint_client.get_any_data(
+            table="COMPINFO",
+            columns="compid,assignto,assigntype,assignid,property",
+            filters=[{"field": "compid", "operator": "eq", "value": serial}],
+            page_size=1,
+        )
+    except Exception:
+        return {}
+    if not rows:
+        return {}
+    row = rows[0] or {}
+    return {
+        "compid": _text(row.get("compid")) or serial,
+        "assignto": _text(row.get("assignto")),
+        "assigntype": _text(row.get("assigntype")) or "Employee",
+        "assignid": _text(row.get("assignid")),
+        "property": _text(row.get("property")),
+    }
+
+
+@router.get("/create/compinfo-assign")
+def create_compinfo_assign(
+    compid: str = Query(..., min_length=1, max_length=40),
+    user: Annotated[dict[str, Any] | None, Depends(require_demo_user)] = None,
+):
+    """Asset-routed assign defaults for Add WO (Assign Type / Assign To / Assign ID)."""
+    _ = user
+    data = _emaint_compinfo_assignment(compid)
+    if not data:
+        return {
+            "compid": compid.strip(),
+            "assignto": None,
+            "assigntype": "Employee",
+            "assignid": None,
+            "property": None,
+            "found": False,
+        }
+    return {**data, "assigntype": data.get("assigntype") or "Employee", "found": True}
+
+
 _YES_NO = frozenset({"yes", "no"})
 
 
@@ -699,14 +747,16 @@ def _insert_work_order_sql(row: dict[str, Any]) -> dict[str, Any]:
             INSERT INTO projects.work_orders (
                 wo, property, casino_id, asset_id, theme_id, compid, comp_desc,
                 bank, location, brief_desc, work_desc, wo_type, probtype,
-                asst_dwn, game_oos, assignto, requestor, req_tele,
-                drivetime, workmhours, hours, workstatus, date_wo, adddate
+                asst_dwn, game_oos, assignto, assignid, assigntype,
+                requestor, req_tele, drivetime, workmhours, hours,
+                workstatus, stattype, date_wo, adddate
             )
             VALUES (
                 %s, %s, %s, %s, %s, %s, %s,
                 %s, %s, %s, %s, %s, %s,
                 %s, %s, %s, %s, %s,
-                %s, %s, %s, N'O', %s, %s
+                %s, %s, %s, %s, %s,
+                N'O', N'Open', %s, %s
             )
             """,
             (
@@ -726,6 +776,8 @@ def _insert_work_order_sql(row: dict[str, Any]) -> dict[str, Any]:
                 row.get("asst_dwn"),
                 row.get("game_oos"),
                 row.get("assignto"),
+                row.get("assignid"),
+                row.get("assigntype") or "Employee",
                 row.get("requestor"),
                 row.get("req_tele"),
                 row.get("drivetime"),
@@ -821,6 +873,22 @@ def create_work_order(
     workmhours = _optional_float(body.workmhours)
     hours = workmhours
 
+    # Assign Type/To come from the asset's COMPINFO (eMaint). Type is always Employee.
+    ci_assign = _emaint_compinfo_assignment(serial) if serial else {}
+    if ci_assign.get("property"):
+        property_name = ci_assign["property"] or property_name
+    assigntype = "Employee"
+    assignto = _text(body.assignto) or ci_assign.get("assignto")
+    assignid = _text(body.assignid) or ci_assign.get("assignid")
+    # If the UI sent the COMPINFO name, keep COMPINFO assignid even if body omitted it.
+    if (
+        assignto
+        and ci_assign.get("assignto")
+        and assignto == ci_assign.get("assignto")
+        and not assignid
+    ):
+        assignid = ci_assign.get("assignid")
+
     emaint_payload: dict[str, Any] = {
         "brief_desc": brief,
         "work_desc": work_desc,
@@ -828,6 +896,8 @@ def create_work_order(
         "date_wo": date_stamp,
         "property": property_name,
         "workstatus": "Open",
+        "stattype": "Open",
+        "assigntype": assigntype,
         "asst_dwn": asst_dwn,
         "game_oos": game_oos,
     }
@@ -837,8 +907,10 @@ def create_work_order(
         emaint_payload["wo_type"] = _text(body.wo_type)
     if _text(body.probtype):
         emaint_payload["probtype"] = _text(body.probtype)
-    if _text(body.assignto):
-        emaint_payload["assignto"] = _text(body.assignto)
+    if assignto:
+        emaint_payload["assignto"] = assignto
+    if assignid:
+        emaint_payload["assignid"] = assignid
     if _text(body.requestor):
         emaint_payload["requestor"] = _text(body.requestor)
     if _text(body.req_tele):
@@ -895,7 +967,9 @@ def create_work_order(
         "probtype": _text(body.probtype),
         "asst_dwn": asst_dwn,
         "game_oos": game_oos,
-        "assignto": _text(body.assignto),
+        "assignto": assignto,
+        "assignid": assignid,
+        "assigntype": assigntype,
         "requestor": _text(body.requestor),
         "req_tele": _text(body.req_tele),
         "drivetime": drivetime,

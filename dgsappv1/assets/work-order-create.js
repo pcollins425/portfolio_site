@@ -201,16 +201,39 @@
     hits.innerHTML = "";
   }
 
+  async function loadAssetAssign(drawer, serial) {
+    setVal(drawer, "wo-cr-assign-type", "Employee");
+    if (!serial) {
+      setVal(drawer, "wo-cr-assign", "");
+      setVal(drawer, "wo-cr-assign-id", "");
+      return;
+    }
+    try {
+      const data = await fetchJson(
+        `/api/work-orders/create/compinfo-assign?compid=${encodeURIComponent(serial)}`
+      );
+      setVal(drawer, "wo-cr-assign-type", data.assigntype || "Employee");
+      setVal(drawer, "wo-cr-assign", data.assignto || "");
+      setVal(drawer, "wo-cr-assign-id", data.assignid || "");
+    } catch (_) {
+      setVal(drawer, "wo-cr-assign-type", "Employee");
+      setVal(drawer, "wo-cr-assign", "");
+      setVal(drawer, "wo-cr-assign-id", "");
+    }
+  }
+
   async function applyAsset(drawer, match) {
     if (!match) {
       setVal(drawer, "wo-cr-asset", "");
       setContext(drawer, null);
+      await loadAssetAssign(drawer, "");
       return;
     }
     const serial = match.compid || match.asset_no || "";
     setVal(drawer, "wo-cr-asset", serial);
     setContext(drawer, match);
     hideAssetHits(drawer);
+    await loadAssetAssign(drawer, serial);
 
     const casinoId = match.casino_id;
     if (!casinoId) return;
@@ -315,9 +338,14 @@
           </label>
 
           <label class="dgs-wo-create-field">
-            <span class="dgs-wo-create-label">Assigned to</span>
-            <input type="text" id="wo-cr-assign" class="dgs-wo-create-control" />
+            <span class="dgs-wo-create-label">Assign type</span>
+            <input type="text" id="wo-cr-assign-type" class="dgs-wo-create-control is-readonly" value="Employee" readonly />
           </label>
+          <label class="dgs-wo-create-field">
+            <span class="dgs-wo-create-label">Assigned to</span>
+            <input type="text" id="wo-cr-assign" class="dgs-wo-create-control" placeholder="From asset assignment" />
+          </label>
+          <input type="hidden" id="wo-cr-assign-id" />
           <label class="dgs-wo-create-field">
             <span class="dgs-wo-create-label">Requestor</span>
             <input type="text" id="wo-cr-requestor" class="dgs-wo-create-control" />
@@ -440,12 +468,7 @@
       submitCreate(drawer);
     });
 
-    const me =
-      window.DGSAuth && typeof DGSAuth.getUser === "function" ? DGSAuth.getUser() : null;
-    const assign = drawer.querySelector("#wo-cr-assign");
-    if (assign && me && (me.name || me.email)) {
-      assign.value = me.name || me.email || "";
-    }
+    setVal(drawer, "wo-cr-assign-type", "Employee");
 
     const stateEl = drawer.querySelector("#wo-cr-state");
     const tribeEl = drawer.querySelector("#wo-cr-tribe");
@@ -466,6 +489,7 @@
       assetMap = {};
       setVal(drawer, "wo-cr-asset", "");
       setContext(drawer, null);
+      loadAssetAssign(drawer, "");
       hideAssetHits(drawer);
     });
 
@@ -487,6 +511,7 @@
       assetMap = {};
       setVal(drawer, "wo-cr-asset", "");
       setContext(drawer, null);
+      loadAssetAssign(drawer, "");
       hideAssetHits(drawer);
     });
 
@@ -508,6 +533,7 @@
       }
       setVal(drawer, "wo-cr-asset", "");
       setContext(drawer, null);
+      loadAssetAssign(drawer, "");
       hideAssetHits(drawer);
       if (!casinoId) {
         assetMap = {};
@@ -598,7 +624,10 @@
       probtype: (drawer.querySelector("#wo-cr-prob") || {}).value || "",
       asst_dwn: down,
       game_oos: down,
+      assigntype:
+        (drawer.querySelector("#wo-cr-assign-type") || {}).value || "Employee",
       assignto: (drawer.querySelector("#wo-cr-assign") || {}).value || "",
+      assignid: (drawer.querySelector("#wo-cr-assign-id") || {}).value || "",
       requestor: (drawer.querySelector("#wo-cr-requestor") || {}).value || "",
       req_tele: (drawer.querySelector("#wo-cr-req-tele") || {}).value || "",
       drivetime: (drawer.querySelector("#wo-cr-drive") || {}).value || "",
