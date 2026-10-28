@@ -232,11 +232,17 @@
             <textarea id="wo-pr-notes" class="dgs-v2-input" rows="2"></textarea>
           </label>
           <div class="dgs-wo-field" id="wo-pr-pics-wrap">
-            <span class="dgs-wo-field-label">Pictures <span id="wo-pr-pics-req" hidden>(required — no catalog photo)</span></span>
+            <span class="dgs-wo-field-label">Pictures</span>
+            <div
+              id="wo-pr-photo-banner"
+              class="dgs-wo-pr-photo-banner is-idle"
+              role="status"
+              aria-live="polite"
+            >
+              Select a part to see if a picture is required.
+            </div>
             <input type="file" id="wo-pr-pics" class="dgs-v2-input" accept="image/*" multiple />
-            <p class="dgs-wo-section-note" id="wo-pr-pics-note">
-              Up to 3 photos. Required when the part has no catalog Photo (same as Tech Order Form).
-            </p>
+            <p class="dgs-wo-section-note" id="wo-pr-pics-note">Up to 3 photos.</p>
             <div id="wo-pr-pics-preview" class="dgs-wo-pr-pics-preview" hidden></div>
           </div>
         </div>
@@ -261,10 +267,12 @@
     const statusEl = drawer.querySelector("#wo-pr-status");
     const submitBtn = drawer.querySelector("#wo-pr-submit");
     const picsInput = drawer.querySelector("#wo-pr-pics");
-    const picsReq = drawer.querySelector("#wo-pr-pics-req");
+    const picsWrap = drawer.querySelector("#wo-pr-pics-wrap");
+    const photoBanner = drawer.querySelector("#wo-pr-photo-banner");
     const picsPreview = drawer.querySelector("#wo-pr-pics-preview");
     let searchTimer = null;
-    let selectedHasPhoto = true;
+    let partLookupTimer = null;
+    let selectedHasPhoto = null;
     let picDataUrls = [];
 
     function setStatus(msg, isError) {
@@ -274,9 +282,79 @@
       statusEl.classList.toggle("is-error", !!isError);
     }
 
+    function setPhotoBanner(state, title, detail) {
+      if (!photoBanner) return;
+      photoBanner.classList.remove("is-idle", "is-required", "is-optional", "is-loading");
+      photoBanner.classList.add(state || "is-idle");
+      photoBanner.innerHTML = `<strong>${esc(title)}</strong>${
+        detail ? `<span>${esc(detail)}</span>` : ""
+      }`;
+      if (picsWrap) {
+        picsWrap.classList.toggle("is-photo-required", state === "is-required");
+        picsWrap.classList.toggle("is-photo-optional", state === "is-optional");
+      }
+      if (picsInput) {
+        if (state === "is-required") picsInput.setAttribute("required", "required");
+        else picsInput.removeAttribute("required");
+      }
+    }
+
     function setPhotoRequired(required) {
+      if (required === null || required === undefined) {
+        selectedHasPhoto = null;
+        setPhotoBanner(
+          "is-idle",
+          "Select a part to see if a picture is required.",
+          "Catalog Photo decides whether Pics are required."
+        );
+        return;
+      }
       selectedHasPhoto = !required;
-      if (picsReq) picsReq.hidden = !required;
+      if (required) {
+        setPhotoBanner(
+          "is-required",
+          "Photo required",
+          "This part has no catalog photo. Attach at least 1 picture before submitting."
+        );
+      } else {
+        setPhotoBanner(
+          "is-optional",
+          "Catalog photo on file",
+          "Pictures are optional for this part (up to 3)."
+        );
+      }
+    }
+
+    async function lookupPartPhoto(partId) {
+      const id = (partId || "").trim();
+      if (!id) {
+        setPhotoRequired(null);
+        return;
+      }
+      setPhotoBanner("is-loading", "Checking catalog photo…", `Looking up part ${id}.`);
+      try {
+        const data = await fetchJson(
+          `/api/work-orders/part-catalog/item?id=${encodeURIComponent(id)}`
+        );
+        if (!data || data.found === false) {
+          setPhotoBanner(
+            "is-required",
+            "Photo required",
+            "Part not found in catalog (or has no Photo). Attach at least 1 picture."
+          );
+          selectedHasPhoto = false;
+          return;
+        }
+        setPhotoRequired(!!data.photo_required);
+      } catch (err) {
+        setPhotoBanner(
+          "is-required",
+          "Could not verify catalog photo",
+          "Attach a picture to be safe, or retry after the error clears."
+        );
+        selectedHasPhoto = false;
+        setStatus(err.message || String(err), true);
+      }
     }
 
     function clearPics() {
@@ -286,7 +364,7 @@
         picsPreview.hidden = true;
         picsPreview.innerHTML = "";
       }
-      setPhotoRequired(false);
+      setPhotoRequired(null);
     }
 
     function readFilesAsDataUrls(fileList) {
@@ -395,14 +473,16 @@
           .map((p) => {
             const stock =
               p.stock != null && p.stock !== "" ? ` · stock ${p.stock}` : "";
-            const needPic = p.photo_required ? " · pic required" : "";
+            const badge = p.photo_required
+              ? `<span class="dgs-wo-pr-hit-badge is-required">Photo required</span>`
+              : `<span class="dgs-wo-pr-hit-badge is-optional">Catalog photo</span>`;
             const label = [p.item, p.name, p.mfr].filter(Boolean).join(" · ");
             return `<button type="button" class="dgs-wo-pr-hit" data-item="${esc(
               p.item
             )}" data-photo-required="${p.photo_required ? "1" : "0"}"><span class="dgs-wo-pr-hit-main">${esc(
               label
-            )}</span><span class="dgs-wo-pr-hit-meta">${esc(
-              stock + needPic
+            )} ${badge}</span><span class="dgs-wo-pr-hit-meta">${esc(
+              stock
             )}</span></button>`;
           })
           .join("");
@@ -417,6 +497,7 @@
     if (openBtn) openBtn.addEventListener("click", showForm);
     if (cancelBtn) cancelBtn.addEventListener("click", hideForm);
     if (picsInput) picsInput.addEventListener("change", onPicsChange);
+    setPhotoRequired(null);
 
     if (searchInput) {
       searchInput.addEventListener("input", () => {
@@ -429,6 +510,16 @@
           clearTimeout(searchTimer);
           runSearch();
         }
+      });
+    }
+    if (partInput) {
+      partInput.addEventListener("change", () => {
+        clearTimeout(partLookupTimer);
+        lookupPartPhoto(partInput.value);
+      });
+      partInput.addEventListener("input", () => {
+        clearTimeout(partLookupTimer);
+        partLookupTimer = setTimeout(() => lookupPartPhoto(partInput.value), 450);
       });
     }
     if (results) {
@@ -451,8 +542,12 @@
           setStatus("Choose a DGS Part #.", true);
           return;
         }
-        if (!selectedHasPhoto && !picDataUrls.length) {
+        if (selectedHasPhoto === null) {
+          await lookupPartPhoto(dgsPart);
+        }
+        if (selectedHasPhoto === false && !picDataUrls.length) {
           setStatus("Add at least one picture — this part has no catalog photo.", true);
+          if (picsInput) picsInput.focus();
           return;
         }
         submitBtn.disabled = true;

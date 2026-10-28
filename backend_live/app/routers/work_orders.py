@@ -1364,6 +1364,23 @@ def _parts_search_selector(needle: str, limit: int) -> str:
     return f"TOP(FILTER({appsheet_client.PARTS_TABLE}, {expr}), {int(limit)})"
 
 
+def _part_catalog_row(row: dict[str, Any]) -> dict[str, Any] | None:
+    item = _text(row.get("Part ID (Key)"))
+    if not item:
+        return None
+    photo = _text(row.get("Photo"))
+    return {
+        "item": item,
+        "name": _text(row.get("Part Name")),
+        "mfr": _text(row.get("Manufacturer")),
+        "mfr_part": _text(row.get("MFR Part No.")),
+        "category": _text(row.get("Category")),
+        "stock": _text(row.get("Stock")),
+        "has_photo": bool(photo),
+        "photo_required": not bool(photo),
+    }
+
+
 @router.get("/part-catalog/search")
 def part_catalog_search(
     q: str = Query("", max_length=80),
@@ -1388,23 +1405,44 @@ def part_catalog_search(
         ) from exc
     parts = []
     for row in rows:
-        item = _text(row.get("Part ID (Key)"))
-        if not item:
-            continue
-        photo = _text(row.get("Photo"))
-        parts.append(
-            {
-                "item": item,
-                "name": _text(row.get("Part Name")),
-                "mfr": _text(row.get("Manufacturer")),
-                "mfr_part": _text(row.get("MFR Part No.")),
-                "category": _text(row.get("Category")),
-                "stock": _text(row.get("Stock")),
-                "has_photo": bool(photo),
-                "photo_required": not bool(photo),
-            }
-        )
+        mapped = _part_catalog_row(row)
+        if mapped:
+            parts.append(mapped)
     return {"q": needle, "parts": parts, "count": len(parts)}
+
+
+@router.get("/part-catalog/item")
+def part_catalog_item(
+    id: str = Query(..., min_length=1, max_length=80),
+    user: Annotated[dict[str, Any] | None, Depends(require_demo_user)] = None,
+):
+    """Exact Parts catalog lookup — used to decide if Pics are required."""
+    _require_part_request_write(user)
+    part_id = (id or "").strip()
+    if not part_id:
+        raise HTTPException(status_code=400, detail="Part id is required")
+    safe = part_id.replace('"', "")
+    try:
+        rows = appsheet_client.find_rows(
+            appsheet_client.PARTS_TABLE,
+            selector=(
+                f'FILTER({appsheet_client.PARTS_TABLE}, '
+                f'[Part ID (Key)] = "{safe}")'
+            ),
+        )
+    except appsheet_client.AppSheetError as exc:
+        raise HTTPException(
+            status_code=502,
+            detail=f"Part lookup failed: {exc}",
+        ) from exc
+    if not rows:
+        return {"found": False, "item": part_id, "has_photo": False, "photo_required": True}
+    mapped = _part_catalog_row(rows[0]) or {
+        "item": part_id,
+        "has_photo": False,
+        "photo_required": True,
+    }
+    return {"found": True, **mapped}
 
 
 def _part_request_is_active(status: str, status_2: str) -> bool:
