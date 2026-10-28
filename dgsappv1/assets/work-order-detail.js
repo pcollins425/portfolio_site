@@ -197,14 +197,53 @@
     if (!pr.wo_ready) {
       return `<p class="dgs-field-empty">Part requests need a 5-digit eMaint WO # on this order.</p>`;
     }
+    const d = pr.defaults || {};
+    const techName = esc(d.tech_name || "");
+    const assetId = esc(d.asset_id || "");
+    const shipTo = d.ship_to_category || "Primary Location";
+    const shipOpts = ["Primary Location", "Casino", "Other"]
+      .map(
+        (opt) =>
+          `<option value="${esc(opt)}"${opt === shipTo ? " selected" : ""}>${esc(opt)}</option>`
+      )
+      .join("");
+    const sendTo = esc(d.send_to_address || "");
     return `
       <div class="dgs-wo-pr-toolbar">
         <button type="button" class="dgs-v2-btn dgs-v2-btn-primary" id="wo-pr-open">
           Add part request
         </button>
       </div>
-      <div class="dgs-wo-part-request" id="wo-part-request" hidden>
+      <div class="dgs-wo-part-request" id="wo-part-request" hidden
+        data-tech-address="${esc(d.tech_address || "")}"
+        data-casino-address="${esc(d.casino_address || "")}">
+        <p class="dgs-wo-section-note">Required fields match the Tech Order Form (*). Work Order # and catalog stamps are filled for you.</p>
         <div class="dgs-wo-fields">
+          <label class="dgs-wo-field">
+            <span class="dgs-wo-field-label">Tech Name <span class="dgs-wo-req" aria-hidden="true">*</span></span>
+            <input type="text" id="wo-pr-tech-name" class="dgs-v2-input" value="${techName}" required />
+          </label>
+          <label class="dgs-wo-field">
+            <span class="dgs-wo-field-label">Job Type <span class="dgs-wo-req" aria-hidden="true">*</span></span>
+            <select id="wo-pr-job-type" class="dgs-v2-input" required>
+              <option value="Repair" selected>Repair</option>
+              <option value="Stock">Stock</option>
+              <option value="Install">Install</option>
+            </select>
+          </label>
+          <label class="dgs-wo-field">
+            <span class="dgs-wo-field-label">Asset ID <span class="dgs-wo-req" aria-hidden="true">*</span></span>
+            <input type="text" id="wo-pr-asset" class="dgs-v2-input" value="${assetId}" readonly />
+          </label>
+          <label class="dgs-wo-field">
+            <span class="dgs-wo-field-label">Importance <span class="dgs-wo-req" aria-hidden="true">*</span></span>
+            <select id="wo-pr-importance" class="dgs-v2-input" required>
+              <option value="">—</option>
+              <option>Cabinet Down - Urgent</option>
+              <option>Cosmetic - High Priority</option>
+              <option>Cosmetic - Low Priority</option>
+            </select>
+          </label>
           <label class="dgs-wo-field">
             <span class="dgs-wo-field-label">Part search</span>
             <input type="search" id="wo-pr-search" class="dgs-v2-input" placeholder="Part # or name" autocomplete="off" />
@@ -215,24 +254,29 @@
             <input type="text" id="wo-pr-part" class="dgs-v2-input" required />
           </label>
           <label class="dgs-wo-field">
-            <span class="dgs-wo-field-label">Quantity</span>
+            <span class="dgs-wo-field-label">Description <span class="dgs-wo-req" aria-hidden="true">*</span></span>
+            <input type="text" id="wo-pr-description" class="dgs-v2-input" required />
+          </label>
+          <label class="dgs-wo-field">
+            <span class="dgs-wo-field-label">Quantity <span class="dgs-wo-req" aria-hidden="true">*</span></span>
             <input type="number" id="wo-pr-qty" class="dgs-v2-input" min="1" step="1" value="1" required />
           </label>
           <label class="dgs-wo-field">
-            <span class="dgs-wo-field-label">Importance</span>
-            <select id="wo-pr-importance" class="dgs-v2-input">
-              <option value="">—</option>
-              <option>Cabinet Down - Urgent</option>
-              <option>Cosmetic - High Priority</option>
-              <option>Cosmetic - Low Priority</option>
+            <span class="dgs-wo-field-label">Ship To Category <span class="dgs-wo-req" aria-hidden="true">*</span></span>
+            <select id="wo-pr-ship-to" class="dgs-v2-input" required>
+              ${shipOpts}
             </select>
+          </label>
+          <label class="dgs-wo-field" id="wo-pr-send-to-wrap">
+            <span class="dgs-wo-field-label">Send to Address</span>
+            <input type="text" id="wo-pr-send-to" class="dgs-v2-input" value="${sendTo}" />
           </label>
           <label class="dgs-wo-field">
             <span class="dgs-wo-field-label">Notes</span>
             <textarea id="wo-pr-notes" class="dgs-v2-input" rows="2"></textarea>
           </label>
           <div class="dgs-wo-field" id="wo-pr-pics-wrap">
-            <span class="dgs-wo-field-label">Pictures</span>
+            <span class="dgs-wo-field-label">Pic <span class="dgs-wo-req" aria-hidden="true">*</span></span>
             <div
               id="wo-pr-photo-banner"
               class="dgs-wo-pr-photo-banner is-idle"
@@ -242,7 +286,7 @@
               Select a part to see if a picture is required.
             </div>
             <input type="file" id="wo-pr-pics" class="dgs-v2-input" accept="image/*" multiple />
-            <p class="dgs-wo-section-note" id="wo-pr-pics-note">Up to 3 photos.</p>
+            <p class="dgs-wo-section-note" id="wo-pr-pics-note">First pic required when the part has no catalog photo. Up to 3.</p>
             <div id="wo-pr-pics-preview" class="dgs-wo-pr-pics-preview" hidden></div>
           </div>
         </div>
@@ -258,12 +302,18 @@
     const pr = data.part_requests || {};
     if (!pr.can_write || !pr.wo_ready) return;
     const wo = data.wo;
+    const defaults = pr.defaults || {};
     const openBtn = drawer.querySelector("#wo-pr-open");
     const form = drawer.querySelector("#wo-part-request");
     const cancelBtn = drawer.querySelector("#wo-pr-cancel");
     const searchInput = drawer.querySelector("#wo-pr-search");
     const results = drawer.querySelector("#wo-pr-results");
     const partInput = drawer.querySelector("#wo-pr-part");
+    const descInput = drawer.querySelector("#wo-pr-description");
+    const techNameInput = drawer.querySelector("#wo-pr-tech-name");
+    const jobTypeSelect = drawer.querySelector("#wo-pr-job-type");
+    const shipToSelect = drawer.querySelector("#wo-pr-ship-to");
+    const sendToInput = drawer.querySelector("#wo-pr-send-to");
     const statusEl = drawer.querySelector("#wo-pr-status");
     const submitBtn = drawer.querySelector("#wo-pr-submit");
     const picsInput = drawer.querySelector("#wo-pr-pics");
@@ -280,6 +330,16 @@
       statusEl.hidden = !msg;
       statusEl.textContent = msg || "";
       statusEl.classList.toggle("is-error", !!isError);
+    }
+
+    function syncSendToAddress() {
+      if (!shipToSelect || !sendToInput || !form) return;
+      const cat = shipToSelect.value;
+      const techAddr = form.getAttribute("data-tech-address") || "";
+      const casinoAddr = form.getAttribute("data-casino-address") || "";
+      if (cat === "Primary Location") sendToInput.value = techAddr;
+      else if (cat === "Casino") sendToInput.value = casinoAddr;
+      // Other: leave whatever the tech typed
     }
 
     function setPhotoBanner(state, title, detail) {
@@ -344,6 +404,9 @@
           );
           selectedHasPhoto = false;
           return;
+        }
+        if (descInput && !descInput.value.trim() && data.name) {
+          descInput.value = data.name;
         }
         setPhotoRequired(!!data.photo_required);
       } catch (err) {
@@ -413,7 +476,8 @@
       form.hidden = false;
       if (openBtn) openBtn.hidden = true;
       setStatus("", false);
-      if (searchInput) searchInput.focus();
+      syncSendToAddress();
+      if (techNameInput) techNameInput.focus();
     }
 
     function hideForm() {
@@ -427,10 +491,15 @@
       }
       if (searchInput) searchInput.value = "";
       if (partInput) partInput.value = "";
+      if (descInput) descInput.value = "";
+      if (techNameInput) techNameInput.value = defaults.tech_name || "";
+      if (jobTypeSelect) jobTypeSelect.value = "Repair";
       const qty = drawer.querySelector("#wo-pr-qty");
       if (qty) qty.value = "1";
       const importance = drawer.querySelector("#wo-pr-importance");
       if (importance) importance.value = "";
+      if (shipToSelect) shipToSelect.value = defaults.ship_to_category || "Primary Location";
+      syncSendToAddress();
       const notesEl = drawer.querySelector("#wo-pr-notes");
       if (notesEl) notesEl.value = "";
       clearPics();
@@ -479,7 +548,9 @@
             const label = [p.item, p.name, p.mfr].filter(Boolean).join(" · ");
             return `<button type="button" class="dgs-wo-pr-hit" data-item="${esc(
               p.item
-            )}" data-photo-required="${p.photo_required ? "1" : "0"}"><span class="dgs-wo-pr-hit-main">${esc(
+            )}" data-name="${esc(p.name || "")}" data-photo-required="${
+              p.photo_required ? "1" : "0"
+            }"><span class="dgs-wo-pr-hit-main">${esc(
               label
             )} ${badge}</span><span class="dgs-wo-pr-hit-meta">${esc(
               stock
@@ -497,6 +568,7 @@
     if (openBtn) openBtn.addEventListener("click", showForm);
     if (cancelBtn) cancelBtn.addEventListener("click", hideForm);
     if (picsInput) picsInput.addEventListener("change", onPicsChange);
+    if (shipToSelect) shipToSelect.addEventListener("change", syncSendToAddress);
     setPhotoRequired(null);
 
     if (searchInput) {
@@ -527,6 +599,8 @@
         const btn = event.target.closest(".dgs-wo-pr-hit");
         if (!btn || !partInput) return;
         partInput.value = btn.getAttribute("data-item") || "";
+        const name = btn.getAttribute("data-name") || "";
+        if (descInput && name) descInput.value = name;
         setPhotoRequired(btn.getAttribute("data-photo-required") === "1");
         results.hidden = true;
         results.innerHTML = "";
@@ -534,19 +608,55 @@
     }
     if (submitBtn) {
       submitBtn.addEventListener("click", async () => {
+        const techName = ((techNameInput && techNameInput.value) || "").trim();
+        const jobType = ((jobTypeSelect && jobTypeSelect.value) || "Repair").trim();
         const dgsPart = (partInput && partInput.value) || "";
-        const qty = Number((drawer.querySelector("#wo-pr-qty") || {}).value || 1);
+        const description = ((descInput && descInput.value) || "").trim();
+        const qty = Number((drawer.querySelector("#wo-pr-qty") || {}).value || 0);
         const importance = (drawer.querySelector("#wo-pr-importance") || {}).value || "";
+        const shipTo = ((shipToSelect && shipToSelect.value) || "").trim();
+        const shipAddress = ((sendToInput && sendToInput.value) || "").trim();
         const notes = (drawer.querySelector("#wo-pr-notes") || {}).value || "";
+        if (!techName) {
+          setStatus("Tech Name is required.", true);
+          if (techNameInput) techNameInput.focus();
+          return;
+        }
+        if (!jobType) {
+          setStatus("Job Type is required.", true);
+          return;
+        }
+        if (jobType === "Repair" && !(defaults.asset_id || "").trim()) {
+          setStatus("Asset ID is required for Repair — this WO has no serial.", true);
+          return;
+        }
+        if (jobType === "Repair" && !importance) {
+          setStatus("Importance is required.", true);
+          drawer.querySelector("#wo-pr-importance")?.focus();
+          return;
+        }
         if (!dgsPart.trim()) {
           setStatus("Choose a DGS Part #.", true);
+          return;
+        }
+        if (!description) {
+          setStatus("Description is required.", true);
+          if (descInput) descInput.focus();
+          return;
+        }
+        if (!qty || qty <= 0) {
+          setStatus("Quantity is required.", true);
+          return;
+        }
+        if (!shipTo) {
+          setStatus("Ship To Category is required.", true);
           return;
         }
         if (selectedHasPhoto === null) {
           await lookupPartPhoto(dgsPart);
         }
         if (selectedHasPhoto === false && !picDataUrls.length) {
-          setStatus("Add at least one picture — this part has no catalog photo.", true);
+          setStatus("Pic is required — this part has no catalog photo.", true);
           if (picsInput) picsInput.focus();
           return;
         }
@@ -560,9 +670,13 @@
               body: {
                 dgs_part: dgsPart.trim(),
                 quantity: qty,
+                tech_name: techName,
+                job_type: jobType,
+                part_description: description,
                 importance: importance || null,
+                ship_to_category: shipTo,
+                ship_to_address: shipAddress || null,
                 notes: notes || null,
-                job_type: "Repair",
                 pics: picDataUrls.length ? picDataUrls : null,
               },
             }

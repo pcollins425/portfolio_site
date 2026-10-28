@@ -43,13 +43,20 @@ StatusFilter = Literal["open", "closed", "all"]
 _WO_DIGITS = re.compile(r"^\d{5}$")
 
 
+_PART_REQUEST_SHIP_TO = frozenset({"Primary Location", "Casino", "Other"})
+_PART_REQUEST_JOB_TYPES = frozenset({"Repair", "Stock", "Install"})
+
+
 class PartRequestIn(BaseModel):
     dgs_part: str = Field(min_length=1, max_length=80)
     quantity: float = Field(default=1, gt=0, le=9999)
     job_type: str = Field(default="Repair", max_length=40)
+    tech_name: str | None = Field(default=None, max_length=120)
+    part_description: str | None = Field(default=None, max_length=500)
     importance: str | None = Field(default=None, max_length=80)
     notes: str | None = Field(default=None, max_length=2000)
-    ship_to_category: str | None = Field(default="Primary Location", max_length=80)
+    ship_to_category: str = Field(default="Primary Location", max_length=80)
+    ship_to_address: str | None = Field(default=None, max_length=500)
     # data URLs or raw base64 — stored locally and passed to AppSheet as public image URLs
     pics: list[str] | None = Field(default=None, max_length=3)
 
@@ -1327,6 +1334,28 @@ def _resolve_tech_location(email: str, name: str) -> dict[str, str]:
     return {}
 
 
+def _part_request_defaults(user: dict[str, Any] | None, row: dict[str, Any]) -> dict[str, Any]:
+    """Prefill values for the Tech Order fields AppSheet does not autofill from WO."""
+    user = user or {}
+    tech_email = _text(user.get("email"))
+    user_name = _text(user.get("name")) or ""
+    loc = _resolve_tech_location(tech_email, user_name)
+    tech_name = loc.get("name") or user_name
+    asset = _text(row.get("serial")) or _text(row.get("compid"))
+    casino_address = _casino_ship_address(_text(row.get("property")))
+    tech_address = loc.get("address") or ""
+    ship_to = "Primary Location" if tech_address else ("Casino" if casino_address else "Primary Location")
+    return {
+        "tech_name": tech_name,
+        "job_type": "Repair",
+        "asset_id": asset,
+        "tech_address": tech_address,
+        "casino_address": casino_address,
+        "ship_to_category": ship_to,
+        "send_to_address": tech_address if ship_to == "Primary Location" else casino_address,
+    }
+
+
 def _parts_search_selector(needle: str, limit: int) -> str:
     """Build an AppSheet Find selector that techs can actually use.
 
@@ -1540,7 +1569,42 @@ def create_part_request(
         raise HTTPException(status_code=400, detail=f"Unknown DGS part # {part_id}")
 
     part_name = _text(part_rows[0].get("Part Name"))
+    mfr_part = _text(part_rows[0].get("MFR Part No."))
     catalog_photo = _text(part_rows[0].get("Photo"))
+    catalog_photo_2 = _text(part_rows[0].get("Photo 2"))
+    part_description = (body.part_description or "").strip() or (part_name or "")
+    if not part_description:
+        raise HTTPException(status_code=400, detail="Description is required")
+    if body.quantity is None or float(body.quantity) <= 0:
+        raise HTTPException(status_code=400, detail="Quantity is required")
+
+    job_type = (body.job_type or "Repair").strip() or "Repair"
+    if job_type not in _PART_REQUEST_JOB_TYPES:
+        raise HTTPException(
+            status_code=400,
+            detail="Job Type must be Repair, Stock, or Install",
+        )
+
+    importance = (body.importance or "").strip()
+    if job_type == "Repair":
+        if not importance:
+            raise HTTPException(status_code=400, detail="Importance is required for Repair")
+        if importance not in _PART_REQUEST_IMPORTANCE:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    "Importance must be one of: "
+                    + ", ".join(sorted(_PART_REQUEST_IMPORTANCE))
+                ),
+            )
+
+    ship_to = (body.ship_to_category or "").strip()
+    if ship_to not in _PART_REQUEST_SHIP_TO:
+        raise HTTPException(
+            status_code=400,
+            detail="Ship To Category must be Primary Location, Casino, or Other",
+        )
+
     pic_inputs = [p for p in (body.pics or []) if (p or "").strip()]
     if len(pic_inputs) > 3:
         raise HTTPException(status_code=400, detail="At most 3 pictures allowed")
@@ -1548,7 +1612,7 @@ def create_part_request(
         raise HTTPException(
             status_code=400,
             detail=(
-                "This part has no catalog photo — add at least one picture "
+                "Pic is required — this part has no catalog photo "
                 "(same rule as the Tech Order Form)."
             ),
         )
@@ -1557,38 +1621,39 @@ def create_part_request(
     tech_email = _text(user.get("email"))
     user_name = _text(user.get("name")) or "DGS App"
     loc = _resolve_tech_location(tech_email, user_name)
-    tech_name = loc.get("name") or user_name
+    tech_name = (body.tech_name or "").strip() or loc.get("name") or user_name
+    if not tech_name:
+        raise HTTPException(status_code=400, detail="Tech Name is required")
     initials = (loc.get("initials") or "").strip() or (
-        "".join(p[0] for p in re.split(r"\s+", user_name) if p).upper()[:3] or "DG"
+        "".join(p[0] for p in re.split(r"\s+", tech_name) if p).upper()[:3] or "DG"
     )
     tech_order = f"TO{initials}{uuid.uuid4().hex[:5].upper()}{wo_num}"
 
     asset = _text(row.get("serial")) or _text(row.get("compid"))
-    job_type = (body.job_type or "Repair").strip() or "Repair"
     if job_type == "Repair" and not asset:
         raise HTTPException(
             status_code=400,
-            detail="This work order has no Asset/serial — required for Repair part requests",
+            detail="Asset ID is required for Repair part requests",
         )
 
     casino_address = _casino_ship_address(_text(row.get("property")))
     tech_address = loc.get("address") or ""
-    ship_to = (body.ship_to_category or "Primary Location").strip() or "Primary Location"
-    if ship_to == "Primary Location" and not tech_address and casino_address:
-        # Office / non-tech pilots often have no Locations row — ship to property.
-        ship_to = "Casino"
     if ship_to == "Primary Location":
-        send_to = tech_address
+        send_to = (body.ship_to_address or "").strip() or tech_address
+        if not send_to and casino_address:
+            # Office / non-tech pilots often have no Locations row — fall back.
+            ship_to = "Casino"
+            send_to = casino_address
     elif ship_to == "Casino":
-        send_to = casino_address
+        send_to = (body.ship_to_address or "").strip() or casino_address
     else:
-        send_to = tech_address or casino_address
+        send_to = (body.ship_to_address or "").strip() or tech_address or casino_address
     if not send_to:
         raise HTTPException(
             status_code=400,
             detail=(
                 "No ship-to address found (tech Locations address or casino address). "
-                "Add your tech location in AppSheet or use a WO with a property address."
+                "Pick Casino / Other or add your tech location in AppSheet."
             ),
         )
 
@@ -1602,7 +1667,7 @@ def create_part_request(
         "Date": today,
         "Tech Name": tech_name,
         "Job Type": job_type,
-        "Part Description": part_name or "",
+        "Part Description": part_description,
         "Entered By Email": tech_email or "",
         "Tech Email": tech_email or "",
         "Tech Initials": initials,
@@ -1617,17 +1682,19 @@ def create_part_request(
         payload["Casino Address"] = casino_address
     if _text(row.get("project_no")):
         payload["Project #"] = _text(row.get("project_no"))
-    if body.importance and body.importance.strip():
-        importance = body.importance.strip()
-        if importance not in _PART_REQUEST_IMPORTANCE:
-            raise HTTPException(
-                status_code=400,
-                detail=(
-                    "Importance must be one of: "
-                    + ", ".join(sorted(_PART_REQUEST_IMPORTANCE))
-                ),
-            )
+    if importance:
         payload["Importance"] = importance
+    if mfr_part:
+        payload["Manufacture Part #"] = mfr_part
+    # Part Image drives AppSheet Pics Required_If; stamp catalog photo when present.
+    if catalog_photo:
+        # AppSheet Image fields via API expect a URL; relative Paths may not resolve.
+        # Leave blank if we only have a relative Path — Pics rule uses ISBLANK([Part Image]).
+        # When catalog has Photo, Pics are optional; blank Part Image would wrongly require Pics.
+        # Prefer copying the relative path (native AppSheet shape) so ISBLANK is false.
+        payload["Part Image"] = catalog_photo
+    if catalog_photo_2:
+        payload["Part Image 2"] = catalog_photo_2
     if body.notes and body.notes.strip():
         payload["Notes"] = body.notes.strip()
     pic_fields = ("Pics", "Pics 2", "Pics 3")
@@ -1854,6 +1921,7 @@ def work_order_detail(
         "part_requests": {
             "can_write": _can_write_part_requests(user),
             "wo_ready": bool(wo_key and _WO_DIGITS.match(wo_key)),
+            "defaults": _part_request_defaults(user, row) if _can_write_part_requests(user) else {},
         },
     }
     if include_priority:

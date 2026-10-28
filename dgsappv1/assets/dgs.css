@@ -3357,6 +3357,10 @@ body.wo-create-open .dgs-capacity-drawer.is-wo-create {
   color: #0f1a12;
   background: #9fd4a7;
 }
+.dgs-wo-req {
+  color: #f0a8a8;
+  font-weight: 700;
+}
 .dgs-wo-pr-status {
   margin: 0;
   font-size: 0.84rem;
