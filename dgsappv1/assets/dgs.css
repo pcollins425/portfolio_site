@@ -2928,9 +2928,9 @@ body.dgs-dashboard-v2 .dgs-dashboard-mount:has(.dgs-capacity) {
   box-shadow: -12px 0 32px rgba(0, 0, 0, 0.35);
   color: #f3f5f9;
 }
-body.capacity-drill-open .dgs-capacity-drawer-backdrop,
-body.wo-detail-open .dgs-capacity-drawer-backdrop,
-body.wo-create-open .dgs-capacity-drawer-backdrop,
+body.capacity-drill-open .dgs-capacity-drawer-backdrop:not(.dgs-wo-pr-backdrop),
+body.wo-detail-open .dgs-capacity-drawer-backdrop:not(.dgs-wo-pr-backdrop),
+body.wo-create-open .dgs-capacity-drawer-backdrop:not(.dgs-wo-pr-backdrop),
 body.wo-pr-open .dgs-wo-pr-backdrop {
   display: block;
 }
