@@ -4,8 +4,8 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Truck — DGS Application</title>
-  <link rel="stylesheet" href="assets/dgs.css?v=20261028v" />
-  <link rel="stylesheet" href="assets/dgs-v2.css?v=20261028v" />
+  <link rel="stylesheet" href="assets/dgs.css?v=20261028w" />
+  <link rel="stylesheet" href="assets/dgs-v2.css?v=20261028w" />
 </head>
 <body class="dgs-app dgs-truck-inventory-v2">
   <aside class="dgs-sidebar" id="dgs-sidebar">
@@ -56,14 +56,10 @@
       <form id="add-stock-form" class="dgs-truck-add-form">
         <div class="dgs-truck-add-part">
           <label class="dgs-wo-field">
-            <span class="dgs-wo-field-label">Part search</span>
-            <input id="add-part-search" type="search" class="dgs-v2-input" autocomplete="off" placeholder="Part # or name" />
+            <span class="dgs-wo-field-label">Part</span>
+            <input id="add-item" type="search" class="dgs-v2-input" required autocomplete="off" placeholder="Search part # or name" />
           </label>
           <div id="add-part-results" class="dgs-wo-pr-results dgs-truck-add-results" hidden></div>
-          <label class="dgs-wo-field">
-            <span class="dgs-wo-field-label">Part #</span>
-            <input id="add-item" type="text" class="dgs-v2-input" required autocomplete="off" placeholder="Select from search" readonly />
-          </label>
           <p class="dgs-wo-section-note" id="add-part-label" hidden></p>
         </div>
         <label class="dgs-wo-field">
@@ -110,9 +106,9 @@
     </section>
   </div>
 
-  <script src="assets/auth.js?v=20261028v"></script>
-  <script src="assets/shell.js?v=20261028v"></script>
-  <script src="assets/truck-inventory.js?v=20261028v"></script>
+  <script src="assets/auth.js?v=20261028w"></script>
+  <script src="assets/shell.js?v=20261028w"></script>
+  <script src="assets/truck-inventory.js?v=20261028w"></script>
   <script>DGS.boot("truck_inventory", () => TruckInventoryApp.init());</script>
 </body>
 </html>

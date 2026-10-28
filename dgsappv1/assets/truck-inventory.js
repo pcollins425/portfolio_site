@@ -41,7 +41,6 @@
       "add-stock-panel",
       "add-stock-form",
       "add-to-label",
-      "add-part-search",
       "add-part-results",
       "add-part-label",
       "add-item",
@@ -54,9 +53,9 @@
   }
 
   let partSearchTimer = null;
+  let selectedPartItem = "";
 
-  function clearSelectedPart() {
-    if (els.add_item) els.add_item.value = "";
+  function clearPartLabel() {
     if (els.add_part_label) {
       els.add_part_label.hidden = true;
       els.add_part_label.textContent = "";
@@ -65,8 +64,8 @@
 
   function selectPart(part) {
     const item = (part && part.item) || "";
+    selectedPartItem = item;
     if (els.add_item) els.add_item.value = item;
-    if (els.add_part_search) els.add_part_search.value = item;
     if (els.add_part_results) {
       els.add_part_results.hidden = true;
       els.add_part_results.innerHTML = "";
@@ -77,16 +76,15 @@
         els.add_part_label.hidden = false;
         els.add_part_label.textContent = bits.join(" · ");
       } else {
-        els.add_part_label.hidden = true;
-        els.add_part_label.textContent = "";
+        clearPartLabel();
       }
     }
   }
 
   async function runPartSearch() {
-    const q = (els.add_part_search && els.add_part_search.value) || "";
+    const q = (els.add_item && els.add_item.value) || "";
     if (!els.add_part_results) return;
-    if (q.trim().length < 2) {
+    if (q.trim().length < 2 || q.trim() === selectedPartItem) {
       els.add_part_results.hidden = true;
       els.add_part_results.innerHTML = "";
       return;
@@ -327,8 +325,12 @@
     const item = (els.add_item && els.add_item.value.trim()) || "";
     const qty = Number(els.add_qty && els.add_qty.value);
     const fromBucket = (els.add_from && els.add_from.value) || "";
-    if (!item || !fromBucket || !(qty > 0)) {
-      showError("Part #, qty, and From are required.");
+    if (!item || item !== selectedPartItem) {
+      showError("Pick a part from the search results.");
+      return;
+    }
+    if (!fromBucket || !(qty > 0)) {
+      showError("Qty and From are required.");
       return;
     }
     if (els.add_submit) els.add_submit.disabled = true;
@@ -345,8 +347,9 @@
       showOk(
         `Added ${result.qty} × ${result.item} from ${result.from_bucket} → ${result.to_bucket} (truck available now ${result.truck_available}).`
       );
-      clearSelectedPart();
-      if (els.add_part_search) els.add_part_search.value = "";
+      selectedPartItem = "";
+      if (els.add_item) els.add_item.value = "";
+      clearPartLabel();
       if (els.add_qty) els.add_qty.value = "1";
       await loadSources();
       await load();
@@ -358,15 +361,18 @@
   }
 
   function wire() {
-    if (els.add_part_search) {
-      els.add_part_search.addEventListener("input", () => {
-        clearSelectedPart();
+    if (els.add_item) {
+      els.add_item.addEventListener("input", () => {
+        if (els.add_item.value.trim() !== selectedPartItem) {
+          selectedPartItem = "";
+          clearPartLabel();
+        }
         clearTimeout(partSearchTimer);
         partSearchTimer = setTimeout(() => {
           runPartSearch().catch((err) => showError(err.message || String(err)));
         }, 300);
       });
-      els.add_part_search.addEventListener("keydown", (event) => {
+      els.add_item.addEventListener("keydown", (event) => {
         if (event.key === "Enter") {
           event.preventDefault();
           clearTimeout(partSearchTimer);
