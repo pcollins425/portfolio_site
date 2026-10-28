@@ -102,7 +102,7 @@ PERMISSION_CATALOG: tuple[CatalogArea, ...] = (
         TRUCK_INVENTORY_AREA,
         "Inventory · Truck",
         "inventory",
-        (LEVEL_READ,),
+        (LEVEL_READ, LEVEL_UPDATES, LEVEL_ADDS_UPDATES, LEVEL_ALL),
     ),
     CatalogArea(
         PARTS_INVENTORY_AREA,

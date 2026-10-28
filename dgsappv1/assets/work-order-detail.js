@@ -317,6 +317,22 @@
               <input type="number" id="wo-pr-qty" class="dgs-v2-input" min="1" step="1" value="1" required />
             </label>
             <label class="dgs-wo-field">
+              <span class="dgs-wo-field-label">Stock source <span class="dgs-wo-req" aria-hidden="true">*</span></span>
+              <select id="wo-pr-stock-source" class="dgs-v2-input" required>
+                <option value="request">Request from inventory</option>
+                <option value="truck" disabled>Truck (no availability yet)</option>
+              </select>
+              <span class="dgs-wo-section-note" id="wo-pr-stock-hint">Select a part to check truck stock.</span>
+            </label>
+            <label class="dgs-wo-field">
+              <span class="dgs-wo-field-label">Returning defective? <span class="dgs-wo-req" aria-hidden="true">*</span></span>
+              <select id="wo-pr-defective" class="dgs-v2-input" required>
+                <option value="">—</option>
+                <option value="no">No</option>
+                <option value="yes">Yes — track DAMAGED on truck</option>
+              </select>
+            </label>
+            <label class="dgs-wo-field">
               <span class="dgs-wo-field-label">Ship To Category <span class="dgs-wo-req" aria-hidden="true">*</span></span>
               <select id="wo-pr-ship-to" class="dgs-v2-input" required>
                 ${shipOpts}
@@ -458,10 +474,48 @@
       }
     }
 
+    let lastTruckLooked = null;
+
+    function applyTruckStock(looked) {
+      if (looked !== undefined) lastTruckLooked = looked;
+      const data = looked !== undefined ? looked : lastTruckLooked;
+      const sourceSel = host.querySelector("#wo-pr-stock-source");
+      const hint = host.querySelector("#wo-pr-stock-hint");
+      const qtyEl = host.querySelector("#wo-pr-qty");
+      const qty = Number((qtyEl && qtyEl.value) || 1) || 1;
+      const truckQty = Number(data && data.truck_available_qty) || 0;
+      const truckBucket = (data && data.truck_bucket) || "";
+      if (!sourceSel) return;
+      const canTruck = truckBucket && truckQty >= qty;
+      sourceSel.innerHTML = `
+        <option value="request">Request from inventory</option>
+        <option value="truck"${canTruck ? "" : " disabled"}>
+          Truck ${esc(truckBucket || "—")} (${truckQty} available)
+        </option>`;
+      if (canTruck || (data && data.suggested_source === "truck" && truckQty > 0)) {
+        sourceSel.value = truckQty >= qty ? "truck" : "request";
+      } else {
+        sourceSel.value = "request";
+      }
+      if (hint) {
+        if (!truckBucket) {
+          hint.textContent = "No vehicle linked for this tech — inventory request only.";
+        } else if (truckQty <= 0) {
+          hint.textContent = `${truckBucket} has no good stock of this part.`;
+        } else if (truckQty < qty) {
+          hint.textContent = `${truckBucket} has ${truckQty} — less than qty ${qty}. Raise qty only if requesting inventory.`;
+          sourceSel.value = "request";
+        } else {
+          hint.textContent = `${truckBucket} has ${truckQty} available — truck selected by default.`;
+        }
+      }
+    }
+
     async function lookupPartPhoto(partId) {
       const id = (partId || "").trim();
       if (!id) {
         setPhotoRequired(null);
+        applyTruckStock(null);
         return;
       }
       setPhotoBanner("is-loading", "Checking catalog photo…", `Looking up part ${id}.`);
@@ -469,6 +523,7 @@
         const looked = await fetchJson(
           `/api/work-orders/part-catalog/item?id=${encodeURIComponent(id)}`
         );
+        applyTruckStock(looked);
         if (!looked || looked.found === false) {
           setPhotoBanner(
             "is-required",
@@ -483,6 +538,7 @@
         }
         setPhotoRequired(!!looked.photo_required);
       } catch (err) {
+        applyTruckStock(null);
         setPhotoBanner(
           "is-required",
           "Could not verify catalog photo",
@@ -636,13 +692,20 @@
       results.addEventListener("click", (event) => {
         const btn = event.target.closest(".dgs-wo-pr-hit");
         if (!btn || !partInput) return;
-        partInput.value = btn.getAttribute("data-item") || "";
+        const picked = btn.getAttribute("data-item") || "";
+        partInput.value = picked;
         const name = btn.getAttribute("data-name") || "";
         if (descInput && name) descInput.value = name;
         setPhotoRequired(btn.getAttribute("data-photo-required") === "1");
         results.hidden = true;
         results.innerHTML = "";
+        lookupPartPhoto(picked).catch(() => {});
       });
+    }
+    const qtyInput = host.querySelector("#wo-pr-qty");
+    if (qtyInput) {
+      qtyInput.addEventListener("change", () => applyTruckStock());
+      qtyInput.addEventListener("input", () => applyTruckStock());
     }
     if (submitBtn) {
       submitBtn.addEventListener("click", async () => {
@@ -686,6 +749,17 @@
           setStatus("Ship To Category is required.", true);
           return;
         }
+        const stockSource = ((host.querySelector("#wo-pr-stock-source") || {}).value || "").trim();
+        const defectiveRaw = ((host.querySelector("#wo-pr-defective") || {}).value || "").trim();
+        if (!stockSource) {
+          setStatus("Stock source is required.", true);
+          return;
+        }
+        if (!defectiveRaw) {
+          setStatus("Say whether you are returning a defective item.", true);
+          host.querySelector("#wo-pr-defective")?.focus();
+          return;
+        }
         if (selectedHasPhoto === null) {
           await lookupPartPhoto(dgsPart);
         }
@@ -712,6 +786,8 @@
                 ship_to_address: shipAddress || null,
                 notes: notes || null,
                 pics: picDataUrls.length ? picDataUrls : null,
+                stock_source: stockSource,
+                returning_defective: defectiveRaw === "yes",
               },
             }
           );

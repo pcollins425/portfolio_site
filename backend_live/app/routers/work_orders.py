@@ -24,6 +24,8 @@ from app import appsheet_client
 from app import emaint_client
 from app import mssql
 from app import permission_catalog as cat
+from app import view_as
+from app import wo_inventory_service as stock
 from app.auth_deps import require_area_read, require_demo_user
 from app.casino_scope import (
     assigned_employee_id,
@@ -57,8 +59,13 @@ class PartRequestIn(BaseModel):
     notes: str | None = Field(default=None, max_length=2000)
     ship_to_category: str = Field(default="Primary Location", max_length=80)
     ship_to_address: str | None = Field(default=None, max_length=500)
+    # truck = pull AVAILABLE from tech vehicle; request = AppSheet fulfillment only
+    stock_source: Literal["truck", "request"] = "request"
+    returning_defective: bool = False
     # data URLs or raw base64 — stored locally and passed to AppSheet as public image URLs
     pics: list[str] | None = Field(default=None, max_length=3)
+
+_VEHICLE_CODE = re.compile(r"^V\d+$", re.IGNORECASE)
 
 
 class WorkOrderCreateIn(BaseModel):
@@ -1296,6 +1303,52 @@ def _casino_ship_address(property_name: str | None) -> str:
     )
 
 
+def _location_code_from_row(row: dict[str, Any]) -> str:
+    for key in ("Location ID (Key)NameType", "Location ID (Key)", "Warehouse"):
+        val = _text(row.get(key))
+        if val:
+            return val
+    return _text(row.get("Name"))
+
+
+def _resolve_tech_truck_bucket(user: dict[str, Any] | None) -> str | None:
+    """AppSheet vehicle code (V0xx) for the effective tech email."""
+    email = (view_as.effective_email(user) or "").strip().lower()
+    if not email:
+        return None
+    try:
+        rows = appsheet_client.find_rows(
+            appsheet_client.LOCATIONS_TABLE,
+            selector='FILTER(Locations, [Type] = "Vehicle")',
+        )
+    except appsheet_client.AppSheetError:
+        return None
+    for row in rows or []:
+        row_email = (_text(row.get("Assigned User (Email)")) or "").strip().lower()
+        if row_email != email:
+            continue
+        code = _location_code_from_row(row).upper()
+        if _VEHICLE_CODE.match(code):
+            return code
+    return None
+
+
+def _part_truck_stock(user: dict[str, Any] | None, item: str) -> dict[str, Any]:
+    truck = _resolve_tech_truck_bucket(user)
+    qty = 0.0
+    if truck and item:
+        try:
+            qty = float(stock.truck_available_qty(item, truck))
+        except Exception:
+            qty = 0.0
+    suggested = "truck" if truck and qty > 0 else "request"
+    return {
+        "truck_bucket": truck,
+        "truck_available_qty": qty,
+        "suggested_source": suggested,
+    }
+
+
 def _resolve_tech_location(email: str, name: str) -> dict[str, str]:
     """Best-effort Locations row for ship-to / Tech Name."""
     email_l = (email or "").strip().lower()
@@ -1486,13 +1539,21 @@ def part_catalog_item(
             detail=f"Part lookup failed: {exc}",
         ) from exc
     if not rows:
-        return {"found": False, "item": part_id, "has_photo": False, "photo_required": True}
+        truck = _part_truck_stock(user, part_id)
+        return {
+            "found": False,
+            "item": part_id,
+            "has_photo": False,
+            "photo_required": True,
+            **truck,
+        }
     mapped = _part_catalog_row(rows[0]) or {
         "item": part_id,
         "has_photo": False,
         "photo_required": True,
     }
-    return {"found": True, **mapped}
+    truck = _part_truck_stock(user, mapped.get("item") or part_id)
+    return {"found": True, **mapped, **truck}
 
 
 def _part_request_is_active(status: str, status_2: str) -> bool:
@@ -1635,8 +1696,8 @@ def create_part_request(
         )
     pic_urls = [_store_part_request_pic(p) for p in pic_inputs]
     today = date.today().isoformat()
-    tech_email = _text(user.get("email"))
-    user_name = _text(user.get("name")) or "DGS App"
+    tech_email = view_as.effective_email(user) or _text(user.get("email")) or ""
+    user_name = view_as.effective_name(user) or _text(user.get("name")) or "DGS App"
     loc = _resolve_tech_location(tech_email, user_name)
     tech_name = (body.tech_name or "").strip() or loc.get("name") or user_name
     if not tech_name:
@@ -1674,11 +1735,87 @@ def create_part_request(
             ),
         )
 
+    stock_source = (body.stock_source or "request").strip().lower()
+    if stock_source not in ("truck", "request"):
+        raise HTTPException(status_code=400, detail="stock_source must be truck or request")
+    returning_defective = bool(body.returning_defective)
+    truck_bucket = _resolve_tech_truck_bucket(user)
+    qty = float(body.quantity)
+    who = (tech_email or user_name or "dgs")[:128]
+    stock_applied: list[str] = []
+
+    def _rollback_stock() -> None:
+        from decimal import Decimal as _D
+
+        for step in reversed(stock_applied):
+            try:
+                if step == "issue" and truck_bucket:
+                    stock._apply_balance_delta(  # noqa: SLF001 — intentional rollback
+                        part_id, truck_bucket, stock.COND_AVAILABLE, _D(str(qty))
+                    )
+                elif step == "defective" and truck_bucket:
+                    stock._apply_balance_delta(  # noqa: SLF001 — intentional rollback
+                        part_id, truck_bucket, stock.COND_DAMAGED, _D(str(-qty))
+                    )
+            except Exception:
+                pass
+
+    # Stock moves first so AppSheet failure can roll them back.
+    if stock_source == "truck":
+        if not truck_bucket:
+            raise HTTPException(
+                status_code=400,
+                detail="No vehicle linked for this tech — cannot pull from truck",
+            )
+        try:
+            stock.issue_from_truck(
+                item=part_id,
+                qty=qty,
+                truck_bucket=truck_bucket,
+                wo=wo_num,
+                created_by=who,
+            )
+            stock_applied.append("issue")
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        except Exception as exc:
+            raise HTTPException(status_code=503, detail=f"truck stock error: {exc}") from exc
+
+    if returning_defective:
+        if not truck_bucket:
+            raise HTTPException(
+                status_code=400,
+                detail="No vehicle linked for this tech — cannot track defective return",
+            )
+        try:
+            stock.return_defective_to_truck(
+                item=part_id,
+                qty=qty,
+                truck_bucket=truck_bucket,
+                wo=wo_num,
+                created_by=who,
+            )
+            stock_applied.append("defective")
+        except ValueError as exc:
+            _rollback_stock()
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        except Exception as exc:
+            _rollback_stock()
+            raise HTTPException(status_code=503, detail=f"defective return error: {exc}") from exc
+
+    note_bits = []
+    if body.notes and body.notes.strip():
+        note_bits.append(body.notes.strip())
+    note_bits.append(
+        f"Stock source: {'Truck ' + truck_bucket if stock_source == 'truck' and truck_bucket else 'Request from inventory'}"
+    )
+    note_bits.append(f"Returning defective: {'Yes' if returning_defective else 'No'}")
+
     payload = {
         "Tech Order #": tech_order,
         "Work Order #": wo_num,
         "DGS Part #": part_id,
-        "Quantity": str(int(body.quantity) if float(body.quantity).is_integer() else body.quantity),
+        "Quantity": str(int(qty) if float(qty).is_integer() else qty),
         "Status": "Open",
         "Status 2": "Open",
         "Date": today,
@@ -1690,6 +1827,7 @@ def create_part_request(
         "Tech Initials": initials,
         "Ship To Catagory": ship_to,
         "Send to Address": send_to,
+        "Notes": " | ".join(note_bits),
     }
     if asset:
         payload["Asset ID"] = asset
@@ -1705,15 +1843,9 @@ def create_part_request(
         payload["Manufacture Part #"] = mfr_part
     # Part Image drives AppSheet Pics Required_If; stamp catalog photo when present.
     if catalog_photo:
-        # AppSheet Image fields via API expect a URL; relative Paths may not resolve.
-        # Leave blank if we only have a relative Path — Pics rule uses ISBLANK([Part Image]).
-        # When catalog has Photo, Pics are optional; blank Part Image would wrongly require Pics.
-        # Prefer copying the relative path (native AppSheet shape) so ISBLANK is false.
         payload["Part Image"] = catalog_photo
     if catalog_photo_2:
         payload["Part Image 2"] = catalog_photo_2
-    if body.notes and body.notes.strip():
-        payload["Notes"] = body.notes.strip()
     pic_fields = ("Pics", "Pics 2", "Pics 3")
     for field_name, url in zip(pic_fields, pic_urls):
         payload[field_name] = url
@@ -1724,8 +1856,8 @@ def create_part_request(
             [payload],
         )
     except appsheet_client.AppSheetError as exc:
+        _rollback_stock()
         detail = _appsheet_user_detail(exc, fallback="Part request create failed")
-        # AppSheet validation (bad enum, required field) → 400; transport → 502.
         status = 400 if exc.status_code and 400 <= exc.status_code < 500 else 502
         raise HTTPException(status_code=status, detail=detail) from exc
 
@@ -1737,6 +1869,9 @@ def create_part_request(
         "dgs_part": part_id,
         "quantity": payload["Quantity"],
         "status": "Open",
+        "stock_source": stock_source,
+        "truck_bucket": truck_bucket,
+        "returning_defective": returning_defective,
     }
 
 

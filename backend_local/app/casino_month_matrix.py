@@ -40,6 +40,28 @@ _CASINO_NAME = (
 )
 
 
+def _unit_leaf_key(
+    *,
+    asset_id: str | None,
+    theme_id: str | None,
+    serial: str,
+    theme: str,
+) -> str:
+    """Stable unit leaf across SMM Type-2 twins (same asset + theme, new reference_key).
+
+    Performance expand used to key leaves by ``slot_master_id``. A MOVE/CONVERT
+    twin then showed the same serial twice on TDW/ADW. Asset + theme is the
+    floor identity; serial + theme name is the fallback when SMM did not join.
+    """
+    asset = (asset_id or "").strip()
+    tid = (theme_id or "").strip()
+    if asset and tid:
+        return f"a:{asset}|t:{tid}"
+    if asset:
+        return f"a:{asset}|theme:{(theme or '').strip()}"
+    return f"s:{(serial or '').strip()}|theme:{(theme or '').strip()}"
+
+
 def month_keys(end: date, n: int = 6) -> list[str]:
     """YYYY-MM keys ending on ``end``, oldest first."""
     year, month = end.year, end.month
@@ -431,7 +453,12 @@ def _unit_indexes(row: dict[str, Any]) -> tuple[float | None, float | None]:
 
 
 def build_expand(query: Query, casino_id: str, end: date) -> dict[str, Any]:
-    """One casino, six months, nested vendor → cabinet → sign or theme → serial."""
+    """One casino, six months, nested vendor → cabinet → sign or theme → serial.
+
+    Serial leaves key on SMM ``asset_id`` + ``theme_id`` (not ``slot_master_id``),
+    so Type-2 MOVE twins keep one TDW/ADW line while CONVERT theme changes stay
+    separate under each theme.
+    """
     months = month_keys(end, 6)
     start, stop = _bounds(months)
     rows = query(
@@ -448,7 +475,9 @@ SELECT
   CAST(mr.WIN_Index AS float) AS theo_index,
   CAST(mr.actual_index AS float) AS actual_index,
   TRY_CONVERT(float, mr.HouseWPU) AS house,
-  mr.slot_master_id
+  mr.slot_master_id,
+  smm.asset_id,
+  smm.theme_id
 FROM {_MV} AS mr
 {_CASINO_JOINS}
 WHERE {_DATE_RANGE}
@@ -470,6 +499,8 @@ WHERE {_DATE_RANGE}
         theme = str(row["theme"] or "").strip() or "—"
         serial = str(row["serial"] or "").strip() or "(no serial)"
         smm = str(row["slot_master_id"] or "").strip()
+        asset_id = str(row.get("asset_id") or "").strip() or None
+        theme_id = str(row.get("theme_id") or "").strip() or None
         tdw = None if row["tdw"] is None else float(row["tdw"])
         adw = None if row["adw"] is None else float(row["adw"])
         theo, actual = _unit_indexes(row)
@@ -494,10 +525,27 @@ WHERE {_DATE_RANGE}
         else:
             leaf_parent = c["themes"].setdefault(theme, {"bucket": _bucket(), "serials": {}})
         _add_month(leaf_parent["bucket"], ym, tdw, adw, theo, actual)
-        leaf_key = smm or serial
-        leaf = leaf_parent["serials"].setdefault(
-            leaf_key, {"bucket": _bucket(), "serial": serial, "slot_master_id": smm}
+        leaf_key = _unit_leaf_key(
+            asset_id=asset_id, theme_id=theme_id, serial=serial, theme=theme
         )
+        leaf = leaf_parent["serials"].setdefault(
+            leaf_key,
+            {
+                "bucket": _bucket(),
+                "serial": serial,
+                "slot_master_id": smm or None,
+                "asset_id": asset_id,
+                "theme_id": theme_id,
+                "_ym": ym,
+            },
+        )
+        # Prefer identity from the newest month when Type-2 twins share a leaf.
+        if ym >= str(leaf.get("_ym") or ""):
+            leaf["serial"] = serial
+            leaf["slot_master_id"] = smm or leaf.get("slot_master_id")
+            leaf["asset_id"] = asset_id or leaf.get("asset_id")
+            leaf["theme_id"] = theme_id or leaf.get("theme_id")
+            leaf["_ym"] = ym
         _add_month(leaf["bucket"], ym, tdw, adw, theo, actual)
 
     def serial_nodes(serials: dict[str, Any]) -> list[dict[str, Any]]:
@@ -507,7 +555,9 @@ WHERE {_DATE_RANGE}
             out.append(
                 {
                     "serial": node["serial"],
-                    "slot_master_id": node["slot_master_id"],
+                    "slot_master_id": node.get("slot_master_id"),
+                    "asset_id": node.get("asset_id"),
+                    "theme_id": node.get("theme_id"),
                     **_measures(node["bucket"], months),
                 }
             )

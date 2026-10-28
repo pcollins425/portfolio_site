@@ -1,4 +1,4 @@
-/* Read-only truck (vehicle) stock browse. */
+/* Truck (vehicle) stock browse + Add Stock for writers. */
 (function () {
   "use strict";
 
@@ -9,11 +9,13 @@
 
   const state = {
     browseAll: false,
+    canWrite: false,
     vehicle: null,
     vehicles: [],
     parts: [],
     search: "",
     message: "",
+    sourceBuckets: [],
   };
 
   const els = {};
@@ -25,6 +27,7 @@
   function cacheEls() {
     [
       "error-box",
+      "ok-box",
       "vehicle-pick-wrap",
       "vehicle-select",
       "vehicle-meta",
@@ -35,6 +38,13 @@
       "stat-vehicle",
       "truck-tbody",
       "list-status",
+      "add-stock-panel",
+      "add-stock-form",
+      "add-to-label",
+      "add-item",
+      "add-qty",
+      "add-from",
+      "add-submit",
     ].forEach((id) => {
       els[id.replace(/-/g, "_")] = $(id);
     });
@@ -46,6 +56,9 @@
 
   async function fetchJson(path, options) {
     const headers = window.DGSAuth ? DGSAuth.authHeaders(options?.headers) : {};
+    if (options && options.body && !headers["Content-Type"]) {
+      headers["Content-Type"] = "application/json";
+    }
     const res = await fetch(apiUrl(path), { ...options, headers });
     const body = await res.json().catch(() => ({}));
     if (!res.ok) {
@@ -71,6 +84,10 @@
   }
 
   function showError(msg) {
+    if (els.ok_box) {
+      els.ok_box.hidden = true;
+      els.ok_box.textContent = "";
+    }
     if (!els.error_box) return;
     if (!msg) {
       els.error_box.hidden = true;
@@ -79,6 +96,21 @@
     }
     els.error_box.hidden = false;
     els.error_box.textContent = msg;
+  }
+
+  function showOk(msg) {
+    if (els.error_box) {
+      els.error_box.hidden = true;
+      els.error_box.textContent = "";
+    }
+    if (!els.ok_box) return;
+    if (!msg) {
+      els.ok_box.hidden = true;
+      els.ok_box.textContent = "";
+      return;
+    }
+    els.ok_box.hidden = false;
+    els.ok_box.textContent = msg;
   }
 
   function renderVehiclePicker() {
@@ -115,6 +147,29 @@
     if (els.stat_count) {
       els.stat_count.textContent = String(state.parts.length);
     }
+    if (els.add_to_label) {
+      els.add_to_label.textContent = v ? `To: ${v.code}` : "To: —";
+    }
+  }
+
+  function renderAddPanel() {
+    if (!els.add_stock_panel) return;
+    els.add_stock_panel.hidden = !(state.canWrite && state.vehicle);
+    if (!els.add_from) return;
+    const current = els.add_from.value;
+    const opts = state.sourceBuckets.length
+      ? state.sourceBuckets
+          .map((b) => {
+            const sel = b.bucket === current ? " selected" : "";
+            return `<option value="${esc(b.bucket)}"${sel}>${esc(
+              `${b.bucket} (${fmtNum(b.qty)} on hand)`
+            )}</option>`;
+          })
+          .join("")
+      : `<option value="">No source buckets</option>`;
+    els.add_from.innerHTML = state.sourceBuckets.length
+      ? `<option value="">Select source…</option>${opts}`
+      : opts;
   }
 
   function renderTable() {
@@ -151,6 +206,15 @@
     }
   }
 
+  async function loadSources() {
+    if (!state.canWrite) {
+      state.sourceBuckets = [];
+      return;
+    }
+    const data = await fetchJson("/api/truck-inventory/source-buckets");
+    state.sourceBuckets = data.buckets || [];
+  }
+
   async function load() {
     showError("");
     const params = new URLSearchParams();
@@ -163,13 +227,58 @@
     const qs = params.toString();
     const data = await fetchJson(`/api/truck-inventory${qs ? `?${qs}` : ""}`);
     state.browseAll = !!data.browse_all;
+    state.canWrite = !!data.can_write;
     state.vehicle = data.vehicle || null;
     state.vehicles = data.vehicles || [];
     state.parts = data.parts || [];
     state.message = data.message || "";
+    if (state.canWrite && !state.sourceBuckets.length) {
+      await loadSources().catch(() => {
+        state.sourceBuckets = [];
+      });
+    }
     renderVehiclePicker();
     renderMeta();
+    renderAddPanel();
     renderTable();
+  }
+
+  async function submitAdd(event) {
+    event.preventDefault();
+    if (!state.vehicle || !state.vehicle.code) {
+      showError("Select a vehicle first.");
+      return;
+    }
+    const item = (els.add_item && els.add_item.value.trim()) || "";
+    const qty = Number(els.add_qty && els.add_qty.value);
+    const fromBucket = (els.add_from && els.add_from.value) || "";
+    if (!item || !fromBucket || !(qty > 0)) {
+      showError("Part #, qty, and From are required.");
+      return;
+    }
+    if (els.add_submit) els.add_submit.disabled = true;
+    try {
+      const result = await fetchJson("/api/truck-inventory/add-stock", {
+        method: "POST",
+        body: JSON.stringify({
+          item,
+          qty,
+          from_bucket: fromBucket,
+          to_bucket: state.vehicle.code,
+        }),
+      });
+      showOk(
+        `Added ${result.qty} × ${result.item} from ${result.from_bucket} → ${result.to_bucket} (truck available now ${result.truck_available}).`
+      );
+      if (els.add_item) els.add_item.value = "";
+      if (els.add_qty) els.add_qty.value = "1";
+      await loadSources();
+      await load();
+    } catch (err) {
+      showError(err.message || String(err));
+    } finally {
+      if (els.add_submit) els.add_submit.disabled = false;
+    }
   }
 
   function wire() {
@@ -203,6 +312,11 @@
           name: "",
         };
         load().catch((err) => showError(err.message || String(err)));
+      });
+    }
+    if (els.add_stock_form) {
+      els.add_stock_form.addEventListener("submit", (event) => {
+        submitAdd(event).catch((err) => showError(err.message || String(err)));
       });
     }
   }

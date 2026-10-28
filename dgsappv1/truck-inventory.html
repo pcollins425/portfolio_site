@@ -4,8 +4,8 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Truck — DGS Application</title>
-  <link rel="stylesheet" href="assets/dgs.css?v=20261028t" />
-  <link rel="stylesheet" href="assets/dgs-v2.css?v=20261028t" />
+  <link rel="stylesheet" href="assets/dgs.css?v=20261028u" />
+  <link rel="stylesheet" href="assets/dgs-v2.css?v=20261028u" />
 </head>
 <body class="dgs-app dgs-truck-inventory-v2">
   <aside class="dgs-sidebar" id="dgs-sidebar">
@@ -30,11 +30,12 @@
       <div>
         <p class="dgs-v2-eyebrow">Inventory · vehicle stock</p>
         <h1>Truck</h1>
-        <p class="dgs-v2-subtitle">Read-only stock on your vehicle from AppSheet Locations + <code>stock_balance</code></p>
+        <p class="dgs-v2-subtitle">Vehicle stock from AppSheet Locations + <code>stock_balance</code></p>
       </div>
     </header>
 
     <div id="error-box" class="dgs-v2-error" hidden></div>
+    <div id="ok-box" class="dgs-v2-ok" hidden></div>
 
     <div class="dgs-v2-metrics" id="stat-row" aria-label="Truck summary">
       <div class="dgs-v2-metric">
@@ -46,6 +47,31 @@
         <div class="dgs-v2-metric-value" id="stat-vehicle">—</div>
       </div>
     </div>
+
+    <section class="dgs-v2-list-panel dgs-truck-add-panel" id="add-stock-panel" hidden>
+      <div class="dgs-v2-toolbar">
+        <strong class="dgs-truck-add-title">Add Stock</strong>
+        <span class="dgs-truck-vehicle-meta" id="add-to-label">To: —</span>
+      </div>
+      <form id="add-stock-form" class="dgs-truck-add-form">
+        <label class="dgs-wo-field">
+          <span class="dgs-wo-field-label">Part #</span>
+          <input id="add-item" type="text" class="dgs-v2-input" required autocomplete="off" placeholder="DGS item #" />
+        </label>
+        <label class="dgs-wo-field">
+          <span class="dgs-wo-field-label">Qty</span>
+          <input id="add-qty" type="number" class="dgs-v2-input" min="1" step="1" value="1" required />
+        </label>
+        <label class="dgs-wo-field">
+          <span class="dgs-wo-field-label">From</span>
+          <select id="add-from" class="dgs-v2-input" required>
+            <option value="">Loading…</option>
+          </select>
+        </label>
+        <button type="submit" class="dgs-v2-btn dgs-v2-btn--primary" id="add-submit">Add Stock</button>
+      </form>
+      <p class="dgs-wo-section-note dgs-truck-add-note">Moves good (AVAILABLE) stock onto this truck. Defective lines are never increased.</p>
+    </section>
 
     <section class="dgs-v2-list-panel dgs-truck-panel">
       <div class="dgs-v2-toolbar dgs-truck-toolbar">
@@ -76,9 +102,9 @@
     </section>
   </div>
 
-  <script src="assets/auth.js?v=20261028t"></script>
-  <script src="assets/shell.js?v=20261028t"></script>
-  <script src="assets/truck-inventory.js?v=20261028t"></script>
+  <script src="assets/auth.js?v=20261028u"></script>
+  <script src="assets/shell.js?v=20261028u"></script>
+  <script src="assets/truck-inventory.js?v=20261028u"></script>
   <script>DGS.boot("truck_inventory", () => TruckInventoryApp.init());</script>
 </body>
 </html>

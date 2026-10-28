@@ -1,4 +1,4 @@
-"""Read-only truck (vehicle) stock from Locations + stock_balance."""
+"""Truck (vehicle) stock from Locations + stock_balance; Add Stock for writers."""
 
 from __future__ import annotations
 
@@ -9,10 +9,11 @@ from decimal import Decimal
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from pydantic import BaseModel, Field
 
-from app import appsheet_client, mssql, view_as
+from app import appsheet_client, mssql, view_as, wo_inventory_service as stock
 from app import permission_catalog as cat
-from app.auth_deps import require_area_read, require_demo_user
+from app.auth_deps import require_area_read, require_area_write, require_demo_user
 
 router = APIRouter(
     prefix="/api/truck-inventory",
@@ -21,6 +22,13 @@ router = APIRouter(
 )
 
 _VEHICLE_CODE = re.compile(r"^V\d+$", re.IGNORECASE)
+
+
+class AddStockIn(BaseModel):
+    item: str = Field(min_length=1, max_length=40)
+    qty: float = Field(gt=0, le=99999)
+    from_bucket: str = Field(min_length=1, max_length=64)
+    to_bucket: str = Field(min_length=1, max_length=20)
 
 
 def _catalog() -> str:
@@ -90,14 +98,18 @@ def _can_browse_all(user: dict[str, Any] | None) -> bool:
     return cat.has_area_read(user.get("permissions") or {}, cat.PARTS_INVENTORY_AREA)
 
 
+def _can_write_truck(user: dict[str, Any] | None) -> bool:
+    if user is None:
+        return False
+    return cat.has_area_write(user.get("permissions") or {}, cat.TRUCK_INVENTORY_AREA)
+
+
 def _resolve_my_vehicle(
     user: dict[str, Any] | None,
     vehicles: list[dict[str, str]],
 ) -> dict[str, str] | None:
     if user is None:
         return vehicles[0] if vehicles else None
-    # Dev view keeps the actor email on the user blob; use the target's email
-    # so Locations maps to the truck of the person you're previewing.
     email = view_as.effective_email(user)
     if not email:
         return None
@@ -152,6 +164,23 @@ def _stock_for_bucket(bucket: str, q: str = "") -> list[dict[str, Any]]:
     ]
 
 
+def _assert_to_bucket_allowed(
+    user: dict[str, Any] | None,
+    to_bucket: str,
+    vehicles: list[dict[str, str]],
+) -> None:
+    code = (to_bucket or "").strip().upper()
+    if not _VEHICLE_CODE.match(code):
+        raise HTTPException(status_code=400, detail="Invalid vehicle bucket")
+    if _can_browse_all(user):
+        if not any(v["code"].upper() == code for v in vehicles):
+            raise HTTPException(status_code=404, detail=f"Unknown vehicle {code}")
+        return
+    mine = _resolve_my_vehicle(user, vehicles)
+    if not mine or mine["code"].upper() != code:
+        raise HTTPException(status_code=403, detail="Not available for this truck")
+
+
 @router.get("")
 def truck_inventory(
     bucket: str = Query("", max_length=20),
@@ -178,6 +207,7 @@ def truck_inventory(
         return {
             "ok": True,
             "browse_all": browse_all,
+            "can_write": _can_write_truck(user),
             "vehicle": None,
             "vehicles": vehicles if browse_all else [],
             "parts": [],
@@ -200,9 +230,48 @@ def truck_inventory(
     return {
         "ok": True,
         "browse_all": browse_all,
+        "can_write": _can_write_truck(user),
         "vehicle": active,
         "vehicles": vehicles if browse_all else ([mine] if mine else []),
         "parts": parts,
         "count": len(parts),
         "q": (q or "").strip() or None,
     }
+
+
+@router.get("/source-buckets")
+def source_buckets(
+    user: Annotated[dict[str, Any] | None, Depends(require_area_write(cat.TRUCK_INVENTORY_AREA))] = None,
+):
+    """Good-stock From buckets for Add Stock."""
+    del user
+    try:
+        buckets = stock.list_good_source_buckets()
+    except Exception as exc:
+        raise HTTPException(status_code=503, detail=f"database error: {exc}") from exc
+    return {"ok": True, "buckets": buckets}
+
+
+@router.post("/add-stock")
+def add_stock(
+    body: AddStockIn,
+    user: Annotated[dict[str, Any] | None, Depends(require_area_write(cat.TRUCK_INVENTORY_AREA))] = None,
+):
+    """Move AVAILABLE qty from a warehouse-style bucket onto a vehicle."""
+    vehicles = _vehicle_rows()
+    to_bucket = (body.to_bucket or "").strip().upper()
+    _assert_to_bucket_allowed(user, to_bucket, vehicles)
+    who = view_as.effective_email(user) or (user or {}).get("email") or "dgs"
+    try:
+        result = stock.add_stock_to_truck(
+            item=body.item,
+            qty=body.qty,
+            from_bucket=body.from_bucket,
+            to_bucket=to_bucket,
+            created_by=str(who)[:128],
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=503, detail=f"database error: {exc}") from exc
+    return {"ok": True, **result}

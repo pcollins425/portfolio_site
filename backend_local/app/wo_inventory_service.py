@@ -2,15 +2,21 @@
 
 from __future__ import annotations
 
+import re
 import uuid
 from decimal import Decimal
 
 from app import emaint_demo_service as demo
 
 BUCKET_WAREHOUSE = "WAREHOUSE"
+BUCKET_FIELD = "FIELD"  # ledger destination for truck field issues (no balance row required)
 COND_AVAILABLE = "AVAILABLE"
 COND_REFURB = "REFURB"
 COND_ALLOCATED = "ALLOCATED"
+COND_DAMAGED = "DAMAGED"
+COND_ISSUED = "ISSUED"
+
+_VEHICLE_BUCKET = re.compile(r"^V\d+$", re.IGNORECASE)
 
 
 def _dec(v) -> Decimal:
@@ -348,6 +354,7 @@ def _transfer_stock(
     wo: str | None = None,
     note: str | None = None,
     created_by: str | None = None,
+    apply_to_balance: bool = True,
 ) -> None:
     if qty <= 0:
         raise ValueError("qty must be positive")
@@ -356,7 +363,8 @@ def _transfer_stock(
         if qty > available:
             raise ValueError(f"Only {available} available in {from_bucket}/{from_condition}")
         _apply_balance_delta(item, from_bucket, from_condition, -qty)
-    _apply_balance_delta(item, to_bucket, to_condition, qty)
+    if apply_to_balance:
+        _apply_balance_delta(item, to_bucket, to_condition, qty)
     _record_movement(
         item=item,
         qty=qty,
@@ -369,6 +377,148 @@ def _transfer_stock(
         note=note,
         created_by=created_by,
     )
+
+
+def list_good_source_buckets() -> list[dict]:
+    """Non-vehicle buckets with AVAILABLE qty (Add Stock From picker)."""
+    rows = demo._query(
+        """
+        SELECT bucket, SUM(qty) AS qty
+        FROM [inventory].[stock_balance]
+        WHERE [condition] = %s
+          AND [qty] > 0
+          AND [bucket] NOT LIKE N'V%%'
+          AND [bucket] NOT LIKE N'TRUCK:%%'
+          AND UPPER([bucket]) <> N'DEFECT'
+        GROUP BY bucket
+        ORDER BY bucket
+        """,
+        (COND_AVAILABLE,),
+    )
+    return [
+        {"bucket": (r.get("bucket") or "").strip(), "qty": float(_dec(r.get("qty")))}
+        for r in rows
+        if (r.get("bucket") or "").strip()
+    ]
+
+
+def truck_available_qty(item: str, truck_bucket: str) -> Decimal:
+    return _balance_qty((item or "").strip(), (truck_bucket or "").strip().upper(), COND_AVAILABLE)
+
+
+def add_stock_to_truck(
+    *,
+    item: str,
+    qty: float,
+    from_bucket: str,
+    to_bucket: str,
+    created_by: str | None = None,
+) -> dict:
+    """Move AVAILABLE stock from a warehouse-style bucket onto a vehicle bucket."""
+    item = (item or "").strip()
+    from_bucket = (from_bucket or "").strip()
+    to_bucket = (to_bucket or "").strip().upper()
+    if _inventory_row(item) is None:
+        raise ValueError(f"Unknown item: {item}")
+    if not from_bucket:
+        raise ValueError("from_bucket is required")
+    if not _VEHICLE_BUCKET.match(to_bucket):
+        raise ValueError("to_bucket must be a vehicle code (V0xx)")
+    if from_bucket.upper() == to_bucket:
+        raise ValueError("from_bucket and to_bucket must differ")
+    if from_bucket.upper() == "DEFECT" or from_bucket.upper().startswith("TRUCK:"):
+        raise ValueError("from_bucket is not a valid good-stock source")
+    q = _dec(qty)
+    _transfer_stock(
+        item=item,
+        qty=q,
+        from_bucket=from_bucket,
+        from_condition=COND_AVAILABLE,
+        to_bucket=to_bucket,
+        to_condition=COND_AVAILABLE,
+        note=f"add stock to truck {to_bucket} from {from_bucket}",
+        created_by=created_by,
+    )
+    return {
+        "item": item,
+        "qty": float(q),
+        "from_bucket": from_bucket,
+        "to_bucket": to_bucket,
+        "truck_available": float(truck_available_qty(item, to_bucket)),
+    }
+
+
+def issue_from_truck(
+    *,
+    item: str,
+    qty: float,
+    truck_bucket: str,
+    wo: str | None = None,
+    created_by: str | None = None,
+) -> dict:
+    """Pull good stock off a truck for field use (ledger to FIELD/ISSUED)."""
+    item = (item or "").strip()
+    truck_bucket = (truck_bucket or "").strip().upper()
+    if _inventory_row(item) is None:
+        raise ValueError(f"Unknown item: {item}")
+    if not _VEHICLE_BUCKET.match(truck_bucket):
+        raise ValueError("truck_bucket must be a vehicle code (V0xx)")
+    q = _dec(qty)
+    _transfer_stock(
+        item=item,
+        qty=q,
+        from_bucket=truck_bucket,
+        from_condition=COND_AVAILABLE,
+        to_bucket=BUCKET_FIELD,
+        to_condition=COND_ISSUED,
+        wo=wo,
+        note=f"issue from truck {truck_bucket} to WO {wo or ''}".strip(),
+        created_by=created_by,
+        apply_to_balance=False,
+    )
+    return {
+        "item": item,
+        "qty": float(q),
+        "truck_bucket": truck_bucket,
+        "truck_available": float(truck_available_qty(item, truck_bucket)),
+    }
+
+
+def return_defective_to_truck(
+    *,
+    item: str,
+    qty: float,
+    truck_bucket: str,
+    wo: str | None = None,
+    created_by: str | None = None,
+) -> dict:
+    """Track a defective return on the tech's truck (DAMAGED)."""
+    item = (item or "").strip()
+    truck_bucket = (truck_bucket or "").strip().upper()
+    if _inventory_row(item) is None:
+        raise ValueError(f"Unknown item: {item}")
+    if not _VEHICLE_BUCKET.match(truck_bucket):
+        raise ValueError("truck_bucket must be a vehicle code (V0xx)")
+    q = _dec(qty)
+    _apply_balance_delta(item, truck_bucket, COND_DAMAGED, q)
+    _record_movement(
+        item=item,
+        qty=q,
+        from_bucket=BUCKET_FIELD,
+        from_condition=COND_ISSUED,
+        to_bucket=truck_bucket,
+        to_condition=COND_DAMAGED,
+        wo=wo,
+        work_order_material_id=None,
+        note=f"defective return to truck {truck_bucket} WO {wo or ''}".strip(),
+        created_by=created_by,
+    )
+    return {
+        "item": item,
+        "qty": float(q),
+        "truck_bucket": truck_bucket,
+        "truck_damaged": float(_balance_qty(item, truck_bucket, COND_DAMAGED)),
+    }
 
 
 def move_to_refurb(

@@ -3321,6 +3321,40 @@ body.wo-pr-open .dgs-capacity-drawer.is-wo-pr {
 .dgs-truck-panel {
   margin-top: 0.35rem;
 }
+.dgs-truck-add-panel {
+  margin-bottom: 0.5rem;
+}
+.dgs-truck-add-form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  align-items: flex-end;
+  padding: 0.85rem 1rem 0.35rem;
+}
+.dgs-truck-add-form .dgs-wo-field {
+  margin: 0;
+  min-width: 8rem;
+}
+.dgs-truck-add-form .dgs-wo-field:first-child {
+  flex: 1 1 10rem;
+}
+.dgs-truck-add-note {
+  padding: 0 1rem 0.85rem;
+  margin: 0;
+}
+.dgs-truck-add-title {
+  color: #f3f5f9;
+  font-size: 0.9rem;
+}
+.dgs-v2-ok {
+  padding: 12px 14px;
+  border-radius: 10px;
+  background: rgba(34, 197, 94, 0.12);
+  border: 1px solid rgba(34, 197, 94, 0.28);
+  color: #86efac;
+  font-size: 13px;
+  margin-bottom: 0.5rem;
+}
 .dgs-wo-pr-toolbar {
   margin-top: 0.85rem;
   display: flex;
