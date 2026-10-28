@@ -2947,6 +2947,11 @@ body.wo-pr-open .dgs-capacity-drawer.is-wo-pr {
 .dgs-capacity-drawer.is-wo-pr {
   z-index: 92;
 }
+/* AppSheet-style vertical field stack (not the WO multi-column grid) */
+.dgs-capacity-drawer.is-wo-pr .dgs-wo-fields {
+  grid-template-columns: 1fr;
+  gap: 0.85rem;
+}
 .dgs-capacity-drawer-head {
   display: flex;
   align-items: flex-start;
