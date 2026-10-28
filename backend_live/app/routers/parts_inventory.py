@@ -8,11 +8,17 @@ import os
 from datetime import date, datetime
 from decimal import Decimal
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 
 from app import mssql
+from app import permission_catalog as cat
+from app.auth_deps import require_area_read
 
-router = APIRouter(prefix="/api/parts-inventory", tags=["parts-inventory"])
+router = APIRouter(
+    prefix="/api/parts-inventory",
+    tags=["parts-inventory"],
+    dependencies=[Depends(require_area_read(cat.PARTS_INVENTORY_AREA))],
+)
 
 EMAINT_ARINVT01_URL = "https://x43.emaint.com/wc.dll?X3~emproc~x3Hubv2#/ARINVT01/{item}"
 

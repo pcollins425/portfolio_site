@@ -36,6 +36,8 @@ EXPENSES_AREA = "expenses"
 EXPENSES_MASS_EDIT_AREA = "dgs_expenses_mass_edit"
 FINANCE_DASHBOARD_AREA = "dgs_finance_dashboard"
 CAPACITY_DASHBOARD_AREA = "dgs_capacity_dashboard"
+TRUCK_INVENTORY_AREA = "dgs_truck_inventory"
+PARTS_INVENTORY_AREA = "dgs_parts_inventory"
 ASSISTANT_AREA = "dgs_assistant"
 ASSISTANT_SECRETS_AREA = "dgs_assistant_secrets"
 MAIL_INTAKE_AREA = "dgs_mail_intake"
@@ -63,6 +65,8 @@ PERMISSION_CATALOG: tuple[CatalogArea, ...] = (
     CatalogArea("slot_master", "Slot Master", "inventory"),
     CatalogArea("casino_master", "Casino Master", "inventory", (LEVEL_ADDS_UPDATES, LEVEL_ALL)),
     CatalogArea("full_slot_master", "Full Slot Master", "inventory", (LEVEL_ADDS_UPDATES, LEVEL_ALL)),
+    CatalogArea(TRUCK_INVENTORY_AREA, "Inventory · Truck", "inventory", (LEVEL_READ,)),
+    CatalogArea(PARTS_INVENTORY_AREA, "Inventory · Parts", "inventory", (LEVEL_READ,)),
     CatalogArea("compliance", "Compliance", "compliance"),
     CatalogArea("bill_validators", "Bill Validators", "peripherals"),
     CatalogArea("printers", "Printers", "peripherals"),

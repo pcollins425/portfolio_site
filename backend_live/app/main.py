@@ -8,7 +8,7 @@ from fastapi.responses import JSONResponse
 
 from app import settings as app_settings
 from app import view_as
-from app.routers import account_guide, admin_employees, analyst, assistant, assets, auth, capacity_dashboard, commerce, commission_contract, container_logs, contracts, distribution_agreements, documents, emaint_demo, employees, expenses, field, field_dashboard, hubspot_webhook, mail_intake, market, master_revenue, media, page_chat, parts_bom, parts_catalog, parts_inventory, parts_shop_accounts, performance_intake, projects, projects_workbench, slot_master, software_vault, theme_hub, view_as as view_as_router, warehouse_inventory, work_orders
+from app.routers import account_guide, admin_employees, analyst, assistant, assets, auth, capacity_dashboard, commerce, commission_contract, container_logs, contracts, distribution_agreements, documents, emaint_demo, employees, expenses, field, field_dashboard, hubspot_webhook, mail_intake, market, master_revenue, media, page_chat, parts_bom, parts_catalog, parts_inventory, parts_shop_accounts, performance_intake, projects, projects_workbench, slot_master, software_vault, theme_hub, truck_inventory, view_as as view_as_router, warehouse_inventory, work_orders
 from app.routers.v1 import health as v1_health
 
 app_settings.load_local_env()
@@ -75,6 +75,7 @@ app.include_router(documents.router)
 app.include_router(slot_master.router)
 app.include_router(software_vault.router)
 app.include_router(parts_inventory.router)
+app.include_router(truck_inventory.router)
 app.include_router(parts_catalog.router)
 app.include_router(parts_bom.router)
 app.include_router(parts_shop_accounts.router)

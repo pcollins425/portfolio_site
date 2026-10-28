@@ -66,7 +66,18 @@
       defaultOpen: true,
       items: [
         { id: "warehouse", label: "Warehouse", href: "warehouse.html" },
-        { id: "parts_inventory", label: "Parts", href: "parts-inventory.html" },
+        {
+          id: "truck_inventory",
+          label: "Truck",
+          href: "truck-inventory.html",
+          requireAnyOf: ["dgs_truck_inventory"],
+        },
+        {
+          id: "parts_inventory",
+          label: "Parts",
+          href: "parts-inventory.html",
+          requireAnyOf: ["dgs_parts_inventory"],
+        },
         { id: "slot_master", label: "Slot Master", href: "slot_master.html" },
         { id: "contracts", label: "Contracts", href: "contracts-v2.html", requireAnyOf: ["dgs_contracts"] },
         { id: "assets", label: "Assets", href: "assets-v2.html" },
