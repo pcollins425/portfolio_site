@@ -584,6 +584,70 @@ def _emaint_compinfo_assignment(compid: str) -> dict[str, str | None]:
     }
 
 
+def _emaint_adduser_for_account(user: dict[str, Any] | None) -> str | None:
+    """Map the signed-in DGS account to eMaint CONTACT ``cuserid`` for WORK.adduser.
+
+    Separate from Assign To (asset COMPINFO tech). Falls back to ``EMAINT_USER`` when
+    CONTACT cannot be resolved.
+    """
+    email = _text((user or {}).get("email"))
+    name = _text((user or {}).get("name"))
+    rows: list[dict[str, Any]] = []
+    if email:
+        local = email.split("@", 1)[0]
+        try:
+            rows = emaint_client.get_any_data(
+                table="CONTACT",
+                columns="cuserid,fullname,email",
+                filters=[{"field": "email", "operator": "contains", "value": local}],
+                page_size=10,
+            )
+        except Exception:
+            rows = []
+        email_l = email.lower()
+        rows = [
+            r
+            for r in rows
+            if (_text(r.get("email")) or "").lower() == email_l
+            or (_text(r.get("email")) or "").lower().startswith(local.lower() + "@")
+        ]
+    # Prefer a real person CONTACT over API service accounts when email matches several.
+    def _score(row: dict[str, Any]) -> tuple[int, int, str]:
+        uid = (_text(row.get("cuserid")) or "").upper()
+        full = (_text(row.get("fullname")) or "").casefold()
+        name_l = (name or "").casefold()
+        prefer_name = 0
+        if name_l and full:
+            if full == name_l or name_l in full or full in name_l:
+                prefer_name = 2
+            elif all(p and p in full for p in name_l.replace(".", " ").split()):
+                prefer_name = 1
+        api_penalty = 1 if "API" in uid else 0
+        return (prefer_name, -api_penalty, uid)
+
+    if rows:
+        best = sorted(rows, key=_score, reverse=True)[0]
+        uid = _text(best.get("cuserid"))
+        if uid:
+            return uid
+    if name:
+        try:
+            by_name = emaint_client.get_any_data(
+                table="CONTACT",
+                columns="cuserid,fullname,email",
+                filters=[{"field": "fullname", "operator": "eq", "value": name}],
+                page_size=3,
+            )
+        except Exception:
+            by_name = []
+        if len(by_name) == 1:
+            uid = _text(by_name[0].get("cuserid"))
+            if uid:
+                return uid
+    fallback = (os.environ.get("EMAINT_USER") or "").strip()
+    return fallback.upper() if fallback else None
+
+
 @router.get("/create/compinfo-assign")
 def create_compinfo_assign(
     compid: str = Query(..., min_length=1, max_length=40),
@@ -747,14 +811,14 @@ def _insert_work_order_sql(row: dict[str, Any]) -> dict[str, Any]:
             INSERT INTO projects.work_orders (
                 wo, property, casino_id, asset_id, theme_id, compid, comp_desc,
                 bank, location, brief_desc, work_desc, wo_type, probtype,
-                asst_dwn, game_oos, assignto, assignid, assigntype,
+                asst_dwn, game_oos, assignto, assignid, assigntype, adduser,
                 requestor, req_tele, drivetime, workmhours, hours,
                 workstatus, stattype, date_wo, adddate
             )
             VALUES (
                 %s, %s, %s, %s, %s, %s, %s,
                 %s, %s, %s, %s, %s, %s,
-                %s, %s, %s, %s, %s,
+                %s, %s, %s, %s, %s, %s,
                 %s, %s, %s, %s, %s,
                 N'O', N'Open', %s, %s
             )
@@ -778,6 +842,7 @@ def _insert_work_order_sql(row: dict[str, Any]) -> dict[str, Any]:
                 row.get("assignto"),
                 row.get("assignid"),
                 row.get("assigntype") or "Employee",
+                row.get("adduser"),
                 row.get("requestor"),
                 row.get("req_tele"),
                 row.get("drivetime"),
@@ -889,6 +954,9 @@ def create_work_order(
     ):
         assignid = ci_assign.get("assignid")
 
+    # Add User = signed-in account holder (CONTACT cuserid). Not the asset tech.
+    adduser = _emaint_adduser_for_account(actor)
+
     emaint_payload: dict[str, Any] = {
         "brief_desc": brief,
         "work_desc": work_desc,
@@ -903,6 +971,8 @@ def create_work_order(
     }
     if serial:
         emaint_payload["compid"] = serial
+    if adduser:
+        emaint_payload["adduser"] = adduser
     if _text(body.wo_type):
         emaint_payload["wo_type"] = _text(body.wo_type)
     if _text(body.probtype):
@@ -970,6 +1040,7 @@ def create_work_order(
         "assignto": assignto,
         "assignid": assignid,
         "assigntype": assigntype,
+        "adduser": adduser,
         "requestor": _text(body.requestor),
         "req_tele": _text(body.req_tele),
         "drivetime": drivetime,
