@@ -2,8 +2,15 @@ from __future__ import annotations
 
 import json
 import os
+import re
+from typing import Any
 
 from app import settings as app_settings
+
+_RE_ISO_DATE_ONLY = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+_WORK_DATE_FIELDS = frozenset(
+    {"adddate", "editdate", "date_wo", "date_cmpl", "sch_date", "pts_rdy"}
+)
 
 
 def _load_env() -> None:
@@ -27,6 +34,8 @@ def _request(
     data: dict | None = None,
     token: str | None = None,
     extra_headers: dict | None = None,
+    *,
+    timeout: int = 60,
 ) -> tuple[int, str]:
     from urllib.error import HTTPError, URLError
     from urllib.request import Request, urlopen
@@ -44,7 +53,7 @@ def _request(
     encoded = None if data is None else json.dumps(data).encode("utf-8")
     req = Request(url, data=encoded, headers=headers, method=method)
     try:
-        with urlopen(req, timeout=60) as r:
+        with urlopen(req, timeout=timeout) as r:
             return r.status, r.read().decode("utf-8", errors="replace")
     except HTTPError as e:
         return e.code, (e.read().decode("utf-8", errors="replace") if e.fp else str(e))
@@ -87,3 +96,163 @@ def record_update(*, table: str, row_id: str, payload: dict) -> dict:
         msg = out.get("message") or resp[:500]
         raise RuntimeError(f"eMaint Record failed: HTTP {status} {msg}")
     return out
+
+
+def _strip_nulls(payload: dict[str, Any]) -> dict[str, Any]:
+    return {k: v for k, v in payload.items() if v is not None}
+
+
+def _normalize_work_dates(payload: dict[str, Any]) -> dict[str, Any]:
+    out = dict(payload)
+    for field in _WORK_DATE_FIELDS:
+        if field not in out:
+            continue
+        value = out[field]
+        if isinstance(value, str) and _RE_ISO_DATE_ONLY.match(value.strip()):
+            out[field] = f"{value.strip()}T00:00:00"
+    return out
+
+
+def record_response_accepted(http_code: int, body_text: str) -> bool:
+    if http_code != 200:
+        return False
+    try:
+        return json.loads(body_text).get("valid") is True
+    except json.JSONDecodeError:
+        return False
+
+
+def snippet_suggests_wo_conflict(snippet: str) -> bool:
+    s = (snippet or "").lower()
+    return any(
+        n in s
+        for n in ("duplicate", "already exists", "unique", "in use", "key violation")
+    )
+
+
+def get_any_data(
+    *,
+    table: str,
+    columns: str,
+    filters: list[dict[str, Any]] | None = None,
+    sort_by: list[dict[str, str]] | None = None,
+    page_size: int = 50,
+    token: str | None = None,
+) -> list[dict[str, Any]]:
+    server = _server()
+    if not server:
+        raise RuntimeError("Missing EMAINT_SERVER_URL")
+    bearer = token or get_login_token()
+    body: dict[str, Any] = {
+        "table": table,
+        "pageNumber": 1,
+        "pageSize": max(1, min(int(page_size), 200)),
+        "columns": columns,
+    }
+    if filters:
+        body["filter"] = {"logic": "and", "filters": filters}
+    if sort_by:
+        body["sortBy"] = sort_by
+    status, resp = _request(
+        "POST",
+        f"{server}/api/v2/GetAnyData",
+        data=body,
+        token=bearer,
+        timeout=120,
+    )
+    if status != 200:
+        raise RuntimeError(f"eMaint GetAnyData failed: HTTP {status} {resp[:500]}")
+    try:
+        out = json.loads(resp)
+    except json.JSONDecodeError as exc:
+        raise RuntimeError(f"eMaint GetAnyData invalid JSON: {resp[:500]}") from exc
+    rows = out.get("data") or []
+    return rows if isinstance(rows, list) else []
+
+
+def work_exists(wo: int | str, *, token: str | None = None) -> bool:
+    key = str(wo).strip()
+    if not key:
+        return False
+    rows = get_any_data(
+        table="WORK",
+        columns="wo",
+        filters=[{"field": "wo", "operator": "eq", "value": int(key) if key.isdigit() else key}],
+        page_size=1,
+        token=token,
+    )
+    return bool(rows)
+
+
+def max_work_wo(*, token: str | None = None) -> int:
+    """Highest numeric WORK.wo on eMaint (hard source for allocation)."""
+    rows = get_any_data(
+        table="WORK",
+        columns="wo",
+        sort_by=[{"field": "wo", "dir": "desc"}],
+        page_size=50,
+        token=token,
+    )
+    best = 0
+    for row in rows:
+        raw = str((row or {}).get("wo") or "").strip()
+        if raw.isdigit():
+            best = max(best, int(raw))
+    return best
+
+
+def allocate_next_work_wo(*, token: str | None = None, max_scan: int = 40) -> int:
+    """Next free WO No. from eMaint max + 1 (confirm free; skip gaps from deleted WOs)."""
+    bearer = token or get_login_token()
+    candidate = max_work_wo(token=bearer) + 1
+    if candidate < 1:
+        candidate = 1
+    for _ in range(max(1, max_scan)):
+        if not work_exists(candidate, token=bearer):
+            return candidate
+        candidate += 1
+    raise RuntimeError(f"Could not find a free eMaint WO near {candidate}")
+
+
+def create_work_record(wo: int | str, payload: dict[str, Any]) -> tuple[int, str]:
+    """Create WORK via PUT ``{table, payload}`` with ``wo`` inside payload (int preferred).
+
+    Falls back to POST without top-level ``id`` when PUT returns table-record-not-found.
+    Returns ``(http_status, response_snippet)``.
+    """
+    server = _server()
+    if not server:
+        raise RuntimeError("Missing EMAINT_SERVER_URL")
+    wo_key = str(wo).strip()
+    if not wo_key or not wo_key.isdigit():
+        raise ValueError("wo must be a numeric work order number")
+    wo_int = int(wo_key)
+
+    base = _normalize_work_dates(_strip_nulls(dict(payload)))
+    base.pop("wo", None)
+    token = get_login_token()
+    url = f"{server}/api/v2/Record"
+
+    def _send(method: str, body: dict[str, Any]) -> tuple[int, str]:
+        return _request(method, url, data=body, token=token, timeout=120)
+
+    trials: list[tuple[str, dict[str, Any]]] = [
+        ("PUT", {"table": "WORK", "payload": {**base, "wo": wo_int}}),
+        ("PUT", {"table": "WORK", "payload": {**base, "wo": wo_key}}),
+    ]
+    last_status = -1
+    last_snippet = ""
+    for method, body in trials:
+        last_status, last_snippet = _send(method, body)
+        if record_response_accepted(last_status, last_snippet):
+            return last_status, last_snippet
+
+    if "table record not found" in (last_snippet or "").lower():
+        for wo_val in (wo_int, wo_key):
+            last_status, last_snippet = _send(
+                "POST", {"table": "WORK", "payload": {**base, "wo": wo_val}}
+            )
+            if record_response_accepted(last_status, last_snippet):
+                return last_status, last_snippet
+
+    return last_status, (last_snippet or "")[:1800]

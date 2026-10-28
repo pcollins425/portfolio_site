@@ -236,7 +236,13 @@
     });
     document.getElementById("wo-add")?.addEventListener("click", () => {
       if (!window.DGSWorkOrderCreate) return;
-      DGSWorkOrderCreate.open({ meta: state.meta });
+      DGSWorkOrderCreate.open({
+        meta: state.meta,
+        onCreated: () => {
+          state.offset = 0;
+          loadList(root);
+        },
+      });
     });
     document.getElementById("wo-search")?.addEventListener("keydown", (event) => {
       if (event.key === "Enter") document.getElementById("wo-apply")?.click();

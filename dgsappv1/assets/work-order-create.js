@@ -1,4 +1,4 @@
-/* Add Work Order — field preview drawer (create API next). */
+/* Add Work Order — dual-write create (eMaint WORK + projects.work_orders). */
 (function () {
   "use strict";
 
@@ -7,6 +7,8 @@
   let assetMap = {};
   let searchTimer = null;
   let syncing = false;
+  let submitting = false;
+  let onCreated = null;
 
   function esc(value) {
     return String(value == null ? "" : value)
@@ -16,11 +18,17 @@
       .replace(/"/g, "&quot;");
   }
 
-  async function fetchJson(path) {
+  async function fetchJson(path, options) {
+    const opts = options || {};
     let res;
     try {
       res = await fetch(`${DGSAuth.apiBase()}${path}`, {
-        headers: DGSAuth.authHeaders(),
+        method: opts.method || "GET",
+        headers: {
+          ...DGSAuth.authHeaders(),
+          ...(opts.body ? { "Content-Type": "application/json" } : {}),
+        },
+        body: opts.body ? JSON.stringify(opts.body) : undefined,
       });
     } catch (err) {
       const msg = err && err.message ? err.message : String(err);
@@ -34,7 +42,12 @@
       let detail = await res.text();
       try {
         const parsed = JSON.parse(detail);
-        if (parsed && parsed.detail) detail = parsed.detail;
+        if (parsed && parsed.detail) {
+          detail =
+            typeof parsed.detail === "string"
+              ? parsed.detail
+              : JSON.stringify(parsed.detail);
+        }
       } catch (_) {
         /* keep */
       }
@@ -228,7 +241,7 @@
     const probOpts = [`<option value="">—</option>`]
       .concat(probs.map((t) => `<option value="${esc(t)}">${esc(t)}</option>`))
       .join("");
-    const preview = meta && meta.create_preview_only;
+    const canCreate = meta && meta.can_create && !meta.create_preview_only;
 
     return `
       <div class="dgs-v2-drawer-header dgs-wo-create-head">
@@ -236,7 +249,9 @@
           <p class="dgs-v2-eyebrow">Work orders</p>
           <h2 class="dgs-v2-drawer-title">Add work order</h2>
           <p class="dgs-v2-subtitle">${
-            preview ? "Preview — create not wired yet" : "Create in eMaint + SQL"
+            canCreate
+              ? "Creates in eMaint and SQL"
+              : "Create requires part-request write access"
           }</p>
         </div>
         <button type="button" class="dgs-v2-drawer-close" id="wo-create-close" aria-label="Close">×</button>
@@ -323,8 +338,10 @@
 
         <p class="dgs-wo-create-status" id="wo-cr-status" hidden></p>
         <div class="dgs-wo-create-actions">
-          <button type="button" class="dgs-v2-btn dgs-v2-btn-primary" id="wo-cr-submit" disabled>
-            Create (coming soon)
+          <button type="button" class="dgs-v2-btn dgs-v2-btn-primary" id="wo-cr-submit"${
+            canCreate ? "" : " disabled"
+          }>
+            ${canCreate ? "Create work order" : "Create unavailable"}
           </button>
           <button type="button" class="dgs-v2-btn" id="wo-cr-cancel">Cancel</button>
         </div>
@@ -339,9 +356,89 @@
     el.classList.toggle("is-error", !!isError);
   }
 
+  function validatePayload(payload) {
+    if (!payload.casino_id) return "Pick a casino.";
+    if (!payload.brief_desc || !payload.brief_desc.trim()) {
+      return "Brief description is required.";
+    }
+    if (payload.asst_dwn !== "Yes" && payload.asst_dwn !== "No") {
+      return "Is asset down? must be Yes or No.";
+    }
+    return "";
+  }
+
+  async function submitCreate(drawer) {
+    if (submitting) return;
+    const canCreate = meta && meta.can_create && !meta.create_preview_only;
+    if (!canCreate) {
+      setStatus(drawer, "You do not have create access.", true);
+      return;
+    }
+    const payload = collectPayload(drawer);
+    const err = validatePayload(payload);
+    if (err) {
+      setStatus(drawer, err, true);
+      return;
+    }
+    const body = { ...payload };
+    if (body.drivetime === "") body.drivetime = null;
+    else if (body.drivetime != null && body.drivetime !== "") {
+      body.drivetime = Number(body.drivetime);
+    }
+    if (body.workmhours === "") body.workmhours = null;
+    else if (body.workmhours != null && body.workmhours !== "") {
+      body.workmhours = Number(body.workmhours);
+    }
+
+    submitting = true;
+    const btn = drawer.querySelector("#wo-cr-submit");
+    if (btn) {
+      btn.disabled = true;
+      btn.textContent = "Creating…";
+    }
+    setStatus(drawer, "Creating in eMaint…", false);
+    try {
+      const created = await fetchJson("/api/work-orders/create", {
+        method: "POST",
+        body,
+      });
+      setStatus(
+        drawer,
+        `Created WO ${created.wo}${
+          created.reference_key ? ` (${created.reference_key})` : ""
+        }.`,
+        false
+      );
+      if (typeof onCreated === "function") {
+        try {
+          onCreated(created);
+        } catch (_) {
+          /* ignore */
+        }
+      }
+      window.setTimeout(() => {
+        close();
+        if (created && created.wo && window.DGSWorkOrderDetail) {
+          DGSWorkOrderDetail.open(created.wo);
+        }
+      }, 450);
+    } catch (ex) {
+      setStatus(drawer, ex.message || String(ex), true);
+      if (btn) {
+        btn.disabled = false;
+        btn.textContent = "Create work order";
+      }
+    } finally {
+      submitting = false;
+    }
+  }
+
   function bind(drawer) {
     drawer.querySelector("#wo-create-close")?.addEventListener("click", close);
     drawer.querySelector("#wo-cr-cancel")?.addEventListener("click", close);
+    drawer.querySelector("#wo-cr-submit")?.addEventListener("click", () => {
+      submitCreate(drawer);
+    });
 
     const me =
       window.DGSAuth && typeof DGSAuth.getUser === "function" ? DGSAuth.getUser() : null;
@@ -511,11 +608,13 @@
 
   async function open(options) {
     meta = (options && options.meta) || meta;
+    onCreated = options && typeof options.onCreated === "function" ? options.onCreated : null;
+    submitting = false;
     if (!meta) {
       try {
         meta = await fetchJson("/api/work-orders/meta");
       } catch (_) {
-        meta = { create_preview_only: true, wo_types: [], prob_types: [] };
+        meta = { create_preview_only: true, can_create: false, wo_types: [], prob_types: [] };
       }
     }
     try {
@@ -530,6 +629,12 @@
     bind(drawer);
     if (!places.casinos || !places.casinos.length) {
       setStatus(drawer, "No casinos available for your route.", true);
+    } else if (!(meta && meta.can_create && !meta.create_preview_only)) {
+      setStatus(
+        drawer,
+        "Create is limited to pilot write access (part requests). Re-login if you just got the grant.",
+        true
+      );
     }
     drawer.querySelector("#wo-cr-casino")?.focus();
   }

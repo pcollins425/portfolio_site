@@ -18,6 +18,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
 from app import appsheet_client
+from app import emaint_client
 from app import mssql
 from app import permission_catalog as cat
 from app.auth_deps import require_area_read, require_demo_user
@@ -46,6 +47,24 @@ class PartRequestIn(BaseModel):
     importance: str | None = Field(default=None, max_length=80)
     notes: str | None = Field(default=None, max_length=2000)
     ship_to_category: str | None = Field(default="Primary Location", max_length=80)
+
+
+class WorkOrderCreateIn(BaseModel):
+    casino_id: str = Field(min_length=1, max_length=40)
+    property: str | None = Field(default=None, max_length=30)
+    compid: str | None = Field(default=None, max_length=21)
+    asset_id: str | None = Field(default=None, max_length=25)
+    brief_desc: str = Field(min_length=1, max_length=100)
+    work_desc: str | None = Field(default=None, max_length=8000)
+    wo_type: str | None = Field(default=None, max_length=12)
+    probtype: str | None = Field(default=None, max_length=80)
+    asst_dwn: str = Field(default="No", max_length=20)
+    game_oos: str | None = Field(default=None, max_length=3)
+    assignto: str | None = Field(default=None, max_length=100)
+    requestor: str | None = Field(default=None, max_length=50)
+    req_tele: str | None = Field(default=None, max_length=20)
+    drivetime: float | None = Field(default=None, ge=0, le=999)
+    workmhours: float | None = Field(default=None, ge=0, le=999)
 
 
 _OPEN = """
@@ -311,12 +330,13 @@ def work_orders_meta(
         ORDER BY probtype
         """
     )
+    can_create = _can_write_part_requests(user)
     return {
         "wo_types": [_text(row.get("value")) for row in types if _text(row.get("value"))],
         "prob_types": [_text(row.get("value")) for row in probs if _text(row.get("value"))],
         "has_priority": _has_priority_column(),
-        "can_create": True,  # UI scaffold; eMaint create API still next
-        "create_preview_only": True,
+        "can_create": can_create,
+        "create_preview_only": not can_create,
         "scope": "route" if assigned_employee_id(user) else "all",
         "statuses": [
             {"value": "open", "label": "Open"},
@@ -533,6 +553,380 @@ def create_casino_assets(
     return {
         "casino_id": cid,
         "assets": [_asset_resolve_row(r) for r in rows],
+    }
+
+
+_YES_NO = frozenset({"yes", "no"})
+
+
+def _yes_no(value: str | None, *, field: str) -> str:
+    raw = (value or "").strip()
+    if raw.lower() not in _YES_NO:
+        raise HTTPException(status_code=400, detail=f"{field} must be Yes or No")
+    return "Yes" if raw.lower() == "yes" else "No"
+
+
+def _optional_float(value: float | None) -> float | None:
+    if value is None:
+        return None
+    return float(value)
+
+
+def _load_casino_for_create(
+    casino_id: str,
+    user: dict[str, Any] | None,
+) -> dict[str, Any]:
+    cid = (casino_id or "").strip()
+    if not cid:
+        raise HTTPException(status_code=400, detail="casino_id is required")
+    scope_sql, scope_params = _route_scope(user)
+    rows = _query(
+        f"""
+        SELECT TOP 1
+            c.reference_key AS casino_id,
+            c.casino_name,
+            c.casino_short,
+            c.emaint_property
+        FROM clients.casinos AS c
+        WHERE c.reference_key = %s
+          {scope_sql}
+        """,
+        (cid, *scope_params),
+    )
+    if not rows:
+        raise HTTPException(status_code=404, detail="Casino not found or not on your route")
+    return rows[0]
+
+
+def _load_asset_for_create(
+    *,
+    asset_id: str | None,
+    compid: str | None,
+    casino_id: str,
+    user: dict[str, Any] | None,
+) -> dict[str, Any] | None:
+    aid = (asset_id or "").strip()
+    serial = (compid or "").strip()
+    if not aid and not serial:
+        return None
+    scope_sql, scope_params = _route_scope(user)
+    if aid:
+        rows = _query(
+            f"""
+            SELECT TOP 1
+                sm.asset_id,
+                sm.asset_no,
+                sm.casino_id,
+                sm.theme_id,
+                sm.bank,
+                sm.location,
+                ast.serial_number,
+                cas.emaint_property,
+                cas.casino_name,
+                cab.cabinet_name,
+                ven.vendor_name,
+                th.theme_name
+            FROM inventory.slot_master_migration AS sm
+            INNER JOIN clients.casinos AS cas ON cas.reference_key = sm.casino_id
+            LEFT JOIN inventory.assets AS ast ON ast.reference_key = sm.asset_id
+            LEFT JOIN vendors.vendors AS ven ON ven.reference_key = ast.vendor_id
+            LEFT JOIN vendors.cabinets AS cab ON cab.reference_key = ast.cabinet_id
+            LEFT JOIN vendors.themes AS th ON th.reference_key = sm.theme_id
+            WHERE sm.is_active = 1
+              AND sm.asset_id = %s
+              AND sm.casino_id = %s
+              {scope_sql}
+            """,
+            (aid, casino_id, *scope_params),
+        )
+    else:
+        rows = _query(
+            f"""
+            SELECT TOP 1
+                sm.asset_id,
+                sm.asset_no,
+                sm.casino_id,
+                sm.theme_id,
+                sm.bank,
+                sm.location,
+                ast.serial_number,
+                cas.emaint_property,
+                cas.casino_name,
+                cab.cabinet_name,
+                ven.vendor_name,
+                th.theme_name
+            FROM inventory.slot_master_migration AS sm
+            INNER JOIN clients.casinos AS cas ON cas.reference_key = sm.casino_id
+            LEFT JOIN inventory.assets AS ast ON ast.reference_key = sm.asset_id
+            LEFT JOIN vendors.vendors AS ven ON ven.reference_key = ast.vendor_id
+            LEFT JOIN vendors.cabinets AS cab ON cab.reference_key = ast.cabinet_id
+            LEFT JOIN vendors.themes AS th ON th.reference_key = sm.theme_id
+            WHERE sm.is_active = 1
+              AND sm.casino_id = %s
+              AND (
+                sm.asset_no = %s
+                OR ast.serial_number = %s
+              )
+              {scope_sql}
+            ORDER BY
+              CASE WHEN ast.serial_number = %s THEN 0 ELSE 1 END,
+              sm.asset_no
+            """,
+            (casino_id, serial, serial, serial, *scope_params),
+        )
+    if not rows:
+        raise HTTPException(
+            status_code=400,
+            detail="Asset not found on that casino (or not on your route)",
+        )
+    return rows[0]
+
+
+def _insert_work_order_sql(row: dict[str, Any]) -> dict[str, Any]:
+    """Insert into projects.work_orders with CONTEXT_INFO 0x57 (skip outbound queue)."""
+    conn = mssql.get_connection(database=_catalog(), profile="field", load_env=False)
+    try:
+        cur = conn.cursor(as_dict=True)
+        # Skip enqueue — eMaint already has the row from this request.
+        cur.execute(
+            """
+            DECLARE @ctx varbinary(128) = CONVERT(VARBINARY(128), CAST(0x57 AS BINARY(1)));
+            SET CONTEXT_INFO @ctx;
+            """
+        )
+        cur.execute(
+            """
+            INSERT INTO projects.work_orders (
+                wo, property, casino_id, asset_id, theme_id, compid, comp_desc,
+                bank, location, brief_desc, work_desc, wo_type, probtype,
+                asst_dwn, game_oos, assignto, requestor, req_tele,
+                drivetime, workmhours, hours, workstatus, date_wo, adddate
+            )
+            VALUES (
+                %s, %s, %s, %s, %s, %s, %s,
+                %s, %s, %s, %s, %s, %s,
+                %s, %s, %s, %s, %s,
+                %s, %s, %s, N'O', %s, %s
+            )
+            """,
+            (
+                row["wo"],
+                row.get("property"),
+                row.get("casino_id"),
+                row.get("asset_id"),
+                row.get("theme_id"),
+                row.get("compid"),
+                row.get("comp_desc"),
+                row.get("bank"),
+                row.get("location"),
+                row.get("brief_desc"),
+                row.get("work_desc"),
+                row.get("wo_type"),
+                row.get("probtype"),
+                row.get("asst_dwn"),
+                row.get("game_oos"),
+                row.get("assignto"),
+                row.get("requestor"),
+                row.get("req_tele"),
+                row.get("drivetime"),
+                row.get("workmhours"),
+                row.get("hours"),
+                row.get("date_wo"),
+                row.get("adddate"),
+            ),
+        )
+        cur.execute(
+            """
+            SELECT TOP 1
+                uuid, index_key, reference_key, wo, property, casino_id,
+                asset_id, compid, brief_desc, workstatus, date_wo
+            FROM projects.work_orders
+            WHERE wo = %s
+            ORDER BY index_key DESC
+            """,
+            (row["wo"],),
+        )
+        inserted = cur.fetchone()
+        # Clear skip marker before returning the pooled connection.
+        cur.execute(
+            """
+            DECLARE @z varbinary(128) = CONVERT(VARBINARY(128), CAST(0x00 AS BINARY(1)));
+            SET CONTEXT_INFO @z;
+            """
+        )
+        conn.commit()
+        if not inserted:
+            raise RuntimeError("SQL insert succeeded but row was not readable")
+        return inserted
+    except Exception:
+        try:
+            conn.rollback()
+        except Exception:
+            pass
+        raise
+    finally:
+        conn.close()
+
+
+@router.post("/create")
+def create_work_order(
+    body: WorkOrderCreateIn,
+    user: Annotated[dict[str, Any] | None, Depends(require_demo_user)] = None,
+):
+    """Allocate eMaint WO, create WORK, then insert projects.work_orders (dual-write)."""
+    actor = _require_part_request_write(user)
+    casino = _load_casino_for_create(body.casino_id, actor)
+    casino_id = _text(casino.get("casino_id")) or body.casino_id.strip()
+    property_name = (
+        _text(body.property)
+        or _text(casino.get("emaint_property"))
+        or _text(casino.get("casino_name"))
+    )
+    if not property_name:
+        raise HTTPException(status_code=400, detail="property is required")
+
+    asset = _load_asset_for_create(
+        asset_id=body.asset_id,
+        compid=body.compid,
+        casino_id=casino_id,
+        user=actor,
+    )
+    asst_dwn = _yes_no(body.asst_dwn, field="asst_dwn")
+    game_oos = _yes_no(body.game_oos or asst_dwn, field="game_oos")
+    today = date.today().isoformat()
+    date_stamp = f"{today}T00:00:00"
+    serial = None
+    asset_id = None
+    theme_id = None
+    bank = None
+    location = None
+    theme_name = None
+    if asset:
+        serial = (
+            _text(asset.get("serial_number"))
+            or _text(asset.get("asset_no"))
+            or _text(body.compid)
+        )
+        asset_id = _text(asset.get("asset_id"))
+        theme_id = _text(asset.get("theme_id"))
+        bank = _text(asset.get("bank"))
+        location = _text(asset.get("location"))
+        theme_name = _text(asset.get("theme_name"))
+    else:
+        serial = _text(body.compid)
+
+    brief = (body.brief_desc or "").strip()
+    work_desc = (body.work_desc or "").strip() or None
+    drivetime = _optional_float(body.drivetime)
+    workmhours = _optional_float(body.workmhours)
+    hours = workmhours
+
+    emaint_payload: dict[str, Any] = {
+        "brief_desc": brief,
+        "work_desc": work_desc,
+        "adddate": date_stamp,
+        "date_wo": date_stamp,
+        "property": property_name,
+        "workstatus": "Open",
+        "asst_dwn": asst_dwn,
+        "game_oos": game_oos,
+    }
+    if serial:
+        emaint_payload["compid"] = serial
+    if _text(body.wo_type):
+        emaint_payload["wo_type"] = _text(body.wo_type)
+    if _text(body.probtype):
+        emaint_payload["probtype"] = _text(body.probtype)
+    if _text(body.assignto):
+        emaint_payload["assignto"] = _text(body.assignto)
+    if _text(body.requestor):
+        emaint_payload["requestor"] = _text(body.requestor)
+    if _text(body.req_tele):
+        emaint_payload["req_tele"] = _text(body.req_tele)
+    if drivetime is not None:
+        emaint_payload["drivetime"] = drivetime
+    if workmhours is not None:
+        emaint_payload["workmhours"] = workmhours
+    if bank:
+        emaint_payload["bank"] = bank
+    if location:
+        emaint_payload["location"] = location
+    if theme_name:
+        emaint_payload["comp_desc"] = theme_name
+
+    last_err = "eMaint create failed"
+    assigned_wo: int | None = None
+    for _attempt in range(5):
+        try:
+            candidate = emaint_client.allocate_next_work_wo()
+        except Exception as exc:
+            raise HTTPException(
+                status_code=502,
+                detail=f"Could not allocate eMaint WO #: {exc}",
+            ) from exc
+        status, snippet = emaint_client.create_work_record(candidate, emaint_payload)
+        if emaint_client.record_response_accepted(status, snippet):
+            assigned_wo = candidate
+            break
+        last_err = snippet or f"HTTP {status}"
+        if emaint_client.snippet_suggests_wo_conflict(snippet):
+            continue
+        raise HTTPException(status_code=502, detail=f"eMaint create failed: {last_err[:400]}")
+
+    if assigned_wo is None:
+        raise HTTPException(
+            status_code=502,
+            detail=f"eMaint create failed after retries: {last_err[:400]}",
+        )
+
+    sql_row = {
+        "wo": str(assigned_wo),
+        "property": property_name,
+        "casino_id": casino_id,
+        "asset_id": asset_id,
+        "theme_id": theme_id,
+        "compid": serial,
+        "comp_desc": theme_name,
+        "bank": bank,
+        "location": location,
+        "brief_desc": brief,
+        "work_desc": work_desc,
+        "wo_type": _text(body.wo_type),
+        "probtype": _text(body.probtype),
+        "asst_dwn": asst_dwn,
+        "game_oos": game_oos,
+        "assignto": _text(body.assignto),
+        "requestor": _text(body.requestor),
+        "req_tele": _text(body.req_tele),
+        "drivetime": drivetime,
+        "workmhours": workmhours,
+        "hours": hours,
+        "date_wo": today,
+        "adddate": today,
+    }
+    try:
+        inserted = _insert_work_order_sql(sql_row)
+    except Exception as exc:
+        raise HTTPException(
+            status_code=502,
+            detail=(
+                f"eMaint WO {assigned_wo} was created, but SQL insert failed: {exc}. "
+                "Do not retry blindly — check projects.work_orders / eMaint."
+            ),
+        ) from exc
+
+    return {
+        "ok": True,
+        "wo": _text(inserted.get("wo")) or str(assigned_wo),
+        "reference_key": _text(inserted.get("reference_key")),
+        "uuid": str(inserted.get("uuid")) if inserted.get("uuid") is not None else None,
+        "property": property_name,
+        "casino_id": casino_id,
+        "compid": serial,
+        "asset_id": asset_id,
+        "brief_desc": brief,
+        "date_wo": _day(inserted.get("date_wo")) or today,
+        "workstatus": _text(inserted.get("workstatus")) or "O",
     }
 
 
