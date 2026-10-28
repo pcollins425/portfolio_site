@@ -27,8 +27,6 @@ from app import dgs_org_access as org
 from app.casino_scope import (
     assigned_employee_id,
     columns_contain_any,
-    sql_params,
-    sql_predicate,
 )
 
 # eMaint stores a free-text name, not an EMP key. These are the forms that
@@ -37,6 +35,7 @@ _PROJECT_NAME_ALIASES: dict[str, tuple[str, ...]] = {
     "EMP-000090": ("DQ Danzy",),
     "EMP-000091": ("Don Buning",),
     "EMP-000103": ("Jim Click",),
+    "EMP-000109": ("Jacob B",),
     "EMP-000111": ("Ricky Garrison",),
     "EMP-000113": ("Dom Carratini", "Domingo Carattini"),
     "EMP-000115": ("Lorent Pritchard",),
@@ -103,13 +102,13 @@ def _query(sql: str, params=None) -> list[dict]:
 
 
 def _project_needles(user: dict[str, Any] | None) -> list[str]:
-    """Names to look for in lead_tech / assistant_techs / assigned_to."""
+    """Names to look for in lead_tech / assistant_techs / assigned_to / assignto."""
     employee_id = assigned_employee_id(user)
     if not employee_id:
         return []
     rows = _query(
         """
-        SELECT first_name, last_name
+        SELECT first_name, last_name, name
         FROM employees.employee_roles
         WHERE reference_key = %s
         """,
@@ -121,6 +120,9 @@ def _project_needles(user: dict[str, Any] | None) -> list[str]:
         last = str(rows[0].get("last_name") or "").strip()
         if first and last:
             needles.append(f"{first} {last}")
+        short = str(rows[0].get("name") or "").strip()
+        if short and short not in needles:
+            needles.append(short)
     for alias in _PROJECT_NAME_ALIASES.get(employee_id, ()):
         if alias not in needles:
             needles.append(alias)
@@ -132,17 +134,21 @@ def _house_or_named(
     casino_alias: str,
     name_columns: list[str],
 ) -> tuple[str, tuple]:
-    """House tech sees the casino's projects. A named lead or assistant sees that project."""
+    """Tech sees a project only when named as lead / assistant / assigned_to.
+
+    ``casino_alias`` is kept for call-site compatibility; house-route casino
+    membership is intentionally not enough (Dev view / tech browse).
+    """
+    del casino_alias  # house route no longer widens project visibility
     employee_id = assigned_employee_id(user)
     if not employee_id:
         return "", ()
     named_sql, named_params = columns_contain_any(name_columns, _project_needles(user))
-    sql = f" AND ({sql_predicate(casino_alias)} OR {named_sql})"
-    return sql, sql_params(employee_id) + named_params
+    return f" AND {named_sql}", named_params
 
 
 def _catalog_scope(user: dict[str, Any] | None) -> tuple[str, tuple]:
-    """Catalog row is visible to the house tech, the IMS crew, or assigned_to."""
+    """Catalog row is visible when the tech is on the IMS crew or assigned_to."""
     employee_id = assigned_employee_id(user)
     if not employee_id:
         return "", ()
@@ -153,8 +159,7 @@ def _catalog_scope(user: dict[str, Any] | None) -> tuple[str, tuple]:
     )
     assigned_sql, assigned_params = columns_contain_any(["pc.assigned_to"], needles)
     sql = f""" AND (
-        {sql_predicate("c")}
-        OR EXISTS (
+        EXISTS (
             SELECT 1
             FROM projects.ims AS ims
             WHERE ims.reference_key = pc.ims_id
@@ -162,7 +167,7 @@ def _catalog_scope(user: dict[str, Any] | None) -> tuple[str, tuple]:
         )
         OR {assigned_sql}
     )"""
-    return sql, sql_params(employee_id) + crew_params + assigned_params
+    return sql, crew_params + assigned_params
 
 
 def _reject_hidden_casino(user: dict[str, Any] | None, casino_id: str) -> None:
@@ -179,9 +184,6 @@ def _reject_hidden_casino(user: dict[str, Any] | None, casino_id: str) -> None:
         f"""
         SELECT CASE
             WHEN EXISTS (
-                SELECT 1 FROM clients.casinos AS c
-                WHERE c.reference_key = %s AND {sql_predicate("c")}
-            ) OR EXISTS (
                 SELECT 1 FROM projects.ims AS ims
                 WHERE ims.casino_id = %s AND {crew_sql}
             ) OR EXISTS (
@@ -190,11 +192,10 @@ def _reject_hidden_casino(user: dict[str, Any] | None, casino_id: str) -> None:
             ) THEN 1 ELSE 0
         END AS ok
         """,
-        (casino_id, *sql_params(employee_id), casino_id, *crew_params, casino_id, *assigned_params),
+        (casino_id, *crew_params, casino_id, *assigned_params),
     )
     if not rows or not rows[0].get("ok"):
         raise HTTPException(status_code=404, detail=f"casino not found: {casino_id!r}")
-
 
 def _reject_hidden_catalog(user: dict[str, Any] | None, catalog_key: str) -> None:
     employee_id = assigned_employee_id(user)

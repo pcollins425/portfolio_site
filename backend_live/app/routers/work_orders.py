@@ -142,14 +142,15 @@ def _has_priority_column() -> bool:
 
 
 def _route_scope(user: dict[str, Any] | None) -> tuple[str, tuple[Any, ...]]:
+    """Casino route for Add WO / asset pickers (house tech list)."""
     employee_id = assigned_employee_id(user)
     if not employee_id:
         return "", ()
     return f" AND {sql_predicate('cas')}", sql_params(employee_id)
 
 
-def _detail_scope(user: dict[str, Any] | None) -> tuple[str, tuple[Any, ...]]:
-    """Techs: casino on their route, or WO assigned to them (Field list)."""
+def _assignee_scope(user: dict[str, Any] | None) -> tuple[str, tuple[Any, ...]]:
+    """Techs browse only WOs where they are named on assignto."""
     employee_id = assigned_employee_id(user)
     if not employee_id:
         return "", ()
@@ -159,10 +160,12 @@ def _detail_scope(user: dict[str, Any] | None) -> tuple[str, tuple[Any, ...]]:
         ["wo.assignto"],
         project_routes._project_needles(user),
     )
-    return (
-        f" AND ({sql_predicate('cas')} OR {named_sql})",
-        sql_params(employee_id) + named_params,
-    )
+    return f" AND {named_sql}", named_params
+
+
+def _detail_scope(user: dict[str, Any] | None) -> tuple[str, tuple[Any, ...]]:
+    """Same as browse: assigned tech only (not every casino on the route)."""
+    return _assignee_scope(user)
 
 
 def _status_sql(status: str) -> str:
@@ -226,7 +229,7 @@ def work_orders_list(
 ):
     include_priority = _has_priority_column()
     priority_select = "wo.priority," if include_priority else ""
-    scope_sql, scope_params = _route_scope(user)
+    scope_sql, scope_params = _assignee_scope(user)
     status_sql = _status_sql(status)
 
     where = [f"1 = 1{status_sql}{scope_sql}"]
@@ -311,7 +314,7 @@ def work_orders_list(
 
     emp = assigned_employee_id(user)
     return {
-        "scope": "route" if emp else "all",
+        "scope": "assigned" if emp else "all",
         "status": (status or "open").strip().lower(),
         "q": needle or None,
         "wo_type": type_raw or None,
@@ -351,7 +354,7 @@ def work_orders_meta(
         "has_priority": _has_priority_column(),
         "can_create": can_create,
         "create_preview_only": not can_create,
-        "scope": "route" if assigned_employee_id(user) else "all",
+        "scope": "assigned" if assigned_employee_id(user) else "all",
         "statuses": [
             {"value": "open", "label": "Open"},
             {"value": "closed", "label": "Closed"},

@@ -110,7 +110,9 @@
       )
       .join("");
     const scopeNote =
-      state.scope === "route" ? "Your route" : "All properties";
+      state.scope === "assigned" || state.scope === "route"
+        ? "Assigned to you"
+        : "All properties";
     const rows = state.orders
       .map((row) => {
         const active = state.selectedWo === row.wo ? " is-active" : "";
