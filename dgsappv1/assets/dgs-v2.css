@@ -43,6 +43,8 @@ body.dgs-assistant-v2.dgs-app {
   height: 100vh;
   overflow: hidden;
   color-scheme: dark;
+  background: var(--dgs-v2-bg);
+  color: var(--dgs-v2-text);
 }
 
 body.dgs-contracts-v2 .dgs-v2-main,
@@ -8617,4 +8619,51 @@ body.dgs-assistant-v2 .assistant-empty {
   body.dgs-assistant-v2 .dgs-v2-main.assistant-page {
     padding-bottom: calc(16px + var(--dgs-v2-system-nav-clear-tablet, 88px));
   }
+}
+
+/* Truck inventory — force dark shell (body paint + fill panel like Parts) */
+body.dgs-truck-inventory-v2.dgs-app {
+  background: var(--dgs-v2-bg) !important;
+  color: var(--dgs-v2-text);
+  color-scheme: dark;
+}
+
+body.dgs-truck-inventory-v2 .dgs-v2-main {
+  background: var(--dgs-v2-bg) !important;
+  color: var(--dgs-v2-text);
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+body.dgs-truck-inventory-v2 .dgs-truck-panel {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+body.dgs-truck-inventory-v2 .dgs-truck-toolbar {
+  margin-bottom: 0;
+  border-bottom: 1px solid var(--dgs-v2-border);
+  background: var(--dgs-v2-card-head);
+}
+
+body.dgs-truck-inventory-v2 .dgs-v2-input,
+body.dgs-truck-inventory-v2 .dgs-truck-toolbar select,
+body.dgs-truck-inventory-v2 .dgs-truck-toolbar input[type="search"] {
+  padding: 10px 14px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: var(--dgs-v2-bg);
+  color: var(--dgs-v2-text);
+  font-size: 13px;
+  font-family: inherit;
+}
+
+body.dgs-truck-inventory-v2 .dgs-v2-metrics {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  max-width: 520px;
 }

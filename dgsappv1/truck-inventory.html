@@ -4,8 +4,8 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Truck — DGS Application</title>
-  <link rel="stylesheet" href="assets/dgs.css" />
-  <link rel="stylesheet" href="assets/dgs-v2.css" />
+  <link rel="stylesheet" href="assets/dgs.css?v=20261028t" />
+  <link rel="stylesheet" href="assets/dgs-v2.css?v=20261028t" />
 </head>
 <body class="dgs-app dgs-truck-inventory-v2">
   <aside class="dgs-sidebar" id="dgs-sidebar">
@@ -36,17 +36,6 @@
 
     <div id="error-box" class="dgs-v2-error" hidden></div>
 
-    <div class="dgs-v2-toolbar dgs-truck-toolbar">
-      <label class="dgs-truck-vehicle-pick" id="vehicle-pick-wrap" hidden>
-        <span class="dgs-wo-field-label">Vehicle</span>
-        <select id="vehicle-select" class="dgs-v2-input" aria-label="Vehicle"></select>
-      </label>
-      <div class="dgs-truck-vehicle-meta" id="vehicle-meta">Loading vehicle…</div>
-      <input id="search-input" type="search" placeholder="Part #, description, mfr…" autocomplete="off" />
-      <button id="search-btn" type="button" class="dgs-v2-btn dgs-v2-btn--primary">Search</button>
-      <button id="clear-search" type="button" class="dgs-v2-btn">Clear</button>
-    </div>
-
     <div class="dgs-v2-metrics" id="stat-row" aria-label="Truck summary">
       <div class="dgs-v2-metric">
         <div class="dgs-v2-metric-label">Lines on truck</div>
@@ -59,6 +48,16 @@
     </div>
 
     <section class="dgs-v2-list-panel dgs-truck-panel">
+      <div class="dgs-v2-toolbar dgs-truck-toolbar">
+        <label class="dgs-truck-vehicle-pick" id="vehicle-pick-wrap" hidden>
+          <span class="dgs-wo-field-label">Vehicle</span>
+          <select id="vehicle-select" class="dgs-v2-input" aria-label="Vehicle"></select>
+        </label>
+        <div class="dgs-truck-vehicle-meta" id="vehicle-meta">Loading vehicle…</div>
+        <input id="search-input" type="search" placeholder="Part #, description, mfr…" autocomplete="off" />
+        <button id="search-btn" type="button" class="dgs-v2-btn dgs-v2-btn--primary">Search</button>
+        <button id="clear-search" type="button" class="dgs-v2-btn">Clear</button>
+      </div>
       <div class="dgs-v2-grid-wrap">
         <table class="dgs-v2-grid" id="truck-table">
           <thead>
@@ -77,9 +76,9 @@
     </section>
   </div>
 
-  <script src="assets/auth.js"></script>
-  <script src="assets/shell.js"></script>
-  <script src="assets/truck-inventory.js"></script>
+  <script src="assets/auth.js?v=20261028t"></script>
+  <script src="assets/shell.js?v=20261028t"></script>
+  <script src="assets/truck-inventory.js?v=20261028t"></script>
   <script>DGS.boot("truck_inventory", () => TruckInventoryApp.init());</script>
 </body>
 </html>
