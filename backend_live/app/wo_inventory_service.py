@@ -436,6 +436,8 @@ def add_stock_to_truck(
     created_by: str | None = None,
 ) -> dict:
     """Move AVAILABLE stock from a warehouse-style bucket onto a vehicle bucket."""
+    from app import stock_outbound_sync as outbound
+
     item = (item or "").strip()
     from_bucket = (from_bucket or "").strip()
     to_bucket = (to_bucket or "").strip().upper()
@@ -460,6 +462,24 @@ def add_stock_to_truck(
         note=f"add stock to truck {to_bucket} from {from_bucket}",
         created_by=created_by,
     )
+    try:
+        outbound.push_stock_outbound(item, [from_bucket, to_bucket])
+    except Exception:
+        # Reverse SQL transfer so AppSheet/eMaint failure does not leave drift.
+        try:
+            _transfer_stock(
+                item=item,
+                qty=q,
+                from_bucket=to_bucket,
+                from_condition=COND_AVAILABLE,
+                to_bucket=from_bucket,
+                to_condition=COND_AVAILABLE,
+                note=f"rollback add stock to truck {to_bucket}",
+                created_by=created_by,
+            )
+        except Exception:
+            pass
+        raise
     return {
         "item": item,
         "qty": float(q),
@@ -478,6 +498,8 @@ def issue_from_truck(
     created_by: str | None = None,
 ) -> dict:
     """Pull good stock off a truck for field use (ledger to FIELD/ISSUED)."""
+    from app import stock_outbound_sync as outbound
+
     item = (item or "").strip()
     truck_bucket = (truck_bucket or "").strip().upper()
     if _inventory_row(item) is None:
@@ -497,6 +519,14 @@ def issue_from_truck(
         created_by=created_by,
         apply_to_balance=False,
     )
+    try:
+        outbound.push_stock_outbound(item, [truck_bucket])
+    except Exception:
+        try:
+            _apply_balance_delta(item, truck_bucket, COND_AVAILABLE, q)
+        except Exception:
+            pass
+        raise
     return {
         "item": item,
         "qty": float(q),
@@ -514,6 +544,8 @@ def return_defective_to_truck(
     created_by: str | None = None,
 ) -> dict:
     """Track a defective return on the tech's truck (DAMAGED)."""
+    from app import stock_outbound_sync as outbound
+
     item = (item or "").strip()
     truck_bucket = (truck_bucket or "").strip().upper()
     if _inventory_row(item) is None:
@@ -534,6 +566,14 @@ def return_defective_to_truck(
         note=f"defective return to truck {truck_bucket} WO {wo or ''}".strip(),
         created_by=created_by,
     )
+    try:
+        outbound.push_stock_outbound(item, [truck_bucket])
+    except Exception:
+        try:
+            _apply_balance_delta(item, truck_bucket, COND_DAMAGED, -q)
+        except Exception:
+            pass
+        raise
     return {
         "item": item,
         "qty": float(q),

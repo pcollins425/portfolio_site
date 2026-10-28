@@ -81,13 +81,13 @@ def get_login_token() -> str:
     return str(token)
 
 
-def record_update(*, table: str, row_id: str, payload: dict) -> dict:
+def record_update(*, table: str, row_id: str, payload: dict, token: str | None = None) -> dict:
     server = _server()
     if not server:
         raise RuntimeError("Missing EMAINT_SERVER_URL")
-    token = get_login_token()
+    bearer = token or get_login_token()
     body = {"table": table, "id": row_id, "payload": payload}
-    status, resp = _request("POST", f"{server}/api/v2/Record", data=body, token=token)
+    status, resp = _request("POST", f"{server}/api/v2/Record", data=body, token=bearer)
     try:
         out = json.loads(resp)
     except json.JSONDecodeError as exc:
@@ -96,6 +96,128 @@ def record_update(*, table: str, row_id: str, payload: dict) -> dict:
         msg = out.get("message") or resp[:500]
         raise RuntimeError(f"eMaint Record failed: HTTP {status} {msg}")
     return out
+
+
+def get_admin_login_token() -> str | None:
+    """Optional EMAINT_ADMIN_* for INVLOC creates (cuid required)."""
+    _load_env()
+    user = (os.environ.get("EMAINT_ADMIN_USER") or "").strip()
+    password = (os.environ.get("EMAINT_ADMIN_PASSWORD") or "").strip()
+    if not user or not password:
+        return None
+    agent = (
+        os.environ.get("EMAINT_ADMIN_USER_AGENT")
+        or os.environ.get("EMAINT_USER_AGENT")
+        or "PAUL_v1"
+    ).strip()
+    status, body = _request(
+        "POST",
+        _login_url(),
+        data={},
+        extra_headers={"username": user, "password": password, "XT-UserAgent": agent},
+    )
+    if status != 200:
+        raise RuntimeError(f"eMaint admin login failed: HTTP {status} {body[:500]}")
+    out = json.loads(body)
+    token = out.get("token") or out.get("Token") or out.get("accessToken")
+    if not token:
+        raise RuntimeError("eMaint admin login response missing token")
+    return str(token)
+
+
+def find_invloc(*, item: str, invloc: str, token: str | None = None) -> dict[str, Any] | None:
+    """Return INVLOC row ``{cuid, onhand, invloc, item}`` or None."""
+    item = (item or "").strip()
+    loc = (invloc or "").strip()
+    if not item or not loc:
+        return None
+    rows = get_any_data(
+        table="INVLOC",
+        columns="cuid,item,invloc,onhand",
+        filters=[
+            {"field": "item", "operator": "eq", "value": item},
+            {"field": "invloc", "operator": "eq", "value": loc},
+        ],
+        page_size=5,
+        token=token,
+    )
+    if not rows:
+        return None
+    row = rows[0] or {}
+    return {
+        "cuid": str(row.get("cuid") or "").strip(),
+        "item": str(row.get("item") or "").strip(),
+        "invloc": str(row.get("invloc") or "").strip(),
+        "onhand": row.get("onhand"),
+    }
+
+
+def set_invloc_onhand(*, cuid: str, onhand: float, token: str | None = None) -> dict:
+    return record_update(
+        table="INVLOC",
+        row_id=cuid,
+        payload={"onhand": float(onhand)},
+        token=token,
+    )
+
+
+def create_invloc(*, item: str, invloc: str, onhand: float) -> str:
+    """Create INVLOC via admin PUT. Returns cuid. Raises if admin creds missing."""
+    import time
+
+    admin = get_admin_login_token()
+    if not admin:
+        raise RuntimeError(
+            f"No eMaint INVLOC for {item}/{invloc} and EMAINT_ADMIN_USER/PASSWORD "
+            "not configured to create one"
+        )
+    server = _server()
+    if not server:
+        raise RuntimeError("Missing EMAINT_SERVER_URL")
+    agent = (
+        os.environ.get("EMAINT_ADMIN_USER_AGENT")
+        or os.environ.get("EMAINT_USER_AGENT")
+        or "PAUL_v1"
+    ).strip()
+    probe = f"_TMP{int(time.time() * 1000) % 10_000_000:07d}"
+    body = {
+        "table": "INVLOC",
+        "payload": {
+            "cuid": probe,
+            "item": item,
+            "invloc": invloc,
+            "onhand": float(onhand),
+        },
+    }
+    status, resp = _request(
+        "PUT",
+        f"{server}/api/v2/Record",
+        data=body,
+        token=admin,
+        extra_headers={"XT-UserAgent": agent},
+        timeout=120,
+    )
+    try:
+        out = json.loads(resp)
+    except json.JSONDecodeError as exc:
+        raise RuntimeError(f"eMaint INVLOC create invalid JSON: HTTP {status} {resp[:500]}") from exc
+    if status == 200 and out.get("valid"):
+        return str(out.get("id") or "").strip() or probe
+    if "already exists" in (resp or "").lower():
+        found = find_invloc(item=item, invloc=invloc)
+        if found and found.get("cuid"):
+            set_invloc_onhand(cuid=found["cuid"], onhand=onhand)
+            return found["cuid"]
+    raise RuntimeError(f"eMaint INVLOC create failed: HTTP {status} {resp[:400]}")
+
+
+def set_arinvt01_onhand(*, item: str, onhand: float, token: str | None = None) -> dict:
+    return record_update(
+        table="ARINVT01",
+        row_id=item,
+        payload={"onhand": float(max(0.0, onhand))},
+        token=token,
+    )
 
 
 def _strip_nulls(payload: dict[str, Any]) -> dict[str, Any]:

@@ -1747,6 +1747,8 @@ def create_part_request(
     def _rollback_stock() -> None:
         from decimal import Decimal as _D
 
+        from app import stock_outbound_sync as outbound
+
         for step in reversed(stock_applied):
             try:
                 if step == "issue" and truck_bucket:
@@ -1759,8 +1761,14 @@ def create_part_request(
                     )
             except Exception:
                 pass
+        # Re-align AppSheet + eMaint to post-rollback SQL balances.
+        if truck_bucket and stock_applied:
+            try:
+                outbound.push_stock_outbound(part_id, [truck_bucket])
+            except Exception:
+                pass
 
-    # Stock moves first so AppSheet failure can roll them back.
+    # Stock moves first (SQL + AppSheet levels + eMaint), then Part Order.
     if stock_source == "truck":
         if not truck_bucket:
             raise HTTPException(
