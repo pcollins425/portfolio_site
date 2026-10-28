@@ -2934,8 +2934,8 @@ body.wo-create-open .dgs-capacity-drawer-backdrop,
 body.wo-pr-open .dgs-wo-pr-backdrop {
   display: block;
 }
-body.capacity-drill-open .dgs-capacity-drawer,
-body.wo-detail-open .dgs-capacity-drawer,
+body.capacity-drill-open .dgs-capacity-drawer:not(.is-wo-detail):not(.is-wo-create):not(.is-wo-pr),
+body.wo-detail-open .dgs-capacity-drawer.is-wo-detail,
 body.wo-create-open .dgs-capacity-drawer.is-wo-create,
 body.wo-pr-open .dgs-capacity-drawer.is-wo-pr {
   display: flex;
@@ -3091,7 +3091,8 @@ body.wo-pr-open .dgs-capacity-drawer.is-wo-pr {
   font-size: 0.82rem;
 }
 .dgs-capacity-drawer.is-wo-detail,
-.dgs-capacity-drawer.is-wo-create {
+.dgs-capacity-drawer.is-wo-create,
+.dgs-capacity-drawer.is-wo-pr {
   width: min(720px, 96vw);
 }
 .dgs-capacity-drawer.is-wo-create {
@@ -3559,7 +3560,8 @@ body.dgs-work-orders-v2 .dgs-wo-root {
 
 /* Field / Work Orders / WO detail — phone + tablet compact */
 @media (max-width: 1366px) {
-  body.wo-detail-open .dgs-capacity-drawer.is-wo-detail {
+  body.wo-detail-open .dgs-capacity-drawer.is-wo-detail,
+  body.wo-pr-open .dgs-capacity-drawer.is-wo-pr {
     top: auto;
     left: 0;
     right: 0;
@@ -3748,7 +3750,8 @@ body.dgs-work-orders-v2 .dgs-wo-root {
     grid-template-columns: 1fr;
   }
 
-  body.wo-detail-open .dgs-capacity-drawer.is-wo-detail {
+  body.wo-detail-open .dgs-capacity-drawer.is-wo-detail,
+  body.wo-pr-open .dgs-capacity-drawer.is-wo-pr {
     height: min(94dvh, 920px);
   }
 }
