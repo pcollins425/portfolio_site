@@ -1348,9 +1348,11 @@ def _map_part_request_job_type(wo_type: str | None) -> str:
 
 def _part_request_defaults(user: dict[str, Any] | None, row: dict[str, Any]) -> dict[str, Any]:
     """Prefill locked Tech Order context from WO + Locations."""
+    from app import view_as as view_as_mod
+
     user = user or {}
-    tech_email = _text(user.get("email"))
-    user_name = _text(user.get("name")) or ""
+    tech_email = _text(view_as_mod.effective_email(user))
+    user_name = _text(view_as_mod.effective_name(user)) or ""
     loc = _resolve_tech_location(tech_email, user_name)
     tech_name = loc.get("name") or user_name
     asset = _text(row.get("serial")) or _text(row.get("compid"))

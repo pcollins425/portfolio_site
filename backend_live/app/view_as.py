@@ -81,3 +81,33 @@ def apply(user: dict[str, Any], target_id: str | None) -> dict[str, Any]:
 
 def public_user(user: dict[str, Any]) -> dict[str, Any]:
     return {key: user.get(key) for key in _PUBLIC_USER_KEYS}
+
+
+def effective_email(user: dict[str, Any] | None) -> str:
+    """Email for identity-sensitive reads while Dev view is active.
+
+    Dev view keeps the signed-in email on the user blob (writes stay attributed
+    to the actor) but overlays the target under ``view_as``. Features that
+    resolve *who you are pretending to be* (truck Locations, tech defaults)
+    should use this helper.
+    """
+    if not user:
+        return ""
+    target = user.get("view_as") if isinstance(user.get("view_as"), dict) else None
+    if target:
+        email = (target.get("email") or "").strip().lower()
+        if email:
+            return email
+    return (user.get("email") or "").strip().lower()
+
+
+def effective_name(user: dict[str, Any] | None) -> str:
+    """Display name for the Dev-view target when set, else the signed-in name."""
+    if not user:
+        return ""
+    target = user.get("view_as") if isinstance(user.get("view_as"), dict) else None
+    if target:
+        name = (target.get("name") or "").strip()
+        if name:
+            return name
+    return (user.get("name") or "").strip()

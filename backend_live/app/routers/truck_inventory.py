@@ -10,7 +10,7 @@ from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
-from app import appsheet_client, mssql
+from app import appsheet_client, mssql, view_as
 from app import permission_catalog as cat
 from app.auth_deps import require_area_read, require_demo_user
 
@@ -96,7 +96,9 @@ def _resolve_my_vehicle(
 ) -> dict[str, str] | None:
     if user is None:
         return vehicles[0] if vehicles else None
-    email = (user.get("email") or "").strip().lower()
+    # Dev view keeps the actor email on the user blob; use the target's email
+    # so Locations maps to the truck of the person you're previewing.
+    email = view_as.effective_email(user)
     if not email:
         return None
     for row in vehicles:
