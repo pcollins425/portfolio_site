@@ -2930,13 +2930,22 @@ body.dgs-dashboard-v2 .dgs-dashboard-mount:has(.dgs-capacity) {
 }
 body.capacity-drill-open .dgs-capacity-drawer-backdrop,
 body.wo-detail-open .dgs-capacity-drawer-backdrop,
-body.wo-create-open .dgs-capacity-drawer-backdrop {
+body.wo-create-open .dgs-capacity-drawer-backdrop,
+body.wo-pr-open .dgs-wo-pr-backdrop {
   display: block;
 }
 body.capacity-drill-open .dgs-capacity-drawer,
 body.wo-detail-open .dgs-capacity-drawer,
-body.wo-create-open .dgs-capacity-drawer.is-wo-create {
+body.wo-create-open .dgs-capacity-drawer.is-wo-create,
+body.wo-pr-open .dgs-capacity-drawer.is-wo-pr {
   display: flex;
+}
+/* Parts Order stacks over the open WO detail drawer */
+.dgs-wo-pr-backdrop {
+  z-index: 91;
+}
+.dgs-capacity-drawer.is-wo-pr {
+  z-index: 92;
 }
 .dgs-capacity-drawer-head {
   display: flex;
@@ -3281,10 +3290,6 @@ body.wo-create-open .dgs-capacity-drawer.is-wo-create {
   justify-content: space-between;
   gap: 0.75rem;
 }
-.dgs-wo-pr-context {
-  margin-top: 0.65rem;
-  margin-bottom: 0.35rem;
-}
 .dgs-wo-pr-toolbar {
   margin-top: 0.85rem;
   display: flex;
@@ -3293,34 +3298,13 @@ body.wo-create-open .dgs-capacity-drawer.is-wo-create {
   gap: 0.65rem;
 }
 .dgs-wo-part-request {
-  margin-top: 0.85rem;
-  padding-top: 0.85rem;
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
   display: grid;
   gap: 0.75rem;
 }
-.dgs-wo-pr-card {
-  padding: 0.85rem 0.9rem 1rem;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 10px;
-  background: rgba(255, 255, 255, 0.03);
-  border-top: 1px solid rgba(255, 255, 255, 0.12);
-}
-.dgs-wo-pr-card-title {
-  margin: 0;
-  font-size: 0.95rem;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: #d7dde8;
-}
-.dgs-wo-part-request[hidden] {
-  display: none !important;
-}
-.dgs-wo-part-request .dgs-v2-input,
-.dgs-wo-part-request input,
-.dgs-wo-part-request select,
-.dgs-wo-part-request textarea {
+.dgs-capacity-drawer.is-wo-pr .dgs-wo-part-request .dgs-v2-input,
+.dgs-capacity-drawer.is-wo-pr .dgs-wo-part-request input,
+.dgs-capacity-drawer.is-wo-pr .dgs-wo-part-request select,
+.dgs-capacity-drawer.is-wo-pr .dgs-wo-part-request textarea {
   width: 100%;
   box-sizing: border-box;
   margin-top: 0.25rem;

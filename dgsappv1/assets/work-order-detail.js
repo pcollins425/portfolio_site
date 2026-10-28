@@ -191,10 +191,62 @@
     </table></div>`;
   }
 
-  function partRequestContextHtml(data) {
+  function partRequestAddControlsHtml(data) {
     const pr = data.part_requests || {};
-    if (!pr.can_write || !pr.wo_ready) return "";
-    const d = pr.defaults || {};
+    if (!pr.can_write) return "";
+    if (!pr.wo_ready) {
+      return `<p class="dgs-field-empty">Part requests need a 5-digit eMaint WO # on this order.</p>`;
+    }
+    return `
+      <div class="dgs-wo-pr-toolbar">
+        <button type="button" class="dgs-v2-btn dgs-v2-btn-primary" id="wo-pr-open">
+          Add part request
+        </button>
+      </div>`;
+  }
+
+  function ensurePartRequestDrawer() {
+    let backdrop = document.getElementById("wo-pr-backdrop");
+    let drawer = document.getElementById("wo-pr-drawer");
+    if (!backdrop) {
+      backdrop = document.createElement("div");
+      backdrop.id = "wo-pr-backdrop";
+      backdrop.className = "dgs-capacity-drawer-backdrop dgs-wo-pr-backdrop";
+      document.body.appendChild(backdrop);
+      backdrop.addEventListener("click", closePartRequestDrawer);
+    }
+    if (!drawer) {
+      drawer = document.createElement("aside");
+      drawer.id = "wo-pr-drawer";
+      drawer.className = "dgs-capacity-drawer is-wo-pr";
+      drawer.setAttribute("aria-label", "Parts Order");
+      document.body.appendChild(drawer);
+      drawer.addEventListener("click", (event) => {
+        if (event.target.closest("#wo-pr-cancel, #wo-pr-close")) {
+          closePartRequestDrawer();
+        }
+      });
+    }
+    return { backdrop, drawer };
+  }
+
+  function closePartRequestDrawer() {
+    document.body.classList.remove("wo-pr-open");
+    const drawer = document.getElementById("wo-pr-drawer");
+    if (drawer) drawer.innerHTML = "";
+  }
+
+  function partRequestDrawerHtml(data) {
+    const d = (data.part_requests && data.part_requests.defaults) || {};
+    const shipTo = d.ship_to_category || "Primary Location";
+    const shipOpts = ["Primary Location", "Casino", "Other"]
+      .map(
+        (opt) =>
+          `<option value="${esc(opt)}"${opt === shipTo ? " selected" : ""}>${esc(opt)}</option>`
+      )
+      .join("");
+    const sendTo = esc(d.send_to_address || "");
+    const importanceRequired = (d.job_type || "Repair") === "Repair";
     const contextFields = [
       textField("Tech Name", d.tech_name),
       textField("Job Type", d.job_type),
@@ -205,131 +257,119 @@
     ]
       .filter(Boolean)
       .join("");
-    return `<div class="dgs-wo-fields dgs-wo-pr-context">${
-      contextFields || `<p class="dgs-field-empty">No order context available.</p>`
-    }</div>`;
-  }
-
-  function partRequestAddControlsHtml(data) {
-    const pr = data.part_requests || {};
-    if (!pr.can_write) return "";
-    if (!pr.wo_ready) {
-      return `<p class="dgs-field-empty">Part requests need a 5-digit eMaint WO # on this order.</p>`;
-    }
-    const d = pr.defaults || {};
-    const shipTo = d.ship_to_category || "Primary Location";
-    const shipOpts = ["Primary Location", "Casino", "Other"]
-      .map(
-        (opt) =>
-          `<option value="${esc(opt)}"${opt === shipTo ? " selected" : ""}>${esc(opt)}</option>`
-      )
-      .join("");
-    const sendTo = esc(d.send_to_address || "");
-    const importanceRequired = (d.job_type || "Repair") === "Repair";
     return `
-      <div class="dgs-wo-pr-toolbar">
-        <button type="button" class="dgs-v2-btn dgs-v2-btn-primary" id="wo-pr-open">
-          Add part request
-        </button>
+      <div class="dgs-capacity-drawer-head">
+        <div>
+          <p class="dgs-capacity-drawer-kicker">Parts Order</p>
+          <h2>Add part request</h2>
+          <p class="dgs-capacity-drawer-meta">WO ${esc(data.wo || "—")}</p>
+        </div>
+        <button type="button" class="dgs-v2-btn" id="wo-pr-close">Close</button>
       </div>
-      <div class="dgs-wo-part-request dgs-wo-pr-card" id="wo-part-request" hidden
+      <div class="dgs-capacity-drawer-body dgs-wo-detail-body"
+        id="wo-part-request"
         data-tech-name="${esc(d.tech_name || "")}"
         data-job-type="${esc(d.job_type || "Repair")}"
         data-asset-id="${esc(d.asset_id || "")}"
         data-tech-address="${esc(d.tech_address || "")}"
         data-casino-address="${esc(d.casino_address || "")}">
-        <h4 class="dgs-wo-pr-card-title">Parts Order</h4>
-        <p class="dgs-wo-section-note">Fill the fields inventory still needs. Context above is locked from this work order.</p>
-        <div class="dgs-wo-fields">
-          <label class="dgs-wo-field">
-            <span class="dgs-wo-field-label">Importance${
-              importanceRequired
-                ? ` <span class="dgs-wo-req" aria-hidden="true">*</span>`
-                : ""
-            }</span>
-            <select id="wo-pr-importance" class="dgs-v2-input"${
-              importanceRequired ? " required" : ""
-            }>
-              <option value="">—</option>
-              <option>Cabinet Down - Urgent</option>
-              <option>Cosmetic - High Priority</option>
-              <option>Cosmetic - Low Priority</option>
-            </select>
-          </label>
-          <label class="dgs-wo-field">
-            <span class="dgs-wo-field-label">Part search</span>
-            <input type="search" id="wo-pr-search" class="dgs-v2-input" placeholder="Part # or name" autocomplete="off" />
-          </label>
-          <div id="wo-pr-results" class="dgs-wo-pr-results" hidden></div>
-          <label class="dgs-wo-field">
-            <span class="dgs-wo-field-label">DGS Part #</span>
-            <input type="text" id="wo-pr-part" class="dgs-v2-input" required />
-          </label>
-          <label class="dgs-wo-field">
-            <span class="dgs-wo-field-label">Description <span class="dgs-wo-req" aria-hidden="true">*</span></span>
-            <input type="text" id="wo-pr-description" class="dgs-v2-input" required />
-          </label>
-          <label class="dgs-wo-field">
-            <span class="dgs-wo-field-label">Quantity <span class="dgs-wo-req" aria-hidden="true">*</span></span>
-            <input type="number" id="wo-pr-qty" class="dgs-v2-input" min="1" step="1" value="1" required />
-          </label>
-          <label class="dgs-wo-field">
-            <span class="dgs-wo-field-label">Ship To Category <span class="dgs-wo-req" aria-hidden="true">*</span></span>
-            <select id="wo-pr-ship-to" class="dgs-v2-input" required>
-              ${shipOpts}
-            </select>
-          </label>
-          <label class="dgs-wo-field" id="wo-pr-send-to-wrap">
-            <span class="dgs-wo-field-label">Send to Address</span>
-            <input type="text" id="wo-pr-send-to" class="dgs-v2-input" value="${sendTo}" />
-          </label>
-          <label class="dgs-wo-field">
-            <span class="dgs-wo-field-label">Notes</span>
-            <textarea id="wo-pr-notes" class="dgs-v2-input" rows="2"></textarea>
-          </label>
-          <div class="dgs-wo-field" id="wo-pr-pics-wrap">
-            <span class="dgs-wo-field-label">Pic <span class="dgs-wo-req" aria-hidden="true">*</span></span>
-            <div
-              id="wo-pr-photo-banner"
-              class="dgs-wo-pr-photo-banner is-idle"
-              role="status"
-              aria-live="polite"
-            >
-              Select a part to see if a picture is required.
-            </div>
-            <input type="file" id="wo-pr-pics" class="dgs-v2-input" accept="image/*" multiple />
-            <p class="dgs-wo-section-note" id="wo-pr-pics-note">First pic required when the part has no catalog photo. Up to 3.</p>
-            <div id="wo-pr-pics-preview" class="dgs-wo-pr-pics-preview" hidden></div>
+        <section class="dgs-wo-section">
+          <h3>Order context</h3>
+          <p class="dgs-wo-section-note">Locked from this work order — not editable here.</p>
+          <div class="dgs-wo-fields dgs-wo-pr-context">
+            ${contextFields || `<p class="dgs-field-empty">No order context available.</p>`}
           </div>
-        </div>
-        <p class="dgs-wo-pr-status" id="wo-pr-status" hidden></p>
-        <div class="dgs-wo-pr-actions">
-          <button type="button" class="dgs-v2-btn dgs-v2-btn-primary" id="wo-pr-submit">Submit request</button>
-          <button type="button" class="dgs-v2-btn" id="wo-pr-cancel">Cancel</button>
-        </div>
+        </section>
+        <section class="dgs-wo-section">
+          <h3>Request</h3>
+          <p class="dgs-wo-section-note">Fields inventory still needs from you.</p>
+          <div class="dgs-wo-fields dgs-wo-part-request">
+            <label class="dgs-wo-field">
+              <span class="dgs-wo-field-label">Importance${
+                importanceRequired
+                  ? ` <span class="dgs-wo-req" aria-hidden="true">*</span>`
+                  : ""
+              }</span>
+              <select id="wo-pr-importance" class="dgs-v2-input"${
+                importanceRequired ? " required" : ""
+              }>
+                <option value="">—</option>
+                <option>Cabinet Down - Urgent</option>
+                <option>Cosmetic - High Priority</option>
+                <option>Cosmetic - Low Priority</option>
+              </select>
+            </label>
+            <label class="dgs-wo-field">
+              <span class="dgs-wo-field-label">Part search</span>
+              <input type="search" id="wo-pr-search" class="dgs-v2-input" placeholder="Part # or name" autocomplete="off" />
+            </label>
+            <div id="wo-pr-results" class="dgs-wo-pr-results" hidden></div>
+            <label class="dgs-wo-field">
+              <span class="dgs-wo-field-label">DGS Part #</span>
+              <input type="text" id="wo-pr-part" class="dgs-v2-input" required />
+            </label>
+            <label class="dgs-wo-field">
+              <span class="dgs-wo-field-label">Description <span class="dgs-wo-req" aria-hidden="true">*</span></span>
+              <input type="text" id="wo-pr-description" class="dgs-v2-input" required />
+            </label>
+            <label class="dgs-wo-field">
+              <span class="dgs-wo-field-label">Quantity <span class="dgs-wo-req" aria-hidden="true">*</span></span>
+              <input type="number" id="wo-pr-qty" class="dgs-v2-input" min="1" step="1" value="1" required />
+            </label>
+            <label class="dgs-wo-field">
+              <span class="dgs-wo-field-label">Ship To Category <span class="dgs-wo-req" aria-hidden="true">*</span></span>
+              <select id="wo-pr-ship-to" class="dgs-v2-input" required>
+                ${shipOpts}
+              </select>
+            </label>
+            <label class="dgs-wo-field" id="wo-pr-send-to-wrap">
+              <span class="dgs-wo-field-label">Send to Address</span>
+              <input type="text" id="wo-pr-send-to" class="dgs-v2-input" value="${sendTo}" />
+            </label>
+            <label class="dgs-wo-field">
+              <span class="dgs-wo-field-label">Notes</span>
+              <textarea id="wo-pr-notes" class="dgs-v2-input" rows="2"></textarea>
+            </label>
+            <div class="dgs-wo-field" id="wo-pr-pics-wrap">
+              <span class="dgs-wo-field-label">Pic <span class="dgs-wo-req" aria-hidden="true">*</span></span>
+              <div
+                id="wo-pr-photo-banner"
+                class="dgs-wo-pr-photo-banner is-idle"
+                role="status"
+                aria-live="polite"
+              >
+                Select a part to see if a picture is required.
+              </div>
+              <input type="file" id="wo-pr-pics" class="dgs-v2-input" accept="image/*" multiple />
+              <p class="dgs-wo-section-note" id="wo-pr-pics-note">First pic required when the part has no catalog photo. Up to 3.</p>
+              <div id="wo-pr-pics-preview" class="dgs-wo-pr-pics-preview" hidden></div>
+            </div>
+          </div>
+          <p class="dgs-wo-pr-status" id="wo-pr-status" hidden></p>
+          <div class="dgs-wo-pr-actions">
+            <button type="button" class="dgs-v2-btn dgs-v2-btn-primary" id="wo-pr-submit">Submit request</button>
+            <button type="button" class="dgs-v2-btn" id="wo-pr-cancel">Cancel</button>
+          </div>
+        </section>
       </div>`;
   }
 
-  function bindPartRequestUi(drawer, data) {
-    const pr = data.part_requests || {};
-    if (!pr.can_write || !pr.wo_ready) return;
+  function bindPartRequestForm(host, data, woDetailDrawer) {
+    const defaults = (data.part_requests && data.part_requests.defaults) || {};
     const wo = data.wo;
-    const defaults = pr.defaults || {};
-    const openBtn = drawer.querySelector("#wo-pr-open");
-    const form = drawer.querySelector("#wo-part-request");
-    const cancelBtn = drawer.querySelector("#wo-pr-cancel");
-    const searchInput = drawer.querySelector("#wo-pr-search");
-    const results = drawer.querySelector("#wo-pr-results");
-    const partInput = drawer.querySelector("#wo-pr-part");
-    const descInput = drawer.querySelector("#wo-pr-description");
-    const shipToSelect = drawer.querySelector("#wo-pr-ship-to");
-    const sendToInput = drawer.querySelector("#wo-pr-send-to");
-    const statusEl = drawer.querySelector("#wo-pr-status");
-    const submitBtn = drawer.querySelector("#wo-pr-submit");
-    const picsInput = drawer.querySelector("#wo-pr-pics");
-    const picsWrap = drawer.querySelector("#wo-pr-pics-wrap");
-    const photoBanner = drawer.querySelector("#wo-pr-photo-banner");
-    const picsPreview = drawer.querySelector("#wo-pr-pics-preview");
+    const form = host.querySelector("#wo-part-request") || host;
+    const searchInput = host.querySelector("#wo-pr-search");
+    const results = host.querySelector("#wo-pr-results");
+    const partInput = host.querySelector("#wo-pr-part");
+    const descInput = host.querySelector("#wo-pr-description");
+    const shipToSelect = host.querySelector("#wo-pr-ship-to");
+    const sendToInput = host.querySelector("#wo-pr-send-to");
+    const statusEl = host.querySelector("#wo-pr-status");
+    const submitBtn = host.querySelector("#wo-pr-submit");
+    const picsInput = host.querySelector("#wo-pr-pics");
+    const picsWrap = host.querySelector("#wo-pr-pics-wrap");
+    const photoBanner = host.querySelector("#wo-pr-photo-banner");
+    const picsPreview = host.querySelector("#wo-pr-pics-preview");
     let searchTimer = null;
     let partLookupTimer = null;
     let selectedHasPhoto = null;
@@ -373,7 +413,6 @@
       const casinoAddr = form.getAttribute("data-casino-address") || "";
       if (cat === "Primary Location") sendToInput.value = techAddr;
       else if (cat === "Casino") sendToInput.value = casinoAddr;
-      // Other: leave whatever the tech typed
     }
 
     function setPhotoBanner(state, title, detail) {
@@ -427,10 +466,10 @@
       }
       setPhotoBanner("is-loading", "Checking catalog photo…", `Looking up part ${id}.`);
       try {
-        const data = await fetchJson(
+        const looked = await fetchJson(
           `/api/work-orders/part-catalog/item?id=${encodeURIComponent(id)}`
         );
-        if (!data || data.found === false) {
+        if (!looked || looked.found === false) {
           setPhotoBanner(
             "is-required",
             "Photo required",
@@ -439,10 +478,10 @@
           selectedHasPhoto = false;
           return;
         }
-        if (descInput && !descInput.value.trim() && data.name) {
-          descInput.value = data.name;
+        if (descInput && !descInput.value.trim() && looked.name) {
+          descInput.value = looked.name;
         }
-        setPhotoRequired(!!data.photo_required);
+        setPhotoRequired(!!looked.photo_required);
       } catch (err) {
         setPhotoBanner(
           "is-required",
@@ -505,42 +544,8 @@
       }
     }
 
-    function showForm() {
-      if (!form) return;
-      form.hidden = false;
-      if (openBtn) openBtn.hidden = true;
-      setStatus("", false);
-      syncSendToAddress();
-      const importance = drawer.querySelector("#wo-pr-importance");
-      if (importance) importance.focus();
-      else if (searchInput) searchInput.focus();
-    }
-
-    function hideForm() {
-      if (!form) return;
-      form.hidden = true;
-      if (openBtn) openBtn.hidden = false;
-      setStatus("", false);
-      if (results) {
-        results.hidden = true;
-        results.innerHTML = "";
-      }
-      if (searchInput) searchInput.value = "";
-      if (partInput) partInput.value = "";
-      if (descInput) descInput.value = "";
-      const qty = drawer.querySelector("#wo-pr-qty");
-      if (qty) qty.value = "1";
-      const importance = drawer.querySelector("#wo-pr-importance");
-      if (importance) importance.value = "";
-      if (shipToSelect) shipToSelect.value = defaults.ship_to_category || "Primary Location";
-      syncSendToAddress();
-      const notesEl = drawer.querySelector("#wo-pr-notes");
-      if (notesEl) notesEl.value = "";
-      clearPics();
-    }
-
     async function refreshList() {
-      const listHost = drawer.querySelector("#wo-pr-list");
+      const listHost = woDetailDrawer && woDetailDrawer.querySelector("#wo-pr-list");
       if (!listHost) return;
       const listed = await fetchJson(
         `/api/work-orders/${encodeURIComponent(wo)}/part-requests`
@@ -599,10 +604,9 @@
       }
     }
 
-    if (openBtn) openBtn.addEventListener("click", showForm);
-    if (cancelBtn) cancelBtn.addEventListener("click", hideForm);
     if (picsInput) picsInput.addEventListener("change", onPicsChange);
     if (shipToSelect) shipToSelect.addEventListener("change", syncSendToAddress);
+    syncSendToAddress();
     setPhotoRequired(null);
 
     if (searchInput) {
@@ -647,11 +651,11 @@
         const assetId = lockedAssetId();
         const dgsPart = (partInput && partInput.value) || "";
         const description = ((descInput && descInput.value) || "").trim();
-        const qty = Number((drawer.querySelector("#wo-pr-qty") || {}).value || 0);
-        const importance = (drawer.querySelector("#wo-pr-importance") || {}).value || "";
+        const qty = Number((host.querySelector("#wo-pr-qty") || {}).value || 0);
+        const importance = (host.querySelector("#wo-pr-importance") || {}).value || "";
         const shipTo = ((shipToSelect && shipToSelect.value) || "").trim();
         const shipAddress = ((sendToInput && sendToInput.value) || "").trim();
-        const notes = (drawer.querySelector("#wo-pr-notes") || {}).value || "";
+        const notes = (host.querySelector("#wo-pr-notes") || {}).value || "";
         if (!techName) {
           setStatus("Tech Name is missing from order context.", true);
           return;
@@ -662,7 +666,7 @@
         }
         if (jobType === "Repair" && !importance) {
           setStatus("Importance is required.", true);
-          drawer.querySelector("#wo-pr-importance")?.focus();
+          host.querySelector("#wo-pr-importance")?.focus();
           return;
         }
         if (!dgsPart.trim()) {
@@ -712,10 +716,11 @@
             }
           );
           await refreshList();
-          hideForm();
-          const toolbar = drawer.querySelector(".dgs-wo-pr-toolbar");
+          closePartRequestDrawer();
+          clearPics();
+          const toolbar = woDetailDrawer && woDetailDrawer.querySelector(".dgs-wo-pr-toolbar");
           if (toolbar) {
-            drawer.querySelector("#wo-pr-flash")?.remove();
+            woDetailDrawer.querySelector("#wo-pr-flash")?.remove();
             const flash = document.createElement("p");
             flash.id = "wo-pr-flash";
             flash.className = "dgs-wo-pr-status";
@@ -731,6 +736,25 @@
           submitBtn.disabled = false;
         }
       });
+    }
+  }
+
+  function openPartRequestDrawer(data, woDetailDrawer) {
+    const { drawer } = ensurePartRequestDrawer();
+    document.body.classList.add("wo-pr-open");
+    drawer.innerHTML = partRequestDrawerHtml(data);
+    bindPartRequestForm(drawer, data, woDetailDrawer);
+    const importance = drawer.querySelector("#wo-pr-importance");
+    if (importance) importance.focus();
+    else drawer.querySelector("#wo-pr-search")?.focus();
+  }
+
+  function bindPartRequestUi(drawer, data) {
+    const pr = data.part_requests || {};
+    if (!pr.can_write || !pr.wo_ready) return;
+    const openBtn = drawer.querySelector("#wo-pr-open");
+    if (openBtn) {
+      openBtn.addEventListener("click", () => openPartRequestDrawer(data, drawer));
     }
   }
 
@@ -811,6 +835,7 @@
   }
 
   function close() {
+    closePartRequestDrawer();
     const wo = selectedWo;
     selectedWo = null;
     document.body.classList.remove("wo-detail-open");
@@ -919,7 +944,6 @@
               <h3>Part requests</h3>
             </div>
             <p class="dgs-wo-section-note">Sent to inventory (AppSheet Part Orders). Pilot: Paul + Kevin.</p>
-            ${partRequestContextHtml(data)}
             <div id="wo-pr-list"><p class="dgs-v2-loading">Loading requests…</p></div>
             ${partRequestAddControlsHtml(data)}
           </section>
