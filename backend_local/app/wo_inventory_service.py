@@ -379,22 +379,43 @@ def _transfer_stock(
     )
 
 
-def list_good_source_buckets() -> list[dict]:
-    """Non-vehicle buckets with AVAILABLE qty (Add Stock From picker)."""
-    rows = demo._query(
-        """
-        SELECT bucket, SUM(qty) AS qty
-        FROM [inventory].[stock_balance]
-        WHERE [condition] = %s
-          AND [qty] > 0
-          AND [bucket] NOT LIKE N'V%%'
-          AND [bucket] NOT LIKE N'TRUCK:%%'
-          AND UPPER([bucket]) <> N'DEFECT'
-        GROUP BY bucket
-        ORDER BY bucket
-        """,
-        (COND_AVAILABLE,),
-    )
+def list_good_source_buckets(item: str | None = None) -> list[dict]:
+    """Non-vehicle buckets with AVAILABLE qty (Add Stock From picker).
+
+    When ``item`` is set, qty is that part's AVAILABLE in each bucket — not a
+    warehouse-wide total (which misled Add Stock into thinking stock existed).
+    """
+    item = (item or "").strip()
+    if item:
+        rows = demo._query(
+            """
+            SELECT bucket, qty
+            FROM [inventory].[stock_balance]
+            WHERE [item] = %s
+              AND [condition] = %s
+              AND [qty] > 0
+              AND [bucket] NOT LIKE N'V%%'
+              AND [bucket] NOT LIKE N'TRUCK:%%'
+              AND UPPER([bucket]) <> N'DEFECT'
+            ORDER BY bucket
+            """,
+            (item, COND_AVAILABLE),
+        )
+    else:
+        rows = demo._query(
+            """
+            SELECT bucket, SUM(qty) AS qty
+            FROM [inventory].[stock_balance]
+            WHERE [condition] = %s
+              AND [qty] > 0
+              AND [bucket] NOT LIKE N'V%%'
+              AND [bucket] NOT LIKE N'TRUCK:%%'
+              AND UPPER([bucket]) <> N'DEFECT'
+            GROUP BY bucket
+            ORDER BY bucket
+            """,
+            (COND_AVAILABLE,),
+        )
     return [
         {"bucket": (r.get("bucket") or "").strip(), "qty": float(_dec(r.get("qty")))}
         for r in rows

@@ -4,8 +4,8 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Truck — DGS Application</title>
-  <link rel="stylesheet" href="assets/dgs.css?v=20261028w" />
-  <link rel="stylesheet" href="assets/dgs-v2.css?v=20261028w" />
+  <link rel="stylesheet" href="assets/dgs.css?v=20261028x" />
+  <link rel="stylesheet" href="assets/dgs-v2.css?v=20261028x" />
 </head>
 <body class="dgs-app dgs-truck-inventory-v2">
   <aside class="dgs-sidebar" id="dgs-sidebar">
@@ -74,7 +74,7 @@
         </label>
         <button type="submit" class="dgs-v2-btn dgs-v2-btn--primary" id="add-submit">Add Stock</button>
       </form>
-      <p class="dgs-wo-section-note dgs-truck-add-note">Moves good (AVAILABLE) stock onto this truck. Defective lines are never increased.</p>
+      <p class="dgs-wo-section-note dgs-truck-add-note">From lists buckets that have AVAILABLE qty for the selected part only. Defective lines are never increased.</p>
     </section>
 
     <section class="dgs-v2-list-panel dgs-truck-panel">
@@ -106,9 +106,9 @@
     </section>
   </div>
 
-  <script src="assets/auth.js?v=20261028w"></script>
-  <script src="assets/shell.js?v=20261028w"></script>
-  <script src="assets/truck-inventory.js?v=20261028w"></script>
+  <script src="assets/auth.js?v=20261028x"></script>
+  <script src="assets/shell.js?v=20261028x"></script>
+  <script src="assets/truck-inventory.js?v=20261028x"></script>
   <script>DGS.boot("truck_inventory", () => TruckInventoryApp.init());</script>
 </body>
 </html>

@@ -241,15 +241,17 @@ def truck_inventory(
 
 @router.get("/source-buckets")
 def source_buckets(
+    item: str = Query("", max_length=80),
     user: Annotated[dict[str, Any] | None, Depends(require_area_write(cat.TRUCK_INVENTORY_AREA))] = None,
 ):
-    """Good-stock From buckets for Add Stock."""
+    """Good-stock From buckets for Add Stock (per-item when ``item`` is set)."""
     del user
+    part = (item or "").strip()
     try:
-        buckets = stock.list_good_source_buckets()
+        buckets = stock.list_good_source_buckets(part or None)
     except Exception as exc:
         raise HTTPException(status_code=503, detail=f"database error: {exc}") from exc
-    return {"ok": True, "buckets": buckets}
+    return {"ok": True, "item": part or None, "buckets": buckets}
 
 
 @router.post("/add-stock")

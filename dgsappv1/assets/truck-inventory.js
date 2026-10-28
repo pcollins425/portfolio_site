@@ -79,6 +79,7 @@
         clearPartLabel();
       }
     }
+    loadSources(item).catch((err) => showError(err.message || String(err)));
   }
 
   async function runPartSearch() {
@@ -229,20 +230,25 @@
     if (!els.add_stock_panel) return;
     els.add_stock_panel.hidden = !(state.canWrite && state.vehicle);
     if (!els.add_from) return;
+    const part = selectedPartItem || ((els.add_item && els.add_item.value) || "").trim();
     const current = els.add_from.value;
-    const opts = state.sourceBuckets.length
-      ? state.sourceBuckets
-          .map((b) => {
-            const sel = b.bucket === current ? " selected" : "";
-            return `<option value="${esc(b.bucket)}"${sel}>${esc(
-              `${b.bucket} (${fmtNum(b.qty)} on hand)`
-            )}</option>`;
-          })
-          .join("")
-      : `<option value="">No source buckets</option>`;
-    els.add_from.innerHTML = state.sourceBuckets.length
-      ? `<option value="">Select source…</option>${opts}`
-      : opts;
+    if (!part) {
+      els.add_from.innerHTML = `<option value="">Select a part first…</option>`;
+      return;
+    }
+    if (!state.sourceBuckets.length) {
+      els.add_from.innerHTML = `<option value="">No AVAILABLE stock for this part</option>`;
+      return;
+    }
+    const opts = state.sourceBuckets
+      .map((b) => {
+        const sel = b.bucket === current ? " selected" : "";
+        return `<option value="${esc(b.bucket)}"${sel}>${esc(
+          `${b.bucket} (${fmtNum(b.qty)} available)`
+        )}</option>`;
+      })
+      .join("");
+    els.add_from.innerHTML = `<option value="">Select source…</option>${opts}`;
   }
 
   function renderTable() {
@@ -279,13 +285,22 @@
     }
   }
 
-  async function loadSources() {
+  async function loadSources(item) {
     if (!state.canWrite) {
       state.sourceBuckets = [];
       return;
     }
-    const data = await fetchJson("/api/truck-inventory/source-buckets");
+    const part = (item || "").trim();
+    if (!part) {
+      state.sourceBuckets = [];
+      renderAddPanel();
+      return;
+    }
+    const data = await fetchJson(
+      `/api/truck-inventory/source-buckets?item=${encodeURIComponent(part)}`
+    );
     state.sourceBuckets = data.buckets || [];
+    renderAddPanel();
   }
 
   async function load() {
@@ -305,15 +320,16 @@
     state.vehicles = data.vehicles || [];
     state.parts = data.parts || [];
     state.message = data.message || "";
-    if (state.canWrite && !state.sourceBuckets.length) {
-      await loadSources().catch(() => {
-        state.sourceBuckets = [];
-      });
-    }
     renderVehiclePicker();
     renderMeta();
     renderAddPanel();
     renderTable();
+    if (state.canWrite && selectedPartItem) {
+      await loadSources(selectedPartItem).catch(() => {
+        state.sourceBuckets = [];
+        renderAddPanel();
+      });
+    }
   }
 
   async function submitAdd(event) {
@@ -350,8 +366,9 @@
       selectedPartItem = "";
       if (els.add_item) els.add_item.value = "";
       clearPartLabel();
+      state.sourceBuckets = [];
       if (els.add_qty) els.add_qty.value = "1";
-      await loadSources();
+      renderAddPanel();
       await load();
     } catch (err) {
       showError(err.message || String(err));
@@ -366,6 +383,8 @@
         if (els.add_item.value.trim() !== selectedPartItem) {
           selectedPartItem = "";
           clearPartLabel();
+          state.sourceBuckets = [];
+          renderAddPanel();
         }
         clearTimeout(partSearchTimer);
         partSearchTimer = setTimeout(() => {
