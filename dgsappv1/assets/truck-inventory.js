@@ -7,6 +7,8 @@
     new URLSearchParams(window.location.search).get("api")?.replace(/\/$/, "") ||
     "https://api.collinsmediallc.com";
 
+  const LAST_TRUCK_KEY = "dgs_truck_inventory_last_bucket";
+
   const state = {
     browseAll: false,
     canWrite: false,
@@ -18,11 +20,32 @@
     sourceBuckets: [],
   };
 
+  function rememberTruck(code) {
+    const c = (code || "").trim().toUpperCase();
+    if (!/^V\d+$/i.test(c)) return;
+    try {
+      localStorage.setItem(LAST_TRUCK_KEY, c);
+    } catch (_) {
+      /* ignore quota / private mode */
+    }
+  }
+
+  function recalledTruck() {
+    try {
+      const c = (localStorage.getItem(LAST_TRUCK_KEY) || "").trim().toUpperCase();
+      return /^V\d+$/i.test(c) ? c : "";
+    } catch (_) {
+      return "";
+    }
+  }
+
   const els = {};
 
   function $(id) {
     return document.getElementById(id);
   }
+
+  const ADD_FOLD_KEY = "dgs_truck_add_stock_open";
 
   function cacheEls() {
     [
@@ -37,8 +60,11 @@
       "stat-count",
       "stat-vehicle",
       "truck-tbody",
+      "truck-cards",
       "list-status",
       "add-stock-panel",
+      "add-stock-toggle",
+      "add-stock-body",
       "add-stock-form",
       "add-to-label",
       "add-part-results",
@@ -50,6 +76,35 @@
     ].forEach((id) => {
       els[id.replace(/-/g, "_")] = $(id);
     });
+  }
+
+  function isPhoneOrTablet() {
+    return window.matchMedia("(max-width: 1366px)").matches;
+  }
+
+  function setAddFoldOpen(open) {
+    if (!els.add_stock_panel) return;
+    els.add_stock_panel.classList.toggle("is-collapsed", !open);
+    if (els.add_stock_toggle) {
+      els.add_stock_toggle.setAttribute("aria-expanded", open ? "true" : "false");
+    }
+    try {
+      localStorage.setItem(ADD_FOLD_KEY, open ? "1" : "0");
+    } catch (_) {
+      /* ignore */
+    }
+  }
+
+  function recalledAddFoldOpen() {
+    try {
+      const v = localStorage.getItem(ADD_FOLD_KEY);
+      if (v === "0") return false;
+      if (v === "1") return true;
+    } catch (_) {
+      /* ignore */
+    }
+    // Phone/tablet: start collapsed so stock list is usable immediately.
+    return !isPhoneOrTablet();
   }
 
   let partSearchTimer = null;
@@ -228,7 +283,12 @@
 
   function renderAddPanel() {
     if (!els.add_stock_panel) return;
-    els.add_stock_panel.hidden = !(state.canWrite && state.vehicle);
+    const show = !!(state.canWrite && state.vehicle);
+    els.add_stock_panel.hidden = !show;
+    if (show && !els.add_stock_panel.dataset.foldInit) {
+      setAddFoldOpen(recalledAddFoldOpen());
+      els.add_stock_panel.dataset.foldInit = "1";
+    }
     if (!els.add_from) return;
     const part = selectedPartItem || ((els.add_item && els.add_item.value) || "").trim();
     const current = els.add_from.value;
@@ -252,32 +312,50 @@
   }
 
   function renderTable() {
-    if (!els.truck_tbody) return;
+    const emptyMsg =
+      state.message ||
+      (state.vehicle
+        ? state.search
+          ? `No parts matched “${state.search}”.`
+          : "No stock on this vehicle."
+        : "No vehicle to show.");
     if (!state.parts.length) {
-      els.truck_tbody.innerHTML = "";
-      if (els.list_status) {
-        els.list_status.textContent =
-          state.message ||
-          (state.vehicle
-            ? state.search
-              ? `No parts matched “${state.search}”.`
-              : "No stock on this vehicle."
-            : "No vehicle to show.");
-      }
+      if (els.truck_tbody) els.truck_tbody.innerHTML = "";
+      if (els.truck_cards) els.truck_cards.innerHTML = "";
+      if (els.list_status) els.list_status.textContent = emptyMsg;
       return;
     }
-    els.truck_tbody.innerHTML = state.parts
-      .map((p) => {
-        const mfr = [p.mfr, p.mfrpartno].filter(Boolean).join(" · ");
-        return `<tr>
-          <td>${esc(p.item || "—")}</td>
-          <td>${esc(p.descrip || "—")}</td>
-          <td class="dgs-v2-col--desktop">${esc(mfr || "—")}</td>
-          <td>${esc(p.condition || "—")}</td>
-          <td class="dgs-v2-bin-qty">${esc(fmtNum(p.qty))}</td>
-        </tr>`;
-      })
-      .join("");
+    if (els.truck_tbody) {
+      els.truck_tbody.innerHTML = state.parts
+        .map((p) => {
+          const mfr = [p.mfr, p.mfrpartno].filter(Boolean).join(" · ");
+          return `<tr>
+            <td>${esc(p.item || "—")}</td>
+            <td>${esc(p.descrip || "—")}</td>
+            <td class="dgs-v2-col--desktop">${esc(mfr || "—")}</td>
+            <td>${esc(p.condition || "—")}</td>
+            <td class="dgs-v2-bin-qty">${esc(fmtNum(p.qty))}</td>
+          </tr>`;
+        })
+        .join("");
+    }
+    if (els.truck_cards) {
+      els.truck_cards.innerHTML = state.parts
+        .map((p) => {
+          const mfr = [p.mfr, p.mfrpartno].filter(Boolean).join(" · ");
+          return `<article class="dgs-wo-card dgs-truck-card">
+            <div class="dgs-wo-card-top">
+              <span class="dgs-wo-card-wo">${esc(p.item || "—")}</span>
+              <span class="dgs-truck-card-qty">${esc(fmtNum(p.qty))}</span>
+            </div>
+            <div class="dgs-wo-card-property">${esc(p.descrip || "—")}</div>
+            <div class="dgs-wo-card-meta">${esc(
+              [p.condition, mfr].filter(Boolean).join(" · ") || "—"
+            )}</div>
+          </article>`;
+        })
+        .join("");
+    }
     if (els.list_status) {
       els.list_status.textContent = `${state.parts.length} line${
         state.parts.length === 1 ? "" : "s"
@@ -311,6 +389,9 @@
       params.set("bucket", state.vehicle.code);
     } else if (els.vehicle_select && !els.vehicle_pick_wrap.hidden && els.vehicle_select.value) {
       params.set("bucket", els.vehicle_select.value);
+    } else {
+      const last = recalledTruck();
+      if (last) params.set("bucket", last);
     }
     const qs = params.toString();
     const data = await fetchJson(`/api/truck-inventory${qs ? `?${qs}` : ""}`);
@@ -320,6 +401,7 @@
     state.vehicles = data.vehicles || [];
     state.parts = data.parts || [];
     state.message = data.message || "";
+    if (state.vehicle && state.vehicle.code) rememberTruck(state.vehicle.code);
     renderVehiclePicker();
     renderMeta();
     renderAddPanel();
@@ -368,6 +450,7 @@
       clearPartLabel();
       state.sourceBuckets = [];
       if (els.add_qty) els.add_qty.value = "1";
+      if (isPhoneOrTablet()) setAddFoldOpen(false);
       renderAddPanel();
       await load();
     } catch (err) {
@@ -378,6 +461,12 @@
   }
 
   function wire() {
+    if (els.add_stock_toggle) {
+      els.add_stock_toggle.addEventListener("click", () => {
+        const open = els.add_stock_toggle.getAttribute("aria-expanded") !== "true";
+        setAddFoldOpen(open);
+      });
+    }
     if (els.add_item) {
       els.add_item.addEventListener("input", () => {
         if (els.add_item.value.trim() !== selectedPartItem) {

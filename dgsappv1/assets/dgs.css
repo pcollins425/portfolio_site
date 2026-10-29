@@ -3296,12 +3296,25 @@ body.wo-pr-open .dgs-capacity-drawer.is-wo-pr {
   justify-content: space-between;
   gap: 0.75rem;
 }
+/* Truck — shell scrolls stock; add stock folds on phone/tablet */
+body.dgs-truck-inventory-v2 .dgs-truck-shell {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  overflow: hidden;
+}
+body.dgs-truck-inventory-v2 .dgs-truck-metrics {
+  flex: 0 0 auto;
+  margin: 0;
+}
 .dgs-truck-toolbar {
   display: flex;
   flex-wrap: wrap;
   align-items: flex-end;
   gap: 0.65rem;
-  margin-bottom: 0.85rem;
+  flex: 0 0 auto;
 }
 .dgs-truck-toolbar .dgs-v2-input,
 .dgs-truck-toolbar input[type="search"],
@@ -3317,12 +3330,78 @@ body.wo-pr-open .dgs-capacity-drawer.is-wo-pr {
   color: #9aa6b8;
   font-size: 0.88rem;
   padding-bottom: 0.45rem;
+  min-width: 0;
 }
 .dgs-truck-panel {
-  margin-top: 0.35rem;
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+}
+.dgs-truck-stock-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+  padding-bottom: 0.35rem;
+}
+.dgs-truck-stock-scroll .dgs-v2-grid-wrap {
+  flex: none;
+  overflow: visible;
+}
+.dgs-truck-card-list {
+  display: none;
+  padding: 0.75rem 0.85rem;
+}
+.dgs-truck-card-list .dgs-wo-card {
+  cursor: default;
+}
+.dgs-truck-card-qty {
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  color: #f3f5f9;
 }
 .dgs-truck-add-panel {
-  margin-bottom: 0.5rem;
+  flex: 0 0 auto;
+  margin: 0;
+  overflow: visible;
+}
+.dgs-truck-fold-toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  width: 100%;
+  margin: 0;
+  padding: 0.85rem 1rem;
+  border: 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  background: var(--dgs-v2-card-head, #141922);
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.dgs-truck-fold-toggle .dgs-truck-vehicle-meta {
+  flex: 1;
+  padding-bottom: 0;
+}
+.dgs-truck-fold-chevron {
+  width: 0.55rem;
+  height: 0.55rem;
+  border-right: 2px solid #9aa6b8;
+  border-bottom: 2px solid #9aa6b8;
+  transform: rotate(45deg);
+  transition: transform 0.15s ease;
+  flex: 0 0 auto;
+}
+.dgs-truck-add-panel.is-collapsed .dgs-truck-fold-chevron {
+  transform: rotate(-135deg);
+}
+.dgs-truck-add-panel.is-collapsed .dgs-truck-add-body {
+  display: none;
 }
 .dgs-truck-add-form {
   display: flex;
@@ -3346,6 +3425,9 @@ body.wo-pr-open .dgs-capacity-drawer.is-wo-pr {
 }
 .dgs-truck-add-results {
   margin: 0;
+  max-height: 12rem;
+  overflow: auto;
+  -webkit-overflow-scrolling: touch;
 }
 .dgs-truck-add-results:not([hidden]) {
   padding: 0.35rem 0;
@@ -3357,6 +3439,93 @@ body.wo-pr-open .dgs-capacity-drawer.is-wo-pr {
 .dgs-truck-add-title {
   color: #f3f5f9;
   font-size: 0.9rem;
+  font-weight: 650;
+}
+
+@media (max-width: 1366px) {
+  body.dgs-truck-inventory-v2 .dgs-v2-main {
+    padding: 12px 14px 16px;
+    gap: 12px;
+  }
+
+  body.dgs-truck-inventory-v2 .dgs-truck-shell {
+    padding-bottom: var(--dgs-v2-system-nav-clear-tablet, 36px);
+  }
+
+  body.dgs-truck-inventory-v2 .dgs-v2-desktop-only {
+    display: none;
+  }
+
+  body.dgs-truck-inventory-v2 .dgs-truck-metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  body.dgs-truck-inventory-v2 .dgs-truck-metrics .dgs-v2-metric-value {
+    font-size: 1.35rem;
+  }
+
+  .dgs-truck-desktop-table {
+    display: none;
+  }
+
+  .dgs-truck-card-list {
+    display: flex;
+  }
+
+  .dgs-truck-toolbar {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.55rem;
+    align-items: stretch;
+  }
+
+  .dgs-truck-toolbar .dgs-truck-vehicle-pick,
+  .dgs-truck-toolbar .dgs-truck-vehicle-meta,
+  .dgs-truck-toolbar input[type="search"] {
+    grid-column: 1 / -1;
+    min-width: 0;
+    flex: none;
+  }
+
+  .dgs-truck-toolbar .dgs-truck-vehicle-meta {
+    padding: 0.15rem 0 0;
+  }
+
+  .dgs-truck-add-form {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    align-items: stretch;
+  }
+
+  .dgs-truck-add-part,
+  .dgs-truck-add-form > .dgs-v2-btn {
+    grid-column: 1 / -1;
+    min-width: 0;
+  }
+
+  .dgs-truck-add-form .dgs-wo-field {
+    min-width: 0;
+  }
+}
+
+@media (max-width: 900px) {
+  body.dgs-truck-inventory-v2.dgs-app {
+    height: 100dvh;
+    max-height: 100dvh;
+  }
+
+  body.dgs-truck-inventory-v2 .dgs-truck-shell {
+    padding-bottom: var(--dgs-v2-system-nav-clear, 28px);
+  }
+
+  .dgs-truck-fold-toggle {
+    min-height: 48px;
+  }
+
+  body.dgs-truck-inventory-v2 .dgs-v2-metrics .dgs-v2-metric {
+    padding: 12px 14px;
+  }
 }
 .dgs-v2-ok {
   padding: 12px 14px;

@@ -54,6 +54,28 @@
     }));
   }
 
+  /**
+   * Tech pilot nav lock (2026-10-29). Users with Field dashboard and without
+   * org executive browse (dgs_performance) only see this allowlist — even when
+   * a page is otherwise open to any signed-in employee.
+   *
+   * Dashboard → Operations → Field
+   * Inventory → Truck, Slot Master
+   * Commerce → Vendors, Casinos
+   * Operations → Projects, Work Orders
+   * Reference → Documents
+   */
+  const TECH_PILOT_NAV_IDS = new Set([
+    "dash-sub-operations",
+    "truck_inventory",
+    "slot_master",
+    "vendors",
+    "casinos",
+    "projects",
+    "work_orders",
+    "documents",
+  ]);
+
   const NAV_GROUPS = [
     {
       id: "revenue",
@@ -225,20 +247,33 @@
     return areas.some((a) => hasAreaRead(a));
   }
 
+  function usesTechPilotNav() {
+    // Field tech shape: has Field dashboard, no org Executive/Market browse.
+    // Uses permissions (not role name) so Dev View-As still previews correctly.
+    return hasAreaRead("dgs_tech_dashboard") && !hasAreaRead("dgs_performance");
+  }
+
+  function navItemAllowedForUser(item) {
+    if (!item) return true;
+    if (!hasAnyAreaRead(item.requireAnyOf)) return false;
+    if (usesTechPilotNav() && !TECH_PILOT_NAV_IDS.has(item.id)) return false;
+    return true;
+  }
+
   function visibleNavGroups() {
     return NAV_GROUPS.map((group) => {
       if (group.subgroups) {
         const subgroups = group.subgroups
           .map((sub) => ({
             ...sub,
-            items: sub.items.filter((item) => hasAnyAreaRead(item.requireAnyOf)),
+            items: sub.items.filter((item) => navItemAllowedForUser(item)),
           }))
           .filter((sub) => sub.items.length > 0);
         return { ...group, subgroups };
       }
       return {
         ...group,
-        items: (group.items || []).filter((item) => hasAnyAreaRead(item.requireAnyOf)),
+        items: (group.items || []).filter((item) => navItemAllowedForUser(item)),
       };
     }).filter((group) => (group.subgroups ? group.subgroups.length > 0 : group.items.length > 0));
   }
@@ -340,10 +375,21 @@
   }
 
   function pageAccessAllowed(activeId) {
-    const item = findNavItem(activeId);
-    if (!item) return true;
-    if (!item.requireAnyOf) return true;
-    return hasAnyAreaRead(item.requireAnyOf);
+    if (!activeId) {
+      // Hubs that boot with null (e.g. asset-hub) stay out of the tech pilot set.
+      return !usesTechPilotNav();
+    }
+    // Dashboard shell is allowed for pilot techs; initDashboardPage remaps to Field.
+    if (activeId === "dashboard") {
+      if (!usesTechPilotNav()) return true;
+      return hasAreaRead("dgs_tech_dashboard");
+    }
+    const resolved = resolveNavActiveId(activeId);
+    const item = findNavItem(resolved) || findNavItem(activeId);
+    if (!item) {
+      return !usesTechPilotNav();
+    }
+    return navItemAllowedForUser(item);
   }
 
   function usesMobileTopNav() {

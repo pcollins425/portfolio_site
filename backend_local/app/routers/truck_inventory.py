@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
+import json
 import os
 import re
+import threading
 import time
 from datetime import date, datetime
 from decimal import Decimal
+from pathlib import Path
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -23,8 +26,16 @@ router = APIRouter(
 )
 
 _VEHICLE_CODE = re.compile(r"^V\d+$", re.IGNORECASE)
-_VEHICLE_CACHE: dict[str, Any] = {"rows": None, "expires": 0.0}
-_VEHICLE_CACHE_TTL_SEC = 120.0
+# Same token scrub as work_orders part-catalog (AppSheet FIND tokens).
+_PART_SEARCH_TOKEN = re.compile(r"[^a-zA-Z0-9._/-]+")
+_VEHICLE_CACHE: dict[str, Any] = {"rows": None, "fetched_at": 0.0}
+# Serve stale disk/memory immediately; refresh from AppSheet in the background.
+_VEHICLE_SOFT_TTL_SEC = 5 * 60.0
+_VEHICLE_HARD_TTL_SEC = 24 * 60 * 60.0
+# Docker layout: /app/app/routers/… → /app/data (WORKDIR /app, COPY data ./data).
+_VEHICLE_DISK = Path(__file__).resolve().parents[2] / "data" / "truck_vehicles_cache.json"
+_vehicle_refresh_lock = threading.Lock()
+_vehicle_refreshing = False
 
 
 class AddStockIn(BaseModel):
@@ -70,24 +81,9 @@ def _location_code(row: dict[str, Any]) -> str:
     return (row.get("Name") or "").strip()
 
 
-def _vehicle_rows(*, force: bool = False) -> list[dict[str, str]]:
-    now = time.time()
-    cached = _VEHICLE_CACHE.get("rows")
-    if (
-        not force
-        and cached is not None
-        and float(_VEHICLE_CACHE.get("expires") or 0) > now
-    ):
-        return list(cached)
-    try:
-        rows = appsheet_client.find_rows(
-            appsheet_client.LOCATIONS_TABLE,
-            selector='FILTER(Locations, [Type] = "Vehicle")',
-        )
-    except appsheet_client.AppSheetError as exc:
-        raise HTTPException(status_code=502, detail=f"Locations lookup failed: {exc}") from exc
+def _normalize_vehicle_rows(rows: list[dict[str, Any]] | None) -> list[dict[str, str]]:
     out: list[dict[str, str]] = []
-    for row in rows:
+    for row in rows or []:
         code = _location_code(row)
         if not _VEHICLE_CODE.match(code):
             continue
@@ -100,9 +96,120 @@ def _vehicle_rows(*, force: bool = False) -> list[dict[str, str]]:
             }
         )
     out.sort(key=lambda r: r["code"])
-    _VEHICLE_CACHE["rows"] = out
-    _VEHICLE_CACHE["expires"] = now + _VEHICLE_CACHE_TTL_SEC
     return out
+
+
+def _read_vehicle_disk() -> tuple[list[dict[str, str]] | None, float]:
+    try:
+        raw = json.loads(_VEHICLE_DISK.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError, TypeError, ValueError):
+        return None, 0.0
+    rows = raw.get("rows") if isinstance(raw, dict) else None
+    fetched_at = float((raw or {}).get("fetched_at") or 0) if isinstance(raw, dict) else 0.0
+    if not isinstance(rows, list) or not rows:
+        return None, 0.0
+    cleaned: list[dict[str, str]] = []
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        code = str(row.get("code") or "").strip().upper()
+        if not _VEHICLE_CODE.match(code):
+            continue
+        cleaned.append(
+            {
+                "code": code,
+                "name": str(row.get("name") or "").strip(),
+                "email": str(row.get("email") or "").strip().lower(),
+                "initials": str(row.get("initials") or "").strip(),
+            }
+        )
+    cleaned.sort(key=lambda r: r["code"])
+    return (cleaned or None), fetched_at
+
+
+def _write_vehicle_disk(rows: list[dict[str, str]], fetched_at: float) -> None:
+    try:
+        _VEHICLE_DISK.parent.mkdir(parents=True, exist_ok=True)
+        _VEHICLE_DISK.write_text(
+            json.dumps({"fetched_at": fetched_at, "rows": rows}, indent=2),
+            encoding="utf-8",
+        )
+    except OSError:
+        pass
+
+
+def _fetch_vehicles_from_appsheet() -> list[dict[str, str]]:
+    try:
+        rows = appsheet_client.find_rows(
+            appsheet_client.LOCATIONS_TABLE,
+            selector='FILTER(Locations, [Type] = "Vehicle")',
+        )
+    except appsheet_client.AppSheetError as exc:
+        raise HTTPException(status_code=502, detail=f"Locations lookup failed: {exc}") from exc
+    return _normalize_vehicle_rows(rows)
+
+
+def _store_vehicles(rows: list[dict[str, str]]) -> list[dict[str, str]]:
+    fetched_at = time.time()
+    _VEHICLE_CACHE["rows"] = rows
+    _VEHICLE_CACHE["fetched_at"] = fetched_at
+    _write_vehicle_disk(rows, fetched_at)
+    return list(rows)
+
+
+def _refresh_vehicles_background() -> None:
+    global _vehicle_refreshing
+    try:
+        rows = _fetch_vehicles_from_appsheet()
+        _store_vehicles(rows)
+    except Exception:
+        pass
+    finally:
+        with _vehicle_refresh_lock:
+            _vehicle_refreshing = False
+
+
+def _schedule_vehicle_refresh() -> None:
+    global _vehicle_refreshing
+    with _vehicle_refresh_lock:
+        if _vehicle_refreshing:
+            return
+        _vehicle_refreshing = True
+    threading.Thread(target=_refresh_vehicles_background, daemon=True).start()
+
+
+def _vehicle_rows(*, force: bool = False) -> list[dict[str, str]]:
+    """Vehicle roster for picker / ownership checks.
+
+    AppSheet Locations pull is ~2–3s, so we serve memory/disk cache immediately and
+    refresh in the background when soft-stale.
+    """
+    now = time.time()
+    cached = _VEHICLE_CACHE.get("rows")
+    fetched_at = float(_VEHICLE_CACHE.get("fetched_at") or 0)
+    if cached is None:
+        disk_rows, disk_at = _read_vehicle_disk()
+        if disk_rows:
+            cached = disk_rows
+            fetched_at = disk_at
+            _VEHICLE_CACHE["rows"] = disk_rows
+            _VEHICLE_CACHE["fetched_at"] = disk_at
+
+    age = now - fetched_at if fetched_at else None
+    if force or cached is None:
+        rows = _fetch_vehicles_from_appsheet()
+        return _store_vehicles(rows)
+
+    if age is not None and age > _VEHICLE_SOFT_TTL_SEC:
+        _schedule_vehicle_refresh()
+    if age is not None and age > _VEHICLE_HARD_TTL_SEC:
+        # Extremely stale — still return it, but force a refresh attempt.
+        _schedule_vehicle_refresh()
+    return list(cached)
+
+
+# Warm roster at import so the first browser hit after restart rarely waits on AppSheet.
+_schedule_vehicle_refresh()
 
 
 def _can_browse_all(user: dict[str, Any] | None) -> bool:
@@ -252,22 +359,54 @@ def truck_inventory(
     }
 
 
+def _part_search_tokens(needle: str) -> list[str]:
+    """AND'd search tokens — same rules as work_orders ``_parts_search_selector``."""
+    cleaned = (needle or "").strip()
+    raw_tokens = [t for t in re.split(r"\s+", cleaned) if t]
+    tokens: list[str] = []
+    for raw in raw_tokens:
+        tok = _PART_SEARCH_TOKEN.sub("", raw).lower()
+        if len(tok) >= 2:
+            tokens.append(tok)
+        elif len(tok) == 1 and tokens:
+            tokens.append(tok)
+    if not tokens:
+        fallback = _PART_SEARCH_TOKEN.sub("", cleaned).lower()
+        if len(fallback) >= 2:
+            tokens = [fallback]
+    return tokens[:6]
+
+
 @router.get("/parts-search")
 def parts_search(
     q: str = Query("", max_length=80),
     limit: int = Query(25, ge=1, le=50),
     user: Annotated[dict[str, Any] | None, Depends(require_area_write(cat.TRUCK_INVENTORY_AREA))] = None,
 ):
-    """Fast SQL part picker for Add Stock (avoids AppSheet Parts search latency)."""
+    """Fast SQL part picker for Add Stock (tokenized like WO / AppSheet)."""
     del user
     needle = (q or "").strip()
     if len(needle) < 2:
         return {"ok": True, "q": needle or None, "parts": [], "count": 0}
-    like = f"%{needle}%"
+    tokens = _part_search_tokens(needle)
+    if not tokens:
+        return {"ok": True, "q": needle, "parts": [], "count": 0}
     lim = max(1, min(int(limit), 50))
+    token_clauses: list[str] = []
+    params: list[Any] = [lim]
+    for tok in tokens:
+        like = f"%{tok}%"
+        token_clauses.append(
+            "("
+            "i.item LIKE %s OR i.descrip LIKE %s OR i.mfr LIKE %s OR i.mfrpartno LIKE %s"
+            ")"
+        )
+        params.extend([like, like, like, like])
+    # Prefer exact / prefix hits on the full typed string when present.
+    params.extend([needle, f"{needle}%"])
     try:
         rows = _field_query(
-            """
+            f"""
             SELECT TOP (%s)
                 i.item,
                 i.descrip,
@@ -278,19 +417,14 @@ def parts_search(
             WHERE sw.item IS NULL
               AND i.item IS NOT NULL
               AND LTRIM(RTRIM(i.item)) <> N''
-              AND (
-                    i.item LIKE %s
-                 OR i.descrip LIKE %s
-                 OR i.mfr LIKE %s
-                 OR i.mfrpartno LIKE %s
-              )
+              AND {' AND '.join(token_clauses)}
             ORDER BY
                 CASE WHEN i.item = %s THEN 0
                      WHEN i.item LIKE %s THEN 1
                      ELSE 2 END,
                 i.item
             """,
-            (lim, like, like, like, like, needle, f"{needle}%"),
+            tuple(params),
         )
     except Exception as exc:
         raise HTTPException(status_code=503, detail=f"database error: {exc}") from exc
