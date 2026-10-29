@@ -4,8 +4,8 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>Truck — DGS Application</title>
-  <link rel="stylesheet" href="assets/dgs.css?v=20261029i" />
-  <link rel="stylesheet" href="assets/dgs-v2.css?v=20261029i" />
+  <link rel="stylesheet" href="assets/dgs.css?v=20261029j" />
+  <link rel="stylesheet" href="assets/dgs-v2.css?v=20261029j" />
 </head>
 <body class="dgs-app dgs-truck-inventory-v2">
   <aside class="dgs-sidebar" id="dgs-sidebar">
@@ -54,102 +54,118 @@
         <button type="button" class="dgs-v2-btn" id="btn-open-inv-qty">Inv Qty</button>
       </div>
 
-      <section class="dgs-v2-list-panel dgs-truck-panel">
-        <div class="dgs-v2-toolbar dgs-truck-toolbar">
-          <label class="dgs-truck-vehicle-pick" id="vehicle-pick-wrap" hidden>
-            <span class="dgs-wo-field-label">Vehicle</span>
-            <select id="vehicle-select" class="dgs-v2-input" aria-label="Vehicle"></select>
-          </label>
-          <div class="dgs-truck-vehicle-meta" id="vehicle-meta">Loading vehicle…</div>
-          <input id="search-input" type="search" placeholder="Part #, description, mfr…" autocomplete="off" />
-          <button id="search-btn" type="button" class="dgs-v2-btn dgs-v2-btn--primary">Search</button>
-          <button id="clear-search" type="button" class="dgs-v2-btn">Clear</button>
-        </div>
-        <div class="dgs-truck-stock-scroll">
-          <div class="dgs-v2-grid-wrap dgs-truck-stock-table">
-            <table class="dgs-v2-grid" id="truck-table">
-              <thead>
-                <tr>
-                  <th class="dgs-truck-col-item">Item</th>
-                  <th class="dgs-truck-col-desc">Description</th>
-                  <th class="dgs-v2-col--desktop dgs-truck-col-mfr">Mfr</th>
-                  <th class="dgs-truck-col-cond">Cond</th>
-                  <th class="dgs-v2-bin-qty dgs-truck-col-qty">Qty</th>
-                </tr>
-              </thead>
-              <tbody id="truck-tbody"></tbody>
-            </table>
+      <div class="dgs-v2-split">
+        <section class="dgs-v2-list-panel dgs-truck-panel">
+          <div class="dgs-v2-toolbar dgs-truck-toolbar">
+            <label class="dgs-truck-vehicle-pick" id="vehicle-pick-wrap" hidden>
+              <span class="dgs-wo-field-label">Vehicle</span>
+              <select id="vehicle-select" class="dgs-v2-input" aria-label="Vehicle"></select>
+            </label>
+            <div class="dgs-truck-vehicle-meta" id="vehicle-meta">Loading vehicle…</div>
+            <input id="search-input" type="search" placeholder="Part #, description, mfr…" autocomplete="off" />
+            <button id="search-btn" type="button" class="dgs-v2-btn dgs-v2-btn--primary">Search</button>
+            <button id="clear-search" type="button" class="dgs-v2-btn">Clear</button>
           </div>
-        </div>
-        <div class="dgs-v2-list-status" id="list-status"></div>
-      </section>
+          <div class="dgs-truck-stock-scroll">
+            <div class="dgs-v2-grid-wrap dgs-truck-stock-table">
+              <table class="dgs-v2-grid" id="truck-table">
+                <thead>
+                  <tr>
+                    <th class="dgs-truck-col-item">Item</th>
+                    <th class="dgs-truck-col-desc">Description</th>
+                    <th class="dgs-v2-col--desktop dgs-truck-col-mfr">Mfr</th>
+                    <th class="dgs-truck-col-cond">Cond</th>
+                    <th class="dgs-v2-bin-qty dgs-truck-col-qty">Qty</th>
+                  </tr>
+                </thead>
+                <tbody id="truck-tbody"></tbody>
+              </table>
+            </div>
+          </div>
+          <div class="dgs-v2-list-status" id="list-status"></div>
+        </section>
+
+        <div id="truck-detail-backdrop" class="dgs-v2-detail-backdrop" hidden></div>
+
+        <aside class="dgs-v2-detail" id="detail-panel" aria-hidden="false">
+          <div class="dgs-v2-detail-bar dgs-v2-phone-only" id="detail-bar" hidden>
+            <span class="dgs-v2-detail-bar-title" id="detail-bar-title">Add Stock</span>
+            <button type="button" id="detail-close" class="dgs-v2-drawer-close" aria-label="Close detail">×</button>
+          </div>
+
+          <div class="dgs-v2-detail-body empty" id="detail-body">
+            <p id="detail-empty-msg">Open Add Stock or Inv Qty to manage this truck.</p>
+            <div id="detail-content" hidden>
+              <div class="dgs-v2-sm-detail-head">
+                <div>
+                  <p class="dgs-v2-eyebrow" id="detail-eyebrow">Add Stock</p>
+                  <p class="dgs-v2-subtitle" id="detail-subtitle"></p>
+                </div>
+                <button type="button" class="dgs-v2-drawer-close dgs-v2-desktop-only" id="detail-desktop-close" aria-label="Close">×</button>
+              </div>
+
+              <div id="truck-chip" class="dgs-truck-chip" hidden>Current inventory updated</div>
+
+              <div id="panel-add-stock" class="dgs-truck-sheet-panel" hidden>
+                <form id="add-stock-form" class="dgs-truck-add-form">
+                  <div class="dgs-truck-add-part">
+                    <label class="dgs-wo-field">
+                      <span class="dgs-wo-field-label">Part</span>
+                      <input id="add-item" type="search" class="dgs-v2-input" required autocomplete="off" placeholder="Search part # or name" />
+                    </label>
+                    <div id="add-part-results" class="dgs-wo-pr-results dgs-truck-add-results" hidden></div>
+                    <p class="dgs-wo-section-note" id="add-part-label" hidden></p>
+                  </div>
+                  <label class="dgs-wo-field">
+                    <span class="dgs-wo-field-label">Qty</span>
+                    <input id="add-qty" type="number" class="dgs-v2-input" min="1" step="1" value="1" required />
+                  </label>
+                  <label class="dgs-wo-field">
+                    <span class="dgs-wo-field-label">From</span>
+                    <select id="add-from" class="dgs-v2-input" required>
+                      <option value="">Select a part first…</option>
+                    </select>
+                  </label>
+                  <button type="submit" class="dgs-v2-btn dgs-v2-btn--primary" id="add-submit">Add Stock</button>
+                </form>
+                <p class="dgs-wo-section-note dgs-truck-add-note">Moves AVAILABLE stock from a warehouse bucket onto this truck. Defective is never increased.</p>
+              </div>
+
+              <div id="panel-inv-qty" class="dgs-truck-sheet-panel" hidden>
+                <section class="dgs-truck-inv-block">
+                  <div class="dgs-v2-section-label">Add Part</div>
+                  <form id="inv-add-form" class="dgs-truck-add-form">
+                    <div class="dgs-truck-add-part">
+                      <label class="dgs-wo-field">
+                        <span class="dgs-wo-field-label">Part</span>
+                        <input id="inv-item" type="search" class="dgs-v2-input" required autocomplete="off" placeholder="Search part # or name" />
+                      </label>
+                      <div id="inv-part-results" class="dgs-wo-pr-results dgs-truck-add-results" hidden></div>
+                      <p class="dgs-wo-section-note" id="inv-part-label" hidden></p>
+                    </div>
+                    <label class="dgs-wo-field">
+                      <span class="dgs-wo-field-label">Qty on truck</span>
+                      <input id="inv-qty" type="number" class="dgs-v2-input" min="0" step="1" value="1" required />
+                    </label>
+                    <button type="submit" class="dgs-v2-btn dgs-v2-btn--primary" id="inv-add-submit">Set Qty</button>
+                  </form>
+                  <p class="dgs-wo-section-note">Sets truck AVAILABLE only — does not pull from a warehouse location.</p>
+                </section>
+                <section class="dgs-truck-inv-block">
+                  <div class="dgs-v2-section-label">Current parts</div>
+                  <div id="inv-current-list" class="dgs-truck-inv-list"></div>
+                </section>
+              </div>
+            </div>
+          </div>
+        </aside>
+      </div>
     </div>
   </div>
 
-  <div id="truck-sheet-backdrop" class="dgs-truck-sheet-backdrop" hidden></div>
-  <aside id="truck-sheet" class="dgs-truck-sheet" hidden aria-modal="true" role="dialog">
-    <div class="dgs-truck-sheet-bar">
-      <h2 id="truck-sheet-title">Add Stock</h2>
-      <button type="button" class="dgs-v2-btn" id="truck-sheet-close">Close</button>
-    </div>
-    <p class="dgs-truck-sheet-sub" id="truck-sheet-sub"></p>
-    <div id="truck-chip" class="dgs-truck-chip" hidden>Current inventory updated</div>
-
-    <div id="panel-add-stock" class="dgs-truck-sheet-panel" hidden>
-      <form id="add-stock-form" class="dgs-truck-add-form">
-        <div class="dgs-truck-add-part">
-          <label class="dgs-wo-field">
-            <span class="dgs-wo-field-label">Part</span>
-            <input id="add-item" type="search" class="dgs-v2-input" required autocomplete="off" placeholder="Search part # or name" />
-          </label>
-          <div id="add-part-results" class="dgs-wo-pr-results dgs-truck-add-results" hidden></div>
-          <p class="dgs-wo-section-note" id="add-part-label" hidden></p>
-        </div>
-        <label class="dgs-wo-field">
-          <span class="dgs-wo-field-label">Qty</span>
-          <input id="add-qty" type="number" class="dgs-v2-input" min="1" step="1" value="1" required />
-        </label>
-        <label class="dgs-wo-field">
-          <span class="dgs-wo-field-label">From</span>
-          <select id="add-from" class="dgs-v2-input" required>
-            <option value="">Select a part first…</option>
-          </select>
-        </label>
-        <button type="submit" class="dgs-v2-btn dgs-v2-btn--primary" id="add-submit">Add Stock</button>
-      </form>
-      <p class="dgs-wo-section-note dgs-truck-add-note">Moves AVAILABLE stock from a warehouse bucket onto this truck. Defective is never increased.</p>
-    </div>
-
-    <div id="panel-inv-qty" class="dgs-truck-sheet-panel" hidden>
-      <section class="dgs-truck-inv-block">
-        <h3 class="dgs-truck-inv-heading">Add Part</h3>
-        <form id="inv-add-form" class="dgs-truck-add-form">
-          <div class="dgs-truck-add-part">
-            <label class="dgs-wo-field">
-              <span class="dgs-wo-field-label">Part</span>
-              <input id="inv-item" type="search" class="dgs-v2-input" required autocomplete="off" placeholder="Search part # or name" />
-            </label>
-            <div id="inv-part-results" class="dgs-wo-pr-results dgs-truck-add-results" hidden></div>
-            <p class="dgs-wo-section-note" id="inv-part-label" hidden></p>
-          </div>
-          <label class="dgs-wo-field">
-            <span class="dgs-wo-field-label">Qty on truck</span>
-            <input id="inv-qty" type="number" class="dgs-v2-input" min="0" step="1" value="1" required />
-          </label>
-          <button type="submit" class="dgs-v2-btn dgs-v2-btn--primary" id="inv-add-submit">Set Qty</button>
-        </form>
-        <p class="dgs-wo-section-note">Sets truck AVAILABLE only — does not pull from a warehouse location.</p>
-      </section>
-      <section class="dgs-truck-inv-block">
-        <h3 class="dgs-truck-inv-heading">Current parts</h3>
-        <div id="inv-current-list" class="dgs-truck-inv-list"></div>
-      </section>
-    </div>
-  </aside>
-
-  <script src="assets/auth.js?v=20261029i"></script>
-  <script src="assets/shell.js?v=20261029i"></script>
-  <script src="assets/truck-inventory.js?v=20261029i"></script>
+  <script src="assets/auth.js?v=20261029j"></script>
+  <script src="assets/shell.js?v=20261029j"></script>
+  <script src="assets/truck-inventory.js?v=20261029j"></script>
   <script>DGS.boot("truck_inventory", () => TruckInventoryApp.init());</script>
 </body>
 </html>

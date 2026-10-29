@@ -8,6 +8,7 @@
     "https://api.collinsmediallc.com";
 
   const LAST_TRUCK_KEY = "dgs_truck_inventory_last_bucket";
+  const COMPACT_MQ = window.matchMedia("(max-width: 1366px)");
 
   const state = {
     browseAll: false,
@@ -19,6 +20,7 @@
     message: "",
     sourceBuckets: [],
     sheet: null, // "add-stock" | "inv-qty" | null
+    phoneDetailOpen: false,
   };
 
   const els = {};
@@ -49,11 +51,17 @@
       "truck-actions",
       "btn-open-add-stock",
       "btn-open-inv-qty",
-      "truck-sheet-backdrop",
-      "truck-sheet",
-      "truck-sheet-title",
-      "truck-sheet-sub",
-      "truck-sheet-close",
+      "truck-detail-backdrop",
+      "detail-panel",
+      "detail-bar",
+      "detail-bar-title",
+      "detail-close",
+      "detail-desktop-close",
+      "detail-body",
+      "detail-empty-msg",
+      "detail-content",
+      "detail-eyebrow",
+      "detail-subtitle",
       "truck-chip",
       "panel-add-stock",
       "panel-inv-qty",
@@ -174,37 +182,68 @@
     );
   }
 
+  function isCompact() {
+    return COMPACT_MQ.matches;
+  }
+
+  function setDetailEmpty(empty) {
+    if (!els.detail_body) return;
+    els.detail_body.classList.toggle("empty", empty);
+    if (els.detail_content) els.detail_content.hidden = empty;
+    if (els.detail_empty_msg) els.detail_empty_msg.hidden = !empty;
+  }
+
+  function openPhoneDetail() {
+    if (!isCompact() || !els.detail_panel) return;
+    state.phoneDetailOpen = true;
+    document.body.classList.add("truck-detail-open");
+    els.detail_panel.classList.add("dgs-v2-detail--sheet");
+    els.detail_panel.setAttribute("aria-hidden", "false");
+    if (els.truck_detail_backdrop) els.truck_detail_backdrop.hidden = false;
+    if (els.detail_bar) els.detail_bar.hidden = false;
+  }
+
+  function closePhoneDetail() {
+    state.phoneDetailOpen = false;
+    document.body.classList.remove("truck-detail-open");
+    if (els.detail_panel) {
+      els.detail_panel.classList.remove("dgs-v2-detail--sheet");
+      if (isCompact()) els.detail_panel.setAttribute("aria-hidden", "true");
+      else els.detail_panel.setAttribute("aria-hidden", "false");
+    }
+    if (els.truck_detail_backdrop) els.truck_detail_backdrop.hidden = true;
+    if (els.detail_bar) els.detail_bar.hidden = true;
+  }
+
   function openSheet(kind) {
     state.sheet = kind;
-    document.body.classList.add("truck-sheet-open");
-    if (els.truck_sheet_backdrop) els.truck_sheet_backdrop.hidden = false;
-    if (els.truck_sheet) els.truck_sheet.hidden = false;
     if (els.panel_add_stock) els.panel_add_stock.hidden = kind !== "add-stock";
     if (els.panel_inv_qty) els.panel_inv_qty.hidden = kind !== "inv-qty";
     const code = (state.vehicle && state.vehicle.code) || "—";
-    if (els.truck_sheet_title) {
-      els.truck_sheet_title.textContent = kind === "inv-qty" ? "Inv Qty" : "Add Stock";
-    }
-    if (els.truck_sheet_sub) {
-      els.truck_sheet_sub.textContent =
-        kind === "inv-qty"
-          ? `Clarify AVAILABLE counts on ${code}`
-          : `Transfer stock onto ${code}`;
-    }
+    const title = kind === "inv-qty" ? "Inv Qty" : "Add Stock";
+    const sub =
+      kind === "inv-qty"
+        ? `Clarify AVAILABLE counts on ${code}`
+        : `Transfer stock onto ${code}`;
+    if (els.detail_eyebrow) els.detail_eyebrow.textContent = title;
+    if (els.detail_bar_title) els.detail_bar_title.textContent = title;
+    if (els.detail_subtitle) els.detail_subtitle.textContent = sub;
+    setDetailEmpty(false);
+    if (isCompact()) openPhoneDetail();
+    else if (els.detail_panel) els.detail_panel.setAttribute("aria-hidden", "false");
     if (kind === "add-stock") renderAddFrom();
     if (kind === "inv-qty") renderInvCurrent();
   }
 
   function closeSheet() {
     state.sheet = null;
-    document.body.classList.remove("truck-sheet-open");
-    if (els.truck_sheet_backdrop) els.truck_sheet_backdrop.hidden = true;
-    if (els.truck_sheet) els.truck_sheet.hidden = true;
     if (els.panel_add_stock) els.panel_add_stock.hidden = true;
     if (els.panel_inv_qty) els.panel_inv_qty.hidden = true;
     if (els.truck_chip) els.truck_chip.hidden = true;
-    if (els.truck_sheet_sub) els.truck_sheet_sub.textContent = "";
+    if (els.detail_subtitle) els.detail_subtitle.textContent = "";
     clearTimeout(chipTimer);
+    closePhoneDetail();
+    setDetailEmpty(true);
   }
 
   function clearAddPartLabel() {
@@ -602,15 +641,31 @@
     if (els.btn_open_inv_qty) {
       els.btn_open_inv_qty.addEventListener("click", () => openSheet("inv-qty"));
     }
-    if (els.truck_sheet_close) {
-      els.truck_sheet_close.addEventListener("click", () => closeSheet());
+    if (els.detail_close) {
+      els.detail_close.addEventListener("click", () => closeSheet());
     }
-    if (els.truck_sheet_backdrop) {
-      els.truck_sheet_backdrop.addEventListener("click", () => closeSheet());
+    if (els.detail_desktop_close) {
+      els.detail_desktop_close.addEventListener("click", () => closeSheet());
+    }
+    if (els.truck_detail_backdrop) {
+      els.truck_detail_backdrop.addEventListener("click", () => closeSheet());
     }
     document.addEventListener("keydown", (event) => {
       if (event.key === "Escape" && state.sheet) closeSheet();
     });
+    const onCompactChange = () => {
+      if (!state.sheet) {
+        closePhoneDetail();
+        return;
+      }
+      if (isCompact()) openPhoneDetail();
+      else closePhoneDetail();
+    };
+    if (typeof COMPACT_MQ.addEventListener === "function") {
+      COMPACT_MQ.addEventListener("change", onCompactChange);
+    } else if (typeof COMPACT_MQ.addListener === "function") {
+      COMPACT_MQ.addListener(onCompactChange);
+    }
 
     if (els.add_item) {
       els.add_item.addEventListener("input", () => {
@@ -727,6 +782,10 @@
   async function init() {
     cacheEls();
     wire();
+    setDetailEmpty(true);
+    if (isCompact() && els.detail_panel) {
+      els.detail_panel.setAttribute("aria-hidden", "true");
+    }
     try {
       await load();
     } catch (err) {

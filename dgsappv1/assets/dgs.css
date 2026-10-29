@@ -3318,62 +3318,39 @@ body.dgs-truck-inventory-v2 .dgs-truck-metrics {
 .dgs-truck-actions .dgs-v2-btn {
   flex: 1 1 8rem;
 }
-.dgs-truck-sheet-backdrop,
-.dgs-truck-sheet[hidden],
-.dgs-truck-sheet-backdrop[hidden] {
-  display: none !important;
+/* Detail card: same split + panel setup as Slot Master / Parts. */
+body.dgs-truck-inventory-v2 .dgs-v2-split {
+  flex: 1;
+  min-height: 0;
 }
-.dgs-truck-sheet-backdrop:not([hidden]) {
-  display: block;
-  position: fixed;
-  inset: 0;
-  z-index: 40;
-  background: rgba(0, 0, 0, 0.55);
+body.dgs-truck-inventory-v2 .dgs-v2-phone-only {
+  display: none;
 }
-/* Desktop: detail-card drawer (not a bottom sheet). */
-.dgs-truck-sheet:not([hidden]) {
+body.dgs-truck-inventory-v2 .dgs-v2-detail-backdrop {
+  display: none;
+}
+body.dgs-truck-inventory-v2 .dgs-v2-sm-detail-head {
   display: flex;
-  flex-direction: column;
-  position: fixed;
-  top: 72px;
-  right: 24px;
-  bottom: 24px;
-  left: auto;
-  width: min(440px, calc(100vw - 48px));
-  z-index: 45;
-  max-height: none;
-  background: var(--dgs-v2-card, #1a1f2a);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 16px;
-  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.45);
-  color: var(--dgs-v2-text, #c5cdd9);
-  overflow: hidden;
-  padding-bottom: 0;
-}
-.dgs-truck-sheet-bar {
-  display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
-  gap: 0.75rem;
-  padding: 0.75rem 0.85rem;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-  background: var(--dgs-v2-card-head, #141922);
-  flex: 0 0 auto;
+  gap: 12px;
+  padding: 4px 2px 10px;
+  border-bottom: 1px solid var(--dgs-v2-border, rgba(255, 255, 255, 0.1));
 }
-.dgs-truck-sheet-bar h2 {
-  margin: 0;
-  font-size: 1rem;
-  color: #f3f5f9;
-}
-.dgs-truck-sheet-sub {
-  margin: 0;
-  padding: 0.35rem 0.85rem 0;
-  font-size: 0.8rem;
-  color: #8b96a8;
-  flex: 0 0 auto;
+body.dgs-truck-inventory-v2 .dgs-v2-drawer-close {
+  width: 36px;
+  height: 36px;
+  border: 1px solid var(--dgs-v2-border, rgba(255, 255, 255, 0.14));
+  border-radius: 8px;
+  background: transparent;
+  color: var(--dgs-v2-text-muted, #9aa5b5);
+  font-size: 22px;
+  line-height: 1;
+  cursor: pointer;
+  flex-shrink: 0;
 }
 .dgs-truck-chip {
-  margin: 0.45rem 0.85rem 0;
+  margin: 0;
   padding: 0.4rem 0.65rem;
   border-radius: 999px;
   background: rgba(34, 197, 94, 0.16);
@@ -3385,11 +3362,16 @@ body.dgs-truck-inventory-v2 .dgs-truck-metrics {
   flex: 0 0 auto;
 }
 .dgs-truck-sheet-panel {
-  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
   min-height: 0;
-  overflow: auto;
-  -webkit-overflow-scrolling: touch;
-  padding: 0.65rem 0.85rem 1rem;
+}
+.dgs-truck-sheet-panel .dgs-truck-add-form {
+  padding: 0.35rem 0 0.2rem;
+}
+.dgs-truck-sheet-panel .dgs-truck-add-note {
+  padding: 0 0 0.5rem;
 }
 .dgs-truck-inv-block {
   margin-bottom: 1rem;
@@ -3596,20 +3578,99 @@ body.dgs-truck-inventory-v2 .dgs-truck-metrics {
     border-bottom: 1px solid rgba(255, 255, 255, 0.08);
   }
 
-  /* Phone/tablet: bottom sheet */
-  body.dgs-truck-inventory-v2 .dgs-truck-sheet:not([hidden]) {
-    top: auto;
-    right: 0;
-    left: 0;
-    bottom: 0;
-    width: 100%;
-    max-height: min(92dvh, 900px);
-    border-radius: 16px 16px 0 0;
-    box-shadow: 0 -10px 40px rgba(0, 0, 0, 0.45);
-    padding-bottom: env(safe-area-inset-bottom, 0);
+  body.dgs-truck-inventory-v2 .dgs-v2-desktop-only {
+    display: none;
   }
 
-  body.dgs-truck-inventory-v2 .dgs-v2-desktop-only {
+  /* Compact: same sheet setup as Slot Master / Casinos / Parts siblings. */
+  body.dgs-truck-inventory-v2 .dgs-v2-split {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
+    gap: 0;
+    grid-template-columns: none;
+  }
+
+  body.dgs-truck-inventory-v2 .dgs-v2-list-panel {
+    flex: 1;
+    min-height: 0;
+  }
+
+  body.dgs-truck-inventory-v2 .dgs-v2-detail:not(.dgs-v2-detail--sheet) {
+    display: none;
+  }
+
+  body.dgs-truck-inventory-v2 .dgs-v2-phone-only {
+    display: flex;
+  }
+
+  body.dgs-truck-inventory-v2 .dgs-v2-detail-bar {
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 12px 14px 0;
+    flex-shrink: 0;
+  }
+
+  body.dgs-truck-inventory-v2 .dgs-v2-detail-bar-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--dgs-v2-heading, #f3f5f9);
+    overflow-wrap: anywhere;
+  }
+
+  body.dgs-truck-inventory-v2 .dgs-v2-detail-bar .dgs-v2-drawer-close {
+    width: 36px;
+    height: 36px;
+    border: 1px solid var(--dgs-v2-border, rgba(255, 255, 255, 0.14));
+    border-radius: 8px;
+    background: transparent;
+    color: var(--dgs-v2-text, #c5cdd9);
+    font-size: 22px;
+    line-height: 1;
+    cursor: pointer;
+    flex-shrink: 0;
+  }
+
+  body.dgs-truck-inventory-v2.truck-detail-open .dgs-v2-detail-backdrop {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: 40;
+    background: rgba(0, 0, 0, 0.55);
+  }
+
+  body.dgs-truck-inventory-v2 .dgs-v2-detail.dgs-v2-detail--sheet {
+    display: flex;
+    flex-direction: column;
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 45;
+    height: min(90dvh, 820px);
+    margin: 0;
+    padding-bottom: env(safe-area-inset-bottom, 0);
+    background: var(--dgs-v2-card, #1a1f2a);
+    border: 1px solid var(--dgs-v2-border, rgba(255, 255, 255, 0.1));
+    border-radius: 16px 16px 0 0;
+    box-shadow: 0 -10px 40px rgba(0, 0, 0, 0.45);
+    overflow: hidden;
+  }
+
+  body.dgs-truck-inventory-v2 .dgs-v2-detail.dgs-v2-detail--sheet .dgs-v2-detail-body {
+    flex: 1;
+    min-height: 0;
+    overflow: auto;
+    -webkit-overflow-scrolling: touch;
+    border: none;
+    border-radius: 0;
+    padding: 0 14px 16px;
+  }
+
+  body.dgs-truck-inventory-v2 .dgs-v2-detail.dgs-v2-detail--sheet .dgs-v2-sm-detail-head {
     display: none;
   }
 
