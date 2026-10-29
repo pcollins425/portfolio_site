@@ -3592,19 +3592,24 @@ body.dgs-truck-inventory-v2 .dgs-truck-metrics {
     font-size: 0.82rem;
   }
 
+  body.dgs-truck-inventory-v2 .dgs-truck-stock-table .dgs-v2-grid {
+    font-size: 13px;
+  }
+
+  /* Row height back to normal grid size; only horizontal padding stays tight. */
   body.dgs-truck-inventory-v2 .dgs-truck-stock-table .dgs-v2-grid thead th {
-    padding: 0.45rem 0.25rem;
-    font-size: 0.68rem;
-    letter-spacing: 0.04em;
+    padding: 10px 0.25rem;
+    font-size: 10px;
+    letter-spacing: 0.06em;
     background: #1a1f2a;
     border-bottom: 1px solid rgba(255, 255, 255, 0.12);
   }
 
   body.dgs-truck-inventory-v2 .dgs-truck-stock-table .dgs-v2-grid tbody td {
-    padding: 0.55rem 0.25rem;
+    padding: 12px 0.25rem;
     border-bottom: 1px solid rgba(255, 255, 255, 0.08);
     vertical-align: middle;
-    line-height: 1.25;
+    line-height: 1.5;
   }
 
   body.dgs-truck-inventory-v2 .dgs-truck-stock-table .dgs-v2-grid thead th:first-child,

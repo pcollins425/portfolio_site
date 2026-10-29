@@ -8690,23 +8690,24 @@ body.dgs-truck-inventory-v2 .dgs-v2-metrics {
     padding-right: 0.35rem;
   }
 
-  body.dgs-truck-inventory-v2 .dgs-truck-stock-table .dgs-v2-grid thead th,
+  body.dgs-truck-inventory-v2 .dgs-truck-stock-table .dgs-v2-grid thead th {
+    padding: 10px 0.25rem;
+  }
+
   body.dgs-truck-inventory-v2 .dgs-truck-stock-table .dgs-v2-grid tbody td {
-    padding-top: 0.55rem;
-    padding-bottom: 0.55rem;
-    padding-left: 0.35rem;
-    padding-right: 0.35rem;
+    padding: 12px 0.25rem;
+    line-height: 1.5;
   }
 
   /* Flush first/last columns to the screen edge */
   body.dgs-truck-inventory-v2 .dgs-truck-stock-table .dgs-v2-grid thead th:first-child,
   body.dgs-truck-inventory-v2 .dgs-truck-stock-table .dgs-v2-grid tbody td:first-child {
-    padding-left: 0.25rem;
+    padding-left: 0.2rem;
   }
 
   body.dgs-truck-inventory-v2 .dgs-truck-stock-table .dgs-v2-grid thead th:last-child,
   body.dgs-truck-inventory-v2 .dgs-truck-stock-table .dgs-v2-grid tbody td:last-child {
-    padding-right: 0.25rem;
+    padding-right: 0.2rem;
   }
 
   body.dgs-truck-inventory-v2 .dgs-v2-list-status {
@@ -8727,12 +8728,6 @@ body.dgs-truck-inventory-v2 .dgs-v2-metrics {
   body.dgs-truck-inventory-v2 .dgs-v2-toolbar.dgs-truck-toolbar {
     padding-left: 0.2rem !important;
     padding-right: 0.2rem !important;
-  }
-
-  body.dgs-truck-inventory-v2 .dgs-truck-stock-table .dgs-v2-grid thead th,
-  body.dgs-truck-inventory-v2 .dgs-truck-stock-table .dgs-v2-grid tbody td {
-    padding-left: 0.2rem;
-    padding-right: 0.2rem;
   }
 
   body.dgs-truck-inventory-v2 .dgs-truck-stock-table .dgs-v2-grid thead th:first-child,
