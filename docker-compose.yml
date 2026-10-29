@@ -51,6 +51,8 @@ services:
       PARTS_PHOTOS_ROOT: /media/parts-photos
       # Theme Hub / lab / par / slick PDFs under Analytics Compliance.
       COMPLIANCE_ROOT: /media/compliance
+      # Vendor Hub / Contracts PDFs (contract documents root). Host folder via DOCS_HOST.
+      DOCS_ROOT: /media/contract-documents
       # Page Ask AI — Ollama on host (override in backend_live/.env if needed).
       OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
       OLLAMA_MODEL: ${OLLAMA_MODEL:-llama3.2:3b}
@@ -68,6 +70,9 @@ services:
       # host mirror under portfolio_media (synced from Analytics NAS), bound read-only.
       # Override COMPLIANCE_HOST in backend_live/.env on the Slot Server.
       - ${COMPLIANCE_HOST:-../portfolio_media/compliance}:/media/compliance:ro
+      # Contract / distribution agreement PDFs. Canonical on Analytics NAS; Docker reads a host mirror
+      # (same pattern as compliance). Override DOCS_HOST in backend_live/.env on the Slot Server.
+      - ${DOCS_HOST:-../portfolio_media/contract-documents}:/media/contract-documents:ro
 
 volumes:
   assistant_sessions:

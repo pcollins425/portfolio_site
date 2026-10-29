@@ -144,18 +144,39 @@
   }
 
   async function openPdf(doc) {
-    const headers = window.DGSAuth ? DGSAuth.authHeaders() : {};
-    const res = await fetch(
-      apiUrl(`/api/commerce/vendors/${encodeURIComponent(vendorId)}/distribution-documents/${encodeURIComponent(doc.reference_key)}/file`),
-      { headers }
-    );
-    if (!res.ok) {
-      showError("That PDF is not on file yet.");
-      return;
+    if (!doc) return;
+    // Open synchronously so the browser allows the tab (async fetch alone gets blocked).
+    const viewer = window.open("about:blank", "_blank");
+    try {
+      const headers = window.DGSAuth ? DGSAuth.authHeaders() : {};
+      const res = await fetch(
+        apiUrl(
+          `/api/commerce/vendors/${encodeURIComponent(vendorId)}/distribution-documents/${encodeURIComponent(doc.reference_key)}/file`
+        ),
+        { headers }
+      );
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(
+          typeof body.detail === "string"
+            ? body.detail
+            : res.status === 404
+              ? "That PDF is not on file yet."
+              : res.statusText || "Failed to open PDF"
+        );
+      }
+      const buf = await res.arrayBuffer();
+      const blob = new Blob([buf], { type: "application/pdf" });
+      const url = URL.createObjectURL(blob);
+      if (viewer && !viewer.closed) {
+        viewer.location.href = url;
+      } else {
+        window.open(url, "_blank", "noopener");
+      }
+    } catch (err) {
+      if (viewer && !viewer.closed) viewer.close();
+      showError(err.message || String(err));
     }
-    const blob = await res.blob();
-    const url = URL.createObjectURL(blob);
-    window.open(url, "_blank", "noopener");
   }
 
   function agreementsTile() {
