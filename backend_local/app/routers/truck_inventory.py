@@ -45,6 +45,12 @@ class AddStockIn(BaseModel):
     to_bucket: str = Field(min_length=1, max_length=20)
 
 
+class SetQtyIn(BaseModel):
+    item: str = Field(min_length=1, max_length=40)
+    qty: float = Field(ge=0, le=99999)
+    truck_bucket: str = Field(min_length=1, max_length=20)
+
+
 def _catalog() -> str:
     return (os.environ.get("MSSQL_DATABASE") or "dgs_application_db").strip()
 
@@ -472,6 +478,30 @@ def add_stock(
             qty=body.qty,
             from_bucket=body.from_bucket,
             to_bucket=to_bucket,
+            created_by=str(who)[:128],
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=503, detail=f"database error: {exc}") from exc
+    return {"ok": True, **result}
+
+
+@router.post("/set-qty")
+def set_qty(
+    body: SetQtyIn,
+    user: Annotated[dict[str, Any] | None, Depends(require_area_write(cat.TRUCK_INVENTORY_AREA))] = None,
+):
+    """Set absolute AVAILABLE qty on a truck (Inv Qty — no warehouse transfer)."""
+    vehicles = _vehicle_rows()
+    truck_bucket = (body.truck_bucket or "").strip().upper()
+    _assert_to_bucket_allowed(user, truck_bucket, vehicles)
+    who = view_as.effective_email(user) or (user or {}).get("email") or "dgs"
+    try:
+        result = stock.set_truck_inv_qty(
+            item=body.item,
+            qty=body.qty,
+            truck_bucket=truck_bucket,
             created_by=str(who)[:128],
         )
     except ValueError as exc:

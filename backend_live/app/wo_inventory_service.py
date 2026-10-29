@@ -500,6 +500,88 @@ def add_stock_to_truck(
     }
 
 
+def set_truck_inv_qty(
+    *,
+    item: str,
+    qty: float,
+    truck_bucket: str,
+    created_by: str | None = None,
+) -> dict:
+    """Set absolute AVAILABLE qty on a truck (count clarification — no warehouse pull)."""
+    from app import stock_outbound_sync as outbound
+
+    item = (item or "").strip()
+    truck_bucket = (truck_bucket or "").strip().upper()
+    if _inventory_row(item) is None:
+        raise ValueError(f"Unknown item: {item}")
+    if not _VEHICLE_BUCKET.match(truck_bucket):
+        raise ValueError("truck_bucket must be a vehicle code (V0xx)")
+    new_qty = _dec(qty)
+    if new_qty < 0:
+        raise ValueError("qty cannot be negative")
+    existed = _balance_row(item, truck_bucket, COND_AVAILABLE) is not None
+    previous = truck_available_qty(item, truck_bucket)
+    delta = new_qty - previous
+    if delta == 0:
+        return {
+            "item": item,
+            "truck_bucket": truck_bucket,
+            "previous_qty": float(previous),
+            "qty": float(new_qty),
+            "truck_available": float(new_qty),
+            "updated": False,
+            "existed": existed or previous > 0,
+        }
+
+    _apply_balance_delta(item, truck_bucket, COND_AVAILABLE, delta)
+    try:
+        if delta > 0:
+            _record_movement(
+                item=item,
+                qty=delta,
+                from_bucket=None,
+                from_condition=None,
+                to_bucket=truck_bucket,
+                to_condition=COND_AVAILABLE,
+                wo=None,
+                work_order_material_id=None,
+                note=f"truck inv qty set to {float(new_qty)} on {truck_bucket}",
+                created_by=created_by,
+            )
+        else:
+            _record_movement(
+                item=item,
+                qty=-delta,
+                from_bucket=truck_bucket,
+                from_condition=COND_AVAILABLE,
+                to_bucket="ADJUST",
+                to_condition=COND_AVAILABLE,
+                wo=None,
+                work_order_material_id=None,
+                note=f"truck inv qty set to {float(new_qty)} on {truck_bucket}",
+                created_by=created_by,
+            )
+        outbound.push_stock_outbound(
+            item, [truck_bucket], conditions=[COND_AVAILABLE]
+        )
+    except Exception:
+        try:
+            _apply_balance_delta(item, truck_bucket, COND_AVAILABLE, -delta)
+        except Exception:
+            pass
+        raise
+
+    return {
+        "item": item,
+        "truck_bucket": truck_bucket,
+        "previous_qty": float(previous),
+        "qty": float(new_qty),
+        "truck_available": float(truck_available_qty(item, truck_bucket)),
+        "updated": True,
+        "existed": existed or previous > 0,
+    }
+
+
 def issue_from_truck(
     *,
     item: str,

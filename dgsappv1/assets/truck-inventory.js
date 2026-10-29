@@ -1,4 +1,4 @@
-/* Truck (vehicle) stock browse + Add Stock for writers. */
+/* Truck stock browse + Add Stock (transfer) + Inv Qty (count set). */
 (function () {
   "use strict";
 
@@ -18,34 +18,19 @@
     search: "",
     message: "",
     sourceBuckets: [],
+    sheet: null, // "add-stock" | "inv-qty" | null
   };
 
-  function rememberTruck(code) {
-    const c = (code || "").trim().toUpperCase();
-    if (!/^V\d+$/i.test(c)) return;
-    try {
-      localStorage.setItem(LAST_TRUCK_KEY, c);
-    } catch (_) {
-      /* ignore quota / private mode */
-    }
-  }
-
-  function recalledTruck() {
-    try {
-      const c = (localStorage.getItem(LAST_TRUCK_KEY) || "").trim().toUpperCase();
-      return /^V\d+$/i.test(c) ? c : "";
-    } catch (_) {
-      return "";
-    }
-  }
-
   const els = {};
+  let partSearchTimer = null;
+  let invSearchTimer = null;
+  let selectedPartItem = "";
+  let invSelectedItem = "";
+  let chipTimer = null;
 
   function $(id) {
     return document.getElementById(id);
   }
-
-  const ADD_FOLD_KEY = "dgs_truck_add_stock_open";
 
   function cacheEls() {
     [
@@ -60,122 +45,53 @@
       "stat-count",
       "stat-vehicle",
       "truck-tbody",
-      "truck-cards",
       "list-status",
-      "add-stock-panel",
-      "add-stock-toggle",
-      "add-stock-body",
+      "truck-actions",
+      "btn-open-add-stock",
+      "btn-open-inv-qty",
+      "truck-sheet-backdrop",
+      "truck-sheet",
+      "truck-sheet-title",
+      "truck-sheet-sub",
+      "truck-sheet-close",
+      "truck-chip",
+      "panel-add-stock",
+      "panel-inv-qty",
       "add-stock-form",
-      "add-to-label",
       "add-part-results",
       "add-part-label",
       "add-item",
       "add-qty",
       "add-from",
       "add-submit",
+      "inv-add-form",
+      "inv-item",
+      "inv-qty",
+      "inv-part-results",
+      "inv-part-label",
+      "inv-add-submit",
+      "inv-current-list",
     ].forEach((id) => {
       els[id.replace(/-/g, "_")] = $(id);
     });
   }
 
-  function isPhoneOrTablet() {
-    return window.matchMedia("(max-width: 1366px)").matches;
-  }
-
-  function setAddFoldOpen(open) {
-    if (!els.add_stock_panel) return;
-    els.add_stock_panel.classList.toggle("is-collapsed", !open);
-    if (els.add_stock_toggle) {
-      els.add_stock_toggle.setAttribute("aria-expanded", open ? "true" : "false");
-    }
+  function rememberTruck(code) {
+    const c = (code || "").trim().toUpperCase();
+    if (!/^V\d+$/i.test(c)) return;
     try {
-      localStorage.setItem(ADD_FOLD_KEY, open ? "1" : "0");
+      localStorage.setItem(LAST_TRUCK_KEY, c);
     } catch (_) {
       /* ignore */
     }
   }
 
-  function recalledAddFoldOpen() {
+  function recalledTruck() {
     try {
-      const v = localStorage.getItem(ADD_FOLD_KEY);
-      if (v === "0") return false;
-      if (v === "1") return true;
+      const c = (localStorage.getItem(LAST_TRUCK_KEY) || "").trim().toUpperCase();
+      return /^V\d+$/i.test(c) ? c : "";
     } catch (_) {
-      /* ignore */
-    }
-    // Phone/tablet: start collapsed so stock list is usable immediately.
-    return !isPhoneOrTablet();
-  }
-
-  let partSearchTimer = null;
-  let selectedPartItem = "";
-
-  function clearPartLabel() {
-    if (els.add_part_label) {
-      els.add_part_label.hidden = true;
-      els.add_part_label.textContent = "";
-    }
-  }
-
-  function selectPart(part) {
-    const item = (part && part.item) || "";
-    selectedPartItem = item;
-    if (els.add_item) els.add_item.value = item;
-    if (els.add_part_results) {
-      els.add_part_results.hidden = true;
-      els.add_part_results.innerHTML = "";
-    }
-    if (els.add_part_label) {
-      const bits = [part.name || part.descrip, part.mfr].filter(Boolean);
-      if (bits.length) {
-        els.add_part_label.hidden = false;
-        els.add_part_label.textContent = bits.join(" · ");
-      } else {
-        clearPartLabel();
-      }
-    }
-    loadSources(item).catch((err) => showError(err.message || String(err)));
-  }
-
-  async function runPartSearch() {
-    const q = (els.add_item && els.add_item.value) || "";
-    if (!els.add_part_results) return;
-    if (q.trim().length < 2 || q.trim() === selectedPartItem) {
-      els.add_part_results.hidden = true;
-      els.add_part_results.innerHTML = "";
-      return;
-    }
-    els.add_part_results.hidden = false;
-    els.add_part_results.innerHTML = `<p class="dgs-field-empty">Searching parts…</p>`;
-    try {
-      const payload = await fetchJson(
-        `/api/truck-inventory/parts-search?q=${encodeURIComponent(q.trim())}&limit=25`
-      );
-      const parts = (payload && payload.parts) || [];
-      if (!parts.length) {
-        els.add_part_results.innerHTML = `<p class="dgs-field-empty">No parts matched “${esc(
-          q.trim()
-        )}”.</p>`;
-        return;
-      }
-      els.add_part_results.innerHTML = parts
-        .map((p) => {
-          const label = [p.item, p.name, p.mfr].filter(Boolean).join(" · ");
-          const stock =
-            p.stock != null && p.stock !== "" ? ` · stock ${esc(p.stock)}` : "";
-          return `<button type="button" class="dgs-wo-pr-hit" data-item="${esc(
-            p.item
-          )}" data-name="${esc(p.name || "")}" data-mfr="${esc(
-            p.mfr || ""
-          )}"><span class="dgs-wo-pr-hit-main">${esc(
-            label
-          )}</span><span class="dgs-wo-pr-hit-meta">${stock}</span></button>`;
-        })
-        .join("");
-    } catch (err) {
-      els.add_part_results.innerHTML = `<p class="error-box">${esc(
-        err.message || String(err)
-      )}</p>`;
+      return "";
     }
   }
 
@@ -242,6 +158,150 @@
     els.ok_box.textContent = msg;
   }
 
+  function showChip(msg) {
+    if (!els.truck_chip) return;
+    els.truck_chip.textContent = msg || "Current inventory updated";
+    els.truck_chip.hidden = false;
+    clearTimeout(chipTimer);
+    chipTimer = setTimeout(() => {
+      if (els.truck_chip) els.truck_chip.hidden = true;
+    }, 5000);
+  }
+
+  function availableParts() {
+    return (state.parts || []).filter(
+      (p) => String(p.condition || "").toUpperCase() === "AVAILABLE"
+    );
+  }
+
+  function openSheet(kind) {
+    state.sheet = kind;
+    document.body.classList.add("truck-sheet-open");
+    if (els.truck_sheet_backdrop) els.truck_sheet_backdrop.hidden = false;
+    if (els.truck_sheet) els.truck_sheet.hidden = false;
+    if (els.panel_add_stock) els.panel_add_stock.hidden = kind !== "add-stock";
+    if (els.panel_inv_qty) els.panel_inv_qty.hidden = kind !== "inv-qty";
+    const code = (state.vehicle && state.vehicle.code) || "—";
+    if (els.truck_sheet_title) {
+      els.truck_sheet_title.textContent = kind === "inv-qty" ? "Inv Qty" : "Add Stock";
+    }
+    if (els.truck_sheet_sub) {
+      els.truck_sheet_sub.textContent =
+        kind === "inv-qty"
+          ? `Clarify AVAILABLE counts on ${code}`
+          : `Transfer stock onto ${code}`;
+    }
+    if (kind === "add-stock") renderAddFrom();
+    if (kind === "inv-qty") renderInvCurrent();
+  }
+
+  function closeSheet() {
+    state.sheet = null;
+    document.body.classList.remove("truck-sheet-open");
+    if (els.truck_sheet_backdrop) els.truck_sheet_backdrop.hidden = true;
+    if (els.truck_sheet) els.truck_sheet.hidden = true;
+    if (els.panel_add_stock) els.panel_add_stock.hidden = true;
+    if (els.panel_inv_qty) els.panel_inv_qty.hidden = true;
+    if (els.truck_chip) els.truck_chip.hidden = true;
+  }
+
+  function clearAddPartLabel() {
+    if (els.add_part_label) {
+      els.add_part_label.hidden = true;
+      els.add_part_label.textContent = "";
+    }
+  }
+
+  function clearInvPartLabel() {
+    if (els.inv_part_label) {
+      els.inv_part_label.hidden = true;
+      els.inv_part_label.textContent = "";
+    }
+  }
+
+  function selectAddPart(part) {
+    const item = (part && part.item) || "";
+    selectedPartItem = item;
+    if (els.add_item) els.add_item.value = item;
+    if (els.add_part_results) {
+      els.add_part_results.hidden = true;
+      els.add_part_results.innerHTML = "";
+    }
+    if (els.add_part_label) {
+      const bits = [part.name || part.descrip, part.mfr].filter(Boolean);
+      if (bits.length) {
+        els.add_part_label.hidden = false;
+        els.add_part_label.textContent = bits.join(" · ");
+      } else {
+        clearAddPartLabel();
+      }
+    }
+    loadSources(item).catch((err) => showError(err.message || String(err)));
+  }
+
+  function selectInvPart(part) {
+    const item = (part && part.item) || "";
+    invSelectedItem = item;
+    if (els.inv_item) els.inv_item.value = item;
+    if (els.inv_part_results) {
+      els.inv_part_results.hidden = true;
+      els.inv_part_results.innerHTML = "";
+    }
+    if (els.inv_part_label) {
+      const bits = [part.name || part.descrip, part.mfr].filter(Boolean);
+      if (bits.length) {
+        els.inv_part_label.hidden = false;
+        els.inv_part_label.textContent = bits.join(" · ");
+      } else {
+        clearInvPartLabel();
+      }
+    }
+    const existing = availableParts().find((p) => String(p.item) === item);
+    if (els.inv_qty) {
+      els.inv_qty.value = existing ? String(Number(existing.qty) || 0) : "1";
+    }
+  }
+
+  async function runPartSearch(inputEl, resultsEl, selected) {
+    const q = (inputEl && inputEl.value) || "";
+    if (!resultsEl) return;
+    if (q.trim().length < 2 || q.trim() === selected) {
+      resultsEl.hidden = true;
+      resultsEl.innerHTML = "";
+      return;
+    }
+    resultsEl.hidden = false;
+    resultsEl.innerHTML = `<p class="dgs-field-empty">Searching parts…</p>`;
+    try {
+      const payload = await fetchJson(
+        `/api/truck-inventory/parts-search?q=${encodeURIComponent(q.trim())}&limit=25`
+      );
+      const parts = (payload && payload.parts) || [];
+      if (!parts.length) {
+        resultsEl.innerHTML = `<p class="dgs-field-empty">No parts matched “${esc(
+          q.trim()
+        )}”.</p>`;
+        return;
+      }
+      resultsEl.innerHTML = parts
+        .map((p) => {
+          const label = [p.item, p.name, p.mfr].filter(Boolean).join(" · ");
+          return `<button type="button" class="dgs-wo-pr-hit" data-item="${esc(
+            p.item
+          )}" data-name="${esc(p.name || "")}" data-mfr="${esc(
+            p.mfr || ""
+          )}"><span class="dgs-wo-pr-hit-main">${esc(
+            label
+          )}</span></button>`;
+        })
+        .join("");
+    } catch (err) {
+      resultsEl.innerHTML = `<p class="error-box">${esc(
+        err.message || String(err)
+      )}</p>`;
+    }
+  }
+
   function renderVehiclePicker() {
     if (!els.vehicle_pick_wrap || !els.vehicle_select) return;
     if (!state.browseAll || !state.vehicles.length) {
@@ -270,25 +330,14 @@
         }`;
       }
     }
-    if (els.stat_vehicle) {
-      els.stat_vehicle.textContent = v ? v.code : "—";
-    }
-    if (els.stat_count) {
-      els.stat_count.textContent = String(state.parts.length);
-    }
-    if (els.add_to_label) {
-      els.add_to_label.textContent = v ? `To: ${v.code}` : "To: —";
+    if (els.stat_vehicle) els.stat_vehicle.textContent = v ? v.code : "—";
+    if (els.stat_count) els.stat_count.textContent = String(state.parts.length);
+    if (els.truck_actions) {
+      els.truck_actions.hidden = !(state.canWrite && state.vehicle);
     }
   }
 
-  function renderAddPanel() {
-    if (!els.add_stock_panel) return;
-    const show = !!(state.canWrite && state.vehicle);
-    els.add_stock_panel.hidden = !show;
-    if (show && !els.add_stock_panel.dataset.foldInit) {
-      setAddFoldOpen(recalledAddFoldOpen());
-      els.add_stock_panel.dataset.foldInit = "1";
-    }
+  function renderAddFrom() {
     if (!els.add_from) return;
     const part = selectedPartItem || ((els.add_item && els.add_item.value) || "").trim();
     const current = els.add_from.value;
@@ -311,6 +360,33 @@
     els.add_from.innerHTML = `<option value="">Select source…</option>${opts}`;
   }
 
+  function renderInvCurrent() {
+    if (!els.inv_current_list) return;
+    const rows = availableParts();
+    if (!rows.length) {
+      els.inv_current_list.innerHTML = `<p class="dgs-field-empty">No AVAILABLE parts on this truck yet.</p>`;
+      return;
+    }
+    els.inv_current_list.innerHTML = rows
+      .map((p) => {
+        const desc = p.descrip || "";
+        return `<div class="dgs-truck-inv-row" data-item="${esc(p.item)}">
+          <div class="dgs-truck-inv-row-main">
+            <span class="dgs-truck-inv-item mono">${esc(p.item)}</span>
+            <span class="dgs-truck-inv-desc">${esc(desc)}</span>
+          </div>
+          <label class="dgs-truck-inv-qty-wrap">
+            <span class="dgs-wo-field-label">Qty</span>
+            <input type="number" class="dgs-v2-input dgs-truck-inv-qty" min="0" step="1"
+              value="${esc(fmtNum(p.qty))}" data-item="${esc(p.item)}" data-prev="${esc(
+          String(Number(p.qty) || 0)
+        )}" />
+          </label>
+        </div>`;
+      })
+      .join("");
+  }
+
   function renderTable() {
     const emptyMsg =
       state.message ||
@@ -321,7 +397,6 @@
         : "No vehicle to show.");
     if (!state.parts.length) {
       if (els.truck_tbody) els.truck_tbody.innerHTML = "";
-      if (els.truck_cards) els.truck_cards.innerHTML = "";
       if (els.list_status) els.list_status.textContent = emptyMsg;
       return;
     }
@@ -341,9 +416,6 @@
         })
         .join("");
     }
-    if (els.truck_cards) {
-      els.truck_cards.innerHTML = "";
-    }
     if (els.list_status) {
       els.list_status.textContent = `${state.parts.length} line${
         state.parts.length === 1 ? "" : "s"
@@ -359,14 +431,14 @@
     const part = (item || "").trim();
     if (!part) {
       state.sourceBuckets = [];
-      renderAddPanel();
+      renderAddFrom();
       return;
     }
     const data = await fetchJson(
       `/api/truck-inventory/source-buckets?item=${encodeURIComponent(part)}`
     );
     state.sourceBuckets = data.buckets || [];
-    renderAddPanel();
+    renderAddFrom();
   }
 
   async function load() {
@@ -392,17 +464,17 @@
     if (state.vehicle && state.vehicle.code) rememberTruck(state.vehicle.code);
     renderVehiclePicker();
     renderMeta();
-    renderAddPanel();
     renderTable();
-    if (state.canWrite && selectedPartItem) {
+    if (state.sheet === "inv-qty") renderInvCurrent();
+    if (state.sheet === "add-stock" && selectedPartItem) {
       await loadSources(selectedPartItem).catch(() => {
         state.sourceBuckets = [];
-        renderAddPanel();
+        renderAddFrom();
       });
     }
   }
 
-  async function submitAdd(event) {
+  async function submitAddStock(event) {
     event.preventDefault();
     if (!state.vehicle || !state.vehicle.code) {
       showError("Select a vehicle first.");
@@ -431,16 +503,16 @@
         }),
       });
       showOk(
-        `Added ${result.qty} × ${result.item} from ${result.from_bucket} → ${result.to_bucket} (truck available now ${result.truck_available}).`
+        `Added ${result.qty} × ${result.item} from ${result.from_bucket} → ${result.to_bucket}.`
       );
       selectedPartItem = "";
       if (els.add_item) els.add_item.value = "";
-      clearPartLabel();
+      clearAddPartLabel();
       state.sourceBuckets = [];
       if (els.add_qty) els.add_qty.value = "1";
-      if (isPhoneOrTablet()) setAddFoldOpen(false);
-      renderAddPanel();
+      renderAddFrom();
       await load();
+      closeSheet();
     } catch (err) {
       showError(err.message || String(err));
     } finally {
@@ -448,45 +520,174 @@
     }
   }
 
-  function wire() {
-    if (els.add_stock_toggle) {
-      els.add_stock_toggle.addEventListener("click", () => {
-        const open = els.add_stock_toggle.getAttribute("aria-expanded") !== "true";
-        setAddFoldOpen(open);
-      });
+  async function setInvQty(item, qty, { fromAddPart } = {}) {
+    if (!state.vehicle || !state.vehicle.code) {
+      throw new Error("Select a vehicle first.");
     }
+    const result = await fetchJson("/api/truck-inventory/set-qty", {
+      method: "POST",
+      body: JSON.stringify({
+        item,
+        qty,
+        truck_bucket: state.vehicle.code,
+      }),
+    });
+    await load();
+    if (fromAddPart && result.existed && result.updated) {
+      showChip("Current inventory updated");
+    } else if (fromAddPart && !result.existed && result.updated) {
+      showOk(`Set ${result.item} on ${result.truck_bucket} to ${result.qty}.`);
+    } else if (result.updated) {
+      showChip("Current inventory updated");
+    }
+    return result;
+  }
+
+  async function submitInvAdd(event) {
+    event.preventDefault();
+    const item = (els.inv_item && els.inv_item.value.trim()) || "";
+    const qty = Number(els.inv_qty && els.inv_qty.value);
+    if (!item || item !== invSelectedItem) {
+      showError("Pick a part from the search results.");
+      return;
+    }
+    if (!(qty >= 0) || Number.isNaN(qty)) {
+      showError("Qty is required.");
+      return;
+    }
+    if (els.inv_add_submit) els.inv_add_submit.disabled = true;
+    try {
+      showError("");
+      await setInvQty(item, qty, { fromAddPart: true });
+      invSelectedItem = "";
+      if (els.inv_item) els.inv_item.value = "";
+      clearInvPartLabel();
+      if (els.inv_qty) els.inv_qty.value = "1";
+    } catch (err) {
+      showError(err.message || String(err));
+    } finally {
+      if (els.inv_add_submit) els.inv_add_submit.disabled = false;
+    }
+  }
+
+  async function saveInvRowInput(input) {
+    const item = (input.getAttribute("data-item") || "").trim();
+    const prev = Number(input.getAttribute("data-prev"));
+    const qty = Number(input.value);
+    if (!item || Number.isNaN(qty) || qty < 0) {
+      input.value = String(prev);
+      return;
+    }
+    if (qty === prev) return;
+    input.disabled = true;
+    try {
+      showError("");
+      const result = await setInvQty(item, qty, { fromAddPart: false });
+      input.setAttribute("data-prev", String(result.qty));
+      if (!result.updated) input.value = String(result.qty);
+    } catch (err) {
+      input.value = String(prev);
+      showError(err.message || String(err));
+    } finally {
+      input.disabled = false;
+    }
+  }
+
+  function wire() {
+    if (els.btn_open_add_stock) {
+      els.btn_open_add_stock.addEventListener("click", () => openSheet("add-stock"));
+    }
+    if (els.btn_open_inv_qty) {
+      els.btn_open_inv_qty.addEventListener("click", () => openSheet("inv-qty"));
+    }
+    if (els.truck_sheet_close) {
+      els.truck_sheet_close.addEventListener("click", () => closeSheet());
+    }
+    if (els.truck_sheet_backdrop) {
+      els.truck_sheet_backdrop.addEventListener("click", () => closeSheet());
+    }
+    document.addEventListener("keydown", (event) => {
+      if (event.key === "Escape" && state.sheet) closeSheet();
+    });
+
     if (els.add_item) {
       els.add_item.addEventListener("input", () => {
         if (els.add_item.value.trim() !== selectedPartItem) {
           selectedPartItem = "";
-          clearPartLabel();
+          clearAddPartLabel();
           state.sourceBuckets = [];
-          renderAddPanel();
+          renderAddFrom();
         }
         clearTimeout(partSearchTimer);
         partSearchTimer = setTimeout(() => {
-          runPartSearch().catch((err) => showError(err.message || String(err)));
+          runPartSearch(els.add_item, els.add_part_results, selectedPartItem).catch(
+            (err) => showError(err.message || String(err))
+          );
         }, 200);
-      });
-      els.add_item.addEventListener("keydown", (event) => {
-        if (event.key === "Enter") {
-          event.preventDefault();
-          clearTimeout(partSearchTimer);
-          runPartSearch().catch((err) => showError(err.message || String(err)));
-        }
       });
     }
     if (els.add_part_results) {
       els.add_part_results.addEventListener("click", (event) => {
         const btn = event.target.closest(".dgs-wo-pr-hit");
         if (!btn) return;
-        selectPart({
+        selectAddPart({
           item: btn.getAttribute("data-item") || "",
           name: btn.getAttribute("data-name") || "",
           mfr: btn.getAttribute("data-mfr") || "",
         });
       });
     }
+    if (els.add_stock_form) {
+      els.add_stock_form.addEventListener("submit", (event) => {
+        submitAddStock(event).catch((err) => showError(err.message || String(err)));
+      });
+    }
+
+    if (els.inv_item) {
+      els.inv_item.addEventListener("input", () => {
+        if (els.inv_item.value.trim() !== invSelectedItem) {
+          invSelectedItem = "";
+          clearInvPartLabel();
+        }
+        clearTimeout(invSearchTimer);
+        invSearchTimer = setTimeout(() => {
+          runPartSearch(els.inv_item, els.inv_part_results, invSelectedItem).catch(
+            (err) => showError(err.message || String(err))
+          );
+        }, 200);
+      });
+    }
+    if (els.inv_part_results) {
+      els.inv_part_results.addEventListener("click", (event) => {
+        const btn = event.target.closest(".dgs-wo-pr-hit");
+        if (!btn) return;
+        selectInvPart({
+          item: btn.getAttribute("data-item") || "",
+          name: btn.getAttribute("data-name") || "",
+          mfr: btn.getAttribute("data-mfr") || "",
+        });
+      });
+    }
+    if (els.inv_add_form) {
+      els.inv_add_form.addEventListener("submit", (event) => {
+        submitInvAdd(event).catch((err) => showError(err.message || String(err)));
+      });
+    }
+    if (els.inv_current_list) {
+      els.inv_current_list.addEventListener("change", (event) => {
+        const input = event.target.closest(".dgs-truck-inv-qty");
+        if (!input) return;
+        saveInvRowInput(input).catch((err) => showError(err.message || String(err)));
+      });
+      els.inv_current_list.addEventListener("keydown", (event) => {
+        if (event.key !== "Enter") return;
+        const input = event.target.closest(".dgs-truck-inv-qty");
+        if (!input) return;
+        event.preventDefault();
+        input.blur();
+      });
+    }
+
     if (els.search_btn) {
       els.search_btn.addEventListener("click", () => {
         state.search = (els.search_input && els.search_input.value) || "";
@@ -517,11 +718,6 @@
           name: "",
         };
         load().catch((err) => showError(err.message || String(err)));
-      });
-    }
-    if (els.add_stock_form) {
-      els.add_stock_form.addEventListener("submit", (event) => {
-        submitAdd(event).catch((err) => showError(err.message || String(err)));
       });
     }
   }
