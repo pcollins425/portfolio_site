@@ -3572,7 +3572,6 @@ body.dgs-truck-inventory-v2 .dgs-truck-metrics {
     display: none;
   }
 
-  /* Dense sheet — matches AppSheet list density */
   body.dgs-truck-inventory-v2 .dgs-truck-stock-scroll {
     padding-bottom: 0;
   }
@@ -3589,14 +3588,10 @@ body.dgs-truck-inventory-v2 .dgs-truck-metrics {
   body.dgs-truck-inventory-v2 .dgs-truck-stock-table .dgs-v2-grid {
     table-layout: fixed;
     width: 100%;
-    font-size: 0.82rem;
-  }
-
-  body.dgs-truck-inventory-v2 .dgs-truck-stock-table .dgs-v2-grid {
     font-size: 13px;
   }
 
-  /* Row height back to normal grid size; only horizontal padding stays tight. */
+  /* Normal row height; horizontal padding stays flush to the edges. */
   body.dgs-truck-inventory-v2 .dgs-truck-stock-table .dgs-v2-grid thead th {
     padding: 10px 0.25rem;
     font-size: 10px;
