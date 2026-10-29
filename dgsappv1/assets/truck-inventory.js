@@ -203,6 +203,8 @@
     if (els.panel_add_stock) els.panel_add_stock.hidden = true;
     if (els.panel_inv_qty) els.panel_inv_qty.hidden = true;
     if (els.truck_chip) els.truck_chip.hidden = true;
+    if (els.truck_sheet_sub) els.truck_sheet_sub.textContent = "";
+    clearTimeout(chipTimer);
   }
 
   function clearAddPartLabel() {
