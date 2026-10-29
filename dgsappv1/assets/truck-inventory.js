@@ -329,32 +329,20 @@
       els.truck_tbody.innerHTML = state.parts
         .map((p) => {
           const mfr = [p.mfr, p.mfrpartno].filter(Boolean).join(" · ");
-          return `<tr>
-            <td>${esc(p.item || "—")}</td>
-            <td>${esc(p.descrip || "—")}</td>
-            <td class="dgs-v2-col--desktop">${esc(mfr || "—")}</td>
-            <td>${esc(p.condition || "—")}</td>
-            <td class="dgs-v2-bin-qty">${esc(fmtNum(p.qty))}</td>
+          const cond = p.condition || "—";
+          const desc = p.descrip || "—";
+          return `<tr title="${esc(`${desc}${mfr ? ` · ${mfr}` : ""} · ${cond}`)}">
+            <td class="dgs-truck-col-item mono">${esc(p.item || "—")}</td>
+            <td class="dgs-truck-col-desc">${esc(desc)}</td>
+            <td class="dgs-v2-col--desktop dgs-truck-col-mfr">${esc(mfr || "—")}</td>
+            <td class="dgs-truck-col-cond">${esc(cond)}</td>
+            <td class="dgs-v2-bin-qty dgs-truck-col-qty">${esc(fmtNum(p.qty))}</td>
           </tr>`;
         })
         .join("");
     }
     if (els.truck_cards) {
-      els.truck_cards.innerHTML = state.parts
-        .map((p) => {
-          const mfr = [p.mfr, p.mfrpartno].filter(Boolean).join(" · ");
-          return `<article class="dgs-wo-card dgs-truck-card">
-            <div class="dgs-wo-card-top">
-              <span class="dgs-wo-card-wo">${esc(p.item || "—")}</span>
-              <span class="dgs-truck-card-qty">${esc(fmtNum(p.qty))}</span>
-            </div>
-            <div class="dgs-wo-card-property">${esc(p.descrip || "—")}</div>
-            <div class="dgs-wo-card-meta">${esc(
-              [p.condition, mfr].filter(Boolean).join(" · ") || "—"
-            )}</div>
-          </article>`;
-        })
-        .join("");
+      els.truck_cards.innerHTML = "";
     }
     if (els.list_status) {
       els.list_status.textContent = `${state.parts.length} line${

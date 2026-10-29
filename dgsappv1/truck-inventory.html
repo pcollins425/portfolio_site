@@ -4,8 +4,8 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>Truck — DGS Application</title>
-  <link rel="stylesheet" href="assets/dgs.css?v=20261029d" />
-  <link rel="stylesheet" href="assets/dgs-v2.css?v=20261029d" />
+  <link rel="stylesheet" href="assets/dgs.css?v=20261029e" />
+  <link rel="stylesheet" href="assets/dgs-v2.css?v=20261029e" />
 </head>
 <body class="dgs-app dgs-truck-inventory-v2">
   <aside class="dgs-sidebar" id="dgs-sidebar">
@@ -99,30 +99,30 @@
           <button id="clear-search" type="button" class="dgs-v2-btn">Clear</button>
         </div>
         <div class="dgs-truck-stock-scroll">
-          <div class="dgs-v2-grid-wrap dgs-truck-desktop-table">
+          <div class="dgs-v2-grid-wrap dgs-truck-stock-table">
             <table class="dgs-v2-grid" id="truck-table">
               <thead>
                 <tr>
-                  <th>Item</th>
-                  <th>Description</th>
-                  <th class="dgs-v2-col--desktop">Mfr</th>
-                  <th>Condition</th>
-                  <th class="dgs-v2-bin-qty">Qty</th>
+                  <th class="dgs-truck-col-item">Item</th>
+                  <th class="dgs-truck-col-desc">Description</th>
+                  <th class="dgs-v2-col--desktop dgs-truck-col-mfr">Mfr</th>
+                  <th class="dgs-truck-col-cond">Cond</th>
+                  <th class="dgs-v2-bin-qty dgs-truck-col-qty">Qty</th>
                 </tr>
               </thead>
               <tbody id="truck-tbody"></tbody>
             </table>
           </div>
-          <div class="dgs-wo-card-list dgs-truck-card-list" id="truck-cards" aria-label="Truck stock"></div>
-          <div class="dgs-v2-list-status" id="list-status"></div>
+          <div class="dgs-wo-card-list dgs-truck-card-list" id="truck-cards" aria-label="Truck stock" hidden></div>
         </div>
+        <div class="dgs-v2-list-status" id="list-status"></div>
       </section>
     </div>
   </div>
 
-  <script src="assets/auth.js?v=20261029d"></script>
-  <script src="assets/shell.js?v=20261029d"></script>
-  <script src="assets/truck-inventory.js?v=20261029d"></script>
+  <script src="assets/auth.js?v=20261029e"></script>
+  <script src="assets/shell.js?v=20261029e"></script>
+  <script src="assets/truck-inventory.js?v=20261029e"></script>
   <script>DGS.boot("truck_inventory", () => TruckInventoryApp.init());</script>
 </body>
 </html>
