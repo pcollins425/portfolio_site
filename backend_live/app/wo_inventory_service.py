@@ -94,28 +94,37 @@ def get_assignable_qty(item: str) -> dict:
     }
 
 
-def _balance_qty(item: str, bucket: str, condition: str) -> Decimal:
+def _balance_row(item: str, bucket: str, condition: str) -> dict | None:
     rows = demo._query(
-        "SELECT qty FROM [inventory].[stock_balance] "
+        "SELECT TOP 1 qty, reference_key FROM [inventory].[stock_balance] "
         "WHERE [item] = %s AND [bucket] = %s AND [condition] = %s",
         (item, bucket, condition),
     )
     if not rows:
+        return None
+    return demo._row_json(rows[0])
+
+
+def _balance_qty(item: str, bucket: str, condition: str) -> Decimal:
+    row = _balance_row(item, bucket, condition)
+    if row is None:
         return Decimal("0")
-    return _dec(rows[0].get("qty"))
+    return _dec(row.get("qty"))
 
 
 def _apply_balance_delta(item: str, bucket: str, condition: str, delta: Decimal) -> None:
     if delta == 0:
         return
-    current = _balance_qty(item, bucket, condition)
+    existing = _balance_row(item, bucket, condition)
+    current = _dec(existing.get("qty")) if existing else Decimal("0")
     new_qty = current + delta
     if new_qty < 0:
         raise ValueError(
             f"Insufficient stock for {item} in {bucket}/{condition} "
             f"(have {current}, need {-delta})"
         )
-    if current == 0 and delta > 0:
+    # Zero-qty rows still exist under UQ(item,bucket,condition) — UPDATE, don't INSERT.
+    if existing is None:
         temp_ref = f"T{uuid.uuid4().hex[:12]}"
         demo._execute(
             "INSERT INTO [inventory].[stock_balance] "
