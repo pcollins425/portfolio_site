@@ -1,12 +1,14 @@
 """Push DGS stock_balance moves to AppSheet Inventory_Levels + eMaint (per action).
 
 AppSheet is SSOT for location qty; eMaint INVLOC/header updated immediately for tracking.
-Optimized to minimize AppSheet/eMaint round-trips (one levels Find per item; cached logins).
+Optimized to minimize AppSheet/eMaint round-trips (scoped Find, batched Edit/Add,
+AppSheet∥eMaint).
 """
 
 from __future__ import annotations
 
 import re
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from decimal import Decimal
 from typing import Any, Callable, Iterable
 
@@ -56,18 +58,54 @@ def _location_type(location: str) -> str:
     return "WH"
 
 
-def _fetch_item_levels(item: str) -> dict[tuple[str, str], dict[str, Any]]:
-    """One AppSheet Find for all Inventory_Levels of an item. Keyed (location, sql_condition)."""
-    item_s = (item or "").strip().replace('"', "")
+def _appsheet_quote(value: str) -> str:
+    return (value or "").replace('"', "")
+
+
+def _fetch_item_levels(
+    item: str,
+    locations: list[str] | None = None,
+) -> dict[tuple[str, str], dict[str, Any]]:
+    """One AppSheet Find for Inventory_Levels of an item (optionally scoped to locations)."""
+    item_s = _appsheet_quote(item)
     if not item_s:
         return {}
+    locs = [
+        _appsheet_quote((loc or "").strip())
+        for loc in (locations or [])
+        if (loc or "").strip()
+    ]
+    # De-dupe while preserving order.
+    seen: set[str] = set()
+    loc_list: list[str] = []
+    for loc in locs:
+        key = loc.upper()
+        if not loc or key in seen:
+            continue
+        seen.add(key)
+        loc_list.append(loc)
+    if loc_list:
+        if len(loc_list) == 1:
+            loc_expr = f'[Location] = "{loc_list[0]}"'
+        else:
+            loc_expr = (
+                "OR("
+                + ", ".join(f'[Location] = "{loc}"' for loc in loc_list)
+                + ")"
+            )
+        selector = (
+            f'FILTER({appsheet.INVENTORY_LEVELS_TABLE}, '
+            f'AND([Part ID (Ref)] = "{item_s}", {loc_expr}))'
+        )
+    else:
+        selector = (
+            f'FILTER({appsheet.INVENTORY_LEVELS_TABLE}, '
+            f'[Part ID (Ref)] = "{item_s}")'
+        )
     try:
         rows = appsheet.find_rows(
             appsheet.INVENTORY_LEVELS_TABLE,
-            selector=(
-                f'FILTER({appsheet.INVENTORY_LEVELS_TABLE}, '
-                f'[Part ID (Ref)] = "{item_s}")'
-            ),
+            selector=selector,
             app="parts",
         )
     except appsheet.AppSheetError:
@@ -169,7 +207,7 @@ def set_appsheet_levels_from_balance(
     *,
     conditions: Iterable[str] | None = None,
 ) -> list[dict[str, Any]]:
-    """Push qtys for buckets. One AppSheet Find for the item, then Edit/Add only."""
+    """Push qtys for buckets. One scoped Find, then batched Edit/Add."""
     item = (item or "").strip()
     conds = [
         (c or "").strip().upper()
@@ -178,16 +216,23 @@ def set_appsheet_levels_from_balance(
     ]
     if not conds:
         conds = [COND_AVAILABLE]
-    levels = _fetch_item_levels(item)
+    target_locs = [
+        (bucket or "").strip()
+        for bucket in buckets
+        if (bucket or "").strip() and (bucket or "").strip().upper() != "FIELD"
+    ]
+    levels = _fetch_item_levels(item, target_locs)
     prior: list[dict[str, Any]] = []
-    for bucket in buckets:
-        loc = (bucket or "").strip()
-        if not loc or loc.upper() == "FIELD":
-            continue
+    edits: list[dict[str, Any]] = []
+    adds: list[dict[str, Any]] = []
+    edit_meta: list[tuple[str, str, float]] = []
+    add_meta: list[tuple[str, str, float, str]] = []
+
+    for loc in target_locs:
         for sql_cond in conds:
+            appsheet_cond = _COND_TO_APPSHEET[sql_cond]
             existing = levels.get((loc, sql_cond))
             before = _qty_float(existing.get("Quantity")) if existing else None
-            # Skip no-op: no row and still zero.
             new_qty = float(_balance_qty(item, loc, sql_cond))
             if existing is None and new_qty <= 0:
                 continue
@@ -196,21 +241,50 @@ def set_appsheet_levels_from_balance(
                     "item": item,
                     "location": loc,
                     "sql_condition": sql_cond,
-                    "appsheet_condition": _COND_TO_APPSHEET[sql_cond],
+                    "appsheet_condition": appsheet_cond,
                     "qty": before,
                 }
             )
-            if existing is not None and abs(before - new_qty) < 1e-9:
+            if existing is not None and abs((before or 0.0) - new_qty) < 1e-9:
                 continue
-            updated = upsert_appsheet_level(
-                item=item,
-                location=loc,
-                sql_condition=sql_cond,
-                qty=new_qty,
-                existing=existing,
-            )
-            if updated is not None:
-                levels[(loc, sql_cond)] = updated
+            if existing is not None:
+                key = (
+                    (existing.get(_LEVEL_KEY) or existing.get(_LEVEL_KEY_ALT) or "").strip()
+                    or _level_id(item, loc, appsheet_cond)
+                )
+                edits.append({"Level ID (Key)": key, "Quantity": max(0.0, new_qty)})
+                edit_meta.append((loc, sql_cond, max(0.0, new_qty)))
+            elif new_qty > 0:
+                adds.append(
+                    {
+                        "Part ID (Ref)": item,
+                        "Location": loc,
+                        "Location ID (Ref)": loc,
+                        "Location Type": _location_type(loc),
+                        "Part Condition": appsheet_cond,
+                        "Quantity": max(0.0, new_qty),
+                    }
+                )
+                add_meta.append((loc, sql_cond, max(0.0, new_qty), appsheet_cond))
+
+    if edits:
+        appsheet.edit_rows(appsheet.INVENTORY_LEVELS_TABLE, edits, app="parts")
+        for loc, sql_cond, new_qty in edit_meta:
+            row = dict(levels.get((loc, sql_cond)) or {})
+            row["Quantity"] = new_qty
+            levels[(loc, sql_cond)] = row
+    if adds:
+        added_rows = appsheet.add_rows(
+            appsheet.INVENTORY_LEVELS_TABLE, adds, app="parts"
+        )
+        for idx, (loc, sql_cond, new_qty, appsheet_cond) in enumerate(add_meta):
+            row = added_rows[idx] if idx < len(added_rows) else {
+                "Level ID (Key)": _level_id(item, loc, appsheet_cond),
+                "Location": loc,
+                "Part Condition": appsheet_cond,
+                "Quantity": new_qty,
+            }
+            levels[(loc, sql_cond)] = row
     return prior
 
 
@@ -218,18 +292,76 @@ def restore_appsheet_levels(prior: list[dict[str, Any]]) -> None:
     if not prior:
         return
     item = prior[0].get("item") or ""
-    levels = _fetch_item_levels(item) if item else {}
+    locs = [(snap.get("location") or "").strip() for snap in prior]
+    levels = _fetch_item_levels(item, locs) if item else {}
+    edits: list[dict[str, Any]] = []
+    adds: list[dict[str, Any]] = []
     for snap in reversed(prior):
         qty = snap.get("qty")
         target = 0.0 if qty is None else float(qty)
-        upsert_appsheet_level(
-            item=snap["item"],
-            location=snap["location"],
-            sql_condition=snap["sql_condition"],
-            qty=target,
-            existing=levels.get((snap["location"], snap["sql_condition"])),
-            levels_index=levels,
-        )
+        loc = snap["location"]
+        sql_cond = snap["sql_condition"]
+        appsheet_cond = snap.get("appsheet_condition") or _COND_TO_APPSHEET.get(sql_cond)
+        if not appsheet_cond:
+            continue
+        existing = levels.get((loc, sql_cond))
+        if existing is not None:
+            key = (
+                (existing.get(_LEVEL_KEY) or existing.get(_LEVEL_KEY_ALT) or "").strip()
+                or _level_id(item, loc, appsheet_cond)
+            )
+            edits.append({"Level ID (Key)": key, "Quantity": max(0.0, target)})
+        elif target > 0:
+            adds.append(
+                {
+                    "Part ID (Ref)": item,
+                    "Location": loc,
+                    "Location ID (Ref)": loc,
+                    "Location Type": _location_type(loc),
+                    "Part Condition": appsheet_cond,
+                    "Quantity": max(0.0, target),
+                }
+            )
+    if edits:
+        appsheet.edit_rows(appsheet.INVENTORY_LEVELS_TABLE, edits, app="parts")
+    if adds:
+        appsheet.add_rows(appsheet.INVENTORY_LEVELS_TABLE, adds, app="parts")
+
+
+def _sync_one_invloc(
+    *,
+    item: str,
+    code: str,
+    loc_qty: float,
+    token: str,
+) -> dict[str, Any] | None:
+    """Update/create one INVLOC row. Returns prior snapshot (or None if no-op create skip)."""
+    found = emaint_client.find_invloc(item=item, invloc=code, token=token)
+    if found and found.get("cuid"):
+        snap = {
+            "kind": "invloc",
+            "item": item,
+            "invloc": code,
+            "cuid": found["cuid"],
+            "onhand": _qty_float(found.get("onhand")),
+            "created": False,
+        }
+        if abs(_qty_float(found.get("onhand")) - loc_qty) >= 1e-9:
+            emaint_client.set_invloc_onhand(
+                cuid=found["cuid"], onhand=loc_qty, token=token
+            )
+        return snap
+    if loc_qty > 0:
+        cuid = emaint_client.create_invloc(item=item, invloc=code, onhand=loc_qty)
+        return {
+            "kind": "invloc",
+            "item": item,
+            "invloc": code,
+            "cuid": cuid,
+            "onhand": None,
+            "created": True,
+        }
+    return None
 
 
 def sync_emaint_item_locations(item: str, locations: list[str]) -> list[dict[str, Any]]:
@@ -249,48 +381,45 @@ def sync_emaint_item_locations(item: str, locations: list[str]) -> list[dict[str
         header_before = _qty_float(header_rows[0].get("onhand"))
     prior.append({"kind": "header", "item": item, "onhand": header_before})
 
-    # Preload location totals once
     loc_totals = {
         (loc or "").strip(): location_balance_total(item, (loc or "").strip())
         for loc in locations
         if (loc or "").strip() and (loc or "").strip().upper() != "FIELD"
     }
 
+    codes: list[str] = []
     seen: set[str] = set()
     for loc in locations:
         code = (loc or "").strip()
         if not code or code.upper() == "FIELD" or code.upper() in seen:
             continue
         seen.add(code.upper())
-        found = emaint_client.find_invloc(item=item, invloc=code, token=token)
-        loc_qty = loc_totals.get(code, 0.0)
-        if found and found.get("cuid"):
-            prior.append(
-                {
-                    "kind": "invloc",
-                    "item": item,
-                    "invloc": code,
-                    "cuid": found["cuid"],
-                    "onhand": _qty_float(found.get("onhand")),
-                    "created": False,
-                }
+        codes.append(code)
+
+    if len(codes) <= 1:
+        for code in codes:
+            snap = _sync_one_invloc(
+                item=item, code=code, loc_qty=loc_totals.get(code, 0.0), token=token
             )
-            if abs(_qty_float(found.get("onhand")) - loc_qty) >= 1e-9:
-                emaint_client.set_invloc_onhand(
-                    cuid=found["cuid"], onhand=loc_qty, token=token
-                )
-        elif loc_qty > 0:
-            cuid = emaint_client.create_invloc(item=item, invloc=code, onhand=loc_qty)
-            prior.append(
-                {
-                    "kind": "invloc",
-                    "item": item,
-                    "invloc": code,
-                    "cuid": cuid,
-                    "onhand": None,
-                    "created": True,
-                }
-            )
+            if snap:
+                prior.append(snap)
+    else:
+        # Add Stock touches from+to — run INVLOC updates concurrently.
+        with ThreadPoolExecutor(max_workers=min(4, len(codes))) as pool:
+            futures = {
+                pool.submit(
+                    _sync_one_invloc,
+                    item=item,
+                    code=code,
+                    loc_qty=loc_totals.get(code, 0.0),
+                    token=token,
+                ): code
+                for code in codes
+            }
+            for fut in as_completed(futures):
+                snap = fut.result()
+                if snap:
+                    prior.append(snap)
 
     header_qty = item_balance_total(item)
     if header_before is None or abs(header_before - header_qty) >= 1e-9:
@@ -328,15 +457,50 @@ def push_stock_outbound(
     *,
     conditions: Iterable[str] | None = None,
 ) -> Callable[[], None]:
-    """After SQL move: AppSheet levels then eMaint. Returns undo for both."""
+    """After SQL move: AppSheet levels ∥ eMaint. Fail-closed undo for both."""
     item = (item or "").strip()
     locs = [((x or "").strip()) for x in locations if (x or "").strip()]
-    as_prior = set_appsheet_levels_from_balance(item, locs, conditions=conditions)
-    try:
-        em_prior = sync_emaint_item_locations(item, locs)
-    except Exception:
-        restore_appsheet_levels(as_prior)
-        raise
+    as_prior: list[dict[str, Any]] = []
+    em_prior: list[dict[str, Any]] = []
+    as_err: BaseException | None = None
+    em_err: BaseException | None = None
+
+    def _do_appsheet() -> None:
+        nonlocal as_prior, as_err
+        try:
+            as_prior = set_appsheet_levels_from_balance(
+                item, locs, conditions=conditions
+            )
+        except BaseException as exc:  # noqa: BLE001 — surface either side
+            as_err = exc
+
+    def _do_emaint() -> None:
+        nonlocal em_prior, em_err
+        try:
+            em_prior = sync_emaint_item_locations(item, locs)
+        except BaseException as exc:  # noqa: BLE001
+            em_err = exc
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        f_as = pool.submit(_do_appsheet)
+        f_em = pool.submit(_do_emaint)
+        f_as.result()
+        f_em.result()
+
+    if as_err is not None:
+        if em_prior:
+            try:
+                restore_emaint(em_prior)
+            except Exception:
+                pass
+        raise as_err
+    if em_err is not None:
+        if as_prior:
+            try:
+                restore_appsheet_levels(as_prior)
+            except Exception:
+                pass
+        raise em_err
 
     def undo() -> None:
         restore_emaint(em_prior)

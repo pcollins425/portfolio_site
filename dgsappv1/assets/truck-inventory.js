@@ -561,6 +561,34 @@
     }
   }
 
+  function patchLocalQty(item, qty) {
+    const key = String(item || "");
+    let row = (state.parts || []).find((p) => String(p.item) === key);
+    if (!row) {
+      row = {
+        item: key,
+        bucket: (state.vehicle && state.vehicle.code) || "",
+        condition: "AVAILABLE",
+        qty,
+        descrip: "",
+        mfr: "",
+        mfrpartno: "",
+      };
+      state.parts = [row].concat(state.parts || []);
+    } else {
+      row.qty = qty;
+      row.condition = row.condition || "AVAILABLE";
+    }
+    if (Number(qty) <= 0) {
+      state.parts = (state.parts || []).filter(
+        (p) => !(String(p.item) === key && String(p.condition || "").toUpperCase() === "AVAILABLE" && Number(p.qty) <= 0)
+      );
+    }
+    renderTable();
+    renderMeta();
+    if (state.sheet === "inv-qty") renderInvCurrent();
+  }
+
   async function setInvQty(item, qty, { fromAddPart } = {}) {
     if (!state.vehicle || !state.vehicle.code) {
       throw new Error("Select a vehicle first.");
@@ -573,7 +601,11 @@
         truck_bucket: state.vehicle.code,
       }),
     });
-    await load();
+    if (result.updated) {
+      patchLocalQty(result.item || item, result.qty);
+      // Background reconcile — don't block the chip / next edit on a full reload.
+      load().catch((err) => showError(err.message || String(err)));
+    }
     if (fromAddPart && result.existed && result.updated) {
       showChip("Current inventory updated");
     } else if (fromAddPart && !result.existed && result.updated) {
