@@ -3480,12 +3480,13 @@ body.dgs-truck-inventory-v2 .dgs-truck-metrics {
     font-size: 0.8rem;
   }
 
-  .dgs-truck-toolbar {
+  body.dgs-truck-inventory-v2 .dgs-v2-toolbar.dgs-truck-toolbar {
     display: grid;
     grid-template-columns: 1fr auto auto;
     gap: 0.35rem;
     align-items: center;
-    padding: 0.35rem 0.45rem;
+    /* Side gutters were coming from .dgs-v2-toolbar (14px 16px) in dgs-v2.css */
+    padding: 0.4rem 0.25rem !important;
     border-bottom: 1px solid rgba(255, 255, 255, 0.1);
   }
 
@@ -3592,7 +3593,7 @@ body.dgs-truck-inventory-v2 .dgs-truck-metrics {
   }
 
   body.dgs-truck-inventory-v2 .dgs-truck-stock-table .dgs-v2-grid thead th {
-    padding: 0.35rem 0.45rem;
+    padding: 0.45rem 0.25rem;
     font-size: 0.68rem;
     letter-spacing: 0.04em;
     background: #1a1f2a;
@@ -3600,10 +3601,24 @@ body.dgs-truck-inventory-v2 .dgs-truck-metrics {
   }
 
   body.dgs-truck-inventory-v2 .dgs-truck-stock-table .dgs-v2-grid tbody td {
-    padding: 0.38rem 0.45rem;
+    padding: 0.55rem 0.25rem;
     border-bottom: 1px solid rgba(255, 255, 255, 0.08);
     vertical-align: middle;
-    line-height: 1.2;
+    line-height: 1.25;
+  }
+
+  body.dgs-truck-inventory-v2 .dgs-truck-stock-table .dgs-v2-grid thead th:first-child,
+  body.dgs-truck-inventory-v2 .dgs-truck-stock-table .dgs-v2-grid tbody td:first-child {
+    padding-left: 0.2rem;
+  }
+
+  body.dgs-truck-inventory-v2 .dgs-truck-stock-table .dgs-v2-grid thead th:last-child,
+  body.dgs-truck-inventory-v2 .dgs-truck-stock-table .dgs-v2-grid tbody td:last-child {
+    padding-right: 0.2rem;
+  }
+
+  body.dgs-truck-inventory-v2 .dgs-v2-col--desktop {
+    display: none !important;
   }
 
   body.dgs-truck-inventory-v2 .dgs-truck-stock-table .dgs-v2-grid tbody tr {
@@ -3637,8 +3652,7 @@ body.dgs-truck-inventory-v2 .dgs-truck-metrics {
   }
 
   body.dgs-truck-inventory-v2 .dgs-truck-col-qty {
-    width: 2.6rem;
-    padding-right: 0.5rem !important;
+    width: 2.4rem;
     font-weight: 700;
     color: #f3f5f9;
   }
@@ -3646,7 +3660,7 @@ body.dgs-truck-inventory-v2 .dgs-truck-metrics {
   body.dgs-truck-inventory-v2 .dgs-v2-list-status {
     flex: 0 0 auto;
     margin: 0;
-    padding: 0.25rem 0.45rem;
+    padding: 0.25rem 0.2rem;
     border-top: 1px solid rgba(255, 255, 255, 0.08);
     background: #141922;
     font-size: 0.72rem;
