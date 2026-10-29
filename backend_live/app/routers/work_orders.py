@@ -1764,7 +1764,14 @@ def create_part_request(
         # Re-align AppSheet + eMaint to post-rollback SQL balances.
         if truck_bucket and stock_applied:
             try:
-                outbound.push_stock_outbound(part_id, [truck_bucket])
+                conds = []
+                if "issue" in stock_applied:
+                    conds.append(stock.COND_AVAILABLE)
+                if "defective" in stock_applied:
+                    conds.append(stock.COND_DAMAGED)
+                outbound.push_stock_outbound(
+                    part_id, [truck_bucket], conditions=conds or None
+                )
             except Exception:
                 pass
 

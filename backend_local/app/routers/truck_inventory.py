@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 import re
+import time
 from datetime import date, datetime
 from decimal import Decimal
 from typing import Annotated, Any
@@ -22,6 +23,8 @@ router = APIRouter(
 )
 
 _VEHICLE_CODE = re.compile(r"^V\d+$", re.IGNORECASE)
+_VEHICLE_CACHE: dict[str, Any] = {"rows": None, "expires": 0.0}
+_VEHICLE_CACHE_TTL_SEC = 120.0
 
 
 class AddStockIn(BaseModel):
@@ -67,7 +70,15 @@ def _location_code(row: dict[str, Any]) -> str:
     return (row.get("Name") or "").strip()
 
 
-def _vehicle_rows() -> list[dict[str, str]]:
+def _vehicle_rows(*, force: bool = False) -> list[dict[str, str]]:
+    now = time.time()
+    cached = _VEHICLE_CACHE.get("rows")
+    if (
+        not force
+        and cached is not None
+        and float(_VEHICLE_CACHE.get("expires") or 0) > now
+    ):
+        return list(cached)
     try:
         rows = appsheet_client.find_rows(
             appsheet_client.LOCATIONS_TABLE,
@@ -89,6 +100,8 @@ def _vehicle_rows() -> list[dict[str, str]]:
             }
         )
     out.sort(key=lambda r: r["code"])
+    _VEHICLE_CACHE["rows"] = out
+    _VEHICLE_CACHE["expires"] = now + _VEHICLE_CACHE_TTL_SEC
     return out
 
 
@@ -237,6 +250,61 @@ def truck_inventory(
         "count": len(parts),
         "q": (q or "").strip() or None,
     }
+
+
+@router.get("/parts-search")
+def parts_search(
+    q: str = Query("", max_length=80),
+    limit: int = Query(25, ge=1, le=50),
+    user: Annotated[dict[str, Any] | None, Depends(require_area_write(cat.TRUCK_INVENTORY_AREA))] = None,
+):
+    """Fast SQL part picker for Add Stock (avoids AppSheet Parts search latency)."""
+    del user
+    needle = (q or "").strip()
+    if len(needle) < 2:
+        return {"ok": True, "q": needle or None, "parts": [], "count": 0}
+    like = f"%{needle}%"
+    lim = max(1, min(int(limit), 50))
+    try:
+        rows = _field_query(
+            """
+            SELECT TOP (%s)
+                i.item,
+                i.descrip,
+                i.mfr,
+                i.mfrpartno
+            FROM inventory.inventory AS i
+            LEFT JOIN inventory.software AS sw ON sw.item = i.item
+            WHERE sw.item IS NULL
+              AND i.item IS NOT NULL
+              AND LTRIM(RTRIM(i.item)) <> N''
+              AND (
+                    i.item LIKE %s
+                 OR i.descrip LIKE %s
+                 OR i.mfr LIKE %s
+                 OR i.mfrpartno LIKE %s
+              )
+            ORDER BY
+                CASE WHEN i.item = %s THEN 0
+                     WHEN i.item LIKE %s THEN 1
+                     ELSE 2 END,
+                i.item
+            """,
+            (lim, like, like, like, like, needle, f"{needle}%"),
+        )
+    except Exception as exc:
+        raise HTTPException(status_code=503, detail=f"database error: {exc}") from exc
+    parts = [
+        {
+            "item": _json_value(r.get("item")),
+            "name": _json_value(r.get("descrip")),
+            "mfr": _json_value(r.get("mfr")),
+            "mfr_part": _json_value(r.get("mfrpartno")),
+        }
+        for r in rows
+        if _json_value(r.get("item"))
+    ]
+    return {"ok": True, "q": needle, "parts": parts, "count": len(parts)}
 
 
 @router.get("/source-buckets")

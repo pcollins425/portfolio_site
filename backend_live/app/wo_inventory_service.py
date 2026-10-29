@@ -472,7 +472,9 @@ def add_stock_to_truck(
         created_by=created_by,
     )
     try:
-        outbound.push_stock_outbound(item, [from_bucket, to_bucket])
+        outbound.push_stock_outbound(
+            item, [from_bucket, to_bucket], conditions=[COND_AVAILABLE]
+        )
     except Exception:
         # Reverse SQL transfer so AppSheet/eMaint failure does not leave drift.
         try:
@@ -529,7 +531,7 @@ def issue_from_truck(
         apply_to_balance=False,
     )
     try:
-        outbound.push_stock_outbound(item, [truck_bucket])
+        outbound.push_stock_outbound(item, [truck_bucket], conditions=[COND_AVAILABLE])
     except Exception:
         try:
             _apply_balance_delta(item, truck_bucket, COND_AVAILABLE, q)
@@ -576,7 +578,7 @@ def return_defective_to_truck(
         created_by=created_by,
     )
     try:
-        outbound.push_stock_outbound(item, [truck_bucket])
+        outbound.push_stock_outbound(item, [truck_bucket], conditions=[COND_DAMAGED])
     except Exception:
         try:
             _apply_balance_delta(item, truck_bucket, COND_DAMAGED, -q)

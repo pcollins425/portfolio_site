@@ -94,7 +94,7 @@
     els.add_part_results.innerHTML = `<p class="dgs-field-empty">Searching parts…</p>`;
     try {
       const payload = await fetchJson(
-        `/api/work-orders/part-catalog/search?q=${encodeURIComponent(q.trim())}&limit=25`
+        `/api/truck-inventory/parts-search?q=${encodeURIComponent(q.trim())}&limit=25`
       );
       const parts = (payload && payload.parts) || [];
       if (!parts.length) {
@@ -389,7 +389,7 @@
         clearTimeout(partSearchTimer);
         partSearchTimer = setTimeout(() => {
           runPartSearch().catch((err) => showError(err.message || String(err)));
-        }, 300);
+        }, 200);
       });
       els.add_item.addEventListener("keydown", (event) => {
         if (event.key === "Enter") {

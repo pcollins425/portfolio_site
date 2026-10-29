@@ -3,10 +3,15 @@ from __future__ import annotations
 import json
 import os
 import re
+import time
 from typing import Any
 
 from app import settings as app_settings
 
+# Reuse login tokens across outbound calls in the same process.
+_TOKEN_TTL_SEC = 8 * 60
+_user_token_cache: dict[str, Any] = {"token": None, "expires": 0.0}
+_admin_token_cache: dict[str, Any] = {"token": None, "expires": 0.0}
 _RE_ISO_DATE_ONLY = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 _WORK_DATE_FIELDS = frozenset(
     {"adddate", "editdate", "date_wo", "date_cmpl", "sch_date", "pts_rdy"}
@@ -61,7 +66,11 @@ def _request(
         return -1, str(e.reason)
 
 
-def get_login_token() -> str:
+def get_login_token(*, force: bool = False) -> str:
+    now = time.time()
+    cached = _user_token_cache.get("token")
+    if not force and cached and float(_user_token_cache.get("expires") or 0) > now:
+        return str(cached)
     _load_env()
     user = (os.environ.get("EMAINT_USER") or "").strip()
     password = (os.environ.get("EMAINT_PASSWORD") or "").strip()
@@ -78,6 +87,8 @@ def get_login_token() -> str:
     token = out.get("token") or out.get("Token") or out.get("accessToken")
     if not token:
         raise RuntimeError("eMaint login response missing token")
+    _user_token_cache["token"] = str(token)
+    _user_token_cache["expires"] = now + _TOKEN_TTL_SEC
     return str(token)
 
 
@@ -117,6 +128,10 @@ def get_admin_login_token() -> str | None:
     ).strip()
     if not user or not password:
         return None
+    now = time.time()
+    cached = _admin_token_cache.get("token")
+    if cached and float(_admin_token_cache.get("expires") or 0) > now:
+        return str(cached)
     agent = (
         os.environ.get("EMAINT_ADMIN_AGENT")
         or os.environ.get("EMAINT_ADMIN_USER_AGENT")
@@ -135,6 +150,8 @@ def get_admin_login_token() -> str | None:
     token = out.get("token") or out.get("Token") or out.get("accessToken")
     if not token:
         raise RuntimeError("eMaint admin login response missing token")
+    _admin_token_cache["token"] = str(token)
+    _admin_token_cache["expires"] = now + _TOKEN_TTL_SEC
     return str(token)
 
 
