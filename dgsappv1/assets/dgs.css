@@ -3367,6 +3367,9 @@ body.dgs-truck-inventory-v2 .dgs-v2-drawer-close {
   gap: 10px;
   min-height: 0;
 }
+.dgs-truck-sheet-panel[hidden] {
+  display: none !important;
+}
 .dgs-truck-sheet-panel .dgs-truck-add-form {
   padding: 0.35rem 0 0.2rem;
 }
