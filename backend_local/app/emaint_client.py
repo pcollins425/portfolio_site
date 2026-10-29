@@ -99,14 +99,27 @@ def record_update(*, table: str, row_id: str, payload: dict, token: str | None =
 
 
 def get_admin_login_token() -> str | None:
-    """Optional EMAINT_ADMIN_* for INVLOC creates (cuid required)."""
+    """Optional admin login for INVLOC creates (cuid required).
+
+    Accepts ``EMAINT_ADMIN`` / ``EMAINT_ADMIN_PASS`` (master credentials) or
+    ``EMAINT_ADMIN_USER`` / ``EMAINT_ADMIN_PASSWORD``.
+    """
     _load_env()
-    user = (os.environ.get("EMAINT_ADMIN_USER") or "").strip()
-    password = (os.environ.get("EMAINT_ADMIN_PASSWORD") or "").strip()
+    user = (
+        os.environ.get("EMAINT_ADMIN")
+        or os.environ.get("EMAINT_ADMIN_USER")
+        or ""
+    ).strip()
+    password = (
+        os.environ.get("EMAINT_ADMIN_PASS")
+        or os.environ.get("EMAINT_ADMIN_PASSWORD")
+        or ""
+    ).strip()
     if not user or not password:
         return None
     agent = (
-        os.environ.get("EMAINT_ADMIN_USER_AGENT")
+        os.environ.get("EMAINT_ADMIN_AGENT")
+        or os.environ.get("EMAINT_ADMIN_USER_AGENT")
         or os.environ.get("EMAINT_USER_AGENT")
         or "PAUL_v1"
     ).strip()
@@ -168,14 +181,15 @@ def create_invloc(*, item: str, invloc: str, onhand: float) -> str:
     admin = get_admin_login_token()
     if not admin:
         raise RuntimeError(
-            f"No eMaint INVLOC for {item}/{invloc} and EMAINT_ADMIN_USER/PASSWORD "
-            "not configured to create one"
+            f"No eMaint INVLOC for {item}/{invloc} and EMAINT_ADMIN / "
+            "EMAINT_ADMIN_PASS not configured to create one"
         )
     server = _server()
     if not server:
         raise RuntimeError("Missing EMAINT_SERVER_URL")
     agent = (
-        os.environ.get("EMAINT_ADMIN_USER_AGENT")
+        os.environ.get("EMAINT_ADMIN_AGENT")
+        or os.environ.get("EMAINT_ADMIN_USER_AGENT")
         or os.environ.get("EMAINT_USER_AGENT")
         or "PAUL_v1"
     ).strip()

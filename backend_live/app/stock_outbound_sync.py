@@ -39,31 +39,35 @@ def _qty_float(v: Any) -> float:
 def _find_level_row(item: str, location: str, appsheet_cond: str) -> dict[str, Any] | None:
     lid = _level_id(item, location, appsheet_cond)
     safe = lid.replace('"', "")
+    item_s = item.replace('"', "")
+    loc_s = location.replace('"', "")
+    cond_s = appsheet_cond.replace('"', "")
+    rows: list[dict[str, Any]] = []
     try:
         rows = appsheet.find_rows(
             appsheet.INVENTORY_LEVELS_TABLE,
             selector=(
                 f'FILTER({appsheet.INVENTORY_LEVELS_TABLE}, '
-                f'OR([Level ID (Key)] = "{safe}", '
-                f'[Inventory.Level ID (Key)] = "{safe}"))'
+                f'[Level ID (Key)] = "{safe}")'
             ),
             app="parts",
         )
     except appsheet.AppSheetError:
-        # Fallback: match part + location + condition (slower / broader).
-        item_s = item.replace('"', "")
-        loc_s = location.replace('"', "")
-        cond_s = appsheet_cond.replace('"', "")
-        rows = appsheet.find_rows(
-            appsheet.INVENTORY_LEVELS_TABLE,
-            selector=(
-                f'FILTER({appsheet.INVENTORY_LEVELS_TABLE}, AND('
-                f'[Part ID (Ref)] = "{item_s}", '
-                f'[Location] = "{loc_s}", '
-                f'[Part Condition] = "{cond_s}"))'
-            ),
-            app="parts",
-        )
+        rows = []
+    if not rows:
+        try:
+            rows = appsheet.find_rows(
+                appsheet.INVENTORY_LEVELS_TABLE,
+                selector=(
+                    f'FILTER({appsheet.INVENTORY_LEVELS_TABLE}, AND('
+                    f'[Part ID (Ref)] = "{item_s}", '
+                    f'[Location] = "{loc_s}", '
+                    f'[Part Condition] = "{cond_s}"))'
+                ),
+                app="parts",
+            )
+        except appsheet.AppSheetError:
+            rows = []
     return rows[0] if rows else None
 
 
@@ -135,13 +139,15 @@ def upsert_appsheet_level(
         return
     if q <= 0:
         return
+    loc_type = _location_type(location)
     appsheet.add_rows(
         appsheet.INVENTORY_LEVELS_TABLE,
         [
             {
                 "Part ID (Ref)": item,
                 "Location": location,
-                "Location Type": _location_type(location),
+                "Location ID (Ref)": location,
+                "Location Type": loc_type,
                 "Part Condition": appsheet_cond,
                 "Quantity": q,
             }
@@ -259,7 +265,8 @@ def sync_emaint_item_locations(item: str, locations: list[str]) -> list[dict[str
             emaint_client.set_invloc_onhand(
                 cuid=found["cuid"], onhand=loc_qty, token=token
             )
-        else:
+        elif loc_qty > 0:
+            # Zero qty does not need a new INVLOC row; create only when stock lands.
             cuid = emaint_client.create_invloc(item=item, invloc=code, onhand=loc_qty)
             prior.append(
                 {
