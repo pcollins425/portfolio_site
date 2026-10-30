@@ -3033,16 +3033,17 @@ a.dgs-v2-sm-fk-chip--hub .dgs-v2-wh-asset-link {
 /* Casinos v2 — persistent full-height detail (list chrome left, detail top→bottom) */
 body.dgs-casinos-v2 .dgs-v2-main {
   gap: 0;
-  padding-top: 20px;
-  padding-bottom: 16px;
+  /* Detail owns the full main height — list keeps the inset padding */
+  padding: 0;
 }
 
 body.dgs-casinos-v2 .dgs-casinos-workspace {
   flex: 1;
   min-height: 0;
+  height: 100%;
   /* Wider than default 320–380 rail; height is the primary density goal */
   grid-template-columns: minmax(0, 1fr) minmax(400px, 520px);
-  gap: 14px;
+  gap: 0;
   align-items: stretch;
 }
 
@@ -3053,20 +3054,24 @@ body.dgs-casinos-v2 .dgs-casinos-list-col {
   min-width: 0;
   min-height: 0;
   overflow: hidden;
+  padding: 24px 18px 16px 28px;
+  box-sizing: border-box;
 }
 
 body.dgs-casinos-v2 .dgs-casinos-list-col .dgs-v2-page-header {
-  /* Keep All/Leased/Prospecting with the title (left), clear of the detail column */
-  justify-content: flex-start;
+  /* Title left; All/Leased/Prospecting stay on the right of the list/main chrome */
+  justify-content: space-between;
   align-items: flex-end;
   flex-wrap: wrap;
   gap: 12px 16px;
   flex-shrink: 0;
+  width: 100%;
 }
 
 body.dgs-casinos-v2 .dgs-casinos-list-col .dgs-v2-view-toggle {
   align-self: flex-end;
-  margin-left: 0;
+  margin-left: auto;
+  flex-shrink: 0;
 }
 
 body.dgs-casinos-v2 .dgs-casinos-list-col .dgs-v2-list-panel {
@@ -3075,9 +3080,23 @@ body.dgs-casinos-v2 .dgs-casinos-list-col .dgs-v2-list-panel {
 }
 
 body.dgs-casinos-v2 .dgs-casinos-workspace > .dgs-v2-detail {
+  display: flex;
+  flex-direction: column;
   align-self: stretch;
   height: 100%;
   min-height: 0;
+  gap: 0;
+  /* Flush to top / bottom / right of main */
+  border-left: 1px solid var(--dgs-v2-border);
+  background: var(--dgs-v2-card);
+}
+
+body.dgs-casinos-v2 .dgs-casinos-workspace > .dgs-v2-detail > .dgs-v2-detail-body {
+  flex: 1;
+  min-height: 0;
+  border: none;
+  border-radius: 0;
+  background: transparent;
 }
 
 body.dgs-casinos-v2 .dgs-v2-metrics--perf {
@@ -3555,6 +3574,12 @@ body.dgs-casinos-v2 .dgs-v2-group-row {
     flex: 1;
     min-height: 0;
     gap: 10px;
+    padding: 16px 16px 12px;
+  }
+
+  body.dgs-casinos-v2 .dgs-casinos-workspace > .dgs-v2-detail {
+    border-left: none;
+    background: transparent;
   }
 
   body.dgs-casinos-v2 .dgs-v2-list-panel {
