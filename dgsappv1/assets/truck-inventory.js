@@ -486,11 +486,19 @@
     showError("");
     const params = new URLSearchParams();
     if (state.search) params.set("q", state.search);
+    // Only send a bucket when office browse-all can pick trucks. Tech / Dev
+    // view-as must omit it so the API resolves the assigned vehicle — a
+    // localStorage truck from office browse was 403'ing the whole page.
     if (state.browseAll && state.vehicle && state.vehicle.code) {
       params.set("bucket", state.vehicle.code);
-    } else if (els.vehicle_select && !els.vehicle_pick_wrap.hidden && els.vehicle_select.value) {
+    } else if (
+      state.browseAll &&
+      els.vehicle_select &&
+      !els.vehicle_pick_wrap.hidden &&
+      els.vehicle_select.value
+    ) {
       params.set("bucket", els.vehicle_select.value);
-    } else {
+    } else if (state.browseAll) {
       const last = recalledTruck();
       if (last) params.set("bucket", last);
     }
@@ -502,7 +510,9 @@
     state.vehicles = data.vehicles || [];
     state.parts = data.parts || [];
     state.message = data.message || "";
-    if (state.vehicle && state.vehicle.code) rememberTruck(state.vehicle.code);
+    if (state.browseAll && state.vehicle && state.vehicle.code) {
+      rememberTruck(state.vehicle.code);
+    }
     renderVehiclePicker();
     renderMeta();
     renderTable();

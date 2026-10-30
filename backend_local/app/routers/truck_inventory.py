@@ -319,14 +319,20 @@ def truck_inventory(
     browse_all = _can_browse_all(user)
     requested = (bucket or "").strip().upper()
 
-    if requested:
-        if not _VEHICLE_CODE.match(requested):
-            raise HTTPException(status_code=400, detail="Invalid vehicle bucket")
-        if not browse_all and (not mine or mine["code"].upper() != requested):
-            raise HTTPException(status_code=403, detail="Not available for this truck")
+    if requested and not _VEHICLE_CODE.match(requested):
+        raise HTTPException(status_code=400, detail="Invalid vehicle bucket")
+
+    if browse_all and requested:
+        if not any(v["code"].upper() == requested for v in vehicles):
+            raise HTTPException(status_code=404, detail=f"Unknown vehicle {requested}")
         active_code = requested
     elif mine:
-        active_code = mine["code"].upper()
+        # Tech-scoped (incl. Dev view-as): honor bucket only when it is theirs.
+        # Stale localStorage from office browse must not 403 the page.
+        if requested and mine["code"].upper() == requested:
+            active_code = requested
+        else:
+            active_code = mine["code"].upper()
     elif browse_all and vehicles:
         active_code = vehicles[0]["code"].upper()
     else:
