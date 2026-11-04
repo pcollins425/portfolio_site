@@ -8758,6 +8758,16 @@ body.dgs-truck-inventory-v2 .dgs-truck-toolbar input[type="search"] {
   font-family: inherit;
 }
 
+body.dgs-truck-inventory-v2 .dgs-truck-toolbar select:disabled {
+  color: var(--dgs-v2-text-muted, #8b96a8);
+  background: rgba(255, 255, 255, 0.03);
+  border-color: rgba(255, 255, 255, 0.08);
+  cursor: default;
+  opacity: 1;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
 body.dgs-truck-inventory-v2 .dgs-v2-metrics {
   grid-template-columns: repeat(2, minmax(0, 1fr));
   max-width: 520px;

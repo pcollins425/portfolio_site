@@ -306,21 +306,38 @@
     }
   }
 
+  function vehicleLabel(v) {
+    if (!v) return "—";
+    return (v.name || "").trim() || v.code || "—";
+  }
+
   function renderVehiclePicker() {
     if (!els.vehicle_pick_wrap || !els.vehicle_select) return;
-    if (!state.browseAll || !state.vehicles.length) {
+    const current = state.vehicle || null;
+    const roster =
+      state.browseAll && state.vehicles.length
+        ? state.vehicles
+        : current
+          ? [current]
+          : [];
+    if (!roster.length) {
       els.vehicle_pick_wrap.hidden = true;
+      els.vehicle_select.disabled = true;
+      els.vehicle_select.innerHTML = "";
       return;
     }
     els.vehicle_pick_wrap.hidden = false;
-    const current = (state.vehicle && state.vehicle.code) || "";
-    els.vehicle_select.innerHTML = state.vehicles
+    const selected = (current && current.code) || roster[0].code || "";
+    els.vehicle_select.innerHTML = roster
       .map((v) => {
-        const label = (v.name || "").trim() || v.code || "—";
-        const sel = v.code === current ? " selected" : "";
-        return `<option value="${esc(v.code)}"${sel}>${esc(label)}</option>`;
+        const sel = v.code === selected ? " selected" : "";
+        return `<option value="${esc(v.code)}"${sel}>${esc(
+          vehicleLabel(v)
+        )}</option>`;
       })
       .join("");
+    // Techs (and Dev view-as tech) only see their own truck — show name, not a picker.
+    els.vehicle_select.disabled = !state.browseAll;
   }
 
   function renderMeta() {
