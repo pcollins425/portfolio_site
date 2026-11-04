@@ -86,7 +86,9 @@ def _inventory_row(r: dict) -> dict:
         "stock": _json_value(r.get("stock")),
         "in_software_vault": bool(r.get("in_software_vault")),
         "stock_balance_rows": int(r.get("stock_balance_rows") or 0),
-        "qty_available": _json_value(r.get("qty_available")),
+        "qty_total": _json_value(r.get("qty_total")),
+        # Backward-compatible alias — same full stock_balance sum as qty_total.
+        "qty_available": _json_value(r.get("qty_total")),
     }
 
 
@@ -244,9 +246,7 @@ def list_parts(
                     SELECT COALESCE(SUM(sb.qty), 0)
                     FROM inventory.stock_balance AS sb
                     WHERE sb.item = i.item
-                      AND sb.bucket = N'WAREHOUSE'
-                      AND sb.condition = N'AVAILABLE'
-                ) AS qty_available
+                ) AS qty_total
             {_INVENTORY_FROM}
             WHERE i.item IS NOT NULL
               AND LTRIM(RTRIM(i.item)) <> N''

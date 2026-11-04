@@ -123,7 +123,9 @@
         <td><code>${esc(row.item)}</code></td>
         <td>${esc(row.descrip || "—")}</td>
         <td class="dgs-v2-col--desktop">${esc(row.item_family || "—")}</td>
-        <td class="dgs-v2-bin-qty">${fmtNum(row.onhand)}</td>
+        <td class="dgs-v2-bin-qty">${fmtNum(
+          row.qty_total != null ? row.qty_total : row.qty_available
+        )}</td>
         <td class="dgs-v2-col--desktop">${esc(row.location || "—")}</td>`;
       tr.addEventListener("click", () => selectItem(row.item));
       tbody.appendChild(tr);
