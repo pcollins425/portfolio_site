@@ -6,7 +6,6 @@
     "https://api.collinsmediallc.com";
 
   const state = {
-    summary: null,
     families: [],
     items: [],
     page: 1,
@@ -28,10 +27,6 @@
   function cacheEls() {
     [
       "error-box",
-      "stat-total",
-      "stat-families",
-      "stat-onhand",
-      "stat-balance",
       "family-filter",
       "search-input",
       "search-btn",
@@ -45,8 +40,8 @@
       "detail-content",
       "part-actions",
       "detail-fields",
+      "balances-total",
       "balances-tbody",
-      "balances-status",
     ].forEach((id) => {
       els[id.replace(/-/g, "_")] = $(id);
     });
@@ -104,15 +99,6 @@
     return params.toString();
   }
 
-  function renderSummary() {
-    const s = state.summary;
-    if (!s) return;
-    els.stat_total.textContent = s.total_parts?.toLocaleString() ?? "—";
-    els.stat_families.textContent = s.families?.toLocaleString() ?? "—";
-    els.stat_onhand.textContent = s.with_onhand?.toLocaleString() ?? "—";
-    els.stat_balance.textContent = s.items_with_balance?.toLocaleString() ?? "—";
-  }
-
   function renderFamilies() {
     const select = els.family_filter;
     const current = state.family;
@@ -157,6 +143,13 @@
     return `<div class="dgs-v2-field"><dt>${esc(label)}</dt><dd>${value}</dd></div>`;
   }
 
+  function balancesTotal(balances) {
+    return (balances || []).reduce((sum, b) => {
+      const n = Number(b.qty);
+      return Number.isFinite(n) ? sum + n : sum;
+    }, 0);
+  }
+
   function renderDetail() {
     const d = state.detail;
     if (!d) {
@@ -164,6 +157,7 @@
       els.detail_empty_msg.hidden = false;
       els.detail_content.hidden = true;
       els.part_actions.innerHTML = "";
+      if (els.balances_total) els.balances_total.textContent = "";
       return;
     }
 
@@ -180,43 +174,36 @@
       : vaultNote;
 
     els.detail_fields.innerHTML = [
-      fieldRow("Reference key", `<code>${esc(d.reference_key)}</code>`),
-      fieldRow("Item", `<code>${esc(d.item)}</code>`),
+      fieldRow("Item Number", `<code>${esc(d.item)}</code>`),
       fieldRow("Description", esc(d.descrip || "—")),
       fieldRow("Family", esc(d.item_family || "—")),
-      fieldRow("Sub-category", esc(d.item_subcategory || "—")),
-      fieldRow("eMaint category", esc(d.emaint_category || "—")),
+      fieldRow("Sub-Category", esc(d.item_subcategory || "—")),
       fieldRow("Manufacturer", esc(d.mfr || "—")),
-      fieldRow("MFR part no.", esc(d.mfrpartno || "—")),
-      fieldRow("Supplier part no.", esc(d.vpartno || "—")),
-      fieldRow("On hand", fmtNum(d.onhand)),
-      fieldRow("Bin location", esc(d.location || "—")),
-      fieldRow("Inventory location", esc(d.state || "—")),
-      fieldRow("Unit cost", d.cost != null ? fmtNum(d.cost) : "—"),
-      fieldRow("Supplier", esc(d.supplier || "—")),
-      fieldRow("Stock item", d.stock == null ? "—" : d.stock ? "Yes" : "No"),
-      fieldRow("Last edit", esc([d.editdate, d.edituser].filter(Boolean).join(" · ") || "—")),
+      fieldRow("MFR Part Number", esc(d.mfrpartno || "—")),
+      fieldRow("Bin Location", esc(d.location || "—")),
+      fieldRow("Unit Cost", d.cost != null ? fmtNum(d.cost) : "—"),
     ].join("");
 
     const balances = d.balances || [];
+    const total = balancesTotal(balances);
+    if (els.balances_total) {
+      els.balances_total.textContent = balances.length
+        ? `Total ${fmtNum(total)}`
+        : "Total —";
+    }
+
     els.balances_tbody.innerHTML = balances.length
-      ? balances.map((b) => `
+      ? balances
+          .map(
+            (b) => `
           <tr>
             <td>${esc(b.bucket)}</td>
             <td>${esc(b.condition)}</td>
             <td class="dgs-v2-bin-qty">${fmtNum(b.qty)}</td>
-          </tr>`).join("")
+          </tr>`
+          )
+          .join("")
       : `<tr><td colspan="3">No stock_balance rows for this item.</td></tr>`;
-
-    const positive = balances.filter((b) => Number(b.qty) > 0).length;
-    els.balances_status.textContent = balances.length
-      ? `${positive} bucket(s) with qty > 0`
-      : "Stock buckets will appear after AppSheet migration / WO allocations.";
-  }
-
-  async function loadSummary() {
-    state.summary = await fetchJson("/api/parts-inventory/summary?exclude_software=true");
-    renderSummary();
   }
 
   async function loadFamilies() {
@@ -256,7 +243,7 @@
   async function refreshAll() {
     showError("");
     try {
-      await Promise.all([loadSummary(), loadFamilies(), loadList()]);
+      await Promise.all([loadFamilies(), loadList()]);
       if (state.selectedItem) {
         await loadDetail(state.selectedItem);
       }

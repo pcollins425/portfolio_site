@@ -4,8 +4,8 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Parts — DGS Application</title>
-  <link rel="stylesheet" href="assets/dgs.css" />
-  <link rel="stylesheet" href="assets/dgs-v2.css" />
+  <link rel="stylesheet" href="assets/dgs.css?v=20261104f" />
+  <link rel="stylesheet" href="assets/dgs-v2.css?v=20261104f" />
 </head>
 <body class="dgs-app dgs-parts-inventory-v2">
   <aside class="dgs-sidebar" id="dgs-sidebar">
@@ -35,25 +35,6 @@
     </header>
 
     <div id="error-box" class="dgs-v2-error" hidden></div>
-
-    <div class="dgs-v2-metrics" id="stat-row" aria-label="Summary statistics">
-      <div class="dgs-v2-metric">
-        <div class="dgs-v2-metric-label">Catalog items</div>
-        <div class="dgs-v2-metric-value" id="stat-total">—</div>
-      </div>
-      <div class="dgs-v2-metric">
-        <div class="dgs-v2-metric-label">Families</div>
-        <div class="dgs-v2-metric-value" id="stat-families">—</div>
-      </div>
-      <div class="dgs-v2-metric">
-        <div class="dgs-v2-metric-label">With on hand</div>
-        <div class="dgs-v2-metric-value" id="stat-onhand">—</div>
-      </div>
-      <div class="dgs-v2-metric">
-        <div class="dgs-v2-metric-label">Stock buckets</div>
-        <div class="dgs-v2-metric-value" id="stat-balance">—</div>
-      </div>
-    </div>
 
     <div class="dgs-v2-split">
       <section class="dgs-v2-list-panel">
@@ -93,7 +74,10 @@
             <div class="dgs-v2-section-label">Part</div>
             <div class="dgs-v2-part-actions" id="part-actions"></div>
             <dl class="dgs-v2-fields" id="detail-fields"></dl>
-            <div class="dgs-v2-section-label">Stock balances</div>
+            <div class="dgs-v2-section-label dgs-parts-balances-head" id="balances-head">
+              <span>Stock Balances</span>
+              <span class="dgs-parts-balances-total" id="balances-total"></span>
+            </div>
             <div class="dgs-v2-grid-wrap">
               <table class="dgs-v2-grid" id="balances-table">
                 <thead>
@@ -106,16 +90,15 @@
                 <tbody id="balances-tbody"></tbody>
               </table>
             </div>
-            <p class="dgs-v2-lines-status" id="balances-status"></p>
           </div>
         </div>
       </aside>
     </div>
   </div>
 
-  <script src="assets/auth.js"></script>
-  <script src="assets/shell.js"></script>
-  <script src="assets/parts-inventory.js"></script>
+  <script src="assets/auth.js?v=20261104f"></script>
+  <script src="assets/shell.js?v=20261104f"></script>
+  <script src="assets/parts-inventory.js?v=20261104f"></script>
   <script>DGS.boot("parts_inventory", () => PartsInventoryApp.init());</script>
 </body>
 </html>

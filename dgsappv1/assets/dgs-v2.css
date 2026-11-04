@@ -77,6 +77,35 @@ body.dgs-assistant-v2 .dgs-v2-main {
   overflow: hidden;
 }
 
+body.dgs-parts-inventory-v2 .dgs-v2-main {
+  gap: 8px;
+}
+
+body.dgs-parts-inventory-v2 .dgs-v2-page-header {
+  margin-bottom: 0;
+}
+
+body.dgs-parts-inventory-v2 .dgs-v2-fields {
+  grid-template-columns: 128px 1fr;
+}
+
+body.dgs-parts-inventory-v2 .dgs-parts-balances-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 4px;
+}
+
+body.dgs-parts-inventory-v2 .dgs-parts-balances-total {
+  font-size: 12px;
+  letter-spacing: 0;
+  text-transform: none;
+  font-weight: 650;
+  color: var(--dgs-v2-heading, #f3f5f9);
+  font-variant-numeric: tabular-nums;
+}
+
 body.dgs-dashboard-v2 .dgs-dashboard-mount {
   flex: 1;
   min-height: 0;
