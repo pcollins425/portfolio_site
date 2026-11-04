@@ -91,6 +91,32 @@ window.CM_CATALOG = {
       proof: "collinsmediallc.com → local API tunnel",
     },
   ],
+  practice: [
+    {
+      id: "data-analytics",
+      name: "Data analytics",
+      blurb:
+        "Turn operational records into views people will defend in a meeting — KPIs, exceptions, trends, and drill paths that stay tied to the source rows.",
+      href: "/practice/data-analytics.html",
+      tags: ["analytics", "data"],
+    },
+    {
+      id: "data-architecture",
+      name: "Data architecture",
+      blurb:
+        "Model the system of record so history, relationships, and permissions hold up — SQL shape, landing tables, Type-2 where it matters, and clear ownership.",
+      href: "/practice/data-architecture.html",
+      tags: ["architecture", "data"],
+    },
+    {
+      id: "connective-systems",
+      name: "Connective systems",
+      blurb:
+        "Wire the tools you already run — APIs, tunnels, ingest jobs, and auth — so the app, the warehouse, and the month share one story instead of three exports.",
+      href: "/practice/connective-systems.html",
+      tags: ["integrations", "data"],
+    },
+  ],
   services: [
     {
       id: "custom-ops-app",
@@ -125,12 +151,17 @@ window.CM_CATALOG = {
     name: "Paul Collins",
     role: "Web & app developer · Collins Media, LLC",
     lead:
-      "I build operations software for people who move inventory, customers, and maintenance — not demo decks. Production work lives on this domain; the shop is how you assemble what you need next.",
+      "I build operations software and the data layer under it — apps, analytics, architecture, and the connections between systems. Production work lives on this domain; the shop is how you assemble what you need next.",
     claims: [
       {
         label: "Ops UI in production",
         detail: "Unified operations application: inventory, performance, projects, contracts, field tools.",
         href: "/apps/dgs-operations.html",
+      },
+      {
+        label: "Analytics, architecture, connections",
+        detail: "Practice areas for measurement, system-of-record design, and wiring tools together.",
+        href: "/shop.html#practice",
       },
       {
         label: "Pipelines that survive vendor files",

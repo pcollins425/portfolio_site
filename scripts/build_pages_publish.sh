@@ -17,10 +17,12 @@ mkdir -p pages_publish/dgsappv1
 mkdir -p pages_publish/marketing
 mkdir -p pages_publish/apps
 mkdir -p pages_publish/functions
+mkdir -p pages_publish/practice
 cp index.html shop.html about.html pages_publish/
 cp -r marketing/. pages_publish/marketing/
 cp -r apps/. pages_publish/apps/
 cp -r functions/. pages_publish/functions/
+cp -r practice/. pages_publish/practice/
 cp -r frontend/dist/. pages_publish/dashboardtestv1/
 cp scannertestv1/index.html pages_publish/scannertestv1/
 cp -r emaintdemov1/. pages_publish/emaintdemov1/

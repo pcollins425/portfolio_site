@@ -32,6 +32,8 @@
     if (fn) return fn.name;
     const app = catalog.apps.find((a) => a.id === id);
     if (app) return app.name;
+    const prac = (catalog.practice || []).find((p) => p.id === id);
+    if (prac) return prac.name;
     const svc = catalog.services.find((s) => s.id === id);
     if (svc) return svc.name;
     return id;
@@ -79,6 +81,22 @@
           <label class="cm-mix"><input type="checkbox" data-mix-id="${fn.id}" /> Mix</label>
           <a class="cm-link" href="${fn.href}">Details</a>
           <button type="button" class="cm-link cm-link-btn" data-inquire data-inquire-id="${fn.id}">Inquire</button>
+        </div>
+      </article>`;
+  }
+
+  function practiceCard(item) {
+    return `
+      <article class="cm-item" data-catalog-id="${item.id}">
+        <div class="cm-item-top">
+          <h3><a href="${item.href}">${item.name}</a></h3>
+          <div class="cm-tags">${tagsHtml(item.tags)}</div>
+        </div>
+        <p>${item.blurb}</p>
+        <div class="cm-item-actions">
+          <label class="cm-mix"><input type="checkbox" data-mix-id="${item.id}" /> Mix</label>
+          <a class="cm-link" href="${item.href}">Details</a>
+          <button type="button" class="cm-link cm-link-btn" data-inquire data-inquire-id="${item.id}">Inquire</button>
         </div>
       </article>`;
   }
@@ -305,6 +323,7 @@
   });
 
   renderShelf("[data-shelf-apps]", catalog.apps, appCard);
+  renderShelf("[data-shelf-practice]", catalog.practice || [], practiceCard);
   renderShelf("[data-shelf-functions]", catalog.functions, functionCard);
   renderShelf("[data-shelf-services]", catalog.services, serviceCard);
   renderResume("[data-resume]");

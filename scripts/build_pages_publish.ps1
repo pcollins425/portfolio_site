@@ -17,12 +17,14 @@ New-Item -ItemType Directory -Path (Join-Path $pub "dgsappv1") | Out-Null
 New-Item -ItemType Directory -Path (Join-Path $pub "marketing") | Out-Null
 New-Item -ItemType Directory -Path (Join-Path $pub "apps") | Out-Null
 New-Item -ItemType Directory -Path (Join-Path $pub "functions") | Out-Null
+New-Item -ItemType Directory -Path (Join-Path $pub "practice") | Out-Null
 Copy-Item (Join-Path $Root "index.html") (Join-Path $pub "index.html")
 Copy-Item (Join-Path $Root "shop.html") (Join-Path $pub "shop.html")
 Copy-Item (Join-Path $Root "about.html") (Join-Path $pub "about.html")
 Copy-Item -Path (Join-Path $Root "marketing\*") -Destination (Join-Path $pub "marketing") -Recurse -Force
 Copy-Item -Path (Join-Path $Root "apps\*") -Destination (Join-Path $pub "apps") -Recurse -Force
 Copy-Item -Path (Join-Path $Root "functions\*") -Destination (Join-Path $pub "functions") -Recurse -Force
+Copy-Item -Path (Join-Path $Root "practice\*") -Destination (Join-Path $pub "practice") -Recurse -Force
 Copy-Item -Path (Join-Path $Root "frontend\dist\*") -Destination (Join-Path $pub "dashboardtestv1") -Recurse -Force
 Copy-Item (Join-Path $Root "scannertestv1\index.html") (Join-Path $pub "scannertestv1\index.html")
 Copy-Item -Path (Join-Path $Root "emaintdemov1\*") -Destination (Join-Path $pub "emaintdemov1") -Recurse -Force
