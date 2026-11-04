@@ -116,6 +116,22 @@ window.CM_CATALOG = {
       href: "/practice/connective-systems.html",
       tags: ["integrations", "data"],
     },
+    {
+      id: "ai-pipeline",
+      name: "AI pipeline",
+      blurb:
+        "Route real work through models with guardrails — classify, draft, resolve, hand off to humans — over your own data and APIs, not a disconnected chat toy.",
+      href: "/practice/ai-pipeline.html",
+      tags: ["ai", "data"],
+    },
+    {
+      id: "ai-persona-training",
+      name: "AI persona training",
+      blurb:
+        "Shape how an assistant thinks and pushes back for your team — persona, knowledge slices, modes, and review loops that match how you actually decide.",
+      href: "/practice/ai-persona-training.html",
+      tags: ["ai", "process"],
+    },
   ],
   services: [
     {
@@ -160,7 +176,7 @@ window.CM_CATALOG = {
       },
       {
         label: "Analytics, architecture, connections",
-        detail: "Practice areas for measurement, system-of-record design, and wiring tools together.",
+        detail: "Areas of practice: analytics, architecture, connective systems, AI pipeline, and persona training.",
         href: "/shop.html#practice",
       },
       {
