@@ -3,40 +3,84 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Collins Media LLC — Coming soon</title>
-  <style>
-    * { box-sizing: border-box; }
-    body {
-      margin: 0;
-      min-height: 100vh;
-      display: grid;
-      place-items: center;
-      font-family: system-ui, -apple-system, sans-serif;
-      background: #0f1419;
-      color: #e6edf3;
-    }
-    main {
-      text-align: center;
-      padding: 2rem;
-      max-width: 28rem;
-    }
-    h1 {
-      font-size: 1.35rem;
-      font-weight: 600;
-      margin: 0 0 0.5rem;
-    }
-    p {
-      margin: 0;
-      opacity: 0.76;
-      font-size: 0.95rem;
-      line-height: 1.5;
-    }
-  </style>
+  <title>Collins Media, LLC — Apps, functions &amp; services</title>
+  <meta name="description" content="Collins Media builds ops web apps and mixable functions. Browse the shop, open live production doors, inquire about what you need." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;600;700&family=Syne:wght@600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/marketing/assets/site.css" />
 </head>
-<body>
-  <main>
-    <h1>Coming soon</h1>
-    <p>We're working on this site. Check back shortly.</p>
+<body class="cm-body">
+  <a class="cm-skip" href="#main">Skip to content</a>
+  <header class="cm-header">
+    <a class="cm-brand" href="/">Collins Media <span>LLC</span></a>
+    <nav class="cm-nav" aria-label="Primary">
+      <a href="/shop.html">Shop</a>
+      <a href="/apps/dgs-operations.html">Apps</a>
+      <a href="/about.html">Resume</a>
+    </nav>
+    <div class="cm-header-actions">
+      <a class="cm-btn cm-btn-quiet" data-inquire href="mailto:hello@collinsmediallc.com">Inquire</a>
+    </div>
+  </header>
+
+  <main id="main" class="cm-main">
+    <section class="cm-hero" aria-labelledby="hero-brand">
+      <p id="hero-brand" class="cm-hero-brand">Collins<br />Media<em>.</em></p>
+      <h1>Ops apps you can open — functions you can mix.</h1>
+      <p class="cm-hero-lead">
+        I design and ship web applications for people who run floors, warehouses, and months of data.
+        The shop shows what exists in production and what you can assemble next. Deep tools stay behind authorization.
+      </p>
+      <div class="cm-hero-actions">
+        <a class="cm-btn cm-btn-accent" href="#shop">Browse the shop</a>
+        <a class="cm-btn cm-btn-quiet" data-inquire href="mailto:hello@collinsmediallc.com">Inquire</a>
+      </div>
+    </section>
+
+    <section id="shop" class="cm-section" aria-labelledby="shop-title">
+      <div class="cm-section-head">
+        <p class="cm-eyebrow">Shop</p>
+        <h2 id="shop-title">Pick an app, a function, or a service.</h2>
+        <p class="cm-section-lead">
+          Mix items into an inquire list. Production apps keep public doors open; login is for authorized people only.
+        </p>
+      </div>
+
+      <div class="cm-shelf-block">
+        <h3 class="cm-shelf-label">Apps</h3>
+        <div class="cm-shelf" data-shelf-apps></div>
+      </div>
+
+      <div class="cm-shelf-block">
+        <h3 class="cm-shelf-label">Functions</h3>
+        <div class="cm-shelf cm-shelf-3" data-shelf-functions></div>
+      </div>
+
+      <div class="cm-shelf-block">
+        <h3 class="cm-shelf-label">Services</h3>
+        <div class="cm-shelf" data-shelf-services></div>
+      </div>
+
+      <p style="margin-top:1.5rem"><a class="cm-link" href="/shop.html">Full shop page →</a></p>
+    </section>
+
+    <section id="resume" class="cm-section" aria-labelledby="resume-title">
+      <div class="cm-section-head">
+        <p class="cm-eyebrow">Trust</p>
+        <h2 id="resume-title">Resume, then action.</h2>
+        <p class="cm-section-lead">Capability proof first. The shop is where that trust turns into a scoped build.</p>
+      </div>
+      <div class="cm-resume" data-resume></div>
+      <p style="margin-top:1rem"><a class="cm-link" href="/about.html">Full resume page →</a></p>
+    </section>
   </main>
+
+  <footer class="cm-footer">
+    <p>Collins Media, LLC · <a data-inquire href="mailto:hello@collinsmediallc.com">hello@collinsmediallc.com</a></p>
+  </footer>
+
+  <script src="/marketing/assets/catalog.js"></script>
+  <script src="/marketing/assets/site.js"></script>
 </body>
 </html>

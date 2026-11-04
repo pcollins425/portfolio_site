@@ -1,10 +1,11 @@
 # `portfolio_site` — everything in one repo
 
-Static **coming-soon** site (**`/`**), **Master Revenue** dashboards at **`/dashboardtestv1/`** (Vite + React), **barcode scanner demo** at **`/scannertestv1/`** (standalone HTML, no API), **two FastAPI backends** (local dev vs tunnel), **SQL** to provision the read-only façade, and **scripts** to run it all.
+**Collins Media** capability shop at **`/`**, **Master Revenue** dashboards at **`/dashboardtestv1/`** (Vite + React), **barcode scanner demo** at **`/scannertestv1/`** (standalone HTML, no API), **two FastAPI backends** (local dev vs tunnel), **SQL** to provision the read-only façade, and **scripts** to run it all.
 
 | Path | Purpose |
 |------|---------|
-| **`index.html`** | Cloudflare **`www`** — “coming soon” at site root (**`/`**). |
+| **`index.html`**, **`shop.html`**, **`about.html`** | Cloudflare **`www`** — Collins Media shop + resume at site root. |
+| **`marketing/`**, **`apps/`**, **`functions/`** | Marketing assets and catalog detail pages (published with root). |
 | **`scannertestv1/`** | Barcode scan demo — USB wedge + phone camera; **`GET /api/asset/lookup`**. Published to **`/scannertestv1/`**. |
 | **`emaintdemov1/`** | eMaint replacement demo — browse grid + record form over three SQL landing tables; **`GET /api/emaint-demo/*`**. Published to **`/emaintdemov1/`**. |
 | **`dgsappv1/`** | **Unified app shell** — Dashboard + Warehouse + Operations with shared sidebar/CSS. Published to **`/dgsappv1/`**. See **`dgsappv1/README.md`**. |
