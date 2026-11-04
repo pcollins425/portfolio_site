@@ -2931,13 +2931,15 @@ body.dgs-dashboard-v2 .dgs-dashboard-mount:has(.dgs-capacity) {
 body.capacity-drill-open .dgs-capacity-drawer-backdrop:not(.dgs-wo-pr-backdrop),
 body.wo-detail-open .dgs-capacity-drawer-backdrop:not(.dgs-wo-pr-backdrop),
 body.wo-create-open .dgs-capacity-drawer-backdrop:not(.dgs-wo-pr-backdrop),
+body.truck-action-open .dgs-capacity-drawer-backdrop:not(.dgs-wo-pr-backdrop),
 body.wo-pr-open .dgs-wo-pr-backdrop {
   display: block;
 }
-body.capacity-drill-open .dgs-capacity-drawer:not(.is-wo-detail):not(.is-wo-create):not(.is-wo-pr),
+body.capacity-drill-open .dgs-capacity-drawer:not(.is-wo-detail):not(.is-wo-create):not(.is-wo-pr):not(.is-truck-action),
 body.wo-detail-open .dgs-capacity-drawer.is-wo-detail,
 body.wo-create-open .dgs-capacity-drawer.is-wo-create,
-body.wo-pr-open .dgs-capacity-drawer.is-wo-pr {
+body.wo-pr-open .dgs-capacity-drawer.is-wo-pr,
+body.truck-action-open .dgs-capacity-drawer.is-truck-action {
   display: flex;
 }
 /* Parts Order stacks over the open WO detail drawer */
@@ -3092,8 +3094,45 @@ body.wo-pr-open .dgs-capacity-drawer.is-wo-pr {
 }
 .dgs-capacity-drawer.is-wo-detail,
 .dgs-capacity-drawer.is-wo-create,
-.dgs-capacity-drawer.is-wo-pr {
+.dgs-capacity-drawer.is-wo-pr,
+.dgs-capacity-drawer.is-truck-action {
   width: min(720px, 96vw);
+}
+.dgs-capacity-drawer.is-truck-action {
+  background: var(--dgs-v2-card, #1a1f2a);
+  border-left: 1px solid var(--dgs-v2-border, rgba(255, 255, 255, 0.08));
+}
+.dgs-capacity-drawer.is-truck-action .dgs-capacity-drawer-head {
+  background: var(--dgs-v2-card-head, #141922);
+}
+.dgs-capacity-drawer.is-truck-action .dgs-v2-drawer-close {
+  width: 36px;
+  height: 36px;
+  border: 1px solid var(--dgs-v2-border, rgba(255, 255, 255, 0.08));
+  border-radius: 8px;
+  background: transparent;
+  color: var(--dgs-v2-text-muted, #8b96a8);
+  font-size: 22px;
+  line-height: 1;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.dgs-capacity-drawer.is-truck-action .dgs-truck-add-form {
+  flex-direction: column;
+  align-items: stretch;
+  flex-wrap: nowrap;
+  padding: 0.15rem 0 0.35rem;
+}
+.dgs-capacity-drawer.is-truck-action .dgs-truck-add-form .dgs-wo-field,
+.dgs-capacity-drawer.is-truck-action .dgs-truck-add-part {
+  min-width: 0;
+  width: 100%;
+}
+.dgs-capacity-drawer.is-truck-action .dgs-truck-add-note {
+  padding: 0;
+}
+.dgs-capacity-drawer.is-truck-action .dgs-truck-chip {
+  margin-bottom: 0.75rem;
 }
 .dgs-capacity-drawer.is-wo-create {
   background: var(--dgs-v2-card, #1a1f2a);
@@ -3296,7 +3335,7 @@ body.wo-pr-open .dgs-capacity-drawer.is-wo-pr {
   justify-content: space-between;
   gap: 0.75rem;
 }
-/* Truck — shell scrolls stock; Add Stock / Inv Qty sheets */
+/* Truck — shell scrolls stock; Add Stock / Inv Qty = selective overlay */
 body.dgs-truck-inventory-v2 .dgs-truck-shell {
   flex: 1;
   min-height: 0;
@@ -3318,36 +3357,8 @@ body.dgs-truck-inventory-v2 .dgs-truck-metrics {
 .dgs-truck-actions .dgs-v2-btn {
   flex: 1 1 8rem;
 }
-/* Detail card: same split + panel setup as Slot Master / Parts. */
-body.dgs-truck-inventory-v2 .dgs-v2-split {
-  flex: 1;
-  min-height: 0;
-}
-body.dgs-truck-inventory-v2 .dgs-v2-phone-only {
-  display: none;
-}
-body.dgs-truck-inventory-v2 .dgs-v2-detail-backdrop {
-  display: none;
-}
-body.dgs-truck-inventory-v2 .dgs-v2-sm-detail-head {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 4px 2px 10px;
-  border-bottom: 1px solid var(--dgs-v2-border, rgba(255, 255, 255, 0.1));
-}
-body.dgs-truck-inventory-v2 .dgs-v2-drawer-close {
-  width: 36px;
-  height: 36px;
-  border: 1px solid var(--dgs-v2-border, rgba(255, 255, 255, 0.14));
-  border-radius: 8px;
-  background: transparent;
-  color: var(--dgs-v2-text-muted, #9aa5b5);
-  font-size: 22px;
-  line-height: 1;
-  cursor: pointer;
-  flex-shrink: 0;
+body.dgs-truck-inventory-v2 .dgs-v2-desktop-only {
+  display: block;
 }
 .dgs-truck-chip {
   margin: 0;
@@ -3585,107 +3596,34 @@ body.dgs-truck-inventory-v2 .dgs-v2-drawer-close {
     display: none;
   }
 
-  /* Compact: same sheet setup as Slot Master / Casinos / Parts siblings. */
-  body.dgs-truck-inventory-v2 .dgs-v2-split {
-    display: flex;
-    flex-direction: column;
+  body.dgs-truck-inventory-v2 .dgs-v2-list-panel,
+  body.dgs-truck-inventory-v2 .dgs-truck-panel {
     flex: 1;
     min-height: 0;
-    overflow: hidden;
-    gap: 0;
-    grid-template-columns: none;
-  }
-
-  body.dgs-truck-inventory-v2 .dgs-v2-list-panel {
-    flex: 1;
-    min-height: 0;
-  }
-
-  body.dgs-truck-inventory-v2 .dgs-v2-detail:not(.dgs-v2-detail--sheet) {
-    display: none;
-  }
-
-  body.dgs-truck-inventory-v2 .dgs-v2-phone-only {
-    display: flex;
-  }
-
-  body.dgs-truck-inventory-v2 .dgs-v2-detail-bar {
-    align-items: center;
-    justify-content: space-between;
-    gap: 12px;
-    padding: 12px 14px 0;
-    flex-shrink: 0;
-  }
-
-  body.dgs-truck-inventory-v2 .dgs-v2-detail-bar-title {
-    font-size: 13px;
-    font-weight: 600;
-    color: var(--dgs-v2-heading, #f3f5f9);
-    overflow-wrap: anywhere;
-  }
-
-  body.dgs-truck-inventory-v2 .dgs-v2-detail-bar .dgs-v2-drawer-close {
-    width: 36px;
-    height: 36px;
-    border: 1px solid var(--dgs-v2-border, rgba(255, 255, 255, 0.14));
-    border-radius: 8px;
+    border: none;
+    border-radius: 0;
     background: transparent;
-    color: var(--dgs-v2-text, #c5cdd9);
-    font-size: 22px;
-    line-height: 1;
-    cursor: pointer;
-    flex-shrink: 0;
   }
 
-  body.dgs-truck-inventory-v2.truck-detail-open .dgs-v2-detail-backdrop {
-    display: block;
-    position: fixed;
-    inset: 0;
-    z-index: 40;
-    background: rgba(0, 0, 0, 0.55);
-  }
-
-  body.dgs-truck-inventory-v2 .dgs-v2-detail.dgs-v2-detail--sheet {
-    display: flex;
-    flex-direction: column;
-    position: fixed;
+  /* Selective action drawer → bottom sheet (same family as WO detail). */
+  body.truck-action-open .dgs-capacity-drawer.is-truck-action {
+    top: auto;
     left: 0;
     right: 0;
     bottom: 0;
-    z-index: 45;
-    height: min(90dvh, 820px);
-    margin: 0;
-    padding-bottom: env(safe-area-inset-bottom, 0);
-    background: var(--dgs-v2-card, #1a1f2a);
-    border: 1px solid var(--dgs-v2-border, rgba(255, 255, 255, 0.1));
+    width: 100%;
+    max-width: 100%;
+    height: min(92dvh, 860px);
+    border-left: none;
+    border-top: 1px solid rgba(255, 255, 255, 0.12);
     border-radius: 16px 16px 0 0;
     box-shadow: 0 -10px 40px rgba(0, 0, 0, 0.45);
-    overflow: hidden;
+    padding-bottom: env(safe-area-inset-bottom, 0);
   }
 
-  body.dgs-truck-inventory-v2 .dgs-v2-detail.dgs-v2-detail--sheet .dgs-v2-detail-body {
-    flex: 1;
-    min-height: 0;
-    overflow: auto;
+  body.truck-action-open .dgs-capacity-drawer.is-truck-action .dgs-capacity-drawer-body {
+    padding: 0.85rem 1rem calc(1rem + var(--dgs-v2-system-nav-clear, 28px));
     -webkit-overflow-scrolling: touch;
-    border: none;
-    border-radius: 0;
-    padding: 0 14px 16px;
-  }
-
-  body.dgs-truck-inventory-v2 .dgs-v2-detail.dgs-v2-detail--sheet .dgs-v2-sm-detail-head {
-    display: none;
-  }
-
-  body.dgs-truck-inventory-v2 .dgs-truck-add-panel,
-  body.dgs-truck-inventory-v2 .dgs-truck-panel {
-    border: none;
-    border-radius: 0;
-    background: transparent;
-  }
-
-  body.dgs-truck-inventory-v2 .dgs-truck-add-panel {
-    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
   }
 
   body.dgs-truck-inventory-v2 .dgs-v2-error,
