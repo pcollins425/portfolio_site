@@ -3646,23 +3646,21 @@ body.dgs-truck-inventory-v2 .dgs-v2-desktop-only {
   }
 
   .dgs-truck-toolbar .dgs-truck-vehicle-pick {
-    grid-column: 1 / -1;
+    grid-column: 1;
     gap: 0;
-  }
-
-  .dgs-truck-toolbar .dgs-truck-vehicle-pick .dgs-wo-field-label {
-    display: none;
+    min-width: 0;
   }
 
   .dgs-truck-toolbar .dgs-truck-vehicle-meta {
     grid-column: 1 / -1;
-    padding: 0 0 0.1rem;
+    padding: 0;
     font-size: 0.75rem;
     line-height: 1.2;
+    align-self: center;
   }
 
   body.dgs-truck-inventory-v2 .dgs-truck-toolbar:has(#vehicle-pick-wrap:not([hidden])) .dgs-truck-vehicle-meta {
-    display: none;
+    grid-column: 2 / -1;
   }
 
   .dgs-truck-toolbar input[type="search"] {

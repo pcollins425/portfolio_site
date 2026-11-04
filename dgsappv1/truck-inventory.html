@@ -4,8 +4,8 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>Truck — DGS Application</title>
-  <link rel="stylesheet" href="assets/dgs.css?v=20261104c" />
-  <link rel="stylesheet" href="assets/dgs-v2.css?v=20261104c" />
+  <link rel="stylesheet" href="assets/dgs.css?v=20261104d" />
+  <link rel="stylesheet" href="assets/dgs-v2.css?v=20261104d" />
 </head>
 <body class="dgs-app dgs-truck-inventory-v2">
   <aside class="dgs-sidebar" id="dgs-sidebar">
@@ -46,8 +46,7 @@
       <section class="dgs-v2-list-panel dgs-truck-panel">
         <div class="dgs-v2-toolbar dgs-truck-toolbar">
           <label class="dgs-truck-vehicle-pick" id="vehicle-pick-wrap" hidden>
-            <span class="dgs-wo-field-label">Vehicle</span>
-            <select id="vehicle-select" class="dgs-v2-input" aria-label="Vehicle"></select>
+            <select id="vehicle-select" class="dgs-v2-input" aria-label="Technician"></select>
           </label>
           <div class="dgs-truck-vehicle-meta" id="vehicle-meta">Loading vehicle…</div>
           <input id="search-input" type="search" placeholder="Item #, part, manufacturer, category…" autocomplete="off" />
@@ -147,9 +146,9 @@
     </div>
   </aside>
 
-  <script src="assets/auth.js?v=20261104c"></script>
-  <script src="assets/shell.js?v=20261104c"></script>
-  <script src="assets/truck-inventory.js?v=20261104c"></script>
+  <script src="assets/auth.js?v=20261104d"></script>
+  <script src="assets/shell.js?v=20261104d"></script>
+  <script src="assets/truck-inventory.js?v=20261104d"></script>
   <script>DGS.boot("truck_inventory", () => TruckInventoryApp.init());</script>
 </body>
 </html>

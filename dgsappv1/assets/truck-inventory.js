@@ -316,7 +316,7 @@
     const current = (state.vehicle && state.vehicle.code) || "";
     els.vehicle_select.innerHTML = state.vehicles
       .map((v) => {
-        const label = `${v.code} · ${v.name || "—"}`;
+        const label = (v.name || "").trim() || v.code || "—";
         const sel = v.code === current ? " selected" : "";
         return `<option value="${esc(v.code)}"${sel}>${esc(label)}</option>`;
       })
