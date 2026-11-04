@@ -3,7 +3,8 @@
   if (!catalog) return;
 
   const storageKey = "cm-mix-ids";
-  const apiBase = (window.CM_API_BASE || "https://api.collinsmediallc.com").replace(/\/$/, "");
+  // Same-origin Worker route (Resend). Override with window.CM_API_BASE if needed.
+  const apiBase = (window.CM_API_BASE || "").replace(/\/$/, "");
 
   function readMix() {
     try {

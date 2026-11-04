@@ -6,10 +6,15 @@ name = "root"
 main = "worker/spa.js"
 
 compatibility_date = "2026-05-27"
-
+# Node-free Worker; inquire uses fetch → Resend.
 [build]
 command = "bash scripts/build_pages_publish.sh"
 
 [assets]
 directory = "./pages_publish"
 binding = "ASSETS"
+
+# Public inquire form (worker/spa.js). Set secret: npx wrangler secret put RESEND_API_KEY
+[vars]
+COLLINS_INQUIRE_TO = "pcollins425@gmail.com"
+COLLINS_INQUIRE_FROM = "Collins Media <hello@collinsmediallc.com>"
