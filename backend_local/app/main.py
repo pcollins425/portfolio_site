@@ -8,7 +8,7 @@ from fastapi.responses import JSONResponse
 
 from app import settings as app_settings
 from app import view_as
-from app.routers import account_guide, analyst, assistant, assets, auth, commerce, commission_contract, contracts, distribution_agreements, documents, emaint_demo, employees, expenses, field, hubspot_webhook, mail_intake, market, master_revenue, media, parts_bom, parts_catalog, parts_inventory, parts_shop_accounts, slot_master, software_vault, view_as as view_as_router, warehouse_inventory
+from app.routers import account_guide, analyst, assistant, assets, auth, commerce, commission_contract, contracts, distribution_agreements, documents, emaint_demo, employees, expenses, field, hubspot_webhook, mail_intake, market, master_revenue, media, parts_bom, parts_catalog, parts_inventory, parts_shop_accounts, public_inquire, slot_master, software_vault, view_as as view_as_router, warehouse_inventory
 from app.routers.v1 import health as v1_health
 
 app_settings.load_local_env()
@@ -80,6 +80,7 @@ app.include_router(parts_shop_accounts.router)
 app.include_router(expenses.router)
 app.include_router(mail_intake.router)
 app.include_router(assistant.router)
+app.include_router(public_inquire.router)
 app.include_router(v1_health.router, prefix="/api/v1", tags=["v1"])
 app.include_router(v1_health.router, prefix="/v1", tags=["v1"])
 

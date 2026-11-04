@@ -3,6 +3,7 @@
   if (!catalog) return;
 
   const storageKey = "cm-mix-ids";
+  const apiBase = (window.CM_API_BASE || "https://api.collinsmediallc.com").replace(/\/$/, "");
 
   function readMix() {
     try {
@@ -35,41 +36,9 @@
     return id;
   }
 
-  function buildMailto(extraIds) {
+  function mixLabels(extraIds) {
     const ids = [...new Set([...(extraIds || []), ...readMix()])];
-    const lines = ids.length
-      ? ids.map((id) => `- ${labelForId(id)} (${id})`)
-      : ["- (no specific items selected — general inquiry)"];
-    const subject = ids.length
-      ? `Collins Media inquiry — ${ids.length} item${ids.length === 1 ? "" : "s"}`
-      : "Collins Media inquiry";
-    const body = [
-      "Hi Paul,",
-      "",
-      "I'm interested in the following from the Collins Media shop:",
-      "",
-      ...lines,
-      "",
-      "Context / timeline:",
-      "",
-      "",
-    ].join("\n");
-    return `mailto:${catalog.inquireEmail}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
-  }
-
-  function syncMixUi() {
-    const ids = readMix();
-    document.querySelectorAll("[data-mix-id]").forEach((input) => {
-      input.checked = ids.includes(input.getAttribute("data-mix-id"));
-    });
-    const dock = document.querySelector("[data-mix-dock]");
-    const count = document.querySelector("[data-mix-count]");
-    if (count) count.textContent = String(ids.length);
-    if (dock) dock.classList.toggle("is-open", ids.length > 0);
-    document.querySelectorAll("[data-inquire]").forEach((el) => {
-      const preset = el.getAttribute("data-inquire-id");
-      el.setAttribute("href", buildMailto(preset ? [preset] : []));
-    });
+    return ids.map((id) => `${labelForId(id)} (${id})`);
   }
 
   function tagsHtml(tags) {
@@ -108,7 +77,7 @@
         <div class="cm-item-actions">
           <label class="cm-mix"><input type="checkbox" data-mix-id="${fn.id}" /> Mix</label>
           <a class="cm-link" href="${fn.href}">Details</a>
-          <a class="cm-link" data-inquire data-inquire-id="${fn.id}" href="#">Inquire</a>
+          <button type="button" class="cm-link cm-link-btn" data-inquire data-inquire-id="${fn.id}">Inquire</button>
         </div>
       </article>`;
   }
@@ -123,7 +92,7 @@
         <p>${svc.blurb}</p>
         <div class="cm-item-actions">
           <label class="cm-mix"><input type="checkbox" data-mix-id="${svc.id}" /> Mix</label>
-          <a class="cm-link" data-inquire data-inquire-id="${svc.id}" href="#">Inquire</a>
+          <button type="button" class="cm-link cm-link-btn" data-inquire data-inquire-id="${svc.id}">Inquire</button>
         </div>
       </article>`;
   }
@@ -164,10 +133,155 @@
     dock.setAttribute("data-mix-dock", "");
     dock.innerHTML = `
       <p><span data-mix-count>0</span> in your mix</p>
-      <a class="cm-btn cm-btn-accent" data-inquire href="#">Inquire</a>
+      <button type="button" class="cm-btn cm-btn-accent" data-inquire>Inquire</button>
       <button type="button" class="cm-btn cm-btn-quiet" data-mix-clear>Clear</button>`;
     document.body.appendChild(dock);
     dock.querySelector("[data-mix-clear]").addEventListener("click", () => writeMix([]));
+  }
+
+  function ensureForm() {
+    if (document.querySelector("[data-inquire-dialog]")) return;
+    const wrap = document.createElement("div");
+    wrap.className = "cm-inquire";
+    wrap.setAttribute("data-inquire-dialog", "");
+    wrap.hidden = true;
+    wrap.innerHTML = `
+      <div class="cm-inquire-backdrop" data-inquire-close tabindex="-1"></div>
+      <div class="cm-inquire-panel" role="dialog" aria-modal="true" aria-labelledby="cm-inquire-title">
+        <div class="cm-inquire-head">
+          <div>
+            <p class="cm-eyebrow">Inquire</p>
+            <h2 id="cm-inquire-title">Tell me what you need</h2>
+          </div>
+          <button type="button" class="cm-inquire-x" data-inquire-close aria-label="Close">×</button>
+        </div>
+        <form class="cm-inquire-form" data-inquire-form novalidate>
+          <input class="cm-hp" type="text" name="website" tabindex="-1" autocomplete="off" aria-hidden="true" />
+          <label>
+            <span>Name</span>
+            <input name="name" type="text" required maxlength="120" autocomplete="name" />
+          </label>
+          <label>
+            <span>Email</span>
+            <input name="email" type="email" required maxlength="200" autocomplete="email" />
+          </label>
+          <label>
+            <span>Company <em>(optional)</em></span>
+            <input name="company" type="text" maxlength="160" autocomplete="organization" />
+          </label>
+          <div class="cm-inquire-mix">
+            <span>Your mix</span>
+            <ul data-inquire-mix></ul>
+          </div>
+          <label>
+            <span>Message</span>
+            <textarea name="message" required maxlength="4000" rows="5" placeholder="What are you trying to build or fix?"></textarea>
+          </label>
+          <p class="cm-inquire-status" data-inquire-status hidden></p>
+          <div class="cm-inquire-actions">
+            <button type="submit" class="cm-btn cm-btn-accent" data-inquire-submit>Send inquiry</button>
+            <button type="button" class="cm-btn cm-btn-quiet" data-inquire-close>Cancel</button>
+          </div>
+        </form>
+      </div>`;
+    document.body.appendChild(wrap);
+
+    wrap.querySelectorAll("[data-inquire-close]").forEach((el) => {
+      el.addEventListener("click", closeInquire);
+    });
+    wrap.querySelector("[data-inquire-form]").addEventListener("submit", onSubmit);
+    document.addEventListener("keydown", (e) => {
+      if (e.key === "Escape" && !wrap.hidden) closeInquire();
+    });
+  }
+
+  let pendingExtra = [];
+
+  function openInquire(extraIds) {
+    ensureForm();
+    pendingExtra = extraIds || [];
+    const wrap = document.querySelector("[data-inquire-dialog]");
+    const list = wrap.querySelector("[data-inquire-mix]");
+    const labels = mixLabels(pendingExtra);
+    list.innerHTML = labels.length
+      ? labels.map((l) => `<li>${l}</li>`).join("")
+      : "<li>(none selected — general inquiry)</li>";
+    const status = wrap.querySelector("[data-inquire-status]");
+    status.hidden = true;
+    status.textContent = "";
+    status.classList.remove("is-error", "is-ok");
+    wrap.hidden = false;
+    document.body.classList.add("cm-inquire-open");
+    const name = wrap.querySelector('input[name="name"]');
+    if (name) name.focus();
+  }
+
+  function closeInquire() {
+    const wrap = document.querySelector("[data-inquire-dialog]");
+    if (!wrap) return;
+    wrap.hidden = true;
+    document.body.classList.remove("cm-inquire-open");
+  }
+
+  async function onSubmit(e) {
+    e.preventDefault();
+    const form = e.currentTarget;
+    const status = document.querySelector("[data-inquire-status]");
+    const submit = document.querySelector("[data-inquire-submit]");
+    const fd = new FormData(form);
+    const payload = {
+      name: String(fd.get("name") || "").trim(),
+      email: String(fd.get("email") || "").trim(),
+      company: String(fd.get("company") || "").trim(),
+      message: String(fd.get("message") || "").trim(),
+      website: String(fd.get("website") || "").trim(),
+      mix: mixLabels(pendingExtra),
+    };
+    if (!payload.name || !payload.email || !payload.message) {
+      status.hidden = false;
+      status.classList.add("is-error");
+      status.classList.remove("is-ok");
+      status.textContent = "Name, email, and message are required.";
+      return;
+    }
+    submit.disabled = true;
+    status.hidden = false;
+    status.classList.remove("is-error", "is-ok");
+    status.textContent = "Sending…";
+    try {
+      const res = await fetch(`${apiBase}/api/public/inquire`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Accept: "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(data.detail || `Send failed (${res.status})`);
+      }
+      status.classList.add("is-ok");
+      status.classList.remove("is-error");
+      status.textContent = "Sent. I’ll get back to you by email.";
+      form.reset();
+      writeMix([]);
+      setTimeout(closeInquire, 1400);
+    } catch (err) {
+      status.classList.add("is-error");
+      status.classList.remove("is-ok");
+      status.textContent = err && err.message ? err.message : "Could not send. Try again.";
+    } finally {
+      submit.disabled = false;
+    }
+  }
+
+  function syncMixUi() {
+    const ids = readMix();
+    document.querySelectorAll("[data-mix-id]").forEach((input) => {
+      input.checked = ids.includes(input.getAttribute("data-mix-id"));
+    });
+    const dock = document.querySelector("[data-mix-dock]");
+    const count = document.querySelector("[data-mix-count]");
+    if (count) count.textContent = String(ids.length);
+    if (dock) dock.classList.toggle("is-open", ids.length > 0);
   }
 
   document.addEventListener("change", (e) => {
@@ -176,10 +290,24 @@
     toggleMix(input.getAttribute("data-mix-id"), input.checked);
   });
 
+  document.addEventListener("click", (e) => {
+    const trigger = e.target.closest("[data-inquire]");
+    if (!trigger) return;
+    e.preventDefault();
+    const preset = trigger.getAttribute("data-inquire-id");
+    openInquire(preset ? [preset] : []);
+  });
+
+  // Convert leftover mailto inquire anchors into form triggers.
+  document.querySelectorAll('a[data-inquire][href^="mailto:"]').forEach((a) => {
+    a.setAttribute("href", "#inquire");
+  });
+
   renderShelf("[data-shelf-apps]", catalog.apps, appCard);
   renderShelf("[data-shelf-functions]", catalog.functions, functionCard);
   renderShelf("[data-shelf-services]", catalog.services, serviceCard);
   renderResume("[data-resume]");
   ensureDock();
+  ensureForm();
   syncMixUi();
 })();

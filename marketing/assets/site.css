@@ -562,6 +562,165 @@ img {
   border-color: rgba(255, 255, 255, 0.25);
 }
 
+.cm-link-btn {
+  appearance: none;
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  font: inherit;
+  font-weight: 700;
+  font-size: 0.9rem;
+  color: var(--cm-accent-ink);
+}
+
+.cm-link-btn:hover {
+  text-decoration: underline;
+}
+
+body.cm-inquire-open {
+  overflow: hidden;
+}
+
+.cm-inquire {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: grid;
+  place-items: center;
+  padding: 1rem;
+}
+
+.cm-inquire[hidden] {
+  display: none !important;
+}
+
+.cm-inquire-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(20, 32, 46, 0.55);
+}
+
+.cm-inquire-panel {
+  position: relative;
+  z-index: 1;
+  width: min(100%, 32rem);
+  max-height: min(92vh, 40rem);
+  overflow: auto;
+  padding: 1.25rem 1.35rem 1.4rem;
+  background: var(--cm-surface-solid);
+  border: 1px solid var(--cm-line);
+  border-radius: 6px;
+  box-shadow: 0 24px 60px rgba(20, 32, 46, 0.28);
+}
+
+.cm-inquire-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.cm-inquire-head h2 {
+  margin: 0.15rem 0 0;
+  font-family: var(--cm-display);
+  font-size: 1.45rem;
+  letter-spacing: -0.03em;
+}
+
+.cm-inquire-x {
+  appearance: none;
+  border: none;
+  background: transparent;
+  font-size: 1.6rem;
+  line-height: 1;
+  cursor: pointer;
+  color: var(--cm-muted);
+  padding: 0.1rem 0.35rem;
+}
+
+.cm-inquire-form {
+  display: grid;
+  gap: 0.85rem;
+}
+
+.cm-inquire-form label {
+  display: grid;
+  gap: 0.3rem;
+  font-weight: 600;
+  font-size: 0.88rem;
+  color: var(--cm-ink-soft);
+}
+
+.cm-inquire-form label em {
+  font-style: normal;
+  font-weight: 500;
+  color: var(--cm-muted);
+}
+
+.cm-inquire-form input,
+.cm-inquire-form textarea {
+  width: 100%;
+  font: inherit;
+  color: var(--cm-ink);
+  padding: 0.65rem 0.75rem;
+  border: 1px solid var(--cm-line);
+  border-radius: 4px;
+  background: #fff;
+}
+
+.cm-inquire-form textarea {
+  resize: vertical;
+  min-height: 7rem;
+}
+
+.cm-inquire-mix span {
+  display: block;
+  font-weight: 600;
+  font-size: 0.88rem;
+  color: var(--cm-ink-soft);
+  margin-bottom: 0.35rem;
+}
+
+.cm-inquire-mix ul {
+  margin: 0;
+  padding: 0.65rem 0.75rem 0.65rem 1.35rem;
+  background: var(--cm-accent-soft);
+  border-radius: 4px;
+  color: var(--cm-ink-soft);
+  font-size: 0.9rem;
+}
+
+.cm-inquire-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.cm-inquire-status {
+  margin: 0;
+  font-size: 0.92rem;
+  font-weight: 600;
+}
+
+.cm-inquire-status.is-error {
+  color: #b42318;
+}
+
+.cm-inquire-status.is-ok {
+  color: var(--cm-accent-ink);
+}
+
+.cm-hp {
+  position: absolute !important;
+  left: -10000px !important;
+  width: 1px !important;
+  height: 1px !important;
+  overflow: hidden !important;
+  opacity: 0 !important;
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

@@ -25,6 +25,14 @@ def api_key_configured() -> bool:
     return bool(_env("RESEND_API_KEY"))
 
 
+def collins_inquire_from() -> str:
+    return _env("COLLINS_INQUIRE_FROM") or "Collins Media <hello@collinsmediallc.com>"
+
+
+def collins_inquire_to() -> str:
+    return _env("COLLINS_INQUIRE_TO") or "pcollins425@gmail.com"
+
+
 def send_email(
     *,
     to: str | list[str],
@@ -35,6 +43,7 @@ def send_email(
     cc: str | list[str] | None = None,
     attachments: list[dict[str, Any]] | None = None,
     idempotency_key: str | None = None,
+    from_addr: str | None = None,
 ) -> str:
     api_key = _env("RESEND_API_KEY")
     if not api_key:
@@ -45,7 +54,7 @@ def send_email(
         raise ValueError("at least one recipient is required")
 
     payload: dict[str, Any] = {
-        "from": reporting_from(),
+        "from": (from_addr or "").strip() or reporting_from(),
         "to": to_list,
         "subject": subject,
         "html": html,
