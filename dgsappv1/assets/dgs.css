@@ -3336,17 +3336,19 @@ body.truck-action-open .dgs-capacity-drawer.is-truck-action {
   gap: 0.75rem;
 }
 /* Truck — shell scrolls stock; Add Stock / Inv Qty = selective overlay */
+body.dgs-truck-inventory-v2 .dgs-v2-main {
+  gap: 8px;
+}
+body.dgs-truck-inventory-v2 .dgs-v2-page-header {
+  margin-bottom: 0;
+}
 body.dgs-truck-inventory-v2 .dgs-truck-shell {
   flex: 1;
   min-height: 0;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 8px;
   overflow: hidden;
-}
-body.dgs-truck-inventory-v2 .dgs-truck-metrics {
-  flex: 0 0 auto;
-  margin: 0;
 }
 .dgs-truck-actions {
   display: flex;
@@ -3571,8 +3573,7 @@ body.dgs-truck-inventory-v2 .dgs-v2-desktop-only {
 
 @media (max-width: 1366px) {
   /* AppSheet-density: full-bleed sheet, thin rows, ellipsis — not cards. */
-  body.dgs-truck-inventory-v2 .dgs-v2-page-header,
-  body.dgs-truck-inventory-v2 .dgs-truck-metrics {
+  body.dgs-truck-inventory-v2 .dgs-v2-page-header {
     display: none !important;
   }
 

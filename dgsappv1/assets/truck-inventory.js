@@ -42,8 +42,6 @@
       "search-input",
       "search-btn",
       "clear-search",
-      "stat-count",
-      "stat-vehicle",
       "truck-tbody",
       "list-status",
       "truck-actions",
@@ -336,8 +334,6 @@
         }`;
       }
     }
-    if (els.stat_vehicle) els.stat_vehicle.textContent = v ? v.code : "—";
-    if (els.stat_count) els.stat_count.textContent = String(state.parts.length);
     if (els.truck_actions) {
       els.truck_actions.hidden = !(state.canWrite && state.vehicle);
     }
