@@ -3797,12 +3797,20 @@ body.dgs-truck-inventory-v2 .dgs-v2-desktop-only {
   }
 
   body.dgs-truck-inventory-v2 .dgs-truck-col-cond {
-    width: 3.6rem;
+    width: 5.5rem;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
     color: #8b96a8;
     font-size: 0.75rem;
+  }
+
+  body.dgs-truck-inventory-v2 .dgs-truck-col-cat {
+    width: 6.5rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    color: #8b96a8;
   }
 
   body.dgs-truck-inventory-v2 .dgs-truck-col-qty {
@@ -3832,7 +3840,7 @@ body.dgs-truck-inventory-v2 .dgs-v2-desktop-only {
     padding-bottom: var(--dgs-v2-system-nav-clear, 28px);
   }
 
-  /* Phone: Item | Description | Qty — drop Cond to match 2-col density */
+  /* Phone: Item # | Part | QTY — drop Condition for density */
   body.dgs-truck-inventory-v2 .dgs-truck-col-cond {
     display: none;
   }

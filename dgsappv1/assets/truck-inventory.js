@@ -409,13 +409,18 @@
     if (els.truck_tbody) {
       els.truck_tbody.innerHTML = state.parts
         .map((p) => {
-          const mfr = [p.mfr, p.mfrpartno].filter(Boolean).join(" · ");
+          const mfr = p.mfr || "—";
+          const cat = p.category || p.item_family || "—";
           const cond = p.condition || "—";
-          const desc = p.descrip || "—";
-          return `<tr title="${esc(`${desc}${mfr ? ` · ${mfr}` : ""} · ${cond}`)}">
+          const part = p.descrip || "—";
+          const tip = [part, p.mfr, cat !== "—" ? cat : "", cond]
+            .filter(Boolean)
+            .join(" · ");
+          return `<tr title="${esc(tip)}">
             <td class="dgs-truck-col-item mono">${esc(p.item || "—")}</td>
-            <td class="dgs-truck-col-desc">${esc(desc)}</td>
-            <td class="dgs-v2-col--desktop dgs-truck-col-mfr">${esc(mfr || "—")}</td>
+            <td class="dgs-truck-col-desc">${esc(part)}</td>
+            <td class="dgs-v2-col--desktop dgs-truck-col-mfr">${esc(mfr)}</td>
+            <td class="dgs-v2-col--desktop dgs-truck-col-cat">${esc(cat)}</td>
             <td class="dgs-truck-col-cond">${esc(cond)}</td>
             <td class="dgs-v2-bin-qty dgs-truck-col-qty">${esc(fmtNum(p.qty))}</td>
           </tr>`;
@@ -548,6 +553,8 @@
         descrip: "",
         mfr: "",
         mfrpartno: "",
+        category: "",
+        item_family: "",
       };
       state.parts = [row].concat(state.parts || []);
     } else {

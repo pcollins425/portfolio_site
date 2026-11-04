@@ -253,10 +253,11 @@ def _stock_for_bucket(bucket: str, q: str = "") -> list[dict[str, Any]]:
     if like:
         filters += (
             " AND ("
-            "sb.item LIKE %s OR i.descrip LIKE %s OR i.mfrpartno LIKE %s OR i.mfr LIKE %s"
+            "sb.item LIKE %s OR i.descrip LIKE %s OR i.mfrpartno LIKE %s"
+            " OR i.mfr LIKE %s OR i.emaint_category LIKE %s OR i.item_family LIKE %s"
             ")"
         )
-        params.extend([like, like, like, like])
+        params.extend([like, like, like, like, like, like])
     rows = _field_query(
         f"""
         SELECT
@@ -267,6 +268,7 @@ def _stock_for_bucket(bucket: str, q: str = "") -> list[dict[str, Any]]:
             i.descrip,
             i.mfr,
             i.mfrpartno,
+            i.emaint_category,
             i.item_family
         FROM inventory.stock_balance AS sb
         LEFT JOIN inventory.inventory AS i ON i.item = sb.item
@@ -284,6 +286,8 @@ def _stock_for_bucket(bucket: str, q: str = "") -> list[dict[str, Any]]:
             "descrip": _json_value(r.get("descrip")),
             "mfr": _json_value(r.get("mfr")),
             "mfrpartno": _json_value(r.get("mfrpartno")),
+            "category": _json_value(r.get("emaint_category"))
+            or _json_value(r.get("item_family")),
             "item_family": _json_value(r.get("item_family")),
         }
         for r in rows
