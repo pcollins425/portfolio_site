@@ -12,6 +12,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import threading
 import time
 from collections import defaultdict
 from datetime import date, datetime
@@ -28,6 +29,9 @@ SEAT_HARD_ABS = 1.00
 PROPERTY_PASS_ABS = 0.05
 MIN_NOTE_LETTERS = 8
 MIN_NOTE_CHARS = 12
+# One heavy MR scan at a time — concurrent full pulls exhaust the dashboard pool
+# (MSSQL_POOL_MAX default 5, blocking) and starve /api/executive.
+_scan_lock = threading.Lock()
 _THROWAYAY = frozenset(
     {
         "ok",
@@ -781,33 +785,45 @@ def _scan_flags(start: date, end: date) -> list[dict[str, Any]]:
 
 
 def _cached_scan(start: date, end: date) -> list[dict[str, Any]]:
+    def _from_cache(now: float) -> list[dict[str, Any]] | None:
+        cs, ce = _scan_cache.get("from"), _scan_cache.get("to")
+        flags = _scan_cache.get("flags")
+        if (
+            flags is not None
+            and cs is not None
+            and ce is not None
+            and start >= cs
+            and end <= ce
+            and now - float(_scan_cache.get("at") or 0) < _SCAN_TTL_SEC
+        ):
+            out = []
+            for f in flags:
+                ym = str(f.get("ym") or "")[:7]
+                try:
+                    d = _month_start(ym)
+                except HTTPException:
+                    continue
+                if start <= d < end:
+                    out.append(f)
+            return out
+        return None
+
     now = time.monotonic()
-    cs, ce = _scan_cache.get("from"), _scan_cache.get("to")
-    flags = _scan_cache.get("flags")
-    if (
-        flags is not None
-        and cs is not None
-        and ce is not None
-        and start >= cs
-        and end <= ce
-        and now - float(_scan_cache.get("at") or 0) < _SCAN_TTL_SEC
-    ):
-        out = []
-        for f in flags:
-            ym = str(f.get("ym") or "")[:7]
-            try:
-                d = _month_start(ym)
-            except HTTPException:
-                continue
-            if start <= d < end:
-                out.append(f)
-        return out
-    flags = _scan_flags(start, end)
-    _scan_cache["from"] = start
-    _scan_cache["to"] = end
-    _scan_cache["at"] = now
-    _scan_cache["flags"] = flags
-    return flags
+    hit = _from_cache(now)
+    if hit is not None:
+        return hit
+
+    with _scan_lock:
+        now = time.monotonic()
+        hit = _from_cache(now)
+        if hit is not None:
+            return hit
+        flags = _scan_flags(start, end)
+        _scan_cache["from"] = start
+        _scan_cache["to"] = end
+        _scan_cache["at"] = now
+        _scan_cache["flags"] = flags
+        return flags
 
 
 def _merge_resolution(flag: dict[str, Any], stored: dict[str, Any] | None) -> dict[str, Any]:

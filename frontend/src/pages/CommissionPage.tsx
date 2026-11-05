@@ -283,7 +283,8 @@ export default function CommissionPage({
   const [ownSummary, setOwnSummary] = useState<CommissionSummary | null>(null);
   const [sortKey, setSortKey] = useState<SortKey>("delta");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
-  const rail = summary ?? ownSummary;
+  // Prefer page-local full-history summary; shell may only pass a 12-month badge scan.
+  const rail = ownSummary ?? summary;
 
   const sortedFlags = useMemo(
     () => sortFlags(data?.flags ?? [], sortKey, sortDir),
@@ -327,7 +328,6 @@ export default function CommissionPage({
   }, [focus, statusFilter, kindFilter]);
 
   useEffect(() => {
-    if (summary) return;
     const through = periods[0]?.slice(0, 7);
     if (!through) return;
     fetchJson<CommissionSummary>(
@@ -335,7 +335,7 @@ export default function CommissionPage({
     )
       .then(setOwnSummary)
       .catch(() => setOwnSummary(null));
-  }, [summary, periods]);
+  }, [periods]);
 
   const selected = useMemo(
     () => data?.flags.find((f) => f.id === selectedId) ?? null,
@@ -361,7 +361,7 @@ export default function CommissionPage({
       });
       setNote("");
       onResolved();
-      if (!summary) {
+      {
         const through = periods[0]?.slice(0, 7) || focus;
         if (through) {
           fetchJson<CommissionSummary>(

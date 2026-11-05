@@ -165,8 +165,10 @@ export default function DashboardApp() {
 
   const refreshCommissionSummary = useCallback((through: string) => {
     if (!through) return;
+    // Shell badge only needs a trailing window. Full-history scan (~187k MR rows)
+    // was saturating the dashboard SQL pool (max 5, blocking) and hung Executive.
     fetchJson<CommissionSummary>(
-      `/api/commission-contract/summary?through=${encodeURIComponent(through)}`,
+      `/api/commission-contract/summary?through=${encodeURIComponent(through)}&months=12`,
     )
       .then((d) => {
         setCommissionSummary(d);
