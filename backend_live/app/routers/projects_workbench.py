@@ -248,6 +248,8 @@ def _get_proposal(ref_or_id: str) -> dict:
             p.uuid, p.reference_key, p.casino_id, p.kind, p.version_num, p.stage,
             p.grace_months, p.project_date, p.locked_at, p.locked_by,
             p.version_readiness, p.notes, p.discussion,
+            p.contact_name, p.contact_email, p.address_line1, p.address_line2,
+            p.content_revision,
             p.insert_date, p.update_date, p.update_by, p.change_log,
             c.casino_name, c.casino_short, c.casino_abbreviation,
             v.has_tbd_theme, v.open_check_count, v.computed_version_readiness
@@ -261,6 +263,19 @@ def _get_proposal(ref_or_id: str) -> dict:
     if not rows:
         raise HTTPException(status_code=404, detail="Proposal not found")
     return rows[0]
+
+
+def _bump_content_revision(proposal_id: str, actor: str) -> None:
+    _execute(
+        """
+        UPDATE projects.proposal
+        SET content_revision = SYSUTCDATETIME(),
+            update_date = SYSUTCDATETIME(),
+            update_by = %s
+        WHERE uuid = %s
+        """,
+        (actor[:50], proposal_id),
+    )
 
 
 @router.get("/permissions")
@@ -380,12 +395,14 @@ def proposal_detail(
             u.asset_id, u.cabinet_id, u.current_theme_id, u.proposed_theme_id,
             u.unverified_theme_id,
             u.zone, u.bank, u.location, u.bank_group,
+            u.rtp_target, u.denom, u.bet_config, u.restrictions,
             u.flag_reasons_json, u.rejected_themes_json,
             ct.theme_name AS current_theme_name,
             pt.theme_name AS proposed_theme_name,
             ut.display_name AS unverified_theme_name,
             ut.reference_key AS unverified_reference_key,
             cab.cabinet_name,
+            vend.vendor_name AS manufacturer_name,
             act.action_name,
             CASE
                 WHEN u.unverified_theme_id IS NOT NULL THEN 0
@@ -405,6 +422,7 @@ def proposal_detail(
         LEFT JOIN vendors.themes pt ON pt.reference_key = u.proposed_theme_id
         LEFT JOIN projects.unverified_theme ut ON ut.uuid = u.unverified_theme_id
         LEFT JOIN vendors.cabinets cab ON cab.reference_key = u.cabinet_id
+        LEFT JOIN vendors.vendors vend ON vend.reference_key = cab.vendor_id
         LEFT JOIN projects.action_types act ON act.action_code = u.op
         WHERE u.proposal_id = %s
         ORDER BY u.sort_order, u.reference_key
@@ -464,6 +482,19 @@ class UnitPatch(BaseModel):
     zone: str | None = None
     bank: str | None = None
     location: str | None = None
+    rtp_target: str | None = None
+    denom: str | None = None
+    bet_config: str | None = None
+    restrictions: str | None = None
+
+
+class ProposalPatch(BaseModel):
+    contact_name: str | None = None
+    contact_email: str | None = None
+    address_line1: str | None = None
+    address_line2: str | None = None
+    notes: str | None = None
+    discussion: str | None = None
 
 
 class TempThemeBody(BaseModel):
@@ -613,6 +644,18 @@ def patch_unit(
     if body.location is not None:
         sets.append("location = %s")
         params.append(body.location.strip() or None)
+    if body.rtp_target is not None:
+        sets.append("rtp_target = %s")
+        params.append(body.rtp_target.strip() or None)
+    if body.denom is not None:
+        sets.append("denom = %s")
+        params.append(body.denom.strip() or None)
+    if body.bet_config is not None:
+        sets.append("bet_config = %s")
+        params.append(body.bet_config.strip() or None)
+    if body.restrictions is not None:
+        sets.append("restrictions = %s")
+        params.append(body.restrictions.strip() or None)
 
     if len(sets) == 2:
         raise HTTPException(status_code=400, detail="No fields to update")
@@ -622,8 +665,72 @@ def patch_unit(
         f"UPDATE projects.proposal_unit SET {', '.join(sets)} WHERE uuid = %s",
         tuple(params),
     )
+    # content_revision bumped by projects.trg_proposal_unit_bump_content_revision
     _refresh_readiness(str(row["proposal_id"]))
     return proposal_detail(str(row["reference_key"]), user)
+
+
+@router.get("/proposals/{ref}/revision")
+def proposal_revision(
+    ref: str,
+    user: Annotated[dict[str, Any] | None, Depends(require_demo_user)] = None,
+):
+    """Cheap Get check — document-level content_revision only."""
+    _assert_read(user)
+    p = _get_proposal(ref)
+    return {
+        "reference_key": _json_value(p["reference_key"]),
+        "content_revision": _json_value(p.get("content_revision")),
+        "update_date": _json_value(p.get("update_date")),
+        "stage": _json_value(p.get("stage")),
+    }
+
+
+@router.patch("/proposals/{ref}")
+def patch_proposal(
+    ref: str,
+    body: ProposalPatch,
+    user: Annotated[dict[str, Any] | None, Depends(require_demo_user)] = None,
+):
+    """Letter / header fields — Draft only. Bumps content_revision."""
+    p = _get_proposal(ref)
+    if p["stage"] != "draft":
+        raise HTTPException(status_code=400, detail="Proposal edits belong to Draft")
+    if not _is_admin(user):
+        _assert_write(user)
+
+    sets: list[str] = []
+    params: list[Any] = []
+    mapping = (
+        ("contact_name", body.contact_name),
+        ("contact_email", body.contact_email),
+        ("address_line1", body.address_line1),
+        ("address_line2", body.address_line2),
+        ("notes", body.notes),
+        ("discussion", body.discussion),
+    )
+    for col, val in mapping:
+        if val is not None:
+            sets.append(f"{col} = %s")
+            params.append(val.strip() or None)
+    if not sets:
+        raise HTTPException(status_code=400, detail="No fields to update")
+
+    actor = _actor(user)
+    sets.extend(
+        [
+            "content_revision = SYSUTCDATETIME()",
+            "update_date = SYSUTCDATETIME()",
+            "update_by = %s",
+        ]
+    )
+    params.append(actor)
+    params.append(str(p["uuid"]))
+    _execute(
+        f"UPDATE projects.proposal SET {', '.join(sets)} WHERE uuid = %s",
+        tuple(params),
+    )
+    return proposal_detail(str(p["reference_key"]), user)
 
 
 @router.patch("/checks/{check_id}")

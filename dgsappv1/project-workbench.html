@@ -192,6 +192,122 @@
     }
     .pwb-theme-results button:disabled:hover { background: transparent; }
     .pwb-rel { position: relative; }
+    .pwb-summary-list { margin: 0; padding-left: 18px; color: #c5cdd9; font-size: .9rem; }
+    .pwb-summary-list li { margin: 4px 0; }
+    .pwb-notes {
+      white-space: pre-wrap;
+      background: rgba(0,0,0,.25);
+      border: 1px solid rgba(255,255,255,.08);
+      border-radius: 8px;
+      padding: 10px 12px;
+      font-size: .88rem;
+      color: #c5cdd9;
+      min-height: 2.5em;
+    }
+    .pwb-history { font-size: .8rem; color: #9aa3b2; margin: 0; padding: 0; list-style: none; }
+    .pwb-history li { padding: 6px 0; border-bottom: 1px solid rgba(255,255,255,.06); }
+    body.pwb-edit-mode .pwb-browse { display: none; }
+    body.pwb-edit-mode .pwb-edit { display: flex; }
+    .pwb-edit {
+      display: none;
+      flex-direction: column;
+      flex: 1;
+      min-height: 0;
+      gap: 12px;
+    }
+    .pwb-edit-bar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+    }
+    .pwb-edit-layout {
+      display: grid;
+      grid-template-columns: minmax(320px, 42%) 1fr;
+      gap: 14px;
+      flex: 1;
+      min-height: 0;
+    }
+    @media (max-width: 1100px) {
+      .pwb-edit-layout { grid-template-columns: 1fr; overflow-y: auto; }
+    }
+    .pwb-edit-fields, .pwb-edit-doc {
+      overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
+      flex: 1;
+      min-height: 0;
+      padding: 14px 16px 24px;
+    }
+    .pwb-field-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+    .pwb-field-grid label {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      font-size: .78rem;
+      color: #9aa3b2;
+    }
+    .pwb-field-grid label.full { grid-column: 1 / -1; }
+    .pwb-field-grid input, .pwb-field-grid textarea {
+      background: #12161e;
+      color: #e8ecf2;
+      border: 1px solid rgba(255,255,255,.15);
+      border-radius: 6px;
+      padding: 8px 10px;
+      font: inherit;
+    }
+    .pwb-field-grid textarea { min-height: 72px; resize: vertical; }
+    .pwb-doc-frame {
+      background: #f4f1ea;
+      color: #1a1a1a;
+      border-radius: 6px;
+      padding: 28px 32px;
+      min-height: 420px;
+      font-family: "Georgia", "Times New Roman", serif;
+      font-size: 13px;
+      line-height: 1.45;
+      box-shadow: inset 0 0 0 1px rgba(0,0,0,.08);
+    }
+    .pwb-doc-frame h3 {
+      margin: 0 0 12px;
+      font-size: 15px;
+      letter-spacing: .02em;
+      text-align: center;
+      font-family: inherit;
+    }
+    .pwb-doc-meta { margin: 0 0 2px; }
+    .pwb-doc-letter { margin: 16px 0; }
+    .pwb-doc-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 12px;
+      font-size: 11px;
+      font-family: "Segoe UI", system-ui, sans-serif;
+    }
+    .pwb-doc-table th, .pwb-doc-table td {
+      border: 1px solid #333;
+      padding: 4px 6px;
+      text-align: left;
+      vertical-align: top;
+    }
+    .pwb-doc-table th { background: #e8e4dc; }
+    .pwb-doc-hint {
+      margin: 0 0 8px;
+      font-size: .75rem;
+      color: #9aa3b2;
+      font-family: system-ui, sans-serif;
+    }
+    .pwb-sync {
+      font-size: .75rem;
+      color: #9aa3b2;
+      margin-left: auto;
+    }
+    .pwb-sync.pending { color: #f0c14b; }
+    .pwb-sync.ok { color: #3dd68c; }
+    .pwb-sync.err { color: #f07178; }
   </style>
 </head>
 <body class="dgs-app dgs-pwb">
@@ -217,34 +333,55 @@
       <div>
         <p class="dgs-v2-eyebrow">Operations</p>
         <h1>Project Workbench</h1>
-        <p class="dgs-v2-subtitle">One stage at a time — Draft, then Pre-Check, then Final</p>
+        <p class="dgs-v2-subtitle">Active proposals — browse detail, edit draft with live document preview</p>
       </div>
     </header>
 
     <div id="error-box" class="dgs-v2-error" hidden></div>
 
-    <div class="pwb-toolbar">
-      <input type="search" id="q" placeholder="Search ref / casino" />
-      <select id="stage-filter">
-        <option value="">All stages</option>
-        <option value="draft">draft</option>
-        <option value="pre_check">pre_check</option>
-        <option value="final_approved">final_approved</option>
-        <option value="worksheet_issued">worksheet_issued</option>
-        <option value="done">done</option>
-      </select>
-      <button type="button" class="dgs-v2-btn" id="btn-refresh">Refresh</button>
+    <div class="pwb-browse" id="pwb-browse">
+      <div class="pwb-toolbar">
+        <input type="search" id="q" placeholder="Search ref / casino" />
+        <select id="stage-filter">
+          <option value="active" selected>Active (not done)</option>
+          <option value="">All stages</option>
+          <option value="draft">draft</option>
+          <option value="pre_check">pre_check</option>
+          <option value="final_approved">final_approved</option>
+          <option value="worksheet_issued">worksheet_issued</option>
+          <option value="done">done</option>
+        </select>
+        <button type="button" class="dgs-v2-btn" id="btn-refresh">Refresh</button>
+      </div>
+
+      <div class="pwb-layout">
+        <div class="pwb-panel">
+          <div class="pwb-panel-h"><span>Proposals</span><span id="list-count"></span></div>
+          <div class="pwb-list" id="list-root"></div>
+        </div>
+        <div class="pwb-panel">
+          <div class="pwb-panel-h"><span>Detail</span><span id="write-hint"></span></div>
+          <div class="pwb-detail" id="detail-root">
+            <p class="pwb-empty">Select a proposal.</p>
+          </div>
+        </div>
+      </div>
     </div>
 
-    <div class="pwb-layout">
-      <div class="pwb-panel">
-        <div class="pwb-panel-h"><span>Proposals</span><span id="list-count"></span></div>
-        <div class="pwb-list" id="list-root"></div>
+    <div class="pwb-edit" id="pwb-edit" hidden>
+      <div class="pwb-edit-bar">
+        <button type="button" class="dgs-v2-btn" id="btn-exit-edit">← Back to detail</button>
+        <strong id="edit-ref-label"></strong>
+        <span class="pwb-sync" id="edit-sync">idle</span>
       </div>
-      <div class="pwb-panel">
-        <div class="pwb-panel-h"><span>Detail</span><span id="write-hint"></span></div>
-        <div class="pwb-detail" id="detail-root">
-          <p class="pwb-empty">Select a proposal.</p>
+      <div class="pwb-edit-layout">
+        <div class="pwb-panel">
+          <div class="pwb-panel-h"><span>Proposal fields</span><span>SQL → document</span></div>
+          <div class="pwb-edit-fields" id="edit-fields-root"></div>
+        </div>
+        <div class="pwb-panel">
+          <div class="pwb-panel-h"><span>Conversion request</span><span>WordCraft host next</span></div>
+          <div class="pwb-edit-doc" id="edit-doc-root"></div>
         </div>
       </div>
     </div>

@@ -12,7 +12,13 @@
     activeRef: null,
     detail: null,
     casinoFilter: null,
+    mode: "browse", // browse | edit
+    contentRevision: null,
+    pollTimer: null,
+    pushPending: 0,
   };
+
+  const POLL_MS = 5000;
 
   const STAGES = [
     ["draft", "Draft"],
@@ -239,6 +245,364 @@
     }).join("")}</ol>`;
   }
 
+  function themeToLabel(u) {
+    if (u.unverified_theme_id) return u.unverified_theme_name || "Temp";
+    if (Number(u.is_tbd)) return "TBD";
+    return u.proposed_theme_name || u.proposed_theme_id || "—";
+  }
+
+  function zbl(u) {
+    const parts = [u.zone, u.bank, u.location].map((x) => (x || "").trim()).filter(Boolean);
+    return parts.length ? parts.join("-") : "—";
+  }
+
+  function proposedSummary(units) {
+    const rows = units || [];
+    if (!rows.length) return `<p class="pwb-empty">No units on this proposal.</p>`;
+    const byTo = {};
+    rows.forEach((u) => {
+      if (u.op === "REMOVE") {
+        const key = `remove:${u.serial || u.uuid}`;
+        byTo[key] = byTo[key] || { label: `Remove ${u.serial || "unit"}`, n: 0 };
+        byTo[key].n += 1;
+        return;
+      }
+      const to = themeToLabel(u);
+      const from = u.current_theme_name || "—";
+      const key = `${from}→${to}`;
+      byTo[key] = byTo[key] || { label: `${from} → ${to}`, n: 0 };
+      byTo[key].n += 1;
+    });
+    return `<ul class="pwb-summary-list">${Object.values(byTo)
+      .map((g) => `<li>${esc(g.label)} <span style="color:#9aa3b2">×${g.n}</span></li>`)
+      .join("")}</ul>`;
+  }
+
+  function deptNotesHtml(d) {
+    const p = d.proposal || {};
+    const notes = (p.discussion || "").trim() || (p.notes || "").trim();
+    const hist = (d.history || []).slice(0, 8);
+    const histHtml = hist.length
+      ? `<ul class="pwb-history">${hist
+          .map((h) => {
+            const move =
+              h.from_stage || h.to_stage
+                ? `${h.from_stage || "—"} → ${h.to_stage || "—"}`
+                : h.event_type || "event";
+            return `<li><strong>${esc(h.actor || "")}</strong> · ${esc(move)} · ${esc(
+              h.event_at || ""
+            )}</li>`;
+          })
+          .join("")}</ul>`
+      : `<p class="pwb-empty">No stage history yet.</p>`;
+    return `
+      <div class="pwb-section">Department / stage notes</div>
+      <div class="pwb-notes">${notes ? esc(notes) : "No notes yet."}</div>
+      <div class="pwb-section">Recent stage activity</div>
+      ${histHtml}
+    `;
+  }
+
+  function setSync(msg, cls) {
+    const el = document.getElementById("edit-sync");
+    if (!el) return;
+    el.textContent = msg;
+    el.className = `pwb-sync${cls ? " " + cls : ""}`;
+  }
+
+  function stopPoll() {
+    if (STATE.pollTimer) {
+      clearInterval(STATE.pollTimer);
+      STATE.pollTimer = null;
+    }
+  }
+
+  function startPoll() {
+    stopPoll();
+    STATE.pollTimer = setInterval(() => {
+      if (STATE.mode === "edit" && STATE.activeRef) pollRevision();
+    }, POLL_MS);
+  }
+
+  async function pollRevision() {
+    if (!STATE.activeRef || STATE.pushPending > 0) return;
+    try {
+      const rev = await api(
+        `/api/projects-workbench/proposals/${encodeURIComponent(STATE.activeRef)}/revision`
+      );
+      const server = rev.content_revision || "";
+      if (!STATE.contentRevision) {
+        STATE.contentRevision = server;
+        return;
+      }
+      if (server && server > STATE.contentRevision) {
+        setSync("pulling…", "pending");
+        STATE.detail = await api(
+          `/api/projects-workbench/proposals/${encodeURIComponent(STATE.activeRef)}`
+        );
+        STATE.contentRevision = STATE.detail.proposal.content_revision || server;
+        if (STATE.mode === "edit") renderEdit();
+        else renderDetail();
+        setSync(`synced ${server}`, "ok");
+      }
+    } catch (e) {
+      setSync(e.message || "poll failed", "err");
+    }
+  }
+
+  function enterEdit() {
+    const p = STATE.detail && STATE.detail.proposal;
+    if (!p || !canEditUnits(p.stage)) return;
+    STATE.mode = "edit";
+    STATE.contentRevision = p.content_revision || null;
+    document.body.classList.add("pwb-edit-mode");
+    document.getElementById("pwb-browse").hidden = true;
+    const edit = document.getElementById("pwb-edit");
+    edit.hidden = false;
+    document.getElementById("edit-ref-label").textContent = p.reference_key;
+    renderEdit();
+    startPoll();
+    setSync(`rev ${STATE.contentRevision || "—"}`, "ok");
+  }
+
+  function exitEdit() {
+    STATE.mode = "browse";
+    stopPoll();
+    document.body.classList.remove("pwb-edit-mode");
+    document.getElementById("pwb-edit").hidden = true;
+    document.getElementById("pwb-browse").hidden = false;
+    renderDetail();
+  }
+
+  function renderDocPreview(d) {
+    const p = d.proposal || {};
+    const casino = p.casino_name || p.casino_short || "Casino Name";
+    const units = d.units || [];
+    const rows = units
+      .map((u) => {
+        const to =
+          u.op === "REMOVE"
+            ? "(remove)"
+            : u.unverified_theme_name || u.proposed_theme_name || (Number(u.is_tbd) ? "TBD" : "");
+        return `<tr>
+          <td>${esc(u.manufacturer_name || "")}</td>
+          <td>${esc(u.cabinet_name || u.cabinet_id || "")}</td>
+          <td>${esc(u.serial || "")}</td>
+          <td>${esc(u.current_theme_name || "")}</td>
+          <td>${esc(to)}</td>
+          <td>${esc(zbl(u))}</td>
+          <td>${esc(u.rtp_target || "")}</td>
+          <td>${esc(u.denom || "")}</td>
+          <td>${esc(u.bet_config || "")}</td>
+          <td>${esc(u.restrictions || "")}</td>
+        </tr>`;
+      })
+      .join("");
+    return `
+      <p class="pwb-doc-hint">SQL-controlled preview (WordCraft iframe plugs in when hosted same-origin).</p>
+      <div class="pwb-doc-frame" id="pwb-doc-frame">
+        <h3>Leased Equipment Software Conversion Request</h3>
+        <p class="pwb-doc-meta"><strong>${esc(casino)}</strong></p>
+        <p class="pwb-doc-meta">${esc(p.contact_name || "Direct Contact")}</p>
+        <p class="pwb-doc-meta">${esc(p.contact_email || "Direct Contact Email")}</p>
+        <p class="pwb-doc-meta">${esc(p.address_line1 || "Address Line #1")}</p>
+        <p class="pwb-doc-meta">${esc(p.address_line2 || "Address Line #2")}</p>
+        <p class="pwb-doc-meta"><strong>Request # ${esc(p.reference_key)}</strong></p>
+        <div class="pwb-doc-letter">
+          <p>Hello,</p>
+          <p>Pending your approval, Dynamic Gaming Solutions, LLC would like to perform the following software conversions to our leased equipment at the ${esc(
+            casino
+          )}. As always, we thank you for your continued partnership.</p>
+          <p>Respectfully,</p>
+        </div>
+        <p><strong>Convert</strong></p>
+        <table class="pwb-doc-table">
+          <thead><tr>
+            <th>Manufacturer</th><th>Cabinet</th><th>Serial #</th>
+            <th>Theme (From)</th><th>Theme (To)</th><th>Z-B-L</th>
+            <th>RTP Target</th><th>Denom</th><th>Bet Config</th><th>Restrictions</th>
+          </tr></thead>
+          <tbody>${
+            rows ||
+            `<tr><td colspan="10" style="text-align:center;color:#666">No units</td></tr>`
+          }</tbody>
+        </table>
+      </div>
+    `;
+  }
+
+  function renderEdit() {
+    const fields = document.getElementById("edit-fields-root");
+    const doc = document.getElementById("edit-doc-root");
+    const d = STATE.detail;
+    if (!d || !d.proposal) {
+      fields.innerHTML = `<p class="pwb-empty">No proposal loaded.</p>`;
+      doc.innerHTML = "";
+      return;
+    }
+    const p = d.proposal;
+    const unitRows = (d.units || [])
+      .map((u) => {
+        const toLabel = themeToLabel(u);
+        const themeCell =
+          u.op === "REMOVE"
+            ? `<span class="pwb-removed">removed from floor</span>`
+            : `<div class="pwb-rel theme-cell">
+                <input data-unit="${esc(u.uuid)}" data-field="theme_q" data-cabinet="${esc(
+                  u.cabinet_id || ""
+                )}" placeholder="${
+                  u.cabinet_id ? "Search theme…" : "Add a cabinet first"
+                }" value="${
+                  u.unverified_theme_id
+                    ? esc(u.unverified_theme_name || "")
+                    : Number(u.is_tbd)
+                      ? ""
+                      : esc(u.proposed_theme_name || "")
+                }" ${u.cabinet_id ? "" : "disabled"} />
+                <div class="pwb-theme-results" hidden></div>
+                <div style="margin-top:4px;font-size:.75rem;color:#9aa3b2">${esc(toLabel)}</div>
+                ${softwareBadge(u)}
+              </div>`;
+        return `<tr>
+          <td>${
+            `<select data-unit="${esc(u.uuid)}" data-field="op">${(
+              STATE.actionTypes.length
+                ? STATE.actionTypes
+                : [{ action_code: u.op, action_name: u.action_name || u.op }]
+            )
+              .map(
+                (a) =>
+                  `<option value="${esc(a.action_code)}"${
+                    u.op === a.action_code ? " selected" : ""
+                  }>${esc(a.action_name)}</option>`
+              )
+              .join("")}</select>`
+          }</td>
+          <td><input data-unit="${esc(u.uuid)}" data-field="serial" value="${esc(
+            u.serial || ""
+          )}" /></td>
+          <td>${esc(u.cabinet_name || u.cabinet_id || "—")}</td>
+          <td>${themeCell}</td>
+          <td><input data-unit="${esc(u.uuid)}" data-field="zone" value="${esc(
+            u.zone || ""
+          )}" style="max-width:64px" /></td>
+          <td><input data-unit="${esc(u.uuid)}" data-field="bank" value="${esc(
+            u.bank || ""
+          )}" style="max-width:64px" /></td>
+          <td><input data-unit="${esc(u.uuid)}" data-field="location" value="${esc(
+            u.location || ""
+          )}" style="max-width:64px" /></td>
+          <td><input data-unit="${esc(u.uuid)}" data-field="rtp_target" value="${esc(
+            u.rtp_target || ""
+          )}" placeholder="opt" style="max-width:72px" /></td>
+          <td><input data-unit="${esc(u.uuid)}" data-field="denom" value="${esc(
+            u.denom || ""
+          )}" placeholder="opt" style="max-width:90px" /></td>
+          <td><input data-unit="${esc(u.uuid)}" data-field="bet_config" value="${esc(
+            u.bet_config || ""
+          )}" placeholder="opt" style="max-width:100px" /></td>
+          <td><input data-unit="${esc(u.uuid)}" data-field="restrictions" value="${esc(
+            u.restrictions || ""
+          )}" placeholder="opt" style="max-width:100px" /></td>
+        </tr>`;
+      })
+      .join("");
+
+    fields.innerHTML = `
+      <div class="pwb-section">Letter header</div>
+      <div class="pwb-field-grid">
+        <label>Casino<input value="${esc(
+          p.casino_name || p.casino_short || ""
+        )}" disabled /></label>
+        <label>Request #<input value="${esc(p.reference_key)}" disabled /></label>
+        <label>Contact name<input data-proposal="contact_name" value="${esc(
+          p.contact_name || ""
+        )}" /></label>
+        <label>Contact email<input data-proposal="contact_email" value="${esc(
+          p.contact_email || ""
+        )}" /></label>
+        <label class="full">Address line 1<input data-proposal="address_line1" value="${esc(
+          p.address_line1 || ""
+        )}" /></label>
+        <label class="full">Address line 2<input data-proposal="address_line2" value="${esc(
+          p.address_line2 || ""
+        )}" /></label>
+        <label class="full">Stage notes<textarea data-proposal="discussion">${esc(
+          p.discussion || ""
+        )}</textarea></label>
+      </div>
+      <div class="pwb-section">Convert lines</div>
+      <table class="pwb-table">
+        <thead><tr>
+          <th>Op</th><th>Serial</th><th>Cabinet</th><th>Theme (To)</th>
+          <th>Zone</th><th>Bank</th><th>Loc</th>
+          <th>RTP</th><th>Denom</th><th>Bet</th><th>Restrict</th>
+        </tr></thead>
+        <tbody>${
+          unitRows || `<tr><td colspan="11" class="pwb-empty">No units</td></tr>`
+        }</tbody>
+      </table>
+      <div class="pwb-actions" style="margin-top:14px">
+        <button type="button" class="dgs-v2-btn dgs-v2-btn--primary" id="btn-send-precheck-edit">Send to Pre-Check</button>
+      </div>
+    `;
+    doc.innerHTML = renderDocPreview(d);
+    bindEditHandlers();
+  }
+
+  function bindEditHandlers() {
+    const fields = document.getElementById("edit-fields-root");
+    fields.querySelectorAll("[data-proposal]").forEach((el) => {
+      el.addEventListener("change", () => {
+        const body = {};
+        body[el.getAttribute("data-proposal")] = el.value;
+        patchProposal(body);
+      });
+    });
+    fields.querySelectorAll("select[data-unit][data-field=op]").forEach((el) => {
+      el.addEventListener("change", () => patchUnit(el.dataset.unit, { op: el.value }));
+    });
+    ["serial", "zone", "bank", "location", "rtp_target", "denom", "bet_config", "restrictions"].forEach(
+      (field) => {
+        fields.querySelectorAll(`input[data-unit][data-field=${field}]`).forEach((el) => {
+          el.addEventListener("change", () => {
+            const body = {};
+            body[field] = el.value;
+            patchUnit(el.dataset.unit, body);
+          });
+        });
+      }
+    );
+    fields.querySelectorAll("input[data-unit][data-field=theme_q]").forEach((el) => {
+      let timer = null;
+      el.addEventListener("input", () => {
+        clearTimeout(timer);
+        timer = setTimeout(() => themeSearch(el), 250);
+      });
+      el.addEventListener("focus", () => {
+        if (el.value.trim()) themeSearch(el);
+      });
+    });
+    const send = document.getElementById("btn-send-precheck-edit");
+    if (send) {
+      send.addEventListener("click", async () => {
+        try {
+          showError("");
+          STATE.detail = await api(
+            `/api/projects-workbench/proposals/${encodeURIComponent(
+              STATE.detail.proposal.reference_key
+            )}/stage`,
+            { method: "POST", body: JSON.stringify({ stage: "pre_check" }) }
+          );
+          await loadList();
+          exitEdit();
+        } catch (e) {
+          showError(e.message || String(e));
+        }
+      });
+    }
+  }
+
   function renderDetail() {
     const root = document.getElementById("detail-root");
     const hint = document.getElementById("write-hint");
@@ -256,7 +620,8 @@
 
     let actions = "";
     if (editUnits) {
-      actions += `<button type="button" class="dgs-v2-btn dgs-v2-btn--primary" id="btn-send-precheck">Send to Pre-Check</button>`;
+      actions += `<button type="button" class="dgs-v2-btn dgs-v2-btn--primary" id="btn-edit-proposal">Edit Proposal</button>`;
+      actions += `<button type="button" class="dgs-v2-btn" id="btn-send-precheck">Send to Pre-Check</button>`;
     }
     if (p.stage === "pre_check" && canReturn()) {
       actions += `<button type="button" class="dgs-v2-btn" id="btn-return-draft">Return to draft…</button>`;
@@ -286,85 +651,21 @@
 
     const unitsRows = (d.units || [])
       .map((u) => {
-        const isTemp = !!(u.unverified_theme_id);
-        const themeLabel = isTemp
-          ? `<span class="pwb-temp">${esc(u.unverified_theme_name || "Temp")}</span>`
-          : Number(u.is_tbd)
-            ? `<span class="pwb-tbd">TBD</span>`
-            : esc(u.proposed_theme_name || u.proposed_theme_id || "—");
-        const themeIdLine = isTemp
-          ? esc(u.unverified_reference_key || "")
-          : esc(u.proposed_theme_id || "");
-        const sw = softwareBadge(u);
-        const hasCab = !!(u.cabinet_id && String(u.cabinet_id).trim());
-        const themeEditor = u.op === "REMOVE"
-          ? `<span class="pwb-removed">removed from floor</span>`
-          : editUnits
-          ? `<div class="pwb-rel theme-cell">
-              <input data-unit="${esc(u.uuid)}" data-field="theme_q" data-cabinet="${esc(
-                u.cabinet_id || ""
-              )}" placeholder="${
-                hasCab ? "Search theme…" : "Add a cabinet first"
-              }" value="${
-                isTemp
-                  ? esc(u.unverified_theme_name || "")
-                  : Number(u.is_tbd)
-                    ? ""
-                    : esc(u.proposed_theme_name || "")
-              }" ${hasCab ? "" : "disabled"} />
-              <div class="pwb-theme-results" hidden></div>
-              <div style="margin-top:4px;font-size:.75rem;color:#9aa3b2">${themeLabel} · ${themeIdLine}</div>
-              ${sw}
-              ${themeHubLink(u)}
-            </div>`
-          : `<span class="${Number(u.is_tbd) ? "pwb-tbd" : ""}">${themeLabel}</span>${sw}${themeHubLink(u)}`;
+        const themeLabel =
+          u.op === "REMOVE"
+            ? `<span class="pwb-removed">removed</span>`
+            : Number(u.is_tbd)
+              ? `<span class="pwb-tbd">TBD</span>`
+              : u.unverified_theme_id
+                ? `<span class="pwb-temp">${esc(u.unverified_theme_name || "Temp")}</span>`
+                : esc(u.proposed_theme_name || "—");
         return `<tr>
-          <td>${esc(u.sort_order)}</td>
-          <td>${
-            editUnits
-              ? `<select data-unit="${esc(u.uuid)}" data-field="op">
-                  ${(STATE.actionTypes.length
-                    ? STATE.actionTypes
-                    : [{ action_code: u.op, action_name: u.action_name || u.op }]
-                  )
-                    .map(
-                      (a) =>
-                        `<option value="${esc(a.action_code)}"${
-                          u.op === a.action_code ? " selected" : ""
-                        }>${esc(a.action_name)}</option>`
-                    )
-                    .join("")}
-                </select>`
-              : esc(u.action_name || u.op)
-          }</td>
-          <td>${
-            editUnits
-              ? `<input data-unit="${esc(u.uuid)}" data-field="serial" value="${esc(u.serial || "")}" />`
-              : esc(u.serial || "")
-          }</td>
+          <td>${esc(u.action_name || u.op)}</td>
+          <td>${esc(u.serial || "")}</td>
           <td>${esc(u.cabinet_name || u.cabinet_id || "—")}</td>
-          <td>${themeEditor}</td>
-          <td>${
-            editUnits
-              ? `<input data-unit="${esc(u.uuid)}" data-field="zone" value="${esc(
-                  u.zone || ""
-                )}" style="max-width:70px" />`
-              : esc(u.zone || "")
-          }</td>
-          <td>${
-            editUnits
-              ? `<input data-unit="${esc(u.uuid)}" data-field="bank" value="${esc(
-                  u.bank || ""
-                )}" style="max-width:70px" />`
-              : esc(u.bank || "")
-          }</td>
-          <td>${
-            editUnits
-              ? `<input data-unit="${esc(u.uuid)}" data-field="location" value="${esc(
-                  u.location || ""
-                )}" style="max-width:70px" />`
-              : esc(u.location || "")
-          }</td>
+          <td>${esc(u.current_theme_name || "—")}</td>
+          <td>${themeLabel}${softwareBadge(u)}${themeHubLink(u)}</td>
+          <td>${esc(zbl(u))}</td>
           ${
             showChecks
               ? CHECKS.map(([type]) =>
@@ -382,7 +683,7 @@
     const checkHeads = showChecks
       ? CHECKS.map(([, label]) => `<th>${label}</th>`).join("")
       : "";
-    const colCount = showChecks ? 8 + CHECKS.length : 8;
+    const colCount = showChecks ? 6 + CHECKS.length : 6;
 
     root.innerHTML = `
       <h2>${esc(p.reference_key)}</h2>
@@ -394,15 +695,23 @@
       ${laterNote ? `<p class="pwb-stage-note">${esc(laterNote)}</p>` : ""}
       <div class="pwb-actions">${actions}</div>
 
-      <div class="pwb-section">${p.stage === "draft" ? "Units" : "Units on this proposal"}</div>
+      <div class="pwb-section">What is being proposed</div>
+      ${proposedSummary(d.units)}
+
+      <div class="pwb-section">Lines</div>
       <table class="pwb-table">
         <thead><tr>
-          <th>#</th><th>Op</th><th>Serial</th><th>Cabinet</th><th>Proposed theme</th><th>Zone</th><th>Bank</th><th>Loc</th>
+          <th>Op</th><th>Serial</th><th>Cabinet</th><th>From</th><th>To</th><th>Z-B-L</th>
           ${checkHeads}
         </tr></thead>
         <tbody>${unitsRows || `<tr><td colspan="${colCount}" class="pwb-empty">No units</td></tr>`}</tbody>
       </table>
+
+      ${deptNotesHtml(d)}
     `;
+
+    const editBtn = document.getElementById("btn-edit-proposal");
+    if (editBtn) editBtn.addEventListener("click", () => enterEdit());
 
     const send = document.getElementById("btn-send-precheck");
     if (send) {
@@ -468,43 +777,8 @@
       });
     }
 
-    root.querySelectorAll("select[data-unit][data-field=op]").forEach((el) => {
-      el.addEventListener("change", () => patchUnit(el.dataset.unit, { op: el.value }));
-    });
-    root.querySelectorAll("input[data-unit][data-field=serial]").forEach((el) => {
-      el.addEventListener("change", () => patchUnit(el.dataset.unit, { serial: el.value }));
-    });
-    ["zone", "bank", "location"].forEach((field) => {
-      root.querySelectorAll(`input[data-unit][data-field=${field}]`).forEach((el) => {
-        el.addEventListener("change", () => {
-          const body = {};
-          body[field] = el.value;
-          patchUnit(el.dataset.unit, body);
-        });
-      });
-    });
-    root.querySelectorAll("input[data-unit][data-field=theme_q]").forEach((el) => {
-      let timer = null;
-      el.addEventListener("input", () => {
-        clearTimeout(timer);
-        timer = setTimeout(() => themeSearch(el), 250);
-      });
-      el.addEventListener("focus", () => {
-        if (el.value.trim()) themeSearch(el);
-      });
-      el.addEventListener("keydown", (ev) => {
-        if (ev.key !== "Enter") return;
-        ev.preventDefault();
-        const box = el.parentElement.querySelector(".pwb-theme-results");
-        const add = box && box.querySelector("button[data-add-temp]");
-        if (add) add.click();
-      });
-    });
     root.querySelectorAll("select[data-check][data-field=status]").forEach((el) => {
       el.addEventListener("change", () => patchCheck(el.dataset.check, { status: el.value }));
-    });
-    root.querySelectorAll("input[data-check][data-field=notes]").forEach((el) => {
-      el.addEventListener("change", () => patchCheck(el.dataset.check, { notes: el.value }));
     });
   }
 
@@ -602,14 +876,47 @@
   async function patchUnit(unitId, body) {
     try {
       showError("");
+      STATE.pushPending += 1;
+      setSync("pushing…", "pending");
       STATE.detail = await api(`/api/projects-workbench/units/${encodeURIComponent(unitId)}`, {
         method: "PATCH",
         body: JSON.stringify(body),
       });
+      STATE.contentRevision =
+        (STATE.detail.proposal && STATE.detail.proposal.content_revision) || STATE.contentRevision;
       await loadList();
-      renderDetail();
+      if (STATE.mode === "edit") renderEdit();
+      else renderDetail();
+      setSync(`pushed ${STATE.contentRevision || ""}`, "ok");
     } catch (e) {
       showError(e.message || String(e));
+      setSync(e.message || "push failed", "err");
+    } finally {
+      STATE.pushPending = Math.max(0, STATE.pushPending - 1);
+    }
+  }
+
+  async function patchProposal(body) {
+    if (!STATE.activeRef) return;
+    try {
+      showError("");
+      STATE.pushPending += 1;
+      setSync("pushing…", "pending");
+      STATE.detail = await api(
+        `/api/projects-workbench/proposals/${encodeURIComponent(STATE.activeRef)}`,
+        { method: "PATCH", body: JSON.stringify(body) }
+      );
+      STATE.contentRevision =
+        (STATE.detail.proposal && STATE.detail.proposal.content_revision) || STATE.contentRevision;
+      await loadList();
+      if (STATE.mode === "edit") renderEdit();
+      else renderDetail();
+      setSync(`pushed ${STATE.contentRevision || ""}`, "ok");
+    } catch (e) {
+      showError(e.message || String(e));
+      setSync(e.message || "push failed", "err");
+    } finally {
+      STATE.pushPending = Math.max(0, STATE.pushPending - 1);
     }
   }
 
@@ -632,11 +939,15 @@
     const stage = document.getElementById("stage-filter").value;
     const params = new URLSearchParams();
     if (q) params.set("q", q);
-    if (stage) params.set("stage", stage);
+    if (stage && stage !== "active") params.set("stage", stage);
     if (STATE.casinoFilter) params.set("casino_id", STATE.casinoFilter);
     params.set("page_size", "100");
     const data = await api(`/api/projects-workbench/proposals?${params}`);
-    STATE.items = data.items || [];
+    let items = data.items || [];
+    if (stage === "active") {
+      items = items.filter((it) => it.stage !== "done");
+    }
+    STATE.items = items;
     renderList();
   }
 
@@ -672,6 +983,7 @@
       STATE.actionTypes = perms.action_types || [];
       document.getElementById("btn-refresh").addEventListener("click", () => loadList());
       document.getElementById("stage-filter").addEventListener("change", () => loadList());
+      document.getElementById("btn-exit-edit").addEventListener("click", () => exitEdit());
       let t = null;
       document.getElementById("q").addEventListener("input", () => {
         clearTimeout(t);
@@ -681,6 +993,9 @@
       const ref = (params.get("ref") || "").trim();
       if (ref) await openDetail(ref);
       else if (STATE.items.length === 1) await openDetail(STATE.items[0].reference_key);
+      if ((params.get("edit") || "") === "1" && STATE.detail && canEditUnits(STATE.detail.proposal.stage)) {
+        enterEdit();
+      }
     } catch (e) {
       showError(e.message || String(e));
     }
