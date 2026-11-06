@@ -271,24 +271,29 @@ def _get_proposal(ref_or_id: str) -> dict:
     if not rows:
         raise HTTPException(status_code=404, detail="Proposal not found")
     row = rows[0]
+    def _txt(val) -> str:
+        if val is None:
+            return ""
+        return str(val).strip()
+
     # Letter block is casino-sourced (not proposal-edited). Prefer slot director.
     contact_name = (
-        (row.get("slot_director_name") or "").strip()
-        or (row.get("general_manager_name") or "").strip()
+        _txt(row.get("slot_director_name"))
+        or _txt(row.get("general_manager_name"))
         or None
     )
     contact_email = (
-        (row.get("slot_director_email") or "").strip()
-        or (row.get("general_manager_email") or "").strip()
+        _txt(row.get("slot_director_email"))
+        or _txt(row.get("general_manager_email"))
         or None
     )
-    city = (row.get("casino_city") or "").strip()
-    state = (row.get("casino_state") or "").strip()
-    zip_code = (row.get("casino_zip") or "").strip()
+    city = _txt(row.get("casino_city"))
+    state = _txt(row.get("casino_state"))
+    zip_code = _txt(row.get("casino_zip"))  # zip may be int in clients.casinos
     city_line = ", ".join(p for p in (city, " ".join(x for x in (state, zip_code) if x)) if p)
     row["letter_contact_name"] = contact_name
     row["letter_contact_email"] = contact_email
-    row["letter_address_line1"] = (row.get("casino_address") or "").strip() or None
+    row["letter_address_line1"] = _txt(row.get("casino_address")) or None
     row["letter_address_line2"] = city_line or None
     return row
 
