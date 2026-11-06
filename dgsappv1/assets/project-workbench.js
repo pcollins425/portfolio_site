@@ -504,8 +504,11 @@
           <td><input data-unit="${esc(u.uuid)}" data-field="location" value="${esc(
             u.location || ""
           )}" /></td>
+          <td><button type="button" class="pwb-del-line" data-del-unit="${esc(
+            u.uuid
+          )}" title="Delete line" aria-label="Delete line">×</button></td>
         </tr>
-        <tr class="pwb-edit-setup-row"><td colspan="7">
+        <tr class="pwb-edit-setup-row"><td colspan="8">
           <div class="pwb-edit-setup">
             <label>RTP<input data-unit="${esc(u.uuid)}" data-field="rtp_target" value="${esc(
               u.rtp_target || ""
@@ -529,21 +532,69 @@
         <colgroup>
           <col class="c-op" /><col class="c-serial" /><col class="c-cab" />
           <col class="c-theme" /><col class="c-zbl" /><col class="c-zbl" /><col class="c-zbl" />
+          <col class="c-del" />
         </colgroup>
         <thead><tr>
           <th>Op</th><th>Serial</th><th>Cabinet</th><th>Theme (To)</th>
-          <th>Zone</th><th>Bank</th><th>Loc</th>
+          <th>Zone</th><th>Bank</th><th>Loc</th><th></th>
         </tr></thead>
         <tbody>${
-          rows || `<tr><td colspan="7" class="pwb-empty">No units on this proposal.</td></tr>`
+          rows || `<tr><td colspan="8" class="pwb-empty">No units on this proposal.</td></tr>`
         }</tbody>
       </table>
       <div class="pwb-actions" style="margin-top:12px">
+        <button type="button" class="dgs-v2-btn" id="btn-add-line">Add line</button>
         <button type="button" class="dgs-v2-btn dgs-v2-btn--primary" id="btn-send-precheck-edit">Send to Pre-Check</button>
       </div>
     `;
     doc.innerHTML = renderDocPreview(d);
     bindEditHandlers();
+  }
+
+  async function addUnitLine() {
+    if (!STATE.activeRef) return;
+    try {
+      showError("");
+      STATE.pushPending += 1;
+      setSync("adding…", "pending");
+      STATE.detail = await api(
+        `/api/projects-workbench/proposals/${encodeURIComponent(STATE.activeRef)}/units`,
+        { method: "POST", body: JSON.stringify({}) }
+      );
+      STATE.contentRevision =
+        (STATE.detail.proposal && STATE.detail.proposal.content_revision) || STATE.contentRevision;
+      await loadList();
+      renderEdit();
+      setSync(`added ${STATE.contentRevision || ""}`, "ok");
+    } catch (e) {
+      showError(e.message || String(e));
+      setSync(e.message || "add failed", "err");
+    } finally {
+      STATE.pushPending = Math.max(0, STATE.pushPending - 1);
+    }
+  }
+
+  async function deleteUnitLine(unitId) {
+    if (!confirm("Delete this line?")) return;
+    try {
+      showError("");
+      STATE.pushPending += 1;
+      setSync("deleting…", "pending");
+      STATE.detail = await api(
+        `/api/projects-workbench/units/${encodeURIComponent(unitId)}`,
+        { method: "DELETE" }
+      );
+      STATE.contentRevision =
+        (STATE.detail.proposal && STATE.detail.proposal.content_revision) || STATE.contentRevision;
+      await loadList();
+      renderEdit();
+      setSync(`deleted ${STATE.contentRevision || ""}`, "ok");
+    } catch (e) {
+      showError(e.message || String(e));
+      setSync(e.message || "delete failed", "err");
+    } finally {
+      STATE.pushPending = Math.max(0, STATE.pushPending - 1);
+    }
   }
 
   function bindEditHandlers() {
@@ -572,6 +623,11 @@
         if (el.value.trim()) themeSearch(el);
       });
     });
+    fields.querySelectorAll("button[data-del-unit]").forEach((el) => {
+      el.addEventListener("click", () => deleteUnitLine(el.getAttribute("data-del-unit")));
+    });
+    const addBtn = document.getElementById("btn-add-line");
+    if (addBtn) addBtn.addEventListener("click", () => addUnitLine());
     const send = document.getElementById("btn-send-precheck-edit");
     if (send) {
       send.addEventListener("click", async () => {

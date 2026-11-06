@@ -8,7 +8,7 @@ import re
 from datetime import date, datetime
 from decimal import Decimal
 from typing import Annotated, Any, Literal
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
@@ -547,6 +547,131 @@ class CheckPatch(BaseModel):
 class StageBody(BaseModel):
     stage: Literal["draft", "pre_check", "final_approved"]
     reason: str | None = Field(None, max_length=2000)
+
+
+class UnitCreateBody(BaseModel):
+    op: str | None = None
+    serial: str | None = None
+    cabinet_id: str | None = None
+
+
+def _assert_draft_write(p: dict, user: dict[str, Any] | None) -> None:
+    if p["stage"] != "draft":
+        raise HTTPException(status_code=400, detail="Proposal edits belong to Draft")
+    if not _is_admin(user):
+        _assert_write(user)
+
+
+def _next_unit_sort(proposal_id: str) -> int:
+    rows = _query(
+        """
+        SELECT ISNULL(MAX(sort_order), 0) AS mx
+        FROM projects.proposal_unit
+        WHERE proposal_id = %s
+        """,
+        (proposal_id,),
+    )
+    return int(rows[0]["mx"] or 0) + 1
+
+
+def _unit_reference_key(proposal_ref: str, sort_order: int) -> str:
+    base = f"PU-{proposal_ref}-{sort_order:03d}"
+    hit = _query(
+        "SELECT TOP 1 reference_key FROM projects.proposal_unit WHERE reference_key = %s",
+        (base,),
+    )
+    if not hit:
+        return base
+    # Collision (e.g. deleted mid-list then re-added): append short suffix.
+    return f"PU-{proposal_ref}-{sort_order:03d}-{str(uuid4())[:8]}"
+
+
+@router.post("/proposals/{ref}/units")
+def create_unit(
+    ref: str,
+    body: UnitCreateBody | None = None,
+    user: Annotated[dict[str, Any] | None, Depends(require_demo_user)] = None,
+):
+    """Add a blank draft line. Theme stays TBD until assigned; cabinet optional."""
+    p = _get_proposal(ref)
+    _assert_draft_write(p, user)
+    body = body or UnitCreateBody()
+    kind = str(p.get("kind") or "conversion").lower()
+    default_op = "INSTALL" if kind == "install" else "CONVERT"
+    op = _canon_op(body.op) if body.op else default_op
+    tbd = _tbd_theme_id()
+    sort_order = _next_unit_sort(str(p["uuid"]))
+    unit_id = str(uuid4())
+    unit_ref = _unit_reference_key(str(p["reference_key"]), sort_order)
+    actor = _actor(user)
+    cabinet_id = (body.cabinet_id or "").strip() or None
+    if cabinet_id:
+        exists = _query(
+            "SELECT TOP 1 reference_key FROM vendors.cabinets WHERE reference_key = %s",
+            (cabinet_id,),
+        )
+        if not exists:
+            raise HTTPException(status_code=400, detail="Unknown cabinet_id")
+    serial = (body.serial or "").strip() or None
+    _execute(
+        """
+        INSERT INTO projects.proposal_unit (
+            uuid, reference_key, update_by,
+            proposal_id, sort_order, op, serial, cabinet_id,
+            proposed_theme_id
+        ) VALUES (
+            %s, %s, %s,
+            %s, %s, %s, %s, %s,
+            %s
+        )
+        """,
+        (
+            unit_id,
+            unit_ref,
+            actor,
+            str(p["uuid"]),
+            sort_order,
+            op,
+            serial,
+            cabinet_id,
+            tbd,
+        ),
+    )
+    return proposal_detail(str(p["reference_key"]), user)
+
+
+@router.delete("/units/{unit_id}")
+def delete_unit(
+    unit_id: str,
+    user: Annotated[dict[str, Any] | None, Depends(require_demo_user)] = None,
+):
+    rows = _query(
+        """
+        SELECT u.uuid, u.proposal_id, p.stage, p.reference_key
+        FROM projects.proposal_unit u
+        JOIN projects.proposal p ON p.uuid = u.proposal_id
+        WHERE u.uuid = %s
+        """,
+        (unit_id.strip(),),
+    )
+    if not rows:
+        raise HTTPException(status_code=404, detail="Unit not found")
+    row = rows[0]
+    _assert_draft_write(
+        {"stage": row["stage"], "uuid": row["proposal_id"]},
+        user,
+    )
+    # Readiness FKs are NO ACTION — clear children first.
+    _execute(
+        "DELETE FROM projects.proposal_readiness_check WHERE proposal_unit_id = %s",
+        (unit_id.strip(),),
+    )
+    _execute(
+        "DELETE FROM projects.proposal_unit WHERE uuid = %s",
+        (unit_id.strip(),),
+    )
+    # content_revision bumped by trigger on unit delete
+    return proposal_detail(str(row["reference_key"]), user)
 
 
 @router.patch("/units/{unit_id}")
