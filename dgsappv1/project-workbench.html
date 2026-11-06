@@ -223,7 +223,7 @@
     }
     .pwb-edit-layout {
       display: grid;
-      grid-template-columns: minmax(380px, 1fr) minmax(360px, 1fr);
+      grid-template-columns: minmax(420px, 1.1fr) minmax(320px, 0.9fr);
       gap: 14px;
       flex: 1;
       min-height: 0;
@@ -236,71 +236,80 @@
       -webkit-overflow-scrolling: touch;
       flex: 1;
       min-height: 0;
-      padding: 16px 18px 28px;
+      padding: 12px 14px 20px;
     }
-    .pwb-unit-card {
-      border: 1px solid rgba(255,255,255,.12);
-      border-radius: 10px;
-      background: rgba(0,0,0,.28);
-      padding: 14px 14px 12px;
-      margin: 0 0 14px;
+    .pwb-edit-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: .88rem;
+      table-layout: fixed;
     }
-    .pwb-unit-card-h {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 8px 12px;
-      align-items: baseline;
-      margin-bottom: 12px;
+    .pwb-edit-table th, .pwb-edit-table td {
+      border-bottom: 1px solid rgba(255,255,255,.08);
+      padding: 8px 6px;
+      text-align: left;
+      vertical-align: top;
+    }
+    .pwb-edit-table th {
       color: #9aa3b2;
-      font-size: .8rem;
+      font-weight: 500;
+      font-size: .75rem;
+      position: sticky;
+      top: 0;
+      background: #12161e;
+      z-index: 1;
     }
-    .pwb-unit-card-h strong {
-      color: #e8ecf2;
-      font-size: .95rem;
-    }
-    .pwb-unit-grid {
-      display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: 12px 14px;
-    }
-    .pwb-unit-grid label {
-      display: flex;
-      flex-direction: column;
-      gap: 6px;
-      font-size: .8rem;
-      color: #9aa3b2;
-      min-width: 0;
-    }
-    .pwb-unit-grid label.span2 { grid-column: 1 / -1; }
-    .pwb-unit-grid input,
-    .pwb-unit-grid select,
-    .pwb-unit-grid textarea {
+    .pwb-edit-table input,
+    .pwb-edit-table select {
       width: 100%;
       max-width: none;
       box-sizing: border-box;
       background: #12161e;
       color: #e8ecf2;
-      border: 1px solid rgba(255,255,255,.18);
-      border-radius: 6px;
-      padding: 10px 12px;
+      border: 1px solid rgba(255,255,255,.15);
+      border-radius: 5px;
+      padding: 6px 8px;
       font: inherit;
-      font-size: .95rem;
+      font-size: .86rem;
     }
-    .pwb-unit-setup {
-      display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: 12px 14px;
-      margin-top: 12px;
-      padding-top: 12px;
-      border-top: 1px solid rgba(255,255,255,.08);
-    }
-    .pwb-unit-setup .opt-label {
+    .pwb-edit-table col.c-op { width: 7.5rem; }
+    .pwb-edit-table col.c-serial { width: 6.5rem; }
+    .pwb-edit-table col.c-cab { width: 8.5rem; }
+    .pwb-edit-table col.c-theme { width: auto; }
+    .pwb-edit-table col.c-zbl { width: 3.4rem; }
+    .pwb-edit-table .theme-meta {
+      margin-top: 4px;
       font-size: .72rem;
-      text-transform: uppercase;
-      letter-spacing: .04em;
+      color: #9aa3b2;
+    }
+    .pwb-edit-setup-row td {
+      padding-top: 0;
+      padding-bottom: 10px;
+      border-bottom: 1px solid rgba(255,255,255,.12);
+    }
+    .pwb-edit-setup {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 8px;
+      padding: 2px 0 4px;
+    }
+    .pwb-edit-setup label {
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+      font-size: .7rem;
       color: #6d7684;
-      grid-column: 1 / -1;
-      margin-bottom: -4px;
+    }
+    .pwb-edit-setup input {
+      width: 100%;
+      box-sizing: border-box;
+      background: #12161e;
+      color: #e8ecf2;
+      border: 1px solid rgba(255,255,255,.12);
+      border-radius: 5px;
+      padding: 5px 7px;
+      font: inherit;
+      font-size: .8rem;
     }
     .pwb-doc-frame {
       background: #f4f1ea;

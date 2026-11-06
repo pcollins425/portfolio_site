@@ -497,6 +497,9 @@ def proposal_detail(
                 u["flag_reasons"] = [raw]
         else:
             u["flag_reasons"] = []
+        # action_types codes are uppercase; older imports used lowercase.
+        if u.get("op") is not None:
+            u["op"] = str(u["op"]).strip().upper()
     return {
         "proposal": _row(p),
         "tbd_theme_id": tbd,

@@ -451,23 +451,23 @@
       return;
     }
     const units = d.units || [];
-    const cards = units
-      .map((u, idx) => {
+    const actionOpts = STATE.actionTypes.length
+      ? STATE.actionTypes
+      : [{ action_code: "CONVERT", action_name: "Convert" }];
+    const rows = units
+      .map((u) => {
+        const opCode = String(u.op || "").toUpperCase();
         const toLabel = themeToLabel(u);
-        const opSelect = `<select data-unit="${esc(u.uuid)}" data-field="op">${(
-          STATE.actionTypes.length
-            ? STATE.actionTypes
-            : [{ action_code: u.op, action_name: u.action_name || u.op }]
-        )
+        const opSelect = `<select data-unit="${esc(u.uuid)}" data-field="op">${actionOpts
           .map(
             (a) =>
               `<option value="${esc(a.action_code)}"${
-                u.op === a.action_code ? " selected" : ""
+                opCode === String(a.action_code || "").toUpperCase() ? " selected" : ""
               }>${esc(a.action_name)}</option>`
           )
           .join("")}</select>`;
-        const themeBlock =
-          u.op === "REMOVE"
+        const themeCell =
+          opCode === "REMOVE"
             ? `<span class="pwb-removed">removed from floor</span>`
             : `<div class="pwb-rel">
                 <input data-unit="${esc(u.uuid)}" data-field="theme_q" data-cabinet="${esc(
@@ -482,55 +482,63 @@
                       : esc(u.proposed_theme_name || "")
                 }" ${u.cabinet_id ? "" : "disabled"} />
                 <div class="pwb-theme-results" hidden></div>
-                <div style="margin-top:6px;font-size:.8rem;color:#9aa3b2">
-                  ${esc(toLabel)}${u.current_theme_name ? ` · from ${esc(u.current_theme_name)}` : ""}
-                </div>
-                ${softwareBadge(u)}
+                <div class="theme-meta">${esc(toLabel)}${
+                  u.current_theme_name ? ` · from ${esc(u.current_theme_name)}` : ""
+                } ${softwareBadge(u)}</div>
               </div>`;
-        return `<article class="pwb-unit-card" data-unit-card="${esc(u.uuid)}">
-          <div class="pwb-unit-card-h">
-            <strong>#${esc(u.sort_order != null ? u.sort_order : idx + 1)}</strong>
-            <span>${esc(u.cabinet_name || u.cabinet_id || "No cabinet")}</span>
-            <span>${esc(u.manufacturer_name || "")}</span>
-          </div>
-          <div class="pwb-unit-grid">
-            <label>Op${opSelect}</label>
-            <label>Serial<input data-unit="${esc(u.uuid)}" data-field="serial" value="${esc(
-              u.serial || ""
-            )}" /></label>
-            <label class="span2">Theme (To)${themeBlock}</label>
-            <label>Zone<input data-unit="${esc(u.uuid)}" data-field="zone" value="${esc(
-              u.zone || ""
-            )}" /></label>
-            <label>Bank<input data-unit="${esc(u.uuid)}" data-field="bank" value="${esc(
-              u.bank || ""
-            )}" /></label>
-            <label>Loc<input data-unit="${esc(u.uuid)}" data-field="location" value="${esc(
-              u.location || ""
-            )}" /></label>
-          </div>
-          <div class="pwb-unit-setup">
-            <div class="opt-label">Optional setup</div>
-            <label>RTP target<input data-unit="${esc(u.uuid)}" data-field="rtp_target" value="${esc(
+        return `<tr>
+          <td>${opSelect}</td>
+          <td><input data-unit="${esc(u.uuid)}" data-field="serial" value="${esc(
+            u.serial || ""
+          )}" /></td>
+          <td title="${esc(u.manufacturer_name || "")}">${esc(
+            u.cabinet_name || u.cabinet_id || "—"
+          )}</td>
+          <td>${themeCell}</td>
+          <td><input data-unit="${esc(u.uuid)}" data-field="zone" value="${esc(
+            u.zone || ""
+          )}" /></td>
+          <td><input data-unit="${esc(u.uuid)}" data-field="bank" value="${esc(
+            u.bank || ""
+          )}" /></td>
+          <td><input data-unit="${esc(u.uuid)}" data-field="location" value="${esc(
+            u.location || ""
+          )}" /></td>
+        </tr>
+        <tr class="pwb-edit-setup-row"><td colspan="7">
+          <div class="pwb-edit-setup">
+            <label>RTP<input data-unit="${esc(u.uuid)}" data-field="rtp_target" value="${esc(
               u.rtp_target || ""
             )}" placeholder="optional" /></label>
             <label>Denom<input data-unit="${esc(u.uuid)}" data-field="denom" value="${esc(
               u.denom || ""
             )}" placeholder="optional" /></label>
-            <label>Bet config<input data-unit="${esc(u.uuid)}" data-field="bet_config" value="${esc(
+            <label>Bet<input data-unit="${esc(u.uuid)}" data-field="bet_config" value="${esc(
               u.bet_config || ""
             )}" placeholder="optional" /></label>
-            <label>Restrictions<input data-unit="${esc(u.uuid)}" data-field="restrictions" value="${esc(
+            <label>Restrict<input data-unit="${esc(u.uuid)}" data-field="restrictions" value="${esc(
               u.restrictions || ""
             )}" placeholder="optional" /></label>
           </div>
-        </article>`;
+        </td></tr>`;
       })
       .join("");
 
     fields.innerHTML = `
-      ${cards || `<p class="pwb-empty">No units on this proposal.</p>`}
-      <div class="pwb-actions" style="margin-top:8px">
+      <table class="pwb-edit-table">
+        <colgroup>
+          <col class="c-op" /><col class="c-serial" /><col class="c-cab" />
+          <col class="c-theme" /><col class="c-zbl" /><col class="c-zbl" /><col class="c-zbl" />
+        </colgroup>
+        <thead><tr>
+          <th>Op</th><th>Serial</th><th>Cabinet</th><th>Theme (To)</th>
+          <th>Zone</th><th>Bank</th><th>Loc</th>
+        </tr></thead>
+        <tbody>${
+          rows || `<tr><td colspan="7" class="pwb-empty">No units on this proposal.</td></tr>`
+        }</tbody>
+      </table>
+      <div class="pwb-actions" style="margin-top:12px">
         <button type="button" class="dgs-v2-btn dgs-v2-btn--primary" id="btn-send-precheck-edit">Send to Pre-Check</button>
       </div>
     `;
