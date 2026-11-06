@@ -252,9 +252,17 @@ def _get_proposal(ref_or_id: str) -> dict:
             p.content_revision,
             p.insert_date, p.update_date, p.update_by, p.change_log,
             c.casino_name, c.casino_short, c.casino_abbreviation,
+            c.address AS casino_address,
+            c.city AS casino_city,
+            c.zip AS casino_zip,
+            c.phone AS casino_phone,
+            c.slot_director_name, c.slot_director_email,
+            c.general_manager_name, c.general_manager_email,
+            st.state_abbreviation AS casino_state,
             v.has_tbd_theme, v.open_check_count, v.computed_version_readiness
         FROM projects.proposal p
         LEFT JOIN clients.casinos c ON c.reference_key = p.casino_id
+        LEFT JOIN clients.states st ON st.reference_key = c.state_id
         LEFT JOIN projects.vw_proposal_version_blockers v ON v.proposal_id = p.uuid
         WHERE p.reference_key = %s OR CAST(p.uuid AS nvarchar(36)) = %s
         """,
@@ -262,7 +270,27 @@ def _get_proposal(ref_or_id: str) -> dict:
     )
     if not rows:
         raise HTTPException(status_code=404, detail="Proposal not found")
-    return rows[0]
+    row = rows[0]
+    # Letter block is casino-sourced (not proposal-edited). Prefer slot director.
+    contact_name = (
+        (row.get("slot_director_name") or "").strip()
+        or (row.get("general_manager_name") or "").strip()
+        or None
+    )
+    contact_email = (
+        (row.get("slot_director_email") or "").strip()
+        or (row.get("general_manager_email") or "").strip()
+        or None
+    )
+    city = (row.get("casino_city") or "").strip()
+    state = (row.get("casino_state") or "").strip()
+    zip_code = (row.get("casino_zip") or "").strip()
+    city_line = ", ".join(p for p in (city, " ".join(x for x in (state, zip_code) if x)) if p)
+    row["letter_contact_name"] = contact_name
+    row["letter_contact_email"] = contact_email
+    row["letter_address_line1"] = (row.get("casino_address") or "").strip() or None
+    row["letter_address_line2"] = city_line or None
+    return row
 
 
 def _bump_content_revision(proposal_id: str, actor: str) -> None:

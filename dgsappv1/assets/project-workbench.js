@@ -374,9 +374,19 @@
     renderDetail();
   }
 
+  function letterContact(p) {
+    return {
+      name: p.letter_contact_name || p.slot_director_name || p.general_manager_name || "",
+      email: p.letter_contact_email || p.slot_director_email || p.general_manager_email || "",
+      line1: p.letter_address_line1 || p.casino_address || "",
+      line2: p.letter_address_line2 || "",
+    };
+  }
+
   function renderDocPreview(d) {
     const p = d.proposal || {};
     const casino = p.casino_name || p.casino_short || "Casino Name";
+    const letter = letterContact(p);
     const units = d.units || [];
     const rows = units
       .map((u) => {
@@ -399,14 +409,14 @@
       })
       .join("");
     return `
-      <p class="pwb-doc-hint">SQL-controlled preview (WordCraft iframe plugs in when hosted same-origin).</p>
+      <p class="pwb-doc-hint">Header from casino record · lines from proposal units (WordCraft host next).</p>
       <div class="pwb-doc-frame" id="pwb-doc-frame">
         <h3>Leased Equipment Software Conversion Request</h3>
         <p class="pwb-doc-meta"><strong>${esc(casino)}</strong></p>
-        <p class="pwb-doc-meta">${esc(p.contact_name || "Direct Contact")}</p>
-        <p class="pwb-doc-meta">${esc(p.contact_email || "Direct Contact Email")}</p>
-        <p class="pwb-doc-meta">${esc(p.address_line1 || "Address Line #1")}</p>
-        <p class="pwb-doc-meta">${esc(p.address_line2 || "Address Line #2")}</p>
+        <p class="pwb-doc-meta">${esc(letter.name || "Direct Contact")}</p>
+        <p class="pwb-doc-meta">${esc(letter.email || "Direct Contact Email")}</p>
+        <p class="pwb-doc-meta">${esc(letter.line1 || "Address Line #1")}</p>
+        <p class="pwb-doc-meta">${esc(letter.line2 || "Address Line #2")}</p>
         <p class="pwb-doc-meta"><strong>Request # ${esc(p.reference_key)}</strong></p>
         <div class="pwb-doc-letter">
           <p>Hello,</p>
@@ -440,14 +450,26 @@
       doc.innerHTML = "";
       return;
     }
-    const p = d.proposal;
-    const unitRows = (d.units || [])
-      .map((u) => {
+    const units = d.units || [];
+    const cards = units
+      .map((u, idx) => {
         const toLabel = themeToLabel(u);
-        const themeCell =
+        const opSelect = `<select data-unit="${esc(u.uuid)}" data-field="op">${(
+          STATE.actionTypes.length
+            ? STATE.actionTypes
+            : [{ action_code: u.op, action_name: u.action_name || u.op }]
+        )
+          .map(
+            (a) =>
+              `<option value="${esc(a.action_code)}"${
+                u.op === a.action_code ? " selected" : ""
+              }>${esc(a.action_name)}</option>`
+          )
+          .join("")}</select>`;
+        const themeBlock =
           u.op === "REMOVE"
             ? `<span class="pwb-removed">removed from floor</span>`
-            : `<div class="pwb-rel theme-cell">
+            : `<div class="pwb-rel">
                 <input data-unit="${esc(u.uuid)}" data-field="theme_q" data-cabinet="${esc(
                   u.cabinet_id || ""
                 )}" placeholder="${
@@ -460,89 +482,55 @@
                       : esc(u.proposed_theme_name || "")
                 }" ${u.cabinet_id ? "" : "disabled"} />
                 <div class="pwb-theme-results" hidden></div>
-                <div style="margin-top:4px;font-size:.75rem;color:#9aa3b2">${esc(toLabel)}</div>
+                <div style="margin-top:6px;font-size:.8rem;color:#9aa3b2">
+                  ${esc(toLabel)}${u.current_theme_name ? ` · from ${esc(u.current_theme_name)}` : ""}
+                </div>
                 ${softwareBadge(u)}
               </div>`;
-        return `<tr>
-          <td>${
-            `<select data-unit="${esc(u.uuid)}" data-field="op">${(
-              STATE.actionTypes.length
-                ? STATE.actionTypes
-                : [{ action_code: u.op, action_name: u.action_name || u.op }]
-            )
-              .map(
-                (a) =>
-                  `<option value="${esc(a.action_code)}"${
-                    u.op === a.action_code ? " selected" : ""
-                  }>${esc(a.action_name)}</option>`
-              )
-              .join("")}</select>`
-          }</td>
-          <td><input data-unit="${esc(u.uuid)}" data-field="serial" value="${esc(
-            u.serial || ""
-          )}" /></td>
-          <td>${esc(u.cabinet_name || u.cabinet_id || "—")}</td>
-          <td>${themeCell}</td>
-          <td><input data-unit="${esc(u.uuid)}" data-field="zone" value="${esc(
-            u.zone || ""
-          )}" style="max-width:64px" /></td>
-          <td><input data-unit="${esc(u.uuid)}" data-field="bank" value="${esc(
-            u.bank || ""
-          )}" style="max-width:64px" /></td>
-          <td><input data-unit="${esc(u.uuid)}" data-field="location" value="${esc(
-            u.location || ""
-          )}" style="max-width:64px" /></td>
-          <td><input data-unit="${esc(u.uuid)}" data-field="rtp_target" value="${esc(
-            u.rtp_target || ""
-          )}" placeholder="opt" style="max-width:72px" /></td>
-          <td><input data-unit="${esc(u.uuid)}" data-field="denom" value="${esc(
-            u.denom || ""
-          )}" placeholder="opt" style="max-width:90px" /></td>
-          <td><input data-unit="${esc(u.uuid)}" data-field="bet_config" value="${esc(
-            u.bet_config || ""
-          )}" placeholder="opt" style="max-width:100px" /></td>
-          <td><input data-unit="${esc(u.uuid)}" data-field="restrictions" value="${esc(
-            u.restrictions || ""
-          )}" placeholder="opt" style="max-width:100px" /></td>
-        </tr>`;
+        return `<article class="pwb-unit-card" data-unit-card="${esc(u.uuid)}">
+          <div class="pwb-unit-card-h">
+            <strong>#${esc(u.sort_order != null ? u.sort_order : idx + 1)}</strong>
+            <span>${esc(u.cabinet_name || u.cabinet_id || "No cabinet")}</span>
+            <span>${esc(u.manufacturer_name || "")}</span>
+          </div>
+          <div class="pwb-unit-grid">
+            <label>Op${opSelect}</label>
+            <label>Serial<input data-unit="${esc(u.uuid)}" data-field="serial" value="${esc(
+              u.serial || ""
+            )}" /></label>
+            <label class="span2">Theme (To)${themeBlock}</label>
+            <label>Zone<input data-unit="${esc(u.uuid)}" data-field="zone" value="${esc(
+              u.zone || ""
+            )}" /></label>
+            <label>Bank<input data-unit="${esc(u.uuid)}" data-field="bank" value="${esc(
+              u.bank || ""
+            )}" /></label>
+            <label>Loc<input data-unit="${esc(u.uuid)}" data-field="location" value="${esc(
+              u.location || ""
+            )}" /></label>
+          </div>
+          <div class="pwb-unit-setup">
+            <div class="opt-label">Optional setup</div>
+            <label>RTP target<input data-unit="${esc(u.uuid)}" data-field="rtp_target" value="${esc(
+              u.rtp_target || ""
+            )}" placeholder="optional" /></label>
+            <label>Denom<input data-unit="${esc(u.uuid)}" data-field="denom" value="${esc(
+              u.denom || ""
+            )}" placeholder="optional" /></label>
+            <label>Bet config<input data-unit="${esc(u.uuid)}" data-field="bet_config" value="${esc(
+              u.bet_config || ""
+            )}" placeholder="optional" /></label>
+            <label>Restrictions<input data-unit="${esc(u.uuid)}" data-field="restrictions" value="${esc(
+              u.restrictions || ""
+            )}" placeholder="optional" /></label>
+          </div>
+        </article>`;
       })
       .join("");
 
     fields.innerHTML = `
-      <div class="pwb-section">Letter header</div>
-      <div class="pwb-field-grid">
-        <label>Casino<input value="${esc(
-          p.casino_name || p.casino_short || ""
-        )}" disabled /></label>
-        <label>Request #<input value="${esc(p.reference_key)}" disabled /></label>
-        <label>Contact name<input data-proposal="contact_name" value="${esc(
-          p.contact_name || ""
-        )}" /></label>
-        <label>Contact email<input data-proposal="contact_email" value="${esc(
-          p.contact_email || ""
-        )}" /></label>
-        <label class="full">Address line 1<input data-proposal="address_line1" value="${esc(
-          p.address_line1 || ""
-        )}" /></label>
-        <label class="full">Address line 2<input data-proposal="address_line2" value="${esc(
-          p.address_line2 || ""
-        )}" /></label>
-        <label class="full">Stage notes<textarea data-proposal="discussion">${esc(
-          p.discussion || ""
-        )}</textarea></label>
-      </div>
-      <div class="pwb-section">Convert lines</div>
-      <table class="pwb-table">
-        <thead><tr>
-          <th>Op</th><th>Serial</th><th>Cabinet</th><th>Theme (To)</th>
-          <th>Zone</th><th>Bank</th><th>Loc</th>
-          <th>RTP</th><th>Denom</th><th>Bet</th><th>Restrict</th>
-        </tr></thead>
-        <tbody>${
-          unitRows || `<tr><td colspan="11" class="pwb-empty">No units</td></tr>`
-        }</tbody>
-      </table>
-      <div class="pwb-actions" style="margin-top:14px">
+      ${cards || `<p class="pwb-empty">No units on this proposal.</p>`}
+      <div class="pwb-actions" style="margin-top:8px">
         <button type="button" class="dgs-v2-btn dgs-v2-btn--primary" id="btn-send-precheck-edit">Send to Pre-Check</button>
       </div>
     `;
@@ -552,13 +540,6 @@
 
   function bindEditHandlers() {
     const fields = document.getElementById("edit-fields-root");
-    fields.querySelectorAll("[data-proposal]").forEach((el) => {
-      el.addEventListener("change", () => {
-        const body = {};
-        body[el.getAttribute("data-proposal")] = el.value;
-        patchProposal(body);
-      });
-    });
     fields.querySelectorAll("select[data-unit][data-field=op]").forEach((el) => {
       el.addEventListener("change", () => patchUnit(el.dataset.unit, { op: el.value }));
     });

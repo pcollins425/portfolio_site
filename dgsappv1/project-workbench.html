@@ -223,7 +223,7 @@
     }
     .pwb-edit-layout {
       display: grid;
-      grid-template-columns: minmax(320px, 42%) 1fr;
+      grid-template-columns: minmax(380px, 1fr) minmax(360px, 1fr);
       gap: 14px;
       flex: 1;
       min-height: 0;
@@ -236,30 +236,72 @@
       -webkit-overflow-scrolling: touch;
       flex: 1;
       min-height: 0;
-      padding: 14px 16px 24px;
+      padding: 16px 18px 28px;
     }
-    .pwb-field-grid {
+    .pwb-unit-card {
+      border: 1px solid rgba(255,255,255,.12);
+      border-radius: 10px;
+      background: rgba(0,0,0,.28);
+      padding: 14px 14px 12px;
+      margin: 0 0 14px;
+    }
+    .pwb-unit-card-h {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px 12px;
+      align-items: baseline;
+      margin-bottom: 12px;
+      color: #9aa3b2;
+      font-size: .8rem;
+    }
+    .pwb-unit-card-h strong {
+      color: #e8ecf2;
+      font-size: .95rem;
+    }
+    .pwb-unit-grid {
       display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 10px;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px 14px;
     }
-    .pwb-field-grid label {
+    .pwb-unit-grid label {
       display: flex;
       flex-direction: column;
-      gap: 4px;
-      font-size: .78rem;
+      gap: 6px;
+      font-size: .8rem;
       color: #9aa3b2;
+      min-width: 0;
     }
-    .pwb-field-grid label.full { grid-column: 1 / -1; }
-    .pwb-field-grid input, .pwb-field-grid textarea {
+    .pwb-unit-grid label.span2 { grid-column: 1 / -1; }
+    .pwb-unit-grid input,
+    .pwb-unit-grid select,
+    .pwb-unit-grid textarea {
+      width: 100%;
+      max-width: none;
+      box-sizing: border-box;
       background: #12161e;
       color: #e8ecf2;
-      border: 1px solid rgba(255,255,255,.15);
+      border: 1px solid rgba(255,255,255,.18);
       border-radius: 6px;
-      padding: 8px 10px;
+      padding: 10px 12px;
       font: inherit;
+      font-size: .95rem;
     }
-    .pwb-field-grid textarea { min-height: 72px; resize: vertical; }
+    .pwb-unit-setup {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px 14px;
+      margin-top: 12px;
+      padding-top: 12px;
+      border-top: 1px solid rgba(255,255,255,.08);
+    }
+    .pwb-unit-setup .opt-label {
+      font-size: .72rem;
+      text-transform: uppercase;
+      letter-spacing: .04em;
+      color: #6d7684;
+      grid-column: 1 / -1;
+      margin-bottom: -4px;
+    }
     .pwb-doc-frame {
       background: #f4f1ea;
       color: #1a1a1a;
@@ -376,7 +418,7 @@
       </div>
       <div class="pwb-edit-layout">
         <div class="pwb-panel">
-          <div class="pwb-panel-h"><span>Proposal fields</span><span>SQL → document</span></div>
+          <div class="pwb-panel-h"><span>Convert lines</span><span>SQL → document</span></div>
           <div class="pwb-edit-fields" id="edit-fields-root"></div>
         </div>
         <div class="pwb-panel">
