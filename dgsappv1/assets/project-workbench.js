@@ -476,101 +476,102 @@
     return (frame && frame.contentWindow && frame.contentWindow.wordcraft) || null;
   }
 
-  function walkFindNumber(obj, pred, depth, path) {
-    if (!obj || typeof obj !== "object" || depth > 6) return null;
-    for (const [k, v] of Object.entries(obj)) {
-      const here = path ? path + "." + k : k;
-      if (typeof v === "number" && Number.isFinite(v) && pred(k, v, here)) {
-        return { key: k, value: v, path: here };
-      }
-      if (v && typeof v === "object") {
-        const inner = walkFindNumber(v, pred, depth + 1, here);
-        if (inner) return inner;
-      }
+  async function wordcraftUiInspect() {
+    const wc = wordcraftApi();
+    if (!wc) return null;
+    try {
+      if (typeof wc.uiInspect === "function") return await wc.uiInspect();
+      if (typeof wc.request === "function") return await wc.request("ui.inspect", {});
+    } catch (_) {
+      /* ignore */
     }
     return null;
   }
 
-  /** Best-effort scroll/view metric from ui.inspect (shape varies by WordCraft build). */
-  function scrollMetricFromInspect(inspect) {
-    if (!inspect || typeof inspect !== "object") return null;
-    const named = walkFindNumber(
-      inspect,
-      (k) => /^(scroll|scrollY|scroll_y|offsetY|offset_y|canvas_scroll)$/i.test(k)
-    );
-    if (named) return { kind: "y", y: named.value, path: named.path };
-
-    const pages = inspect.pages || (inspect.view && inspect.view.pages) || inspect.pageRects;
-    if (Array.isArray(pages) && pages[0]) {
-      const p0 = pages[0];
-      const y =
-        typeof p0.y === "number"
-          ? p0.y
-          : typeof p0.top === "number"
-            ? p0.top
-            : p0.rect && typeof p0.rect.y === "number"
-              ? p0.rect.y
-              : p0.rect && p0.rect.min && typeof p0.rect.min.y === "number"
-                ? p0.rect.min.y
-                : null;
-      if (typeof y === "number") {
-        const page = p0.page != null ? p0.page : p0.index != null ? p0.index : 0;
-        return { kind: "pageY", page, y };
-      }
+  async function wordcraftUiWheel(params) {
+    const wc = wordcraftApi();
+    if (!wc || typeof wc.request !== "function") return false;
+    try {
+      // ui.wheel is a control method (queued input), not engine.execute.
+      await wc.request("ui.wheel", params);
+      return true;
+    } catch (_) {
+      return false;
     }
+  }
 
-    const caret = inspect.caret;
-    if (caret && typeof caret.y === "number") return { kind: "y", y: caret.y, path: "caret.y" };
-    return null;
+  /**
+   * WordCraft ui.inspect pages are [left, top, width, height] screen rects.
+   * As you scroll down, page[0] top decreases (goes negative).
+   */
+  function viewSnapshotFromInspect(inspect) {
+    if (!inspect || typeof inspect !== "object") return null;
+    const pages = inspect.pages;
+    if (!Array.isArray(pages) || !pages.length) return null;
+    const tops = pages.map((p) => (Array.isArray(p) ? Number(p[1]) : NaN));
+    if (!Number.isFinite(tops[0])) return null;
+    let pageAtTop = 0;
+    for (let i = 0; i < tops.length; i++) {
+      if (Number.isFinite(tops[i]) && tops[i] <= 48) pageAtTop = i;
+    }
+    const cr = Array.isArray(inspect.canvasRect) ? inspect.canvasRect : null;
+    const wheelX = cr && Number.isFinite(cr[0]) && Number.isFinite(cr[2]) ? cr[0] + cr[2] / 2 : 280;
+    const wheelY = cr && Number.isFinite(cr[1]) && Number.isFinite(cr[3]) ? cr[1] + cr[3] / 2 : 280;
+    return { firstTop: tops[0], pageAtTop, wheelX, wheelY };
   }
 
   async function captureWordCraftView() {
-    const wc = wordcraftApi();
-    if (!wc || typeof wc.uiInspect !== "function") return null;
-    try {
-      const inspect = await wc.uiInspect();
-      return scrollMetricFromInspect(inspect);
-    } catch (_) {
-      return null;
-    }
+    return viewSnapshotFromInspect(await wordcraftUiInspect());
   }
 
   async function restoreWordCraftView(before, seq) {
-    if (!before || seq !== STATE.wordcraftOpenSeq) return;
+    if (!before || !Number.isFinite(before.firstTop) || seq !== STATE.wordcraftOpenSeq) return;
     const wc = wordcraftApi();
     if (!wc) return;
-    // Open is async inside the app; retry a few times until layout settles.
-    for (let i = 0; i < 8; i++) {
-      await new Promise((r) => setTimeout(r, 60 + i * 40));
+
+    // Wait for open+layout; pages is empty until the doc is on screen.
+    let ready = null;
+    for (let i = 0; i < 20; i++) {
+      await new Promise((r) => setTimeout(r, 50 + i * 25));
       if (seq !== STATE.wordcraftOpenSeq) return;
+      ready = viewSnapshotFromInspect(await wordcraftUiInspect());
+      if (ready) break;
+    }
+    if (!ready) return;
+
+    // Fast path for multi-page: Go To page (1-based), then fine-tune with wheel.
+    if (
+      before.pageAtTop > 0 &&
+      typeof wc.execute === "function" &&
+      ready.pageAtTop !== before.pageAtTop
+    ) {
       try {
-        const afterInspect =
-          typeof wc.uiInspect === "function" ? await wc.uiInspect() : null;
-        const after = scrollMetricFromInspect(afterInspect);
-        if (!after) continue;
-        let deltaY = 0;
-        if (before.kind === "y" && after.kind === "y") deltaY = before.y - after.y;
-        else if (before.kind === "pageY" && after.kind === "pageY") deltaY = before.y - after.y;
-        else continue;
-        if (Math.abs(deltaY) < 2) return;
-        // ui.wheel: dy < 0 scrolls down. Positive deltaY means we need to go down.
-        if (typeof wc.execute === "function") {
-          await wc.execute("ui.wheel", {
-            x: 240,
-            y: 240,
-            dy: -deltaY,
-            unit: "point",
-          });
-        } else if (typeof wc.request === "function") {
-          await wc.request("engine.execute", {
-            command: "ui.wheel",
-            params: { x: 240, y: 240, dy: -deltaY, unit: "point" },
-          });
-        }
-        return;
+        await wc.execute("edit.goto", { page: before.pageAtTop + 1 });
+        await new Promise((r) => setTimeout(r, 80));
       } catch (_) {
-        /* keep trying */
+        /* fall through to wheel */
       }
+    }
+
+    // ui.wheel is queued per frame — nudge until page[0] top matches.
+    for (let i = 0; i < 12; i++) {
+      if (seq !== STATE.wordcraftOpenSeq) return;
+      const now = viewSnapshotFromInspect(await wordcraftUiInspect());
+      if (!now) {
+        await new Promise((r) => setTimeout(r, 40));
+        continue;
+      }
+      // dy > 0 scrolls up; dy < 0 scrolls down. Match previous first-page top.
+      const dy = before.firstTop - now.firstTop;
+      if (Math.abs(dy) < 3) return;
+      const ok = await wordcraftUiWheel({
+        x: before.wheelX || now.wheelX,
+        y: before.wheelY || now.wheelY,
+        dy,
+        unit: "point",
+      });
+      if (!ok) return;
+      await new Promise((r) => setTimeout(r, 50));
     }
   }
 
