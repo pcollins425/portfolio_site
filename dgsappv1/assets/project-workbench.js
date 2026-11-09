@@ -462,13 +462,116 @@
     }
   }
 
-  /** Reopen jumps WordCraft to the top — debounce field-driven refreshes. */
+  /** Coalesce rapid field pushes; still refreshes the doc. */
   function scheduleWordCraftRefresh(delayMs) {
     cancelWordCraftRefresh();
     STATE.wordcraftRefreshTimer = setTimeout(() => {
       STATE.wordcraftRefreshTimer = null;
       refreshWordCraftDoc();
-    }, delayMs == null ? 1200 : delayMs);
+    }, delayMs == null ? 400 : delayMs);
+  }
+
+  function wordcraftApi() {
+    const frame = document.getElementById("pwb-wordcraft-frame");
+    return (frame && frame.contentWindow && frame.contentWindow.wordcraft) || null;
+  }
+
+  function walkFindNumber(obj, pred, depth, path) {
+    if (!obj || typeof obj !== "object" || depth > 6) return null;
+    for (const [k, v] of Object.entries(obj)) {
+      const here = path ? path + "." + k : k;
+      if (typeof v === "number" && Number.isFinite(v) && pred(k, v, here)) {
+        return { key: k, value: v, path: here };
+      }
+      if (v && typeof v === "object") {
+        const inner = walkFindNumber(v, pred, depth + 1, here);
+        if (inner) return inner;
+      }
+    }
+    return null;
+  }
+
+  /** Best-effort scroll/view metric from ui.inspect (shape varies by WordCraft build). */
+  function scrollMetricFromInspect(inspect) {
+    if (!inspect || typeof inspect !== "object") return null;
+    const named = walkFindNumber(
+      inspect,
+      (k) => /^(scroll|scrollY|scroll_y|offsetY|offset_y|canvas_scroll)$/i.test(k)
+    );
+    if (named) return { kind: "y", y: named.value, path: named.path };
+
+    const pages = inspect.pages || (inspect.view && inspect.view.pages) || inspect.pageRects;
+    if (Array.isArray(pages) && pages[0]) {
+      const p0 = pages[0];
+      const y =
+        typeof p0.y === "number"
+          ? p0.y
+          : typeof p0.top === "number"
+            ? p0.top
+            : p0.rect && typeof p0.rect.y === "number"
+              ? p0.rect.y
+              : p0.rect && p0.rect.min && typeof p0.rect.min.y === "number"
+                ? p0.rect.min.y
+                : null;
+      if (typeof y === "number") {
+        const page = p0.page != null ? p0.page : p0.index != null ? p0.index : 0;
+        return { kind: "pageY", page, y };
+      }
+    }
+
+    const caret = inspect.caret;
+    if (caret && typeof caret.y === "number") return { kind: "y", y: caret.y, path: "caret.y" };
+    return null;
+  }
+
+  async function captureWordCraftView() {
+    const wc = wordcraftApi();
+    if (!wc || typeof wc.uiInspect !== "function") return null;
+    try {
+      const inspect = await wc.uiInspect();
+      return scrollMetricFromInspect(inspect);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  async function restoreWordCraftView(before, seq) {
+    if (!before || seq !== STATE.wordcraftOpenSeq) return;
+    const wc = wordcraftApi();
+    if (!wc) return;
+    // Open is async inside the app; retry a few times until layout settles.
+    for (let i = 0; i < 8; i++) {
+      await new Promise((r) => setTimeout(r, 60 + i * 40));
+      if (seq !== STATE.wordcraftOpenSeq) return;
+      try {
+        const afterInspect =
+          typeof wc.uiInspect === "function" ? await wc.uiInspect() : null;
+        const after = scrollMetricFromInspect(afterInspect);
+        if (!after) continue;
+        let deltaY = 0;
+        if (before.kind === "y" && after.kind === "y") deltaY = before.y - after.y;
+        else if (before.kind === "pageY" && after.kind === "pageY") deltaY = before.y - after.y;
+        else continue;
+        if (Math.abs(deltaY) < 2) return;
+        // ui.wheel: dy < 0 scrolls down. Positive deltaY means we need to go down.
+        if (typeof wc.execute === "function") {
+          await wc.execute("ui.wheel", {
+            x: 240,
+            y: 240,
+            dy: -deltaY,
+            unit: "point",
+          });
+        } else if (typeof wc.request === "function") {
+          await wc.request("engine.execute", {
+            command: "ui.wheel",
+            params: { x: 240, y: 240, dy: -deltaY, unit: "point" },
+          });
+        }
+        return;
+      } catch (_) {
+        /* keep trying */
+      }
+    }
   }
 
   async function refreshWordCraftDoc() {
@@ -481,6 +584,7 @@
     }
     if (!STATE.wordcraftReady) return;
     const seq = ++STATE.wordcraftOpenSeq;
+    const viewBefore = await captureWordCraftView();
     try {
       const headers = Object.assign({}, window.DGSAuth ? DGSAuth.authHeaders() : {});
       const res = await fetch(
@@ -504,6 +608,8 @@
       setWordCraftHint(`Opened ${name} from SQL`);
       const fb = document.getElementById("pwb-doc-fallback");
       if (fb) fb.hidden = true;
+      // wordcraft:open always starts at top — put the view back when we can.
+      restoreWordCraftView(viewBefore, seq);
     } catch (e) {
       setWordCraftHint(e.message || String(e));
       showDocFallback();
