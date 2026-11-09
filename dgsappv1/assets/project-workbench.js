@@ -545,15 +545,11 @@
           <td>${esc(u.current_theme_name || "")}</td>
           <td>${esc(to)}</td>
           <td>${esc(zbl(u))}</td>
-          <td>${esc(u.rtp_target || "")}</td>
-          <td>${esc(u.denom || "")}</td>
-          <td>${esc(u.bet_config || "")}</td>
-          <td>${esc(u.restrictions || "")}</td>
         </tr>`;
       })
       .join("");
     return `
-      <p class="pwb-doc-hint">Header from casino record · lines from proposal units (WordCraft host next).</p>
+      <p class="pwb-doc-hint">Fallback preview · David template shape (6-col). WordCraft opens the real .docx.</p>
       <div class="pwb-doc-frame" id="pwb-doc-frame">
         <h3>Leased Equipment Software Conversion Request</h3>
         <p class="pwb-doc-meta"><strong>${esc(casino)}</strong></p>
@@ -574,11 +570,10 @@
           <thead><tr>
             <th>Manufacturer</th><th>Cabinet</th><th>Serial #</th>
             <th>Theme (From)</th><th>Theme (To)</th><th>Z-B-L</th>
-            <th>RTP Target</th><th>Denom</th><th>Bet Config</th><th>Restrictions</th>
           </tr></thead>
           <tbody>${
             rows ||
-            `<tr><td colspan="10" style="text-align:center;color:#666">No units</td></tr>`
+            `<tr><td colspan="6" style="text-align:center;color:#666">No units</td></tr>`
           }</tbody>
         </table>
       </div>
