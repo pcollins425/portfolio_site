@@ -21,6 +21,7 @@
     wordcraftFailed: null,
     wordcraftListenerBound: false,
     wordcraftOpenSeq: 0,
+    wordcraftLoadTimer: null,
   };
 
   const POLL_MS = 5000;
@@ -382,6 +383,15 @@
       STATE.wordcraftReady = false;
       STATE.wordcraftFailed = null;
       STATE.wordcraftDirty = false;
+      if (STATE.wordcraftLoadTimer) clearTimeout(STATE.wordcraftLoadTimer);
+      // First load downloads ~21MB gzip then inflates — show patience, then fall back.
+      STATE.wordcraftLoadTimer = setTimeout(() => {
+        if (STATE.wordcraftReady || STATE.mode !== "edit") return;
+        setWordCraftHint(
+          "WordCraft still loading (large first download). HTML preview shown; Craft will replace it when ready."
+        );
+        showDocFallback();
+      }, 45000);
     }
     if (!STATE.wordcraftListenerBound) {
       window.addEventListener("message", onWordCraftMessage);
@@ -393,6 +403,10 @@
     STATE.wordcraftReady = false;
     STATE.wordcraftDirty = false;
     STATE.wordcraftFailed = null;
+    if (STATE.wordcraftLoadTimer) {
+      clearTimeout(STATE.wordcraftLoadTimer);
+      STATE.wordcraftLoadTimer = null;
+    }
     const root = document.getElementById("edit-doc-root");
     if (root) root.innerHTML = "";
   }
@@ -404,6 +418,10 @@
     if (type === "wordcraft:ready") {
       STATE.wordcraftReady = true;
       STATE.wordcraftFailed = null;
+      if (STATE.wordcraftLoadTimer) {
+        clearTimeout(STATE.wordcraftLoadTimer);
+        STATE.wordcraftLoadTimer = null;
+      }
       setWordCraftHint("WordCraft ready · opening from SQL…");
       refreshWordCraftDoc();
       return;
