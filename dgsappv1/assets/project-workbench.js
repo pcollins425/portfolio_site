@@ -23,6 +23,7 @@
     wordcraftOpenSeq: 0,
     wordcraftLoadTimer: null,
     wordcraftRefreshTimer: null,
+    artifacts: [],
   };
 
   const POLL_MS = 5000;
@@ -64,6 +65,152 @@
       throw new Error(typeof msg === "string" ? msg : JSON.stringify(msg));
     }
     return body;
+  }
+
+  async function downloadAuthenticated(path, fallbackName) {
+    const headers = Object.assign({}, window.DGSAuth ? DGSAuth.authHeaders() : {});
+    const res = await fetch(`${apiBase()}${path}`, { headers });
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      const msg = body.detail || body.message || res.statusText;
+      throw new Error(typeof msg === "string" ? msg : JSON.stringify(msg));
+    }
+    const blob = await res.blob();
+    let name = fallbackName || "download.docx";
+    const cd = res.headers.get("Content-Disposition") || "";
+    const m = /filename="([^"]+)"/i.exec(cd);
+    if (m) name = m[1];
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = name;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  }
+
+  function artifactVersionLabel(item) {
+    const m = /version=(\d+)/.exec(String(item.notes || ""));
+    return m ? `V${m[1]}` : "archive";
+  }
+
+  async function loadArtifacts() {
+    if (!STATE.activeRef) {
+      STATE.artifacts = [];
+      return;
+    }
+    try {
+      const data = await api(
+        `/api/projects-workbench/proposals/${encodeURIComponent(STATE.activeRef)}/artifacts`
+      );
+      STATE.artifacts = data.items || [];
+    } catch (_) {
+      STATE.artifacts = [];
+    }
+  }
+
+  function artifactsHtml(idPrefix) {
+    const items = STATE.artifacts || [];
+    if (!items.length) {
+      return `<p class="pwb-empty" style="margin:6px 0">No archives yet.</p>`;
+    }
+    return `<ul class="pwb-artifacts" id="${esc(idPrefix)}-list">${items
+      .map((it) => {
+        const when = (it.insert_date || "").replace("T", " ").slice(0, 19);
+        return `<li>
+          <span>${esc(artifactVersionLabel(it))} · ${esc(when)}${
+            it.created_by ? ` · ${esc(it.created_by)}` : ""
+          }</span>
+          <button type="button" class="dgs-v2-btn" data-artifact-dl="${esc(
+            it.uuid
+          )}">Download</button>
+        </li>`;
+      })
+      .join("")}</ul>`;
+  }
+
+  function bindArtifactDownloads(root) {
+    if (!root) return;
+    root.querySelectorAll("[data-artifact-dl]").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        const id = btn.getAttribute("data-artifact-dl");
+        try {
+          showError("");
+          await downloadAuthenticated(
+            `/api/projects-workbench/artifacts/${encodeURIComponent(id)}/file`,
+            "archive.docx"
+          );
+        } catch (e) {
+          showError(e.message || String(e));
+        }
+      });
+    });
+  }
+
+  async function downloadCurrentDocx() {
+    if (!STATE.activeRef) return;
+    const name = `${STATE.activeRef}.docx`;
+    await downloadAuthenticated(
+      `/api/projects-workbench/proposals/${encodeURIComponent(
+        STATE.activeRef
+      )}/docx?download=1`,
+      name
+    );
+  }
+
+  async function archiveCurrentProposal() {
+    if (!STATE.activeRef) return;
+    const p = STATE.detail && STATE.detail.proposal;
+    const ver = p && p.version_num ? p.version_num : "?";
+    if (
+      !confirm(
+        `Archive V${ver} as read-only and bump to the next version?\n\nThis stores the current conversion DOCX from SQL.`
+      )
+    ) {
+      return;
+    }
+    try {
+      showError("");
+      setSync("archiving…", "pending");
+      const body = await api(
+        `/api/projects-workbench/proposals/${encodeURIComponent(STATE.activeRef)}/archive`,
+        { method: "POST", body: "{}" }
+      );
+      // { proposal: proposal_detail(...), artifact: {...} }
+      STATE.detail = body.proposal;
+      const newRef =
+        (STATE.detail && STATE.detail.proposal && STATE.detail.proposal.reference_key) ||
+        (body.artifact && body.artifact.to_reference_key) ||
+        STATE.activeRef;
+      STATE.activeRef = newRef;
+      STATE.contentRevision =
+        (STATE.detail.proposal && STATE.detail.proposal.content_revision) || STATE.contentRevision;
+      setUrlRef(newRef);
+      await loadList();
+      await loadArtifacts();
+      if (STATE.mode === "edit") {
+        document.getElementById("edit-ref-label").textContent = newRef;
+        renderEdit({ refreshDoc: "now" });
+        refreshEditArchivePanel();
+      } else {
+        renderDetail();
+      }
+      setSync(`archived → ${newRef}`, "ok");
+    } catch (e) {
+      showError(e.message || String(e));
+      setSync(e.message || "archive failed", "err");
+    }
+  }
+
+  function refreshEditArchivePanel() {
+    const slot = document.getElementById("pwb-edit-archives");
+    if (!slot) return;
+    slot.innerHTML = `
+      <div class="pwb-section" style="margin:0">Archived versions (read-only)</div>
+      ${artifactsHtml("edit-arch")}
+    `;
+    bindArtifactDownloads(slot);
   }
 
   function showError(msg) {
@@ -438,8 +585,10 @@
       return;
     }
     if (type === "wordcraft:save") {
-      // Spike: parent owns storage later (blob). Acknowledge by not downloading.
-      setWordCraftHint(`save received (${data.name || "doc"}) — blob store next`);
+      // Product path is Download / Archive on the App bar (SQL snapshot), not Word Save.
+      setWordCraftHint(
+        `Word Save received (${data.name || "doc"}) — use Download or Archive on the bar`
+      );
     }
   }
 
@@ -617,7 +766,7 @@
     }
   }
 
-  function enterEdit() {
+  async function enterEdit() {
     const p = STATE.detail && STATE.detail.proposal;
     if (!p || !canEditUnits(p.stage)) return;
     STATE.mode = "edit";
@@ -631,6 +780,12 @@
     renderEdit();
     startPoll();
     setSync(`rev ${STATE.contentRevision || "—"}`, "ok");
+    await loadArtifacts();
+    const arch = document.getElementById("pwb-edit-archives");
+    if (arch) {
+      arch.hidden = false;
+      refreshEditArchivePanel();
+    }
   }
 
   function exitEdit() {
@@ -640,6 +795,8 @@
     teardownWordCraftHost();
     document.body.classList.remove("pwb-edit-mode");
     document.getElementById("pwb-edit").hidden = true;
+    const arch = document.getElementById("pwb-edit-archives");
+    if (arch) arch.hidden = true;
     document.getElementById("pwb-browse").hidden = false;
     renderDetail();
   }
@@ -986,6 +1143,10 @@
     const blocked = (p.computed_version_readiness || "") !== "ready";
 
     let actions = "";
+    actions += `<button type="button" class="dgs-v2-btn" id="btn-download-docx-detail">Download</button>`;
+    if (editUnits || (p.stage === "pre_check" && (STATE.isAdmin || STATE.canWrite))) {
+      actions += `<button type="button" class="dgs-v2-btn" id="btn-archive-proposal-detail">Archive</button>`;
+    }
     if (editUnits) {
       actions += `<button type="button" class="dgs-v2-btn dgs-v2-btn--primary" id="btn-edit-proposal">Edit Proposal</button>`;
       actions += `<button type="button" class="dgs-v2-btn" id="btn-send-precheck">Send to Pre-Check</button>`;
@@ -1062,6 +1223,9 @@
       ${laterNote ? `<p class="pwb-stage-note">${esc(laterNote)}</p>` : ""}
       <div class="pwb-actions">${actions}</div>
 
+      <div class="pwb-section">Archived versions (read-only)</div>
+      <div id="detail-artifacts">${artifactsHtml("detail-arch")}</div>
+
       <div class="pwb-section">What is being proposed</div>
       ${proposedSummary(d.units)}
 
@@ -1076,6 +1240,21 @@
 
       ${deptNotesHtml(d)}
     `;
+
+    bindArtifactDownloads(document.getElementById("detail-artifacts"));
+    const dlDetail = document.getElementById("btn-download-docx-detail");
+    if (dlDetail) {
+      dlDetail.addEventListener("click", async () => {
+        try {
+          showError("");
+          await downloadCurrentDocx();
+        } catch (e) {
+          showError(e.message || String(e));
+        }
+      });
+    }
+    const archDetail = document.getElementById("btn-archive-proposal-detail");
+    if (archDetail) archDetail.addEventListener("click", () => archiveCurrentProposal());
 
     const editBtn = document.getElementById("btn-edit-proposal");
     if (editBtn) editBtn.addEventListener("click", () => enterEdit());
@@ -1329,6 +1508,7 @@
       STATE.detail = await api(
         `/api/projects-workbench/proposals/${encodeURIComponent(ref)}`
       );
+      await loadArtifacts();
       renderDetail();
     } catch (e) {
       showError(e.message || String(e));
@@ -1353,6 +1533,17 @@
       document.getElementById("btn-refresh").addEventListener("click", () => loadList());
       document.getElementById("stage-filter").addEventListener("change", () => loadList());
       document.getElementById("btn-exit-edit").addEventListener("click", () => exitEdit());
+      document.getElementById("btn-download-docx").addEventListener("click", async () => {
+        try {
+          showError("");
+          await downloadCurrentDocx();
+        } catch (e) {
+          showError(e.message || String(e));
+        }
+      });
+      document
+        .getElementById("btn-archive-proposal")
+        .addEventListener("click", () => archiveCurrentProposal());
       let t = null;
       document.getElementById("q").addEventListener("input", () => {
         clearTimeout(t);

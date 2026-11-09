@@ -15,7 +15,7 @@ from fastapi.responses import Response
 from pydantic import BaseModel, Field
 
 from app import dgs_projects_workbench_permissions as perms
-from app import mssql
+from app import document_storage, mssql
 from app.auth_deps import require_demo_user
 from app.proposal_conversion_docx import build_conversion_request_docx
 
@@ -856,25 +856,227 @@ def proposal_revision(
     }
 
 
+def _docx_filename(reference_key: str, version_num: int | None = None) -> str:
+    base = re.sub(r"[^\w.\-]+", "_", (reference_key or "proposal").strip()) or "proposal"
+    if version_num is not None:
+        return f"{base}-V{int(version_num)}.docx"
+    return f"{base}.docx"
+
+
+def _bump_reference_key(ref: str, new_version: int) -> str:
+    """Rewrite …-V# suffix; append -V# when the key has no version suffix."""
+    key = (ref or "").strip()
+    m = re.match(r"^(.*)-V(\d+)$", key, flags=re.IGNORECASE)
+    candidate = f"{m.group(1)}-V{new_version}" if m else f"{key}-V{new_version}"
+    hit = _query(
+        "SELECT TOP 1 uuid FROM projects.proposal WHERE reference_key = %s",
+        (candidate,),
+    )
+    if not hit:
+        return candidate
+    # Extremely rare collision — keep uniqueness without blocking Archive.
+    return f"{candidate}-{str(uuid4())[:8]}"
+
+
 @router.get("/proposals/{ref}/docx")
 def proposal_docx(
     ref: str,
+    download: bool = Query(False),
     user: Annotated[dict[str, Any] | None, Depends(require_demo_user)] = None,
 ):
-    """SQL → conversion-request .docx for WordCraft host open/refresh."""
+    """SQL → conversion-request .docx for WordCraft host open/refresh or Download."""
     detail = proposal_detail(ref, user)
     data = build_conversion_request_docx(detail)
-    filename = f"{detail['proposal']['reference_key']}.docx"
+    filename = _docx_filename(str(detail["proposal"]["reference_key"]))
+    disposition = "attachment" if download else "inline"
     return Response(
         content=data,
         media_type=(
             "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
         ),
         headers={
-            "Content-Disposition": f'inline; filename="{filename}"',
+            "Content-Disposition": f'{disposition}; filename="{filename}"',
             "Cache-Control": "no-store",
         },
     )
+
+
+@router.get("/proposals/{ref}/artifacts")
+def list_proposal_artifacts(
+    ref: str,
+    user: Annotated[dict[str, Any] | None, Depends(require_demo_user)] = None,
+):
+    """Read-only archive history for this proposal (newest first)."""
+    _assert_read(user)
+    p = _get_proposal(ref)
+    rows = _query(
+        """
+        SELECT
+            uuid, insert_date, created_by, proposal_id, kind,
+            stage_when_built, draft_vs_locked, storage_ref, notes
+        FROM projects.proposal_artifact
+        WHERE proposal_id = %s
+        ORDER BY insert_date DESC
+        """,
+        (str(p["uuid"]),),
+    )
+    return {"items": [_row(r) for r in rows], "reference_key": _json_value(p["reference_key"])}
+
+
+@router.get("/artifacts/{artifact_id}/file")
+def download_proposal_artifact(
+    artifact_id: str,
+    user: Annotated[dict[str, Any] | None, Depends(require_demo_user)] = None,
+):
+    """Download a locked archive DOCX (read-only history)."""
+    _assert_read(user)
+    rows = _query(
+        """
+        SELECT a.uuid, a.storage_ref, a.notes, a.kind, a.draft_vs_locked,
+               p.reference_key
+        FROM projects.proposal_artifact a
+        JOIN projects.proposal p ON p.uuid = a.proposal_id
+        WHERE a.uuid = %s
+        """,
+        (artifact_id.strip(),),
+    )
+    if not rows:
+        raise HTTPException(status_code=404, detail="Archive not found")
+    row = rows[0]
+    rel = str(row["storage_ref"] or "").strip()
+    if not rel:
+        raise HTTPException(status_code=404, detail="Archive has no storage path")
+    try:
+        data = document_storage.read_bytes(rel)
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail="Archive file missing on storage") from exc
+    except Exception as exc:
+        raise HTTPException(status_code=503, detail=f"Could not read archive: {exc}") from exc
+
+    m = re.search(r"version=(\d+)", str(row.get("notes") or ""))
+    ver = int(m.group(1)) if m else None
+    filename = _docx_filename(str(row["reference_key"]), ver)
+    return Response(
+        content=data,
+        media_type=(
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+        ),
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"',
+            "Cache-Control": "no-store",
+        },
+    )
+
+
+@router.post("/proposals/{ref}/archive")
+def archive_proposal(
+    ref: str,
+    user: Annotated[dict[str, Any] | None, Depends(require_demo_user)] = None,
+):
+    """Explicit version checkpoint: store DOCX, lock that snapshot, bump V#.
+
+    Archived files are read-only history. Live edits continue on the bumped draft.
+    """
+    p = _get_proposal(ref)
+    stage = str(p.get("stage") or "")
+    if stage not in {"draft", "pre_check"}:
+        raise HTTPException(
+            status_code=400,
+            detail="Archive is only available in Draft or Pre-Check",
+        )
+    if not _is_admin(user):
+        _assert_write(user)
+
+    detail = proposal_detail(ref, user)
+    data = build_conversion_request_docx(detail)
+    from_version = int(p.get("version_num") or 1)
+    to_version = from_version + 1
+    old_ref = str(p["reference_key"])
+    new_ref = _bump_reference_key(old_ref, to_version)
+    artifact_id = str(uuid4())
+    rel = f"proposals/{p['uuid']}/{artifact_id}.docx"
+    actor = _actor(user)
+
+    try:
+        document_storage.write_bytes(rel, data)
+    except FileNotFoundError as exc:
+        raise HTTPException(
+            status_code=503,
+            detail="Document storage is not configured (set DOCS_ROOT or NAS_DOCS_MODE=smb)",
+        ) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=503, detail=f"Could not store archive: {exc}") from exc
+
+    notes = f"version={from_version};ref={old_ref}"
+    _execute(
+        """
+        INSERT INTO projects.proposal_artifact (
+            uuid, created_by, proposal_id, kind,
+            stage_when_built, draft_vs_locked, storage_ref, notes
+        ) VALUES (
+            %s, %s, %s, N'conversion_docx',
+            %s, N'locked', %s, %s
+        )
+        """,
+        (artifact_id, actor, str(p["uuid"]), stage, rel, notes),
+    )
+    _execute(
+        """
+        UPDATE projects.proposal
+        SET version_num = %s,
+            reference_key = %s,
+            content_revision = SYSUTCDATETIME(),
+            update_date = SYSUTCDATETIME(),
+            update_by = %s,
+            change_log = %s
+        WHERE uuid = %s
+        """,
+        (
+            to_version,
+            new_ref,
+            actor,
+            f"Archived V{from_version} → V{to_version}",
+            str(p["uuid"]),
+        ),
+    )
+    _execute(
+        """
+        INSERT INTO projects.proposal_history (
+            uuid, event_at, actor, proposal_id, event_type,
+            from_stage, to_stage, from_version, to_version, detail_json
+        ) VALUES (
+            NEWID(), SYSUTCDATETIME(), %s, %s, N'version_bump',
+            %s, %s, %s, %s, %s
+        )
+        """,
+        (
+            actor,
+            str(p["uuid"]),
+            stage,
+            stage,
+            from_version,
+            to_version,
+            json.dumps(
+                {
+                    "artifact_id": artifact_id,
+                    "storage_ref": rel,
+                    "from_reference_key": old_ref,
+                    "to_reference_key": new_ref,
+                }
+            ),
+        ),
+    )
+
+    return {
+        "proposal": proposal_detail(new_ref, user),
+        "artifact": {
+            "uuid": artifact_id,
+            "storage_ref": rel,
+            "archived_version": from_version,
+            "from_reference_key": old_ref,
+            "to_reference_key": new_ref,
+        },
+    }
 
 
 @router.patch("/proposals/{ref}")

@@ -213,7 +213,7 @@
       display: grid;
       /* Slightly leaner form column so the David page fits at 100% without CSS scale. */
       grid-template-columns: minmax(400px, 38vw) minmax(0, 1fr);
-      grid-template-rows: auto auto auto minmax(0, 1fr);
+      grid-template-rows: auto auto auto auto minmax(0, 1fr);
       padding: 0;
       gap: 0;
     }
@@ -235,12 +235,16 @@
       border-bottom: 1px solid rgba(255,255,255,.08);
       background: rgba(0,0,0,.18);
     }
+    body.pwb-edit-mode .pwb-edit-archives {
+      grid-column: 1;
+      grid-row: 4;
+    }
     body.pwb-edit-mode .pwb-edit-layout {
       display: contents;
     }
     body.pwb-edit-mode .pwb-edit-layout > .pwb-panel:first-child {
       grid-column: 1;
-      grid-row: 4;
+      grid-row: 5;
       border-radius: 0;
       border: 0;
       border-right: 1px solid rgba(255,255,255,.12);
@@ -292,6 +296,30 @@
       gap: 8px;
       align-items: center;
     }
+    .pwb-edit-archives {
+      padding: 8px 14px 10px;
+      border-bottom: 1px solid rgba(255,255,255,.08);
+      background: rgba(0,0,0,.12);
+      max-height: 140px;
+      overflow: auto;
+    }
+    .pwb-artifacts {
+      list-style: none;
+      margin: 6px 0 0;
+      padding: 0;
+    }
+    .pwb-artifacts li {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+      justify-content: space-between;
+      padding: 4px 0;
+      border-bottom: 1px solid rgba(255,255,255,.06);
+      font-size: .85rem;
+      color: #c5cdd9;
+    }
+    .pwb-artifacts li:last-child { border-bottom: 0; }
     .pwb-edit-layout {
       display: grid;
       grid-template-columns: minmax(420px, 1.1fr) minmax(320px, 0.9fr);
@@ -568,8 +596,11 @@
       <div class="pwb-edit-bar">
         <button type="button" class="dgs-v2-btn" id="btn-exit-edit">← Back to detail</button>
         <strong id="edit-ref-label"></strong>
+        <button type="button" class="dgs-v2-btn" id="btn-download-docx">Download</button>
+        <button type="button" class="dgs-v2-btn dgs-v2-btn--primary" id="btn-archive-proposal">Archive</button>
         <span class="pwb-sync" id="edit-sync">idle</span>
       </div>
+      <div id="pwb-edit-archives" class="pwb-edit-archives" hidden></div>
       <div class="pwb-edit-layout">
         <div class="pwb-panel">
           <div class="pwb-panel-h"><span>Convert lines</span><span>SQL → document</span></div>
