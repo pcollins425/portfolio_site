@@ -16,6 +16,11 @@
     contentRevision: null,
     pollTimer: null,
     pushPending: 0,
+    wordcraftReady: false,
+    wordcraftDirty: false,
+    wordcraftFailed: null,
+    wordcraftListenerBound: false,
+    wordcraftOpenSeq: 0,
   };
 
   const POLL_MS = 5000;
@@ -350,6 +355,125 @@
     }
   }
 
+  function wordcraftSrc() {
+    const author = ((document.getElementById("user-label") || {}).textContent || "").trim();
+    const q = new URLSearchParams({ host: "parent" });
+    if (author) q.set("author", author);
+    // Same-origin static folder under /dgsappv1/wordcraft/ (vendored at publish).
+    return `wordcraft/?${q}`;
+  }
+
+  function ensureWordCraftHost() {
+    const root = document.getElementById("edit-doc-root");
+    if (!root) return;
+    if (!root.querySelector("#pwb-wordcraft-frame")) {
+      root.innerHTML = `
+        <p class="pwb-doc-hint" id="pwb-wordcraft-hint">WordCraft · SQL → .docx · host bridge</p>
+        <div class="pwb-wordcraft-shell">
+          <iframe
+            id="pwb-wordcraft-frame"
+            title="WordCraft"
+            src="${esc(wordcraftSrc())}"
+            allow="fullscreen; clipboard-read; clipboard-write"
+            allowfullscreen></iframe>
+        </div>
+        <div class="pwb-doc-fallback" id="pwb-doc-fallback" hidden></div>
+      `;
+      STATE.wordcraftReady = false;
+      STATE.wordcraftFailed = null;
+      STATE.wordcraftDirty = false;
+    }
+    if (!STATE.wordcraftListenerBound) {
+      window.addEventListener("message", onWordCraftMessage);
+      STATE.wordcraftListenerBound = true;
+    }
+  }
+
+  function teardownWordCraftHost() {
+    STATE.wordcraftReady = false;
+    STATE.wordcraftDirty = false;
+    STATE.wordcraftFailed = null;
+    const root = document.getElementById("edit-doc-root");
+    if (root) root.innerHTML = "";
+  }
+
+  function onWordCraftMessage(ev) {
+    if (ev.origin !== window.location.origin) return;
+    const data = ev.data || {};
+    const type = data.type;
+    if (type === "wordcraft:ready") {
+      STATE.wordcraftReady = true;
+      STATE.wordcraftFailed = null;
+      setWordCraftHint("WordCraft ready · opening from SQL…");
+      refreshWordCraftDoc();
+      return;
+    }
+    if (type === "wordcraft:dirty") {
+      STATE.wordcraftDirty = !!data.dirty;
+      return;
+    }
+    if (type === "wordcraft:failed") {
+      STATE.wordcraftFailed = data.error || "WordCraft failed to start";
+      setWordCraftHint(STATE.wordcraftFailed);
+      showDocFallback();
+      return;
+    }
+    if (type === "wordcraft:save") {
+      // Spike: parent owns storage later (blob). Acknowledge by not downloading.
+      setWordCraftHint(`save received (${data.name || "doc"}) — blob store next`);
+    }
+  }
+
+  function setWordCraftHint(msg) {
+    const el = document.getElementById("pwb-wordcraft-hint");
+    if (el) el.textContent = msg;
+  }
+
+  function showDocFallback() {
+    const fb = document.getElementById("pwb-doc-fallback");
+    if (!fb || !STATE.detail) return;
+    fb.hidden = false;
+    fb.innerHTML = renderDocPreview(STATE.detail);
+  }
+
+  async function refreshWordCraftDoc() {
+    if (STATE.mode !== "edit" || !STATE.activeRef) return;
+    const frame = document.getElementById("pwb-wordcraft-frame");
+    if (!frame || !frame.contentWindow) {
+      showDocFallback();
+      return;
+    }
+    if (!STATE.wordcraftReady) return;
+    const seq = ++STATE.wordcraftOpenSeq;
+    try {
+      const headers = Object.assign({}, window.DGSAuth ? DGSAuth.authHeaders() : {});
+      const res = await fetch(
+        `${apiBase()}/api/projects-workbench/proposals/${encodeURIComponent(
+          STATE.activeRef
+        )}/docx`,
+        { headers }
+      );
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.detail || body.message || res.statusText);
+      }
+      const bytes = await res.arrayBuffer();
+      if (seq !== STATE.wordcraftOpenSeq) return;
+      const name = `${STATE.activeRef}.docx`;
+      frame.contentWindow.postMessage(
+        { type: "wordcraft:open", name, bytes },
+        window.location.origin,
+        [bytes]
+      );
+      setWordCraftHint(`Opened ${name} from SQL`);
+      const fb = document.getElementById("pwb-doc-fallback");
+      if (fb) fb.hidden = true;
+    } catch (e) {
+      setWordCraftHint(e.message || String(e));
+      showDocFallback();
+    }
+  }
+
   function enterEdit() {
     const p = STATE.detail && STATE.detail.proposal;
     if (!p || !canEditUnits(p.stage)) return;
@@ -360,6 +484,7 @@
     const edit = document.getElementById("pwb-edit");
     edit.hidden = false;
     document.getElementById("edit-ref-label").textContent = p.reference_key;
+    ensureWordCraftHost();
     renderEdit();
     startPoll();
     setSync(`rev ${STATE.contentRevision || "—"}`, "ok");
@@ -368,6 +493,7 @@
   function exitEdit() {
     STATE.mode = "browse";
     stopPoll();
+    teardownWordCraftHost();
     document.body.classList.remove("pwb-edit-mode");
     document.getElementById("pwb-edit").hidden = true;
     document.getElementById("pwb-browse").hidden = false;
@@ -447,13 +573,12 @@
 
   function renderEdit() {
     const fields = document.getElementById("edit-fields-root");
-    const doc = document.getElementById("edit-doc-root");
     const d = STATE.detail;
     if (!d || !d.proposal) {
       fields.innerHTML = `<p class="pwb-empty">No proposal loaded.</p>`;
-      doc.innerHTML = "";
       return;
     }
+    ensureWordCraftHost();
     const units = d.units || [];
     const actionOpts = STATE.actionTypes.length
       ? STATE.actionTypes
@@ -550,8 +675,8 @@
         <button type="button" class="dgs-v2-btn dgs-v2-btn--primary" id="btn-send-precheck-edit">Send to Pre-Check</button>
       </div>
     `;
-    doc.innerHTML = renderDocPreview(d);
     bindEditHandlers();
+    refreshWordCraftDoc();
   }
 
   async function addUnitLine() {

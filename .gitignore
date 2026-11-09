@@ -7,6 +7,9 @@ frontend/dist/
 node_modules/
 dgsappv1/dashboard/assets/
 dgsappv1/dashboard/index.html
+# WordCraft web wasm (~60MB) — vendor via scripts/vendor_wordcraft.sh
+dgsappv1/wordcraft/**
+!dgsappv1/wordcraft/README.md
 pages_publish/
 
 # Python

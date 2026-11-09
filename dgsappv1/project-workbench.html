@@ -239,7 +239,11 @@
       /* No top padding — sticky thead must sit flush or scrolled rows bleed above it */
       padding: 0 0 20px;
     }
-    .pwb-edit-doc { padding: 12px 14px 20px; }
+    .pwb-edit-doc {
+      padding: 12px 14px 20px;
+      display: flex;
+      flex-direction: column;
+    }
     .pwb-edit-table {
       width: 100%;
       /* separate required for reliable sticky <th> (collapse leaves a scroll gap) */
@@ -376,6 +380,23 @@
       color: #9aa3b2;
       font-family: system-ui, sans-serif;
     }
+    .pwb-wordcraft-shell {
+      flex: 1;
+      min-height: 420px;
+      height: min(70vh, 820px);
+      border-radius: 6px;
+      overflow: hidden;
+      border: 1px solid rgba(255,255,255,.1);
+      background: #1a1a1a;
+    }
+    .pwb-wordcraft-shell iframe {
+      display: block;
+      width: 100%;
+      height: 100%;
+      border: 0;
+      background: #e6e6e6;
+    }
+    .pwb-doc-fallback { margin-top: 10px; }
     .pwb-sync {
       font-size: .75rem;
       color: #9aa3b2;
@@ -456,7 +477,7 @@
           <div class="pwb-edit-fields" id="edit-fields-root"></div>
         </div>
         <div class="pwb-panel">
-          <div class="pwb-panel-h"><span>Conversion request</span><span>WordCraft host next</span></div>
+          <div class="pwb-panel-h"><span>Conversion request</span><span>WordCraft</span></div>
           <div class="pwb-edit-doc" id="edit-doc-root"></div>
         </div>
       </div>

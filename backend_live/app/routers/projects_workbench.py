@@ -11,11 +11,13 @@ from typing import Annotated, Any, Literal
 from uuid import UUID, uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import Response
 from pydantic import BaseModel, Field
 
 from app import dgs_projects_workbench_permissions as perms
 from app import mssql
 from app.auth_deps import require_demo_user
+from app.proposal_conversion_docx import build_conversion_request_docx
 
 router = APIRouter(prefix="/api/projects-workbench", tags=["projects-workbench"])
 
@@ -852,6 +854,27 @@ def proposal_revision(
         "update_date": _json_value(p.get("update_date")),
         "stage": _json_value(p.get("stage")),
     }
+
+
+@router.get("/proposals/{ref}/docx")
+def proposal_docx(
+    ref: str,
+    user: Annotated[dict[str, Any] | None, Depends(require_demo_user)] = None,
+):
+    """SQL → conversion-request .docx for WordCraft host open/refresh."""
+    detail = proposal_detail(ref, user)
+    data = build_conversion_request_docx(detail)
+    filename = f"{detail['proposal']['reference_key']}.docx"
+    return Response(
+        content=data,
+        media_type=(
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+        ),
+        headers={
+            "Content-Disposition": f'inline; filename="{filename}"',
+            "Cache-Control": "no-store",
+        },
+    )
 
 
 @router.patch("/proposals/{ref}")

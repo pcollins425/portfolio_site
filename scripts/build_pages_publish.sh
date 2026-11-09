@@ -2,6 +2,8 @@
 # Merge Collins Media root shop + production Vite app under **`/dashboardtestv1/`** for Cloudflare Workers assets.
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+# Same-origin WordCraft for Workbench Edit Proposal (gitignored binaries).
+bash "$ROOT/scripts/vendor_wordcraft.sh"
 cd "$ROOT/frontend"
 npm install
 export VITE_API_BASE_URL="${VITE_API_BASE_URL:-https://api.collinsmediallc.com}"
