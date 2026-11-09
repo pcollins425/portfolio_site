@@ -25,6 +25,8 @@
   };
 
   const POLL_MS = 5000;
+  /** Document zoom inside WordCraft (view.zoom). 100 = default. */
+  const WORDCRAFT_ZOOM_PERCENT = 95;
 
   const STAGES = [
     ["draft", "Draft"],
@@ -454,6 +456,32 @@
     fb.innerHTML = renderDocPreview(STATE.detail);
   }
 
+  async function applyWordCraftZoom(percent) {
+    const frame = document.getElementById("pwb-wordcraft-frame");
+    const win = frame && frame.contentWindow;
+    const wc = win && win.wordcraft;
+    if (!wc) return false;
+    const pct = Number(percent);
+    if (!Number.isFinite(pct)) return false;
+    const attempts = [
+      () => wc.execute && wc.execute("view.zoom", { percent: pct }),
+      () => wc.execute && wc.execute("view.zoom", { value: pct }),
+      () =>
+        wc.request &&
+        wc.request("engine.execute", { command: "view.zoom", params: { percent: pct } }),
+    ];
+    for (const run of attempts) {
+      try {
+        if (!run) continue;
+        await run();
+        return true;
+      } catch (_) {
+        /* try next shape */
+      }
+    }
+    return false;
+  }
+
   async function refreshWordCraftDoc() {
     if (STATE.mode !== "edit" || !STATE.activeRef) return;
     const frame = document.getElementById("pwb-wordcraft-frame");
@@ -486,6 +514,11 @@
       setWordCraftHint(`Opened ${name} from SQL`);
       const fb = document.getElementById("pwb-doc-fallback");
       if (fb) fb.hidden = true;
+      // Zoom after open settles — document zoom, not UI chrome scale.
+      setTimeout(() => {
+        if (seq !== STATE.wordcraftOpenSeq) return;
+        applyWordCraftZoom(WORDCRAFT_ZOOM_PERCENT);
+      }, 250);
     } catch (e) {
       setWordCraftHint(e.message || String(e));
       showDocFallback();
