@@ -22,6 +22,7 @@
     wordcraftListenerBound: false,
     wordcraftOpenSeq: 0,
     wordcraftLoadTimer: null,
+    wordcraftRefreshTimer: null,
   };
 
   const POLL_MS = 5000;
@@ -347,7 +348,7 @@
           `/api/projects-workbench/proposals/${encodeURIComponent(STATE.activeRef)}`
         );
         STATE.contentRevision = STATE.detail.proposal.content_revision || server;
-        if (STATE.mode === "edit") renderEdit();
+        if (STATE.mode === "edit") renderEdit({ refreshDoc: "later" });
         else renderDetail();
         setSync(`synced ${server}`, "ok");
       }
@@ -454,7 +455,24 @@
     fb.innerHTML = renderDocPreview(STATE.detail);
   }
 
+  function cancelWordCraftRefresh() {
+    if (STATE.wordcraftRefreshTimer) {
+      clearTimeout(STATE.wordcraftRefreshTimer);
+      STATE.wordcraftRefreshTimer = null;
+    }
+  }
+
+  /** Reopen jumps WordCraft to the top — debounce field-driven refreshes. */
+  function scheduleWordCraftRefresh(delayMs) {
+    cancelWordCraftRefresh();
+    STATE.wordcraftRefreshTimer = setTimeout(() => {
+      STATE.wordcraftRefreshTimer = null;
+      refreshWordCraftDoc();
+    }, delayMs == null ? 1200 : delayMs);
+  }
+
   async function refreshWordCraftDoc() {
+    cancelWordCraftRefresh();
     if (STATE.mode !== "edit" || !STATE.activeRef) return;
     const frame = document.getElementById("pwb-wordcraft-frame");
     if (!frame || !frame.contentWindow) {
@@ -511,6 +529,7 @@
   function exitEdit() {
     STATE.mode = "browse";
     stopPoll();
+    cancelWordCraftRefresh();
     teardownWordCraftHost();
     document.body.classList.remove("pwb-edit-mode");
     document.getElementById("pwb-edit").hidden = true;
@@ -584,12 +603,24 @@
     return !!(u.unverified_theme_id || (!Number(u.is_tbd) && u.proposed_theme_id));
   }
 
-  function renderEdit() {
+  function renderEdit(opts) {
+    opts = opts || {};
     const fields = document.getElementById("edit-fields-root");
     const d = STATE.detail;
     if (!d || !d.proposal) {
       fields.innerHTML = `<p class="pwb-empty">No proposal loaded.</p>`;
       return;
+    }
+    const scrollTop = fields.scrollTop;
+    const active = document.activeElement;
+    let restore = null;
+    if (active && fields.contains(active) && active.dataset) {
+      restore = {
+        unit: active.dataset.unit || "",
+        field: active.dataset.field || "",
+        start: typeof active.selectionStart === "number" ? active.selectionStart : null,
+        end: typeof active.selectionEnd === "number" ? active.selectionEnd : null,
+      };
     }
     ensureWordCraftHost();
     const units = d.units || [];
@@ -689,7 +720,25 @@
       </div>
     `;
     bindEditHandlers();
-    refreshWordCraftDoc();
+    fields.scrollTop = scrollTop;
+    if (restore && restore.unit && restore.field) {
+      const el = fields.querySelector(
+        `[data-unit="${CSS.escape(restore.unit)}"][data-field="${CSS.escape(restore.field)}"]`
+      );
+      if (el) {
+        el.focus();
+        if (restore.start != null && typeof el.setSelectionRange === "function") {
+          try {
+            el.setSelectionRange(restore.start, restore.end == null ? restore.start : restore.end);
+          } catch (_) {
+            /* non-text inputs */
+          }
+        }
+      }
+    }
+    // wordcraft:open always resets scroll — only reopen when asked.
+    if (opts.refreshDoc === "now") refreshWordCraftDoc();
+    else if (opts.refreshDoc === "later") scheduleWordCraftRefresh();
   }
 
   async function addUnitLine() {
@@ -705,7 +754,7 @@
       STATE.contentRevision =
         (STATE.detail.proposal && STATE.detail.proposal.content_revision) || STATE.contentRevision;
       await loadList();
-      renderEdit();
+      renderEdit({ refreshDoc: "now" });
       setSync(`added ${STATE.contentRevision || ""}`, "ok");
     } catch (e) {
       showError(e.message || String(e));
@@ -728,7 +777,7 @@
       STATE.contentRevision =
         (STATE.detail.proposal && STATE.detail.proposal.content_revision) || STATE.contentRevision;
       await loadList();
-      renderEdit();
+      renderEdit({ refreshDoc: "now" });
       setSync(`deleted ${STATE.contentRevision || ""}`, "ok");
     } catch (e) {
       showError(e.message || String(e));
@@ -1098,7 +1147,7 @@
       STATE.contentRevision =
         (STATE.detail.proposal && STATE.detail.proposal.content_revision) || STATE.contentRevision;
       await loadList();
-      if (STATE.mode === "edit") renderEdit();
+      if (STATE.mode === "edit") renderEdit({ refreshDoc: "later" });
       else renderDetail();
       setSync(`pushed ${STATE.contentRevision || ""}`, "ok");
     } catch (e) {
@@ -1122,7 +1171,7 @@
       STATE.contentRevision =
         (STATE.detail.proposal && STATE.detail.proposal.content_revision) || STATE.contentRevision;
       await loadList();
-      if (STATE.mode === "edit") renderEdit();
+      if (STATE.mode === "edit") renderEdit({ refreshDoc: "later" });
       else renderDetail();
       setSync(`pushed ${STATE.contentRevision || ""}`, "ok");
     } catch (e) {
