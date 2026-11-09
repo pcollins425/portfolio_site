@@ -236,29 +236,74 @@
       -webkit-overflow-scrolling: touch;
       flex: 1;
       min-height: 0;
-      padding: 12px 14px 20px;
+      /* No top padding — sticky thead must sit flush or scrolled rows bleed above it */
+      padding: 0 0 20px;
     }
+    .pwb-edit-doc { padding: 12px 14px 20px; }
     .pwb-edit-table {
       width: 100%;
-      border-collapse: collapse;
+      /* separate required for reliable sticky <th> (collapse leaves a scroll gap) */
+      border-collapse: separate;
+      border-spacing: 0;
       font-size: .88rem;
       table-layout: fixed;
     }
     .pwb-edit-table th, .pwb-edit-table td {
       border-bottom: 1px solid rgba(255,255,255,.08);
-      padding: 8px 6px;
+      padding: 8px 8px;
       text-align: left;
       vertical-align: top;
     }
+    .pwb-edit-table th:first-child,
+    .pwb-edit-table td:first-child { padding-left: 14px; }
+    .pwb-edit-table th:last-child,
+    .pwb-edit-table td:last-child { padding-right: 14px; }
+    .pwb-edit-setup-row td { padding-left: 14px; padding-right: 14px; }
     .pwb-edit-table th {
       color: #9aa3b2;
       font-weight: 500;
       font-size: .75rem;
       position: sticky;
       top: 0;
-      background: #12161e;
-      z-index: 1;
+      background: #161b24;
+      z-index: 3;
+      box-shadow: 0 1px 0 rgba(255,255,255,.1);
     }
+    .pwb-edit-fields .pwb-actions {
+      padding: 12px 14px 0;
+    }
+    .pwb-clearable {
+      display: flex;
+      align-items: stretch;
+      gap: 4px;
+      min-width: 0;
+    }
+    .pwb-clearable > input,
+    .pwb-clearable > select {
+      flex: 1;
+      min-width: 0;
+    }
+    .pwb-clear-field {
+      flex: 0 0 auto;
+      border: 1px solid rgba(255,255,255,.12);
+      background: transparent;
+      color: #9aa3b2;
+      border-radius: 5px;
+      cursor: pointer;
+      padding: 0 7px;
+      font-size: .85rem;
+      line-height: 1;
+    }
+    .pwb-clear-field:hover {
+      color: #e07a7a;
+      border-color: rgba(224, 122, 122, .45);
+      background: rgba(220, 80, 80, .12);
+    }
+    .pwb-clear-field:disabled {
+      opacity: .35;
+      cursor: not-allowed;
+    }
+    .pwb-theme-wrap .pwb-clearable { margin-bottom: 2px; }
     .pwb-edit-table input,
     .pwb-edit-table select {
       width: 100%;

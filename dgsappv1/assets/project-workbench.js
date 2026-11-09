@@ -441,6 +441,23 @@
     `;
   }
 
+  function clearableInput(unitId, field, value, attrs) {
+    const v = value || "";
+    const extra = attrs || "";
+    return `<div class="pwb-clearable">
+      <input data-unit="${esc(unitId)}" data-field="${esc(field)}" value="${esc(v)}" ${extra} />
+      <button type="button" class="pwb-clear-field" data-clear-unit="${esc(
+        unitId
+      )}" data-clear-field="${esc(field)}" title="Clear" aria-label="Clear ${esc(
+        field
+      )}"${v ? "" : " disabled"}>×</button>
+    </div>`;
+  }
+
+  function themeIsSet(u) {
+    return !!(u.unverified_theme_id || (!Number(u.is_tbd) && u.proposed_theme_id));
+  }
+
   function renderEdit() {
     const fields = document.getElementById("edit-fields-root");
     const doc = document.getElementById("edit-doc-root");
@@ -458,6 +475,7 @@
       .map((u) => {
         const opCode = String(u.op || "").toUpperCase();
         const toLabel = themeToLabel(u);
+        const themeSet = themeIsSet(u);
         const opSelect = `<select data-unit="${esc(u.uuid)}" data-field="op">${actionOpts
           .map(
             (a) =>
@@ -466,21 +484,27 @@
               }>${esc(a.action_name)}</option>`
           )
           .join("")}</select>`;
+        const themeValue = u.unverified_theme_id
+          ? u.unverified_theme_name || ""
+          : Number(u.is_tbd)
+            ? ""
+            : u.proposed_theme_name || "";
         const themeCell =
           opCode === "REMOVE"
             ? `<span class="pwb-removed">removed from floor</span>`
-            : `<div class="pwb-rel">
-                <input data-unit="${esc(u.uuid)}" data-field="theme_q" data-cabinet="${esc(
-                  u.cabinet_id || ""
-                )}" placeholder="${
-                  u.cabinet_id ? "Search theme…" : "Add a cabinet first"
-                }" value="${
-                  u.unverified_theme_id
-                    ? esc(u.unverified_theme_name || "")
-                    : Number(u.is_tbd)
-                      ? ""
-                      : esc(u.proposed_theme_name || "")
-                }" ${u.cabinet_id ? "" : "disabled"} />
+            : `<div class="pwb-rel pwb-theme-wrap">
+                <div class="pwb-clearable">
+                  <input data-unit="${esc(u.uuid)}" data-field="theme_q" data-cabinet="${esc(
+                    u.cabinet_id || ""
+                  )}" placeholder="${
+                    u.cabinet_id ? "Search theme…" : "Add a cabinet first"
+                  }" value="${esc(themeValue)}" ${u.cabinet_id ? "" : "disabled"} />
+                  <button type="button" class="pwb-clear-field" data-clear-unit="${esc(
+                    u.uuid
+                  )}" data-clear-field="theme" title="Clear theme" aria-label="Clear theme"${
+                    themeSet && u.cabinet_id ? "" : " disabled"
+                  }>×</button>
+                </div>
                 <div class="pwb-theme-results" hidden></div>
                 <div class="theme-meta">${esc(toLabel)}${
                   u.current_theme_name ? ` · from ${esc(u.current_theme_name)}` : ""
@@ -488,40 +512,29 @@
               </div>`;
         return `<tr>
           <td>${opSelect}</td>
-          <td><input data-unit="${esc(u.uuid)}" data-field="serial" value="${esc(
-            u.serial || ""
-          )}" /></td>
+          <td>${clearableInput(u.uuid, "serial", u.serial || "")}</td>
           <td title="${esc(u.manufacturer_name || "")}">${esc(
             u.cabinet_name || u.cabinet_id || "—"
           )}</td>
           <td>${themeCell}</td>
-          <td><input data-unit="${esc(u.uuid)}" data-field="zone" value="${esc(
-            u.zone || ""
-          )}" /></td>
-          <td><input data-unit="${esc(u.uuid)}" data-field="bank" value="${esc(
-            u.bank || ""
-          )}" /></td>
-          <td><input data-unit="${esc(u.uuid)}" data-field="location" value="${esc(
-            u.location || ""
-          )}" /></td>
+          <td>${clearableInput(u.uuid, "zone", u.zone || "")}</td>
+          <td>${clearableInput(u.uuid, "bank", u.bank || "")}</td>
+          <td>${clearableInput(u.uuid, "location", u.location || "")}</td>
           <td><button type="button" class="pwb-del-line" data-del-unit="${esc(
             u.uuid
           )}" title="Delete line" aria-label="Delete line">×</button></td>
         </tr>
         <tr class="pwb-edit-setup-row"><td colspan="8">
           <div class="pwb-edit-setup">
-            <label>RTP<input data-unit="${esc(u.uuid)}" data-field="rtp_target" value="${esc(
-              u.rtp_target || ""
-            )}" placeholder="optional" /></label>
-            <label>Denom<input data-unit="${esc(u.uuid)}" data-field="denom" value="${esc(
-              u.denom || ""
-            )}" placeholder="optional" /></label>
-            <label>Bet<input data-unit="${esc(u.uuid)}" data-field="bet_config" value="${esc(
-              u.bet_config || ""
-            )}" placeholder="optional" /></label>
-            <label>Restrict<input data-unit="${esc(u.uuid)}" data-field="restrictions" value="${esc(
-              u.restrictions || ""
-            )}" placeholder="optional" /></label>
+            <label>RTP${clearableInput(u.uuid, "rtp_target", u.rtp_target || "", 'placeholder="optional"')}</label>
+            <label>Denom${clearableInput(u.uuid, "denom", u.denom || "", 'placeholder="optional"')}</label>
+            <label>Bet${clearableInput(u.uuid, "bet_config", u.bet_config || "", 'placeholder="optional"')}</label>
+            <label>Restrict${clearableInput(
+              u.uuid,
+              "restrictions",
+              u.restrictions || "",
+              'placeholder="optional"'
+            )}</label>
           </div>
         </td></tr>`;
       })
@@ -597,6 +610,24 @@
     }
   }
 
+  function syncClearButton(input) {
+    const wrap = input.closest(".pwb-clearable");
+    if (!wrap) return;
+    const btn = wrap.querySelector(".pwb-clear-field");
+    if (!btn || btn.dataset.clearField === "theme") return;
+    btn.disabled = !String(input.value || "").trim();
+  }
+
+  async function clearUnitField(unitId, field) {
+    if (field === "theme") {
+      await patchUnit(unitId, { proposed_theme_id: "" });
+      return;
+    }
+    const body = {};
+    body[field] = "";
+    await patchUnit(unitId, body);
+  }
+
   function bindEditHandlers() {
     const fields = document.getElementById("edit-fields-root");
     fields.querySelectorAll("select[data-unit][data-field=op]").forEach((el) => {
@@ -605,6 +636,7 @@
     ["serial", "zone", "bank", "location", "rtp_target", "denom", "bet_config", "restrictions"].forEach(
       (field) => {
         fields.querySelectorAll(`input[data-unit][data-field=${field}]`).forEach((el) => {
+          el.addEventListener("input", () => syncClearButton(el));
           el.addEventListener("change", () => {
             const body = {};
             body[field] = el.value;
@@ -622,6 +654,21 @@
       el.addEventListener("focus", () => {
         if (el.value.trim()) themeSearch(el);
       });
+      // Emptying the search and leaving the field clears Theme (To) → TBD.
+      el.addEventListener("change", () => {
+        if (!el.value.trim() && themeIsSet(
+          (STATE.detail.units || []).find((u) => u.uuid === el.dataset.unit) || {}
+        )) {
+          clearUnitField(el.dataset.unit, "theme");
+        }
+      });
+    });
+    fields.querySelectorAll("button[data-clear-field]").forEach((el) => {
+      el.addEventListener("click", () => {
+        const unitId = el.getAttribute("data-clear-unit");
+        const field = el.getAttribute("data-clear-field");
+        if (unitId && field) clearUnitField(unitId, field);
+      });
     });
     fields.querySelectorAll("button[data-del-unit]").forEach((el) => {
       el.addEventListener("click", () => deleteUnitLine(el.getAttribute("data-del-unit")));
@@ -636,8 +683,7 @@
           STATE.detail = await api(
             `/api/projects-workbench/proposals/${encodeURIComponent(
               STATE.detail.proposal.reference_key
-            )}/stage`,
-            { method: "POST", body: JSON.stringify({ stage: "pre_check" }) }
+            )}/stage`,            { method: "POST", body: JSON.stringify({ stage: "pre_check" }) }
           );
           await loadList();
           exitEdit();
@@ -828,7 +874,9 @@
   }
 
   async function themeSearch(input) {
-    const box = input.parentElement.querySelector(".pwb-theme-results");
+    const wrap = input.closest(".pwb-theme-wrap") || input.parentElement;
+    const box = wrap.querySelector(".pwb-theme-results");
+    if (!box) return;
     const q = input.value.trim();
     const cab = (input.dataset.cabinet || "").trim();
     if (!cab) {

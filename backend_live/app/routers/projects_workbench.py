@@ -749,40 +749,47 @@ def patch_unit(
         params.append(_tbd_theme_id())
     if body.proposed_theme_id is not None:
         tid = body.proposed_theme_id.strip()
-        exists = _query(
-            "SELECT TOP 1 reference_key FROM vendors.themes WHERE reference_key = %s",
-            (tid,),
-        )
-        if not exists:
-            raise HTTPException(status_code=400, detail="Unknown proposed_theme_id")
-        cab = _query(
-            "SELECT cabinet_id FROM projects.proposal_unit WHERE uuid = %s",
-            (unit_id.strip(),),
-        )
-        cab_id = (cab[0].get("cabinet_id") or "").strip() if cab else ""
-        if not cab_id:
-            raise HTTPException(
-                status_code=400,
-                detail="Add a cabinet before assigning a theme",
+        tbd = _tbd_theme_id()
+        # Empty / TBD = clear Theme (To) back to the sentinel (draft-editable).
+        if not tid or tid == tbd:
+            sets.append("unverified_theme_id = NULL")
+            sets.append("proposed_theme_id = %s")
+            params.append(tbd)
+        else:
+            exists = _query(
+                "SELECT TOP 1 reference_key FROM vendors.themes WHERE reference_key = %s",
+                (tid,),
             )
-        theme_vendor = _theme_vendor_id(tid)
-        cab_vendor = _cabinet_vendor_id(cab_id)
-        confirmed = _query(
-            f"""
-            SELECT CASE WHEN {_CONFIRMED_SOFTWARE.format(theme="%s", cabinet="%s")}
-                        THEN 1 ELSE 0 END AS ok
-            """,
-            (tid, cab_id, cab_id),
-        )
-        on_cabinet = bool(confirmed and confirmed[0].get("ok"))
-        if not on_cabinet and not _same_vendor_group(theme_vendor, cab_vendor):
-            raise HTTPException(
-                status_code=400,
-                detail="That theme is outside this cabinet's vendor group",
+            if not exists:
+                raise HTTPException(status_code=400, detail="Unknown proposed_theme_id")
+            cab = _query(
+                "SELECT cabinet_id FROM projects.proposal_unit WHERE uuid = %s",
+                (unit_id.strip(),),
             )
-        sets.append("unverified_theme_id = NULL")
-        sets.append("proposed_theme_id = %s")
-        params.append(tid)
+            cab_id = (cab[0].get("cabinet_id") or "").strip() if cab else ""
+            if not cab_id:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Add a cabinet before assigning a theme",
+                )
+            theme_vendor = _theme_vendor_id(tid)
+            cab_vendor = _cabinet_vendor_id(cab_id)
+            confirmed = _query(
+                f"""
+                SELECT CASE WHEN {_CONFIRMED_SOFTWARE.format(theme="%s", cabinet="%s")}
+                            THEN 1 ELSE 0 END AS ok
+                """,
+                (tid, cab_id, cab_id),
+            )
+            on_cabinet = bool(confirmed and confirmed[0].get("ok"))
+            if not on_cabinet and not _same_vendor_group(theme_vendor, cab_vendor):
+                raise HTTPException(
+                    status_code=400,
+                    detail="That theme is outside this cabinet's vendor group",
+                )
+            sets.append("unverified_theme_id = NULL")
+            sets.append("proposed_theme_id = %s")
+            params.append(tid)
     if body.current_theme_id is not None:
         tid = body.current_theme_id.strip()
         if tid:
