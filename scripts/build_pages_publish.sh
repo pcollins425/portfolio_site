@@ -30,4 +30,18 @@ cp scannertestv1/index.html pages_publish/scannertestv1/
 cp -r emaintdemov1/. pages_publish/emaintdemov1/
 cp -r warehouseinventoryv1/. pages_publish/warehouseinventoryv1/
 cp -r dgsappv1/. pages_publish/dgsappv1/
+# WordCraft wasm is ~58MB raw; Workers assets max is 25 MiB. Ship gzip (~21MB)
+# and let worker/spa.js serve it as application/wasm + Content-Encoding: gzip.
+python3 - <<'PY'
+from pathlib import Path
+import gzip
+root = Path("pages_publish/dgsappv1/wordcraft")
+if root.is_dir():
+    for wasm in root.glob("*.wasm"):
+        gz = wasm.with_suffix(wasm.suffix + ".gz")  # file.wasm.gz
+        data = wasm.read_bytes()
+        gz.write_bytes(gzip.compress(data, compresslevel=9))
+        wasm.unlink()
+        print(f"WordCraft asset: {gz.name} ({gz.stat().st_size / 1024 / 1024:.1f} MiB gzip)")
+PY
 echo "OK: $ROOT/pages_publish  (Collins Media shop + /dashboardtestv1 SPA + /dgsappv1 + legacy demos)"

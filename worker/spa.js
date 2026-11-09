@@ -109,6 +109,30 @@ async function handleInquire(request, env) {
   return Response.json({ ok: true, id: result.id || null }, { headers: cors });
 }
 
+/**
+ * WordCraft ships a ~58MB wasm; Workers asset upload max is 25 MiB.
+ * Build gzips it to *.wasm.gz; we serve that under the original *.wasm URL.
+ * @param {Request} request
+ * @param {{ ASSETS: { fetch: (request: Request) => Promise<Response> } }} env
+ * @param {URL} url
+ */
+async function serveWordCraftWasm(request, env, url) {
+  if (!url.pathname.startsWith("/dgsappv1/wordcraft/")) return null;
+  if (!url.pathname.endsWith(".wasm")) return null;
+
+  const gzUrl = new URL(url.toString());
+  gzUrl.pathname = `${url.pathname}.gz`;
+  const gzRes = await env.ASSETS.fetch(new Request(gzUrl.toString(), request));
+  if (!gzRes.ok) return gzRes;
+
+  const headers = new Headers(gzRes.headers);
+  headers.set("Content-Type", "application/wasm");
+  headers.set("Content-Encoding", "gzip");
+  headers.set("Cache-Control", "public, max-age=31536000, immutable");
+  headers.delete("Content-Length");
+  return new Response(gzRes.body, { status: gzRes.status, headers });
+}
+
 export default {
   /** @param {Request} request @param {{ ASSETS: { fetch: (request: Request) => Promise<Response> }, RESEND_API_KEY?: string, COLLINS_INQUIRE_TO?: string, COLLINS_INQUIRE_FROM?: string }} env */
   async fetch(request, env) {
@@ -118,6 +142,9 @@ export default {
     if (pathname === "/api/public/inquire") {
       return handleInquire(request, env);
     }
+
+    const wordcraftWasm = await serveWordCraftWasm(request, env, url);
+    if (wordcraftWasm) return wordcraftWasm;
 
     for (const prefix of [DASHBOARD_PREFIX, DGS_DASHBOARD_PREFIX]) {
       const isDashboardBoot =
