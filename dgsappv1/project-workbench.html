@@ -211,7 +211,8 @@
     /* Edit mode: fields dock to sidebar; WordCraft fills top/right/bottom */
     body.pwb-edit-mode .dgs-v2-main {
       display: grid;
-      grid-template-columns: minmax(400px, 42vw) minmax(0, 1fr);
+      /* Slightly leaner form column so the David page fits at 100% without CSS scale. */
+      grid-template-columns: minmax(400px, 38vw) minmax(0, 1fr);
       grid-template-rows: auto auto auto minmax(0, 1fr);
       padding: 0;
       gap: 0;
@@ -270,14 +271,6 @@
       height: auto;
       border: 0;
       border-radius: 0;
-      /* ~95% page feel without calling view.zoom (that opens the Zoom dialog). */
-      --pwb-wc-zoom: 0.95;
-    }
-    body.pwb-edit-mode .pwb-wordcraft-shell iframe {
-      transform: scale(var(--pwb-wc-zoom));
-      transform-origin: top left;
-      width: calc(100% / var(--pwb-wc-zoom));
-      height: calc(100% / var(--pwb-wc-zoom));
     }
     body.pwb-edit-mode .pwb-doc-fallback {
       margin: 0;
