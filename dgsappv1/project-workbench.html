@@ -23,11 +23,20 @@
       min-height: 0;
       overflow: hidden;
     }
+    /* Browse must fill remaining main height so .pwb-list / .pwb-detail can scroll. */
+    .pwb-browse {
+      display: flex;
+      flex-direction: column;
+      flex: 1;
+      min-height: 0;
+      gap: 14px;
+    }
     .pwb-toolbar {
       display: flex;
       flex-wrap: wrap;
       gap: 8px;
       align-items: center;
+      flex-shrink: 0;
     }
     .pwb-toolbar input, .pwb-toolbar select {
       background: #12161e;
